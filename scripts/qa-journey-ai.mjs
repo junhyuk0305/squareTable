@@ -546,17 +546,12 @@ try {
         await S.page.click('[aria-label="이 답변 보내기"]');
         const sheet = await S.page.waitFor(`[...document.querySelectorAll('[aria-label="노하우 저장"]')].some(e=>e.getBoundingClientRect().width>0)`, 15000);
         if (sheet) await S.page.click('[aria-label="노하우 저장"]');
-        const toast = await S.page.waitFor(`/답변이 직원 챗봇에 반영됐어요|답변을 보냈어요|실패했어요/.test(document.body.innerText)`, 20000);
+        const toast = await S.page.waitFor(`/답변을 보냈어요|실패했어요/.test(document.body.innerText)`, 20000);
         tPub = Date.now();
-        const tText = await S.page.eval(`(document.body.innerText.match(/답변이 직원 챗봇에 반영됐어요|답변을 보냈어요\\.[^\\n]*|[^\\n]*실패했어요[^\\n]*/)||[''])[0]`);
-        // 역 ⑨ 전제 안내(0309 · coach noneReachable): 직원이 지금 알림을 못 받으면(기기 0 등) 전역 토스트
-        //   '답변을 보냈어요. <이름>님이 앱을 열 때 볼 거예요.' 가 대신 뜬다. 어느 문구가 맞는지는 서버 술어(recipient_readiness)와 기기 토큰 수로 가른다.
-        const { count: jTok } = await db.from('push_device_tokens').select('id', { count: 'exact', head: true }).eq('user_id', junior.uid);
-        const { data: ready, error: readyErr } = await owner.rpc('recipient_readiness', { p_unit_id: UNIT, p_user_ids: [junior.uid] });
-        const reachable = !readyErr && (ready ?? []).some((r) => r.user_id === junior.uid && r.blocked_reason == null);
-        log(`저장 시트=${sheet} · 토스트='${tText}' · 직원 기기 토큰 ${jTok}건 · recipient_readiness ${readyErr ? '오류 ' + readyErr.message : JSON.stringify(ready)}`);
-        check(`6 발행 뒤 토스트가 직원 수신 전제에 맞다(기기 토큰 ${jTok}건 · 받을 수 있음=${reachable} → ${reachable ? "'답변이 직원 챗봇에 반영됐어요'" : "'답변을 보냈어요. …앱을 열 때 볼 거예요.'"})`,
-          toast && !readyErr && (reachable ? tText.includes('반영됐어요') : /답변을 보냈어요\. .*앱을 열 때 볼 거예요\./.test(tText)), tText);
+        const tText = await S.page.eval(`(document.body.innerText.match(/답변을 보냈어요[^\\n]*|[^\\n]*실패했어요[^\\n]*/)||[''])[0]`);
+        // 사용자 결정(10-16): 질문·답변엔 수신 전제 안내를 하지 않는다 — 알림 상태와 무관하게 '답변을 보냈어요' 한 가지.
+        log(`저장 시트=${sheet} · 토스트='${tText}'`);
+        check(`6 발행 뒤 '답변을 보냈어요' 토스트(알림 상태와 무관 · 사용자 결정 10-16)`, toast && tText.startsWith('답변을 보냈어요'), tText);
       } else check('6 AI 정리 카드가 뜬다', false, `state=${state}`);
     }
     // DB 대조

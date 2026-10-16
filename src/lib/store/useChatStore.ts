@@ -7,9 +7,7 @@ import { usePlaybookStore } from './usePlaybookStore';
 import { useUnknownQueueStore } from './useUnknownQueueStore';
 import { useSessionStore } from './useSessionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchChatQueries, insertChatQuery, updateChatSatisfaction, recomputePlaybookStats, fetchRecipientReadiness } from '@/lib/db';
-import { noneReachable } from '@/lib/recipientReadiness';
-import { useStaffStore } from './useStaffStore';
+import { fetchChatQueries, insertChatQuery, updateChatSatisfaction, recomputePlaybookStats } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import { showToast } from '@/lib/store/useToastStore';
@@ -101,8 +99,6 @@ type ChatState = {
   // 알바가 '등록' 버튼을 누를 때만 인박스로 보낸다 → 오타·장난성 질문이 사장에게 그대로 가는 걸 막는다.
   pendingDeflects: Record<string, UnknownQuery>;
   deflectStatus: Record<string, 'registered' | 'declined'>;
-  /** 보낸 직후 사장 전원이 알림을 못 받는 상태였다(기기 0 · 알림 끔 · 0309). 카드의 '전달했어요' 줄이 전제를 말한다. 모르면(읽기 실패) 없음. */
-  ownerAway: Record<string, true>;
   hydrate: (juniorId: string) => Promise<void>;
   submit: (text: string) => Promise<void>;
   /** '사장님께 보내기' — 서버 반영 성공 시에만 'registered' 표시가 남는다(#24). */
@@ -125,7 +121,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   lastFailed: null,
   pendingDeflects: {},
   deflectStatus: {},
-  ownerAway: {},
 
   hydrate: async (juniorId) => {
     if (!HAS_SUPABASE) return;
@@ -408,11 +403,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
       return;
     }
-    // 전제 안내(P5): 받는 사람 = 이 매장 사장들(unit_members role=owner · 명부 roles). 한 명이라도 받을 수 있으면 안내 없음.
-    // quiet — 0312 전 서버는 not_owner 예외 · 읽기 실패는 "받을 수 있다"로 보고 배너를 띄우지 않는다.
-    const owners = Object.entries(useStaffStore.getState().roles).filter(([, r]) => r === 'owner').map(([id]) => id);
-    const rows = await fetchRecipientReadiness(useSessionStore.getState().unitId, owners, { quiet: true });
-    if (noneReachable(rows, owners)) set((s) => ({ ownerAway: { ...s.ownerAway, [queryId]: true } }));
   },
 
   // '괜찮아요' — 등록하지 않고 카드를 접는다. 보관해둔 질문은 그대로 둬서 나중에 다시 등록할 수 있다.
@@ -445,7 +435,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     await get().submit(failed.text);
   },
 
-  reset: () => set({ history: [...seed], isLoading: false, lastSubmittedId: null, error: null, lastFailed: null, pendingDeflects: {}, deflectStatus: {}, ownerAway: {} }),
+  reset: () => set({ history: [...seed], isLoading: false, lastSubmittedId: null, error: null, lastFailed: null, pendingDeflects: {}, deflectStatus: {} }),
   applyMock: (demo) =>
-    set({ history: demo ? [...seed] : [], isLoading: false, lastSubmittedId: null, loaded: true, error: null, lastFailed: null, pendingDeflects: {}, deflectStatus: {}, ownerAway: {} }),
+    set({ history: demo ? [...seed] : [], isLoading: false, lastSubmittedId: null, loaded: true, error: null, lastFailed: null, pendingDeflects: {}, deflectStatus: {} }),
 }));

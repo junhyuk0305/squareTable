@@ -17,10 +17,7 @@ import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { buildDirectUq } from '@/lib/utils/buildEntry';
-import { insertKnowhowToUnit, fetchRecipientReadiness } from '@/lib/db';
-import { noneReachable } from '@/lib/recipientReadiness';
-import { useStaffStore, memberNameOf } from '@/lib/store/useStaffStore';
-import { showToast } from '@/lib/store/useToastStore';
+import { insertKnowhowToUnit } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 
@@ -188,12 +185,7 @@ export default function OwnerCoachScreen() {
         return false;
       }
       setToastErr(false);
-      // 질문한 직원이 지금 알림을 못 받으면(기기 0 · 알림 끔) 그 사실을 말한다(P5 · 0309). 읽기 실패는 빈 배열 → 기본 문구.
-      // 이 안내는 전역 토스트로 — 화면 토스트는 1.1초 뒤 인박스로 이동하며 같이 사라져 읽을 시간이 없다.
-      if (answerable && realUq && noneReachable(await fetchRecipientReadiness(activeUnit, [realUq.junior_id]), [realUq.junior_id])) {
-        const name = (memberNameOf(useStaffStore.getState(), realUq.junior_id) ?? realUq.junior_name) || '직원';
-        showToast(`답변을 보냈어요. ${name}님이 앱을 열 때 볼 거예요.`);
-      } else setToast(okMsg);
+      setToast(okMsg);
       // 매장 2개 이상이면 "다른 매장에도?" 넛지를 띄우고 네비는 넛지 닫힘까지 미룬다. 아니면 바로 이동.
       // ★크로스 매장 저장(0121)에는 넛지를 띄우지 않는다 — 넛지의 복제는 **활성 매장을 원본으로** 하는데
       //   방금 쓴 노하우는 활성 매장에 없다. 띄우면 엉뚱한 것을 복제하거나 조용히 0건이 된다.
@@ -201,7 +193,7 @@ export default function OwnerCoachScreen() {
       else navAfter();
       return true;
     },
-    [answerable, realUq, resolve, answer, noteSaved, sugId, approveSuggestion, srcTemplate, attachKnowhow, feedId, markPromoted, navAfter, nudgeTargets, targetUnitId, activeUnit],
+    [answerable, realUq, resolve, answer, noteSaved, sugId, approveSuggestion, srcTemplate, attachKnowhow, feedId, markPromoted, navAfter, nudgeTargets, targetUnitId],
   );
 
   // 이미 있는 노하우로 답하기 — 새 노하우를 만들지 않고 질문만 그 노하우로 해결한다.
@@ -264,7 +256,7 @@ export default function OwnerCoachScreen() {
       // 인박스 답(활성 매장)은 저장을 finishPublish 의 원자 RPC(0311)에 맡긴다 — 여기서 먼저 저장하면 두 단계로 갈라진다.
       const atomic = answerable && !!realUq && !targetUnitId;
       const ok = atomic ? true : await saveEntry(entryWithPart);
-      return finishPublish([entry.id], ok, isInboxAnswer ? '답변이 직원 챗봇에 반영됐어요' : '새 노하우가 저장됐어요', atomic ? entryWithPart : undefined);
+      return finishPublish([entry.id], ok, isInboxAnswer ? '답변을 보냈어요' : '새 노하우가 저장됐어요', atomic ? entryWithPart : undefined);
     },
     [saveEntry, finishPublish, isInboxAnswer, askBeforePublish, withPart, answerable, realUq, targetUnitId],
   );

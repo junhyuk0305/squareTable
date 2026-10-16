@@ -12,7 +12,6 @@ import { Appear } from '@/components/Appear';
 
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { useChatStore } from '@/lib/store/useChatStore';
 import { canManage } from '@/lib/utils/roles';
 import { knowhowSourceLabel } from '@/lib/utils/knowhowSource';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -53,8 +52,6 @@ export function ChatTurn({
   const router = useRouter();
   // 매니저(owner/ask 재사용)는 제안 대신 직접 수정 권한 — 개선 진입을 owner 수정 화면으로 보낸다.
   const manager = canManage(useSessionStore((s) => s.role));
-  // 보낸 직후 사장 전원이 알림을 못 받는 상태였나(기기 0 · 알림 끔) — 판정은 registerToOwner 한 곳(P5).
-  const ownerAway = useChatStore((s) => s.ownerAway[query.id] === true);
   // 상세 모달은 출처(matched) 또는 후보(candidate) 어느 쪽이든 띄운다 — 단일 상태로 통일.
   const [detailEntry, setDetailEntry] = useState<PlaybookEntry | undefined>(undefined);
 
@@ -197,7 +194,7 @@ export function ChatTurn({
               <View style={turnStyles.caveatDone}>
                 <Ionicons name="checkmark-circle" size={13} color={InkColors.ink3} />
                 <Text style={turnStyles.caveatDoneText}>
-                  {ownerAway ? '사장님께 전달했어요. 사장님이 앱을 열 때 보실 거예요.' : '사장님께 전달했어요. 답변이 오면 알려드릴게요.'}
+                  사장님께 전달했어요. 답변이 오면 알려드릴게요.
                 </Text>
               </View>
             ) : (

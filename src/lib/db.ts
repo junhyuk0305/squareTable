@@ -2786,13 +2786,11 @@ export type RecipientReadinessRow = import('@/lib/recipientReadiness').Recipient
 export async function fetchRecipientReadiness(
   unitId: string,
   userIds: string[],
-  // quiet: 실패를 배너 없이 빈 배열로 — 직원이 사장의 수신 전제를 묻는 자리(질문 보내기 · 0312 전엔 not_owner). 질문마다 배너가 뜨면 안 된다.
-  opts?: { quiet?: boolean },
 ): Promise<RecipientReadinessRow[]> {
   if (!HAS_SUPABASE || !unitId || userIds.length === 0) return [];
   const { data, error } = await supabase.rpc('recipient_readiness', { p_unit_id: unitId, p_user_ids: userIds });
   if (error) {
-    if (!opts?.quiet && !isMissingRpc(error)) readFail('fetchRecipientReadiness', error);
+    if (!isMissingRpc(error)) readFail('fetchRecipientReadiness', error);
     return [];
   }
   return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
