@@ -174,13 +174,13 @@ try {
   check('T5 owners 자기제외: ownerA→ 0명(본인뿐)', t5.status === 200 && t5.json?.recipients === 0, `${JSON.stringify(t5.json)}`);
 
   // ── T6 user 같은 매장: 사장A → user=staffA1 → 1명 ─────────────────────────
-  const t6 = await invokePush(ownerA, { audience: 'user', userId: staffA1Id, title: '교대 확정' });
+  const t6 = await invokePush(ownerA, { audience: 'user', tag: 'mention', userId: staffA1Id, title: '교대 확정' });
   check('T6 user 같은 매장: ownerA→staffA1 1명', t6.status === 200 && t6.json?.recipients === 1, `${JSON.stringify(t6.json)}`);
 
   // ── T7 ★크로스테넌트 격리: 사장A → user=ownerB → 403 cross_tenant ─────────
-  const t7 = await invokePush(ownerA, { audience: 'user', userId: ownerBId, title: '침투' });
+  const t7 = await invokePush(ownerA, { audience: 'user', tag: 'mention', userId: ownerBId, title: '침투' });
   check('T7 ★격리: ownerA→user=ownerB 거부(403 cross_tenant)', t7.status === 403 && t7.json?.error === 'cross_tenant', `status=${t7.status} ${JSON.stringify(t7.json)}`);
-  const t7b = await invokePush(ownerA, { audience: 'user', userId: staffB1Id, title: '침투2' });
+  const t7b = await invokePush(ownerA, { audience: 'user', tag: 'mention', userId: staffB1Id, title: '침투2' });
   check('T7b ★격리: ownerA→user=staffB1 거부(403 cross_tenant)', t7b.status === 403 && t7b.json?.error === 'cross_tenant', `status=${t7b.status} ${JSON.stringify(t7b.json)}`);
 
   // ── T8 join_owners: 신청 대기자 → 매장A 사장 1명(아직 소속 아님) ──────────
