@@ -15,7 +15,7 @@ import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
 import { useOwnerAlertStore } from '@/lib/store/useOwnerAlertStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { todayStr } from '@/lib/utils/attendance';
-import { accountAckAt, juniorUnreadCount, managerUnreadCount, ownerUnreadCount } from '@/lib/utils/notifications';
+import { accountAckAt, juniorUnreadCount, manageUnreadCount } from '@/lib/utils/notifications';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
@@ -101,10 +101,9 @@ export function OwnerNotificationBell({ edge = true }: { edge?: boolean } = {}) 
     // 세는 데 이름은 안 쓴다 — 목록(owner/notifications.tsx)과 같은 명부 SSOT(memberNameOf)로 둔다(역 ③).
     const nameOf = (id: string) => memberNameOf({ owner, staff }, id) ?? '직원';
     const received = { feed, taskTemplates: templates, done, today, suggestions, userId, nameOf, ackAt, scheduleNotices };
-    // 사장 배지도 목록처럼 나에게 온 배정을 센다(D11).
-    if (role !== 'manager') return ownerUnreadCount(queue, suggestions, swaps, pending, feed, userId, ackAt, claims, alerts, received, assignments, timeRequests);
-    // 매니저 배지는 목록(buildManagerNotifications)과 같은 인자·같은 배열에서 센다(F-2).
-    return managerUnreadCount({ queue, suggestions, swaps, pending, nameOf, feed, userId, ackAt, claims, alerts }, received);
+    // 사장 배지도 목록처럼 나에게 온 배정을 센다(D11). 매니저 배지는 목록(buildManagerNotifications)과 같은 인자·같은 배열(F-2).
+    //   역할 분기는 manageUnreadCount 하나 — 앱 아이콘 배지(appBadge)가 같은 함수를 쓴다.
+    return manageUnreadCount(role, { queue, suggestions, swaps, pending, nameOf, feed, userId, ackAt, claims, alerts, assignments, timeRequests }, received);
   }, [queue, suggestions, swaps, pending, feed, userId, ackAt, claims, alerts, role, templates, done, today, staff, owner, assignments, timeRequests, scheduleNotices]);
 
   return <BellButton count={count} onPress={() => router.push('/owner/notifications')} edge={edge} />;

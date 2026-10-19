@@ -692,7 +692,8 @@ function ownerRows(args: {
 //   합류 승인·제안 검토·사장 알림(요금제·본사)·입금 결과는 사장 전용 화면이라 뺀다(0201). 예전엔 사장 축을
 //   그대로 받아 눌러도 직원 홈으로 튕겼다. 질문과 내 제안 결과는 물어보기 탭(/junior/chat)에서 본다.
 export type ManagerNotifKind =
-  | 'mention' | 'swap_approval' | 'question' | 'assign' | 'suggestion_approved' | 'suggestion_rejected' | 'role';
+  | 'mention' | 'swap_approval' | 'question' | 'assign' | 'suggestion_approved' | 'suggestion_rejected' | 'role'
+  | 'schedule' | 'shift_time';
 export type ManagerNotifRoute = string;
 export type ManagerNotif = Omit<OwnerNotif, 'kind' | 'route'> & { kind: ManagerNotifKind; route: ManagerNotifRoute };
 
@@ -746,24 +747,37 @@ function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
     });
   }
 
-  // 매니저가 된 알림(0315) — 지정된 순간 받은 사람은 이미 매니저라 이 목록에서 보인다.
+  // 내 근무 알림(D9 · 0289) + 역할 변경(0315) — 직원 벨과 같은 member_notices 행. 매니저도 근무하는 사람이다.
+  //   서버(put_schedule_notice)는 결정한 사람 본인에게 넣지 않는다 → 결정자 행(교대·시간 수정 승인 대기)과 겹치지 않는다.
+  //   근무표는 매니저 허용 목록 안이라 사장 화면 주소(/owner/schedule)로 연다.
   for (const n of args.scheduleNotices ?? []) {
-    if (n.kind === 'role_changed') out.push({ ...roleNoticeRow(n, ackAt), kind: 'role' });
+    if (n.kind === 'role_changed') { out.push({ ...roleNoticeRow(n, ackAt), kind: 'role' }); continue; }
+    out.push({
+      id: `sched_${n.id}`,
+      kind: 'schedule',
+      title: n.title,
+      body: n.body,
+      at: n.created_at,
+      unread: isAfterAck(n.created_at, ackAt),
+      route: NOTIF.schedule.route('owner'),
+    });
   }
 
   return out;
 }
 
 /** ① 사장 축 중 매니저가 행동할 수 있는 것만(F-2) — 멘션(/owner/work) · 교대 승인 대기(/owner/schedule) ·
- *  질문(/junior/chat). 질문은 물어보기 탭이 보여 주는 것(answerableQuestions)만 남긴다. 내가 물은 질문은
+ *  근무 시간 수정 요청(0316 · 내 요청 제외 — 내가 결정할 수 없다) · 질문(/junior/chat). 질문은 물어보기 탭이 보여 주는 것(answerableQuestions)만 남긴다. 내가 물은 질문은
  *  거기서 답할 수 없어서 뺀다. */
 function managerOwnerRows(ownerArgs: Parameters<typeof ownerRows>[0]): ManagerNotif[] {
   const answerable = new Set(
     answerableQuestions(ownerArgs.queue, ownerArgs.userId ?? '', ownerArgs.suggestions).map((u) => `q_${u.id}`),
   );
+  const mine = new Set((ownerArgs.timeRequests ?? []).filter((t) => t.staff_id === ownerArgs.userId).map((t) => `shift_time_${t.id}`));
   const out: ManagerNotif[] = [];
   for (const r of ownerRows(ownerArgs)) {
     if (r.kind === 'mention' || r.kind === 'swap_approval') out.push({ ...r, kind: r.kind });
+    else if (r.kind === 'shift_time' && !mine.has(r.id)) out.push({ ...r, kind: 'shift_time' });
     // 질문은 직원 화면 세트(물어보기 탭)의 그 질문으로(F-2 · /owner/coach 는 허용 목록 밖이다).
     else if (r.kind === 'question' && answerable.has(r.id)) out.push({ ...r, kind: 'question', route: NOTIF.question.route('junior', r.id.slice('q_'.length)) });
   }
@@ -788,4 +802,12 @@ export function buildManagerNotifications(
  *  목록에 없는 합류·제안·입금까지 셌다. 술어를 다시 쓰지 않는다. */
 export function managerUnreadCount(ownerArgs: Parameters<typeof ownerRows>[0], received: ManagerReceivedArgs): number {
   return managerRows(ownerArgs, received).filter((r) => r.unread).length;
+}
+
+/** 관리 화면 세트(사장·매니저)의 벨 숫자 — 벨(NotificationBell)·앱 아이콘 배지(appBadge)·허브가 이 하나를 쓴다.
+ *  매니저 = 매니저 목록과 같은 배열 · 사장 = 사장 카운터(예전 그대로). 같은 규칙을 두 곳에 쓰지 않는다. */
+export function manageUnreadCount(role: string, ownerArgs: Parameters<typeof ownerRows>[0], received: ManagerReceivedArgs): number {
+  if (role === 'manager') return managerUnreadCount(ownerArgs, received);
+  const a = ownerArgs;
+  return ownerUnreadCount(a.queue, a.suggestions, a.swaps, a.pending, a.feed, a.userId, a.ackAt, a.claims, a.alerts, received, a.assignments, a.timeRequests);
 }

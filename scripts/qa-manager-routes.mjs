@@ -59,13 +59,17 @@ for (const [u, r, want] of [
 ]) {
   check(`${r} ${u} → ${want}`, route(u, r) === want, `got=${route(u, r)}`);
 }
-// 앱이 실제로 싣는 푸시 url 전부(notify.ts) — 매니저 결과는 허용 목록이거나 /junior/* 다.
+// 알림 주소 전부 — 10-16 P1 부터 notify.ts 는 주소를 레지스트리(NOTIF[kind].route)에서 받는다. 레지스트리를 직접 돈다.
+//   매니저 결과는 허용 목록이거나 /junior/* 다. 판정은 경로만(?id 는 routeForRole 이 그대로 싣는다).
 const notifySrc = read('src/lib/push/notify.ts');
-const urls = [...new Set([...notifySrc.matchAll(/'(\/(?:owner|junior)\/[a-z-]+)'/g)].map((m) => m[1]))];
-check('notify.ts 에서 url 을 읽었다', urls.length >= 8, show(urls));
+const { NOTIF } = await import('../src/lib/notif/registry.ts');
+const urls = [...new Set(Object.values(NOTIF).flatMap((spec) => ['owner', 'junior'].flatMap((sf) => [spec.route(sf), spec.route(sf, 'x1')])))]
+  .filter((u) => /^\/(owner|junior)\//.test(u));
+check('레지스트리에서 알림 주소를 읽었다', urls.length >= 8, show(urls));
+const pathOf = (u) => String(u).split(/[?#]/)[0];
 const bad = urls.filter((u) => {
   const to = route(u, M);
-  return !(to.startsWith('/junior/') || managerMayOpen(to));
+  return !(to.startsWith('/junior/') || managerMayOpen(pathOf(to)));
 });
 check('매니저: 모든 푸시 url 이 열 수 있는 곳으로 간다', typeof routeForRole === 'function' && bad.length === 0, show(bad.map((u) => `${u}→${route(u, M)}`)));
 
@@ -119,7 +123,7 @@ const received = { feed, taskTemplates, done: {}, today: TODAY, suggestions, use
 const mgr = N.buildManagerNotifications(ownerArgs, received);
 const ids = mgr.map((r) => r.id);
 const routes = mgr.map((r) => `${r.id}→${r.route}`);
-const opens = (r) => String(r.route).startsWith('/junior/') || managerMayOpen(String(r.route));
+const opens = (r) => String(r.route).startsWith('/junior/') || managerMayOpen(pathOf(r.route));
 check('매니저 목록에 /owner/staff 행이 없다', !mgr.some((r) => r.route === '/owner/staff'), show(routes));
 check('합류 신청 없음', !mgr.some((r) => r.kind === 'join_request'));
 check('제안 검토 없음', !mgr.some((r) => r.kind === 'suggestion'));
@@ -127,11 +131,13 @@ check('사장 알림 없음', !ids.some((i) => i.startsWith('alert_')));
 check('입금 결과 없음', !mgr.some((r) => r.kind === 'payment_approved' || r.kind === 'payment_rejected'));
 check('모든 행이 열 수 있는 곳으로 간다', mgr.length > 0 && mgr.every(opens), show(routes));
 const q = mgr.find((r) => r.id === 'q_uq_other');
-check('동료 질문 → /junior/chat', q?.route === '/junior/chat', show(q?.route));
+check('동료 질문 → /junior/chat(그 질문)', q?.route === '/junior/chat?uqId=uq_other', show(q?.route));
 check('내가 물은 질문은 안 뜬다(물어보기 탭에서 답할 수 없다)', !ids.includes('q_uq_mine'));
 const res = mgr.find((r) => r.id === 'sugres_sg_mine_done');
 check('내 제안 결과 → /junior/chat', res?.route === '/junior/chat', show(res?.route));
-check('남기는 행: 공지·멘션·배정·교대 승인', ['notice_f_notice', 'mention_f_mention', 'assign_t1', 'swap_sw_acc'].every((i) => ids.includes(i)), show(ids));
+// 공지는 벨·푸시에서 뺐다(2026-10-16 사용자 결정 · 채팅 맨 위 고정 공지).
+check('남기는 행: 멘션·배정·교대 승인', ['mention_f_mention', 'assign_t1', 'swap_sw_acc'].every((i) => ids.includes(i)), show(ids));
+check('공지 행 없음(10-16)', !ids.includes('notice_f_notice'));
 check('멘션은 1건', mgr.filter((r) => r.kind === 'mention').length === 1);
 
 console.log('\n■ (2-b) 배지 = 같은 배열의 안 읽음 수');
@@ -144,8 +150,9 @@ check('모두 읽기 뒤 배지 0', acked === 0, `got=${show(acked)}`);
 console.log('\n■ (2-c) 사장 목록은 그대로(회귀 0)');
 const own = N.buildOwnerNotifications({ ...ownerArgs, userId: OWNER });
 const ownIds = own.map((r) => r.id);
-check('사장: 합류 신청 → /owner/staff', own.find((r) => r.id === 'join_p1')?.route === '/owner/staff');
-check('사장: 질문 2건 → /owner/inbox', own.filter((r) => r.kind === 'question').every((r) => r.route === '/owner/inbox') && ownIds.includes('q_uq_mine'));
+// 주소는 레지스트리 그대로(합류 = 명부의 그 신청 · 질문 = 노하우 코치의 그 질문).
+check('사장: 합류 신청 → /owner/staff', pathOf(own.find((r) => r.id === 'join_p1')?.route) === '/owner/staff', show(own.find((r) => r.id === 'join_p1')?.route));
+check('사장: 질문 2건 → 그 질문', own.filter((r) => r.kind === 'question').every((r) => r.route === NOTIF.question.route('owner', r.id.slice('q_'.length))) && ownIds.includes('q_uq_mine'));
 check('사장: 제안 검토·입금·사장 알림 있음', ['s_sg_other', 'pay_c1', 'alert_7'].every((i) => ownIds.includes(i)), show(ownIds));
 check('사장 배지 계산 그대로', N.ownerUnreadCount(queue, suggestions, swaps, pending, feed, OWNER, null, claims, alerts) === own.filter((r) => r.unread).length);
 
@@ -178,6 +185,28 @@ check('owner/_layout: 잠긴 매니저 → /billing', /role === 'manager' && sea
   const r = mRows.find((x) => x.id === 'role_9');
   check('매니저: 역할 변경 행 → /junior/home', r?.kind === 'role' && r?.route === '/junior/home', show(r));
   check('매니저: 역할 변경 행을 배지가 센다', N.managerUnreadCount(ownerArgs, { ...received, scheduleNotices: [rn] }) === N.managerUnreadCount(ownerArgs, received) + 1);
+  // 근무 알림(D9) 전부 + 시간 수정 요청(남의 것만) — 매니저 목록·배지가 같은 배열.
+  const sn = [
+    { id: 11, kind: 'swap_confirmed', title: '대타 확정', body: 'a', created_at: '2099-01-02T00:00:00Z' },
+    { id: 12, kind: 'shift_time_result', title: '시간 수정 승인', body: 'b', created_at: '2099-01-02T00:00:00Z' },
+    { id: 13, kind: 'shift_changed', title: '근무 변경', body: 'c', created_at: '2099-01-02T00:00:00Z' },
+  ];
+  const tr = [
+    { id: 'tr_other', staff_id: 'u_junior', date: '2026-10-21', new_start: '09:00', new_end: '13:00', created_at: iso(5) },
+    { id: 'tr_mine', staff_id: ME, date: '2026-10-21', new_start: '09:00', new_end: '13:00', created_at: iso(5) },
+  ];
+  const oa = { ...ownerArgs, timeRequests: tr }, rc = { ...received, scheduleNotices: [rn, ...sn] };
+  const rows2 = N.buildManagerNotifications(oa, rc);
+  const ids2 = rows2.map((x) => x.id);
+  check('매니저: 근무 알림 3종 → /owner/schedule', sn.every((n) => rows2.find((x) => x.id === `sched_${n.id}`)?.route === '/owner/schedule'), show(ids2));
+  check('매니저: 남의 시간 수정 요청만(내 요청은 결정 불가)', ids2.includes('shift_time_tr_other') && !ids2.includes('shift_time_tr_mine'), show(ids2));
+  check('매니저: 같은 행 두 번 없음', new Set(ids2).size === ids2.length);
+  check('매니저 배지(manageUnreadCount) == 목록 안 읽음', N.manageUnreadCount('manager', oa, rc) === rows2.filter((x) => x.unread).length);
+  check('사장 배지(manageUnreadCount) == 예전 ownerUnreadCount',
+    N.manageUnreadCount('owner', { ...oa, userId: OWNER }, rc) === N.ownerUnreadCount(queue, suggestions, swaps, pending, feed, OWNER, null, claims, alerts, rc, undefined, tr));
+  for (const f of ['src/components/NotificationBell.tsx', 'src/lib/push/appBadge.ts', 'src/lib/utils/crossStoreNotifs.ts']) {
+    check(`${f}: 관리 배지는 manageUnreadCount 하나`, /manageUnreadCount\(/.test(read(f)) && !/\b(ownerUnreadCount|managerUnreadCount)\(/.test(read(f)));
+  }
   const sch = read('src/app/owner/schedule.tsx');
   check('근무표: 시간 수정 요청을 매니저에게도(자기 요청 제외)', /pendingTimeRequests\(timeRequests\)\.filter\(\(r\) => isOwner \|\| r\.staff_id !== myId\)/.test(sch));
   check('0316: decide_shift_time = auth_can_manage + cannot_decide_self', /not public\.auth_can_manage\(\) then raise exception 'owner_only'[\s\S]*cannot_decide_self/.test(read('supabase/migrations/0316_manager_shift_time_and_role_notice.sql')));

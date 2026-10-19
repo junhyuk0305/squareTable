@@ -10,8 +10,7 @@ import {
   isPendingAssignment,
   isAfterAck,
   juniorUnreadCount,
-  managerUnreadCount,
-  ownerUnreadCount,
+  manageUnreadCount,
   MAX_NOTIFS,
   type JuniorNotif,
   type ManagerNotif,
@@ -68,9 +67,9 @@ export function storeUnreadCount(d: UnitNotifData, role: string, me: string, tod
   if (!canManage(role)) return juniorUnreadCount(d.feed, d.swaps, me, today, d.taskTemplates, d.done, ackAt, d.suggestions, d.queue, d.scheduleNotices, d.assignments);
   // 0093: 매니저 매장 = 사장 축 중 매니저가 행동할 수 있는 것 + 매니저가 받는 쪽인 축(공지·배정·내 제안 결과).
   //       목록(buildStoreNotifs)과 같은 인자·같은 배열에서 센다(F-2).
-  if (role === 'manager') return managerUnreadCount(ownerArgsOf(d, me, nameOf, ackAt), receivedArgsOf(d, me, today, nameOf, ackAt));
   // 사장도 나에게 온 공지·배정을 센다(D11) — 목록(buildStoreNotifs)과 같은 인자(0313: 입금 결과·사장 알림·퀴즈 완료·시간 수정 요청).
-  return ownerUnreadCount(d.queue, d.suggestions, d.swaps, d.pending, d.feed, me, ackAt, d.claims, d.alerts, receivedArgsOf(d, me, today, nameOf, ackAt), d.assignments, d.timeRequests);
+  //   역할 분기는 manageUnreadCount 하나(매장 벨·앱 아이콘 배지와 같은 함수).
+  return manageUnreadCount(role, ownerArgsOf(d, me, nameOf, ackAt), receivedArgsOf(d, me, today, nameOf, ackAt));
 }
 
 const nameOfFor = (d: UnitNotifData, role: string, me: string) => (id: string) =>

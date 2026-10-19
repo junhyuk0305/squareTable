@@ -16,7 +16,7 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { todayStr } from '@/lib/utils/attendance';
-import { accountAckAt, juniorUnreadCount, ownerUnreadCount } from '@/lib/utils/notifications';
+import { accountAckAt, juniorUnreadCount, manageUnreadCount } from '@/lib/utils/notifications';
 import { canManage } from '@/lib/utils/roles';
 
 type BadgeNav = Navigator & {
@@ -111,8 +111,13 @@ export function useAppBadgeSync(): void {
     const count =
       canManage(role)
         // 나에게 온 배정도 센다(D11 · 벨과 같은 축). 이름은 세는 데 쓰지 않는다.
-        ? ownerUnreadCount(queue, suggestions, swaps, pending, feed, me, ackAt, claims, [],
-            { feed, taskTemplates: templates, done, today, suggestions, userId: me, nameOf: () => '', ackAt }, assignments, timeRequests)
+        //   역할 분기는 벨과 같은 manageUnreadCount — 매니저는 매니저 목록과 같은 배열(근무 알림·역할 변경 포함).
+        //   사장 알림(alerts)은 예전처럼 앱 배지에서 세지 않는다.
+        ? manageUnreadCount(
+            role,
+            { queue, suggestions, swaps, pending, nameOf: () => '', feed, userId: me, ackAt, claims, alerts: [], assignments, timeRequests },
+            { feed, taskTemplates: templates, done, today, suggestions, userId: me, nameOf: () => '', ackAt, scheduleNotices },
+          )
         // 레지스트리 badgeUnit 과 같은 축 — 벨(NotificationBell)과 같은 인자(assignments · joinNotices 포함).
         : juniorUnreadCount(feed, swaps, me, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, joinAckAt);
     setAppBadge(count);
