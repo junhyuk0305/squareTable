@@ -165,6 +165,9 @@ try {
     await J.c.from('work_done').delete().eq('template_id', t2);
     const r2 = await one(srv.from('work_done').select('template_id').eq('template_id', t2));
     check('6-2 남의 완료를 지울 수 없다', !!k0 && !!r2, k0 ? 'K 의 완료가 지워졌다' : 'K 완료 시드가 안 들어갔다');
+    const { error: e3 } = await O.c.from('work_done').delete().eq('template_id', t2);
+    const r3 = await one(srv.from('work_done').select('template_id').eq('template_id', t2));
+    check('6-3 [OK] 사장은 직원의 완료를 풀 수 있다', !e3 && !r3, e3?.message ?? '안 지워졌다');
   }
 
   // ── 7. 퀴즈·이해 확인 위조 ─────────────────────────────────────────────────
