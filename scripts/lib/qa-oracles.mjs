@@ -83,6 +83,12 @@ export const PROBE = `(() => {
     if (el === top || el.contains(top)) return;
     const tr = top.getBoundingClientRect();
     if (tr.width >= W * 0.9 && tr.bottom >= H - 24 && tr.top > r.top && tr.top >= H - 140) { item.partial = true; return; }
+    // 덮은 것이 떠 있는 작은 버튼(FAB)이고 대상이 스크롤 목록 안이면, 내리면 비켜난다 → 부분 노출(10-20 /owner/training 실측 · 사용자 결정).
+    const cover = top.closest(SEL); const sc = scrollerY(el);
+    if (cover && sc && !sc.contains(cover)) {
+      const cr = cover.getBoundingClientRect(); const cp = getComputedStyle(cover).position;
+      if ((cp === 'absolute' || cp === 'fixed') && cr.width <= 80 && cr.height <= 80) { item.partial = true; return; }
+    }
     // 덮은 것이 버튼 안의 아이콘이면 그 버튼 이름으로 적는다(FAB '퀴즈 만들기' 가 목록 행 톱니를 덮은 10-17 실측).
     item.covered = label(top.closest(SEL) || top) + (top.contains(el) ? '(clipped)' : '');
   });

@@ -418,12 +418,6 @@
    ]
   },
   {
-   "key": "owner|/owner/quiz-list|R2",
-   "detail": [
-    "가려짐() \"testfff 설정\" @378,752 44×44"
-   ]
-  },
-  {
    "key": "owner|/owner/quiz-list|R3",
    "detail": [
     "<44 \"응시 중\" @25,59 203×38",
@@ -485,12 +479,6 @@
    "key": "owner|/owner/timesheet/[staffId]|R4",
    "detail": [
     "이 달 출퇴근 기록이 없어요.(388×53)"
-   ]
-  },
-  {
-   "key": "owner|/owner/training|R2",
-   "detail": [
-    "가려짐() \"testfff 설정\" @378,752 44×44"
    ]
   },
   {
