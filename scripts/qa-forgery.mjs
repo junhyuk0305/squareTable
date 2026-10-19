@@ -245,12 +245,19 @@ try {
     const { error: e1 } = await anon.rpc('quiz_link_submit', { p_token: tok, p_guest_name: '사칭', p_guest_phone: victim, p_phone_verified: true, p_answers: [{ item_id: QI, response: 1 }] });
     const { data: rows } = await srv.from('quiz_attempts').select('guest_phone_verified').eq('guest_phone', victim);
     check('11-1 인증 안 한 번호를 인증됨으로 저장할 수 없다', !e1 && (rows ?? []).length > 0 && rows.every((r) => r.guest_phone_verified !== true), e1?.message ?? JSON.stringify(rows));
-    let blocked = false;
-    for (let i = 0; i < 35 && !blocked; i++) { // 0321 상한 = 10분 30회
-      const { error } = await anon.rpc('quiz_link_submit', { p_token: tok, p_guest_name: `반복${i}`, p_guest_phone: null, p_phone_verified: false, p_answers: [{ item_id: QI, response: 0 }] });
-      if (error) blocked = /too_many/.test(error.message);
+    // 0325: 같은 사람(번호 없으면 이름) 10분 10번 · 링크 전체 10분 300번.
+    let manyOk = true;
+    for (let i = 0; i < 12; i++) {
+      const { error } = await anon.rpc('quiz_link_submit', { p_token: tok, p_guest_name: `교육생${i}`, p_guest_phone: null, p_phone_verified: false, p_answers: [{ item_id: QI, response: 1 }] });
+      if (error) manyOk = false;
     }
-    check('11-2 링크 하나로 짧은 시간에 끝없이 제출할 수 없다', blocked);
+    check('11-2 [OK] 여러 사람이 한꺼번에 풀어도 막히지 않는다(12명)', manyOk);
+    let blockedAt = 0;
+    for (let i = 1; i <= 12 && !blockedAt; i++) {
+      const { error } = await anon.rpc('quiz_link_submit', { p_token: tok, p_guest_name: '반복', p_guest_phone: null, p_phone_verified: false, p_answers: [{ item_id: QI, response: 0 }] });
+      if (error && /too_many/.test(error.message)) blockedAt = i;
+    }
+    check('11-3 같은 사람은 10분에 10번까지만 낸다', blockedAt === 11, `막힌 회차=${blockedAt}`);
   }
 
   // ── 14. 코드 대입 ──────────────────────────────────────────────────────────
