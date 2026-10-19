@@ -66,7 +66,7 @@ check('★2-2 hqConsole 은 SHOW_HQ_CONSOLE 상수에서 읽는다(Platform.OS �
 check('★2-3 매장 유무는 stores(my_units)로 센다 · unitId 는 안 본다(작업실 제외 · 0215)', /hasStore: stores\.length > 0/.test(idx));
 const pIdx = idx.indexOf('needsProfileSetup({'), dIdx = idx.indexOf('if (needsDowngradeChoice)'), lIdx = idx.indexOf('landingFor({');
 check('2-4 순서 = 프로필 완성 → 다운그레이드 → landingFor', pIdx > 0 && dIdx > pIdx && lIdx > dIdx, show([pIdx, dIdx, lIdx]));
-check('2-5 미로그인 웹 → /welcome.html, 앱 → /login 은 그대로', /window\.location\.replace\('\/welcome\.html'\)/.test(idx) && /<Redirect href="\/login" \/>/.test(idx));
+check('2-5 미로그인 웹 → /welcome.html, 앱 → /login 은 그대로', /window\.location\.replace\((bootOAuthLost \? OAUTH_LOST_HREF : )?'\/welcome\.html'\)/.test(idx) && /<Redirect href="\/login" \/>/.test(idx));
 
 // ── [3] hq/_layout.tsx ───────────────────────────────────────────────
 console.log('\n[3] hq/_layout.tsx');

@@ -8,6 +8,7 @@ import { needsProfileSetup } from '@/lib/store/profileSetup';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { SHOW_HQ_CONSOLE } from '@/lib/config/store-policy';
 import { landingFor } from '@/lib/nav/landing';
+import { isLostOAuthReturn, OAUTH_LOST_HREF } from '@/lib/auth/googleRedirect';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, Gap, SCREEN_GUTTER } from '@/lib/theme/layout';
@@ -47,6 +48,13 @@ const OFFERS = ['설치 없이 QR로 시작', '사장님 답이 곧 AI가 돼요
 // Q26: 자동 재시도 간격. 5초에서 시작해 두 배씩 늘리고 30초에서 멈춘다.
 const RETRY_FIRST_MS = 5000;
 const RETRY_MAX_MS = 30000;
+
+// 첫 주소를 모듈이 읽힐 때 잡아 둔다. supabase 가 ?code= 교환을 시도한 뒤 주소를 지울 수 있어서다.
+// 세션 없이 OAuth 복귀 흔적이 있었으면 구글 로그인이 끊긴 것 → 소개 페이지 대신 로그인 화면으로.
+// ★한 번 로그인되면 지운다 — 같은 페이지에서 정상 로그인 → 로그아웃 → '/' 로 와도 잘못된 안내를 띄우지 않는다.
+let bootOAuthLost =
+  Platform.OS === 'web' && typeof window !== 'undefined' && window.location.pathname === '/' &&
+  isLostOAuthReturn(window.location.search, window.location.hash);
 
 /**
  * 연결 안내(Q26) — 연결 실패로 세션을 못 읽었을 때 로그인 화면 대신 보인다.
@@ -122,6 +130,7 @@ export default function LandingScreen() {
 
   // 이미 로그인된 재방문자는 마케팅을 건너뛰고 각자 홈으로. (데모 빌드는 항상 랜딩을 보여준다)
   if (HAS_SUPABASE && status === 'signed_in') {
+    bootOAuthLost = false;
     // 소셜 로그인으로 들어와 프로필이 결손(phone/생년월일 없음)이면 역할 홈 대신 완성화면으로 — 이 관문이
     // OAuth 복귀(redirectTo=오리진→여기)를 가장 먼저 받는다. 완성 후엔 phone 이 채워져 이 분기를 안 탄다.
     if (needsProfileSetup({ status, phone, unitId, pendingUnitId, brandId })) {
@@ -143,7 +152,7 @@ export default function LandingScreen() {
   // 웹 미로그인 방문자는 정적 마케팅 페이지(/welcome.html)를 앞문으로 — 로그인/가입만 앱(SPA)으로 이어진다.
   // welcome.html은 실제 정적 파일이라 SPA rewrite에 안 걸린다.
   if (HAS_SUPABASE && status === 'signed_out' && Platform.OS === 'web') {
-    if (typeof window !== 'undefined') window.location.replace('/welcome.html');
+    if (typeof window !== 'undefined') window.location.replace(bootOAuthLost ? OAUTH_LOST_HREF : '/welcome.html');
     return null;
   }
   // 네이티브(스토어 앱)는 마케팅 스크롤(이 화면의 나머지)을 건너뛴다 — 스토어에서 이미 소개를 보고

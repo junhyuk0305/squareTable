@@ -139,7 +139,7 @@ check('[다시 시도] 버튼', index.includes('>다시 시도<'));
 check('[다른 계정으로 로그인] 버튼 → signOut', index.includes('>다른 계정으로 로그인<') && /signOut\(\)/.test(index));
 const offlineAt = index.search(/status === 'signed_out' && sessionCheck === 'offline'/);
 check('signed_out + offline 분기가 있다', offlineAt > -1);
-check('오프라인 분기가 웹 welcome 이동보다 먼저다', offlineAt > -1 && offlineAt < index.indexOf("window.location.replace('/welcome.html')"));
+check('오프라인 분기가 웹 welcome 이동보다 먼저다', offlineAt > -1 && offlineAt < index.indexOf("'/welcome.html')"));
 check('오프라인 분기가 네이티브 /login 이동보다 먼저다', offlineAt > -1 && offlineAt < index.indexOf('<Redirect href="/login" />'));
 check('앱이 다시 켜지면(AppState active) 다시 시도한다', /AppState\.addEventListener\('change'/.test(index) && /'active'/.test(index));
 check('자동 재시도 간격 5초 → 30초', /5000/.test(index) && /30000/.test(index));

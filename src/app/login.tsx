@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { applyMockSeed } from '@/lib/demo/mockSeed';
@@ -16,6 +16,7 @@ import { PasswordInput } from '@/components/PasswordInput';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { SHOW_SOCIAL_LOGIN } from '@/lib/config/store-policy';
 import { isValidEmail } from '@/lib/utils/validation';
+import { track } from '@/lib/analytics/track';
 import type { Role } from '@/types';
 
 /**
@@ -23,6 +24,8 @@ import type { Role } from '@/types';
  * 신규 사장님은 랜딩 FAB → /signup 으로 전환하고, 여기는 재방문·로그아웃 복귀용.
  * Supabase 미설정(데모)이면 역할 토글로 즉시 입장하는 기존 동작을 그대로 유지한다.
  */
+const OAUTH_LOST_TEXT = "구글 로그인이 끝나지 않았어요. 아래 'Google로 계속하기'를 한 번 더 눌러 주세요.";
+
 export default function LoginScreen() {
   const router = useRouter();
   const switchTo = useSessionStore((s) => s.switchTo);
@@ -32,8 +35,14 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [msgErr, setMsgErr] = useState(false);
+  // 구글 로그인이 끊겨 돌아온 경우(index · inject-landing-redirect 가 ?oauth=lost 로 보낸다).
+  // 계정은 이미 생겼을 수 있으니 가입을 다시 하지 말고 구글을 한 번 더 누르게 한다.
+  const oauthLost = useLocalSearchParams<{ oauth?: string }>().oauth === 'lost';
+  const [msg, setMsg] = useState<string | null>(oauthLost ? OAUTH_LOST_TEXT : null);
+  const [msgErr, setMsgErr] = useState(oauthLost);
+  useEffect(() => {
+    if (oauthLost) track('oauth_return_lost');
+  }, [oauthLost]);
   // 안내 문구 표시 — 실패는 빨강(경고), 정보/성공은 중립.
   const flash = (m: string, isErr = false) => {
     setMsg(m);

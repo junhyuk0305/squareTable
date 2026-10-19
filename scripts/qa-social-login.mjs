@@ -68,5 +68,64 @@ console.log('\n■ 소스 계약');
   check('expo-web-browser 가 의존성에 있다', !!pkg?.dependencies?.['expo-web-browser']);
 }
 
+// ★2026-10-20: 구글 로그인이 끊겨 세션 없이 /?code= 로 돌아오면 소개 페이지(welcome.html)로 말없이 튕겼다.
+//   (실사례: 앱에서 시작 → Redirect URLs 에 앱 주소가 없어 웹으로 떨어짐 → 가입을 처음부터 다시 함.)
+//   이제 로그인 화면(/login?oauth=lost)으로 보내 구글을 한 번 더 누르게 한다. 정상 복귀는 그대로다.
+console.log('\n■ 끊긴 구글 복귀 — 소개 페이지 대신 로그인 화면으로');
+{
+  const { isLostOAuthReturn, OAUTH_LOST_HREF } = await load('../src/lib/auth/googleRedirect.ts');
+  check('isLostOAuthReturn: ?code= 를 잡는다', isLostOAuthReturn?.('?code=abc', '') === true);
+  check('isLostOAuthReturn: ?error= 를 잡는다(구글 창 취소)', isLostOAuthReturn?.('?error=access_denied&error_description=x', '') === true);
+  check('isLostOAuthReturn: #error= 도 잡는다', isLostOAuthReturn?.('', '#error=server_error') === true);
+  check('isLostOAuthReturn: 흔적 없으면 false', isLostOAuthReturn?.('', '') === false && isLostOAuthReturn?.('?utm_source=ig', '') === false);
+  check('OAUTH_LOST_HREF = /login?oauth=lost', OAUTH_LOST_HREF === '/login?oauth=lost');
+
+  // 빌드 후 주입되는 인라인 스크립트를 실제로 만들어 돌린다(임시 폴더 · 저장소 dist 는 건드리지 않는다).
+  // ★rmSync({recursive}) 는 한글 사용자 경로(Windows · Node 24)에서 프로세스를 말없이 죽인다(exit 127) → 하나씩 지운다.
+  const { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, unlinkSync, rmdirSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { execFileSync } = await import('node:child_process');
+  const vm = await import('node:vm');
+  const t = mkdtempSync(join(tmpdir(), 'sqt-inject-'));
+  let inline = '';
+  try {
+    mkdirSync(join(t, 'scripts')); mkdirSync(join(t, 'src', 'data'), { recursive: true }); mkdirSync(join(t, 'dist'));
+    copyFileSync(new URL('./inject-landing-redirect.mjs', import.meta.url), join(t, 'scripts', 'inject-landing-redirect.mjs'));
+    copyFileSync(new URL('../src/data/marketing-paths.json', import.meta.url), join(t, 'src', 'data', 'marketing-paths.json'));
+    writeFileSync(join(t, 'dist', 'index.html'), '<html><head></head><body></body></html>');
+    execFileSync(process.execPath, [join(t, 'scripts', 'inject-landing-redirect.mjs')], { stdio: 'ignore' });
+    inline = (readFileSync(join(t, 'dist', 'index.html'), 'utf8').match(/<script id="sqt-landing-redirect">([\s\S]*?)<\/script>/) || ['', ''])[1];
+  } finally {
+    for (const f of ['scripts/inject-landing-redirect.mjs', 'src/data/marketing-paths.json', 'dist/index.html']) { try { unlinkSync(join(t, f)); } catch {} }
+    for (const d of ['scripts', 'src/data', 'src', 'dist', '']) { try { rmdirSync(join(t, d)); } catch {} }
+  }
+  check('인라인 스크립트가 주입된다', inline.length > 0);
+  const runInline = (path, search, keys) => {
+    let to = null;
+    const store = keys.map((k) => [k, 'x']);
+    const ctx = {
+      location: { pathname: path, search, hash: '', replace: (u) => { to = u; } },
+      localStorage: { length: store.length, key: (i) => (store[i] ? store[i][0] : null) },
+    };
+    vm.runInNewContext(inline, ctx);
+    return to;
+  };
+  const SESSION = 'sb-ref-auth-token', VERIFIER = 'sb-ref-auth-token-code-verifier';
+  check('★세션·짝 값 없이 /?code= → /login?oauth=lost', runInline('/', '?code=abc', []) === '/login?oauth=lost', `→ ${runInline('/', '?code=abc', [])}`);
+  check('★세션 없이 /?error= → /login?oauth=lost', runInline('/', '?error=access_denied', []) === '/login?oauth=lost');
+  check('흔적 없는 미로그인 / → /welcome.html (그대로)', runInline('/', '', []) === '/welcome.html');
+  check('★웹에서 시작한 정상 복귀(짝 값 있음) → 이동 없음(앱이 code 를 교환)', runInline('/', '?code=abc', [VERIFIER]) === null);
+  check('로그인된 / → 이동 없음', runInline('/', '', [SESSION]) === null);
+
+  const idx = strip(read('src/app/index.tsx'));
+  check('index: 첫 주소는 모듈 로드 때 잡는다(교환 뒤 주소가 지워져도 판정 유지)', /let bootOAuthLost =[\s\S]*?isLostOAuthReturn\(window\.location\.search, window\.location\.hash\)/.test(idx));
+  check('★index: 로그인되면 지운다(정상 로그인 → 로그아웃 뒤 잘못된 안내 금지)', /status === 'signed_in'\) \{\s*bootOAuthLost = false;/.test(idx));
+  check('index: 웹 미로그인 분기가 끊긴 복귀면 로그인 화면으로', /window\.location\.replace\(bootOAuthLost \? OAUTH_LOST_HREF : '\/welcome\.html'\)/.test(idx));
+  const lg = strip(read('src/app/login.tsx'));
+  check('login: ?oauth=lost 면 안내 문구로 시작한다', /\.oauth === 'lost'/.test(lg) && /useState<string \| null>\(oauthLost \? OAUTH_LOST_TEXT : null\)/.test(lg));
+  check('login: 끊긴 복귀를 계측한다(oauth_return_lost)', /track\('oauth_return_lost'\)/.test(lg));
+}
+
 console.log(`\n── ${pass} PASS · ${fail} FAIL`);
 process.exit(fail > 0 ? 1 : 0);

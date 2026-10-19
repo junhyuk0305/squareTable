@@ -43,7 +43,9 @@ const script =
   `if(p==='/'){` +
   `for(var i=0,s=0;i<localStorage.length;i++){var k=localStorage.key(i);` +
   `if(k&&k.indexOf('sb-')===0&&k.indexOf('-auth-token')!==-1){s=1;break;}}` +
-  `if(!s){location.replace('/welcome.html');}}}catch(e){}})();</script>`;
+  // 세션 없이 ?code=·?error= 를 달고 왔으면 구글 로그인이 끊긴 것이다 → 소개 페이지 대신 로그인 화면으로
+  // (규칙 정본 = src/lib/auth/googleRedirect.ts isLostOAuthReturn · 웹에서 시작한 정상 복귀는 code-verifier 키가 있어 s=1).
+  `if(!s){location.replace(/[?&#](code|error)=/.test(location.search+location.hash)?'/login?oauth=lost':'/welcome.html');}}}catch(e){}})();</script>`;
 
 html = html.replace('<head>', '<head>' + script);
 writeFileSync(file, html);
