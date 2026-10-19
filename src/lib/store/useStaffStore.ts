@@ -7,7 +7,6 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchStaffProfiles, removeStaffMember, subscribeStaff, fetchPendingMembers, approveMember, rejectMember, setMemberRoleDb, fetchMemberTenures, fetchJoinNotices } from '@/lib/db';
 import { openJoinedAt, type MemberTenure } from '@/lib/utils/tenure';
 import { showToast } from '@/lib/store/useToastStore';
-import { notifyUserRoleChange } from '@/lib/push/notify';
 import { PLANS } from '@/lib/config/tiers';
 import { subscribeDebounced } from '@/lib/store/realtimeSync';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
@@ -163,8 +162,9 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     });
   },
 
-  // 매니저 지정/해제(0093): 낙관적 갱신 + 실패 시 복원. 성공 시 토스트 + 대상 본인에게 푸시.
-  // 확인 모달 없음(P7) — 같은 버튼으로 즉시 되돌릴 수 있는 동작이라 실행 + 알림으로 충분하다.
+  // 매니저 지정/해제(0093): 낙관적 갱신 + 실패 시 복원. 성공 시 토스트.
+  // 확인 모달은 화면(staff.tsx)이 지정할 때 띄운다. 이 함수는 확인이 끝난 뒤 불린다.
+  // 대상 본인 알림은 서버가 보낸다(0315 · set_member_role → member_notices). 앱은 푸시를 쏘지 않는다.
   setRole: (id, role) => {
     const before = get().roles;
     if ((before[id] ?? 'junior') === role) return;
@@ -178,7 +178,6 @@ export const useStaffStore = create<StaffState>((set, get) => ({
       }
       const name = get().staff.find((s) => s.id === id)?.name || '직원';
       showToast(role === 'manager' ? `${name}님을 매니저로 지정했어요` : `${name}님을 매니저에서 해제했어요`, 'good');
-      notifyUserRoleChange(id, useSessionStore.getState().storeName, role === 'manager');
     });
   },
 

@@ -19,6 +19,7 @@ import { retryPendingEmbeddings } from '@/lib/ai/embedBacklog';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { canManage, managerMayOpen } from '@/lib/utils/roles';
 import { StoreClosedScreen } from '@/components/StoreClosedScreen';
+import { subscribeMyMembership } from '@/lib/db';
 
 /** 레이아웃이 처음 열 때와 앱이 다시 앞으로 왔을 때(J15 ③) 같은 목록을 다시 읽는다. 목록을 두 벌로 두지 않는다. */
 function hydrateOwnerStores() {
@@ -59,6 +60,8 @@ export default function OwnerLayout() {
   const phone = useSessionStore((s) => s.phone);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
   const unitLocked = useSessionStore((s) => s.unitLocked);
+  const seatLocked = useSessionStore((s) => s.seatLocked);
+  const userId = useSessionStore((s) => s.userId);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -96,9 +99,15 @@ export default function OwnerLayout() {
   //  - 매장 연결 해제 등 소속 변화도 감지. (junior/_layout 과 동일 패턴.)
   useEffect(() => {
     if (status !== 'signed_in') return;
-    const id = setInterval(() => void useSessionStore.getState().refreshMembership(), 30000);
-    return () => clearInterval(id);
-  }, [status]);
+    const refresh = () => void useSessionStore.getState().refreshMembership();
+    // 매니저 지정·해제 즉시(0315) — 해제된 매니저는 역할이 junior 로 바뀌어 아래 역할 가드가 바로 내보낸다.
+    const off = userId ? subscribeMyMembership(userId, refresh) : () => {};
+    const id = setInterval(refresh, 30000);
+    return () => {
+      off();
+      clearInterval(id);
+    };
+  }, [status, userId]);
 
   // 매니저는 직원 세트를 쓰고, 사장 화면은 허용 목록(MANAGER_OWNER_ROUTES)만 연다 — 나머지는 직원 홈으로.
   // ★render-time <Redirect> 로 하면 안 된다 — 웹 콜드 로드에서 이 스택은 목표 경로 전에 첫 라우트(`/owner/ask`)를
@@ -153,6 +162,9 @@ export default function OwnerLayout() {
   }
   // 닫힌 매장(0284 · C2) — 사장이 닫은 매장에 들어와 있는 매니저도 막는다(서버 판정은 사장에게 늘 false).
   if (HAS_SUPABASE && status === 'signed_in' && unitId && role === 'manager' && unitLocked) return <StoreClosedScreen />;
+  // 좌석 잠금(0315) — 사장 매장이 무료로 내려가 이 매니저 자리가 잠기면 직원과 같은 잠금 화면으로 보낸다.
+  //   계정 주체는 사장이다. 서버도 잠긴 매니저의 관리 권한(auth_can_manage)을 거부한다. 사장은 좌석을 차지하지 않는다.
+  if (HAS_SUPABASE && status === 'signed_in' && unitId && role === 'manager' && seatLocked) return <Redirect href="/billing" />;
   // ★2026-08-06: 만료 페이월(구독 만료 → /billing 강제) 제거.
   //   만료는 이제 앱 잠금이 아니라 **무료 요금제 강등**이다(effectivePlanOf / 0115 effective_plan).
   //   사장은 만료돼도 앱을 그대로 쓰고, 제한은 무료 한도(직원 3명·AI 월 200)와 좌석 잠금으로만 걸린다.

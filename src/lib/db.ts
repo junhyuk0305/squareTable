@@ -4031,6 +4031,19 @@ export function subscribeMyProfile(userId: string, onChange: () => void): () => 
   };
 }
 
+// 내 unit_members 행 실시간(0315) — 사장이 매니저로 지정·해제하면(set_member_role) 역할을 바로 다시 읽는다.
+// 역할은 profiles 가 아니라 unit_members 에 있어 위 구독으로는 안 잡혔다. 해제는 profiles 쪽이 잡는다.
+export function subscribeMyMembership(userId: string, onChange: () => void): () => void {
+  if (!HAS_SUPABASE) return () => {};
+  const ch = supabase
+    .channel(uniqueChannel('my-membership'))
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'unit_members', filter: `user_id=eq.${userId}` }, onChange)
+    .subscribe();
+  return () => {
+    supabase.removeChannel(ch);
+  };
+}
+
 // ── 파트(홀·주방 같은 담당) — 0164 ────────────────────────────────────────────
 // 파트는 **거르는 축이 아니라 순서만 올리는 추천 축**이다(0164 주석 ①). 표준 세트를 주지 않으므로
 // **이 매장이 실제로 쓴 값 = store_parts 행**이 곧 후보 목록이고, 쓰기 시작할 때 지연 생성된다.

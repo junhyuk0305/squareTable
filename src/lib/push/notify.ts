@@ -209,16 +209,8 @@ export const notifyOwnersQuizDone = (courseId: string, name: string, courseName:
     body: courseName,
   });
 
-/** 매니저 지정/해제(0093) — 대상 본인에게만. 다음 진입부터 화면 세트가 바뀌는 걸 알린다.
- *  두 경우 모두 직원 홈으로 보낸다(F-2). 매니저는 직원 홈을 쓰고, `/owner/dashboard` 는 허용 목록 밖이다. */
-export const notifyUserRoleChange = (userId: string, storeName: string, promoted: boolean) =>
-  pushNotify({
-    audience: 'user',
-    kind: 'role',
-    userId,
-    title: promoted ? '매니저가 됐어요' : '매니저에서 해제됐어요',
-    body: storeName,
-  });
+// 매니저 지정/해제 알림은 서버가 보낸다(0315 · set_member_role → member_notices · url /junior/home).
+//   예전 notifyUserRoleChange 는 같은 매장 누구나 위조할 수 있어 지웠다. 엣지는 'role' 요청을 무시한다.
 
 // 직원이 받는 것들 (사장/동료 행동 → 직원)
 // 공지는 푸시하지 않는다(2026-10-16 사용자 결정) — 공지 패널에서 본다.

@@ -464,15 +464,14 @@ export default function OwnerStaffScreen() {
         onConfirm={confirmReject}
         onCancel={() => setRejectTarget(null)}
       />
-      {/* 매니저 안내(2026-09-13) — 실제로 **앱에서 되는 것**만 적는다.
-          경계의 정본은 클라이언트 허용목록(lib/utils/roles.ts MANAGER_OWNER_ROUTES)이다.
-          서버 쪽 어긋남(0093 이 매니저에게 열어 뒀던 시급·급여·합류 승인)은 0201 에서 닫혔다. */}
+      {/* 매니저 안내(2026-10-19 · 0315) — 실제로 되는 것만 적는다.
+          경계의 기준은 서버(auth_can_manage · 사장 전용 RPC)다. 앱 허용목록(lib/utils/roles.ts)은 서버가 허용한 범위를 연다. */}
       <ConfirmModal
         visible={!!managerTarget}
         icon="ribbon-outline"
         title="매니저로 지정할까요?"
-        message={`'${managerTarget?.name ?? ''}' 님이 매장 관리를 도울 수 있어요.\n\n새로 할 수 있는 것 — 근무표 짜기·교대 승인, 할일 배정, 공지 쓰기, 출근 기록 수정, 업무방 관리.\n\n그대로인 것 — 급여·시급, 초대코드, 직원 내보내기·매니저 지정, 노하우 편집, 퀴즈, 요금제는 사장님만 해요.`}
-        accent="매니저도 직원 화면을 그대로 써요. 설정의 '매장 관리'로 들어가요."
+        message={`'${managerTarget?.name ?? ''}' 님이 매장 관리를 도울 수 있어요.\n\n새로 할 수 있는 것 — 근무표 짜기·교대 승인, 할일 배정, 공지 쓰기, 출근 기록 수정, 업무방 관리, 노하우 고치기·제안 승인, 퀴즈.\n\n그대로인 것 — 급여·시급, 초대코드, 직원 내보내기·매니저 지정, 노하우 보관, 업무방 삭제, 요금제는 사장님만 해요.`}
+        accent="매니저도 직원 화면을 그대로 써요. 설정의 '매장 관리'·'노하우'·'퀴즈'로 들어가요."
         confirmLabel="매니저로 지정"
         onConfirm={() => {
           if (managerTarget) setRole(managerTarget.id, 'manager');

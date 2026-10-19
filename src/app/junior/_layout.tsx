@@ -15,7 +15,7 @@ import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { subscribeMyProfile } from '@/lib/db';
+import { subscribeMyMembership, subscribeMyProfile } from '@/lib/db';
 import { StoreClosedScreen } from '@/components/StoreClosedScreen';
 
 /** 사장이 `/junior/*` 로 오면 착지시킬 사장 경로 — 대응이 분명한 것만. 없으면 사장 홈. */
@@ -92,9 +92,11 @@ export default function JuniorLayout() {
     if (status !== 'signed_in') return;
     const refresh = () => void useSessionStore.getState().refreshMembership();
     const off = userId ? subscribeMyProfile(userId, refresh) : () => {};
+    const offRole = userId ? subscribeMyMembership(userId, refresh) : () => {}; // 매니저 지정·해제 즉시(0315)
     const id = setInterval(refresh, 20000);
     return () => {
       off();
+      offRole();
       clearInterval(id);
     };
   }, [status, userId]);

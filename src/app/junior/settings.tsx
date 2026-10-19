@@ -141,7 +141,12 @@ export default function StoreSettings() {
           <SettingsRow icon="cash-outline" label="내 시급" value={wage ? `${won(wage)}/시간` : '사장님이 정해요'} />
           {/* 매니저만 — 사장 화면으로 가는 진입은 이 행 하나뿐(허용 목록 = roles.ts MANAGER_OWNER_ROUTES). */}
           {role === 'manager' ? (
-            <SettingsRow icon="storefront-outline" label="매장 관리" hint="근무표 · 할일 배정 · 공지 · 출근기록" onPress={() => router.push('/owner/schedule')} />
+            <>
+              <SettingsRow icon="storefront-outline" label="매장 관리" hint="근무표 · 할일 배정 · 공지 · 출근기록" onPress={() => router.push('/owner/schedule')} />
+              {/* 0315: 서버가 매니저에게 연 노하우 편집·퀴즈 운영으로 가는 진입. 하단 탭은 직원 탭 그대로다. */}
+              <SettingsRow icon="book-outline" label="노하우" hint="노하우 고치기 · 제안 승인 · 받은 질문" onPress={() => router.push('/owner/categories')} />
+              <SettingsRow icon="school-outline" label="퀴즈" hint="퀴즈 만들기 · 결과 보기" onPress={() => router.push('/owner/training')} />
+            </>
           ) : null}
         </SettingsSection>
 

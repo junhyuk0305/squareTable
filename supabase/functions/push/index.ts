@@ -152,6 +152,11 @@ function ownerAlertRouteEdge(kind: string | undefined): string {
 // itemId 는 그 항목(할일·피드·질문·신청자)의 id 다 — 받는 화면이 그 항목을 연다(P1 역 ⑤). 글자 집합을 제한해 싣는다.
 // ★같은 표가 클라에 한 벌 더 있다 = src/lib/notif/registry.ts NOTIF[kind].route(surface, id) (벨·푸시 헬퍼가 쓰는 정본).
 //   새 tag 를 더하면 여기도 더한다. 모르는 tag 는 "/"(앱 첫 화면)다. check-push-route-sync.mjs 가 레지스트리 기준으로 맞춘다.
+// 0315: audience 'user' 로 받는 태그(notify.ts 의 user 발송 전수). 'role' 은 서버가 보내므로 없다.
+const USER_PUSH_TAGS = new Set(['swap-req', 'swap-result', 'q-answered', 'suggestion-result', 'mention', 'assign', 'training']);
+// 결과 알림 — 관리자만 만든다(approve_swap·제안 승인·퀴즈 요청이 관리 권한 RPC 다).
+const MANAGER_USER_PUSH_TAGS = new Set(['swap-result', 'suggestion-result', 'training']);
+
 function clientPushRoute(audience: string | undefined, tag: string | undefined, itemId?: string): string {
   const id = typeof itemId === 'string' && /^[\w.:-]{1,80}$/.test(itemId) ? encodeURIComponent(itemId) : '';
   const owner = audience === 'owners' || audience === 'join_owners';
@@ -720,6 +725,18 @@ Deno.serve(async (req) => {
   const ownerOnly = payload.ownerOnly === true;
   if (!title || !audience) return json(400, { error: 'missing_fields' });
   if (audience !== 'user' && !audienceRoles(audience)) return json(400, { error: 'unknown_audience' });
+  // ★0315: 역할 변경 알림은 서버(set_member_role → member_notices)가 보낸다. 옛 앱이 계속 보내는
+  //   'role' 요청은 아무에게도 보내지 않고 200 으로 끝낸다(옛 앱은 결과를 안 본다 · 위조 '매니저가 됐어요' 차단).
+  if (audience === 'user' && tag === 'role') return json(200, { sent: 0, recipients: 0, ignored: 'server_sends_role' });
+  // ★0315: 'user'(한 사람에게) 는 앱이 실제로 쓰는 태그만 받는다. 결과 알림 3종은 관리자(활성 매장 owner·manager)만 보낸다.
+  //   예전엔 같은 매장 멤버면 누구나 아무 태그·제목으로 동료에게 보낼 수 있었다.
+  if (audience === 'user') {
+    if (!tag || !USER_PUSH_TAGS.has(tag)) return json(400, { error: 'unknown_tag' });
+    if (MANAGER_USER_PUSH_TAGS.has(tag)) {
+      const { data: canManage } = await asCaller.rpc('auth_can_manage');
+      if (canManage !== true) return json(403, { error: 'forbidden' });
+    }
+  }
 
   // 발송 범위가 되는 매장(레이트리밋 키). join_owners 는 신청 대기 매장, 그 외는 소속 매장.
   const scopeUnit = audience === 'join_owners' ? pendingUnit : callerUnit;

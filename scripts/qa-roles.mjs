@@ -118,6 +118,19 @@ try {
   // 0201 뒤로 매니저도 시급을 못 써서 '해제 후 시급 거부'는 해제 전후를 못 가른다 → 출퇴근 보정으로 잰다.
   const attD = await J.from('attendance').insert({ id: `${ATT}jd_${s}`, unit_id: UNIT, staff_id: mId, date: '2026-07-30', work_minutes: 60 });
   check('★해제 후: 남의 출퇴근 보정 즉시 거부', !!attD.error, attD.error?.code ?? '(차단 안 됨!)');
+  // 0315: 역할 알림은 서버가 남긴다(지정·해제 각 1줄). 본인 행만 읽힌다(mn_self_read).
+  const rn0315 = await J.from('member_notices').select('title').eq('unit_id', UNIT).eq('kind', 'role_changed')
+    .gte('created_at', new Date(Date.now() - 120000).toISOString());
+  check('★0315: 지정·해제가 role_changed 알림 2줄을 남긴다', !rn0315.error && (rn0315.data?.length ?? 0) >= 2, rn0315.error?.message ?? `rows=${rn0315.data?.length}`);
+  // 0315: 직원이 엣지로 'role'·결과 알림을 위조하지 못한다. 'role' 은 200 + 0건, 결과 태그는 403.
+  const jTok = (await J.auth.getSession()).data.session?.access_token;
+  const pushAs = (body) => fetch(`${URL}/functions/v1/push`, { method: 'POST', headers: { Authorization: `Bearer ${jTok}`, apikey: ANON, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const fr = await pushAs({ audience: 'user', userId: mId, tag: 'role', title: '매니저가 됐어요', body: 'QA' });
+  const frj = await fr.json().catch(() => ({}));
+  check("★0315: 'role' 푸시 위조 → 보내지 않음(200·sent 0)", fr.status === 200 && (frj.sent ?? 0) === 0, `status=${fr.status} ${JSON.stringify(frj)}`);
+  const fs = await pushAs({ audience: 'user', userId: mId, tag: 'suggestion-result', title: '제안이 반영됐어요', body: 'QA' });
+  check('★0315: 직원의 결과 알림 위조 거부(403)', fs.status === 403, `status=${fs.status}`);
+  skipped('★0315: 좌석 잠긴 매니저의 관리 권한 거부(auth_can_manage=false)', '고정 매장 store_001 을 무료로 내리고 직원 4명 이상이어야 잴 수 있다');
 
   // ── ③ 매니저 허용 도메인 ─────────────────────────────────────────────────
   // ★2026-09-14(0201): 시급·급여 설정·합류 승인은 매니저에게서 **거뒀다**. 0093(07-30)이 열어 뒀지만

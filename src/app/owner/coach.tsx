@@ -97,9 +97,11 @@ export default function OwnerCoachScreen() {
         : addEntry(entry),
     [targetUnitId, addEntry],
   );
+  // 0315: 다른 매장에 넣기(copy_knowhow_to)는 양쪽 매장 소유자만 된다. 이 매장의 매니저에게는 넛지를 안 띄운다.
+  const isOwnerHere = useSessionStore((s) => s.role === 'owner');
   const nudgeTargets = useMemo(
-    () => stores.filter((st) => st.role === 'owner' && st.unit_id !== activeUnit).map((st) => ({ unit_id: st.unit_id, store_name: st.store_name })),
-    [stores, activeUnit],
+    () => stores.filter((st) => isOwnerHere && st.role === 'owner' && st.unit_id !== activeUnit).map((st) => ({ unit_id: st.unit_id, store_name: st.store_name })),
+    [stores, activeUnit, isOwnerHere],
   );
   const [nudgeIds, setNudgeIds] = useState<string[] | null>(null); // 발행된 entryIds(넛지 대상). null=넛지 없음.
 

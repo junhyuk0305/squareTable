@@ -5,11 +5,15 @@ export const canManage = (role: string): boolean => role === 'owner' || role ===
 
 /**
  * 매니저가 열 수 있는 사장 화면(2026-08-27 절충안 ②: 직원 세트 + '매장 관리' 진입 1곳 + 허용 목록).
- * 매니저는 직원 탭바를 쓰고, 여기 있는 `/owner/*` 만 연다 — 급여·시급·초대코드·요금제·매장 설정·직원 관리·
- * 노하우 편집·퀴즈는 제외. 판정은 `managerMayOpen`(owner/_layout 가드) 하나만 쓴다.
+ * 매니저는 직원 탭바를 쓰고, 여기 있는 `/owner/*` 만 연다 — 급여·시급·초대코드·요금제·매장 설정·직원 관리는
+ * 제외(0315 부터 노하우·퀴즈는 연다). 판정은 `managerMayOpen`(owner/_layout 가드) 하나만 쓴다.
  */
 /**
- * ★서버와의 경계 어긋남은 **닫혔다**(0201, 2026-09-14). 이 목록이 매니저 경계의 정본이다.
+ * ★경계의 기준은 서버다(2026-10-19 · 0315). 앱은 서버가 허용한 범위를 연다.
+ *   0315 에서 서버가 이미 허용하던 노하우·제안 승인·받은 질문·퀴즈를 이 목록에 열었다.
+ *   사장 전용(급여·초대코드·노하우 보관·매장 간 복사·업무방 삭제)은 화면 안에서 버튼을 숨긴다.
+ *
+ * (옛 기록) 서버와의 경계 어긋남은 0201(2026-09-14)에서 닫혔다.
  *
  * 2026-07-30(0093)부터 서버는 매니저에게 시급 저장·급여 설정 RPC·합류 승인·반려를 열어 뒀는데,
  * 그 일을 하는 화면(`/owner/staff`·`/owner/payroll`)이 이 목록에 없어 가드가 매니저를
@@ -26,6 +30,18 @@ export const MANAGER_OWNER_ROUTES = [
   '/owner/rooms', // 방 → /owner/work 로 replace
   '/owner/timesheet', // /owner/timesheet/[staffId] 출근기록
   '/owner/notifications', // 공지·알림
+  // 0315: 노하우·퀴즈(서버 쓰기·읽기가 auth_can_manage). 보관·매장 간 복사·초대코드는 화면 안에서 사장만.
+  '/owner/categories', // 노하우 목록
+  '/owner/knowledge',
+  '/owner/coach',
+  '/owner/edit',
+  '/owner/templates',
+  '/owner/suggestions', // 제안 승인
+  '/owner/inbox', // 받은 질문
+  '/owner/training', // 퀴즈
+  '/owner/quiz-new',
+  '/owner/quiz-list',
+  '/owner/quiz',
 ] as const;
 export const managerMayOpen = (pathname: string): boolean =>
   MANAGER_OWNER_ROUTES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -37,8 +53,8 @@ const MANAGER_FLIP = ['work', 'schedule', 'notifications'];
  * 알림 탭 목적지를 받는 사람의 역할(활성 매장 기준 · 0233)에 맞춘다. 웹·앱 푸시가 이 하나를 쓴다.
  * 발송 측(notify.ts)은 수신자 역할을 모른다. 그래서 탭하는 순간의 역할로 고친다.
  *  - 사장: `/junior/x` → `/owner/x`. 직원: `/owner/x` → `/junior/x`. (예전 규칙 그대로)
- *  - 매니저(F-2): 허용 목록 안의 `/owner/*` 는 그대로. 질문(`/owner/inbox`)은 물어보기 탭(`/junior/chat`),
- *    그 밖의 `/owner/*`(제안 검토·직원 관리·사장 홈)는 직원 홈. `/junior/*` 는 짝이 허용 목록에 있을 때만 뒤집는다.
+ *  - 매니저(F-2): 허용 목록 안의 `/owner/*` 는 그대로(0315 부터 받은 질문·제안 승인도 여기). 그 밖의
+ *    `/owner/*`(직원 관리·사장 홈)는 직원 홈. `/junior/*` 는 짝이 허용 목록에 있을 때만 뒤집는다.
  *    예전엔 사장 규칙을 같이 써서 `/junior/chat` 이 없는 `/owner/chat` 이 됐다.
  */
 export function routeForRole(url: string, role: string): string {
@@ -49,7 +65,7 @@ export function routeForRole(url: string, role: string): string {
   const path = url.split(/[?#]/)[0];
   if (isOwner) {
     if (managerMayOpen(path)) return url;
-    return path === '/owner/inbox' ? '/junior/chat' : '/junior/home';
+    return '/junior/home';
   }
   if (isJunior && MANAGER_FLIP.some((p) => path === `/junior/${p}` || path.startsWith(`/junior/${p}/`))) {
     return '/owner/' + url.slice('/junior/'.length);

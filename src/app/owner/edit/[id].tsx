@@ -79,6 +79,8 @@ function ConversationalEdit({ entry, sugId }: { entry: PlaybookEntry; sugId?: st
   const archive = usePlaybookStore((s) => s.archive);
   const entries = usePlaybookStore((s) => s.entries);
   const userName = useSessionStore((s) => s.userName);
+  // 0315: 노하우 삭제(보관 · archive_knowhow)는 서버가 매장 소유자만 받는다. 매니저에게는 휴지통을 안 그린다.
+  const isOwner = useSessionStore((s) => s.role === 'owner');
   const industry = useSessionStore((s) => s.industry);
 
   // 카테고리(= section) 변경 — 저장 시 고른 카테고리를 여기서도 바꿀 수 있다(발행 시트와 같은 선택지).
@@ -174,7 +176,7 @@ function ConversationalEdit({ entry, sugId }: { entry: PlaybookEntry; sugId?: st
         title="노하우 수정"
         backFallback
         right={
-          isBrandCopy(entry) ? undefined : (
+          isBrandCopy(entry) || !isOwner ? undefined : (
             <Pressable
               onPress={del}
               style={({ pressed }) => [styles.headerAction, pressed && { opacity: 0.6 }]}

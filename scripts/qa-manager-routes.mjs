@@ -32,8 +32,15 @@ for (const [u, want] of [
   ['/junior/work', '/owner/work'],
   ['/junior/schedule', '/owner/schedule'],
   ['/junior/notifications', '/owner/notifications'],
-  ['/owner/inbox', '/junior/chat'],
-  ['/owner/suggestions', '/junior/home'],
+  // 0315: 서버가 허용하던 받은 질문·제안 승인·노하우·퀴즈를 매니저에게 연다.
+  ['/owner/inbox', '/owner/inbox'],
+  ['/owner/suggestions', '/owner/suggestions'],
+  ['/owner/categories', '/owner/categories'],
+  ['/owner/training', '/owner/training'],
+  ['/owner/quiz/abc', '/owner/quiz/abc'],
+  ['/owner/payroll', '/junior/home'],
+  ['/owner/import-knowhow', '/junior/home'],
+  ['/owner/store-config', '/junior/home'],
   ['/owner/staff', '/junior/home'],
   ['/owner/dashboard', '/junior/home'],
   ['/owner/work', '/owner/work'],
@@ -147,8 +154,24 @@ const browse = read('src/components/owner/OwnerKnowhowBrowse.tsx'); // 원문 �
 check('OwnerKnowhowBrowse: goAsk 없음', !/\bgoAsk\b/.test(browse));
 check('OwnerKnowhowBrowse: onAsk 없음', !/\bonAsk\b/.test(browse));
 check('OwnerKnowhowBrowse: /owner/ask 로 보내지 않는다', !browse.includes('/owner/ask'));
-const roleChange = /export const notifyUserRoleChange[\s\S]*?\n\s*\}\);/.exec(notifySrc)?.[0] ?? '';
-check('notifyUserRoleChange url = /junior/home(두 경우 모두)', /url:\s*'\/junior\/home'/.test(roleChange) && !roleChange.includes('/owner/'), show(/url:[^\n]*/.exec(roleChange)?.[0]));
+// 0315: 역할 변경 알림은 서버(set_member_role → member_notices)가 보낸다. 앱은 쏘지 않는다.
+check('notify.ts: notifyUserRoleChange 없음', !/export const notifyUserRoleChange/.test(notifySrc));
+check('useStaffStore: 역할 변경 푸시를 쏘지 않는다', !/notifyUserRoleChange/.test(read('src/lib/store/useStaffStore.ts')));
+const mig = read('supabase/migrations/0315_manager_permissions.sql');
+check('0315: set_member_role 이 role_changed 알림을 넣는다', /function public\.set_member_role[\s\S]*'role_changed'[\s\S]*'\/junior\/home'/.test(mig));
+check('0315: 잠긴 매니저는 auth_can_manage 거부', /function public\.auth_can_manage[\s\S]*m\.role = 'manager' and not public\.seat_locked_for/.test(mig));
+check('0315: unit_members realtime', /add table public\.unit_members/.test(mig));
+const edge = read('supabase/functions/push/index.ts');
+check("엣지: 'role' 사용자 푸시는 보내지 않는다", /audience === 'user' && tag === 'role'\) return json\(200/.test(edge));
+check('엣지: 결과 알림 태그는 관리자만', /MANAGER_USER_PUSH_TAGS\.has\(tag\)[\s\S]{0,120}auth_can_manage/.test(edge));
+
+console.log('\n■ (4) 매니저 진입·사장 전용 버튼');
+const jset = read('src/app/junior/settings.tsx');
+check("직원 설정: 매니저에게 '노하우'·'퀴즈' 행", /label="노하우"[^\n]*\/owner\/categories/.test(jset) && /label="퀴즈"[^\n]*\/owner\/training/.test(jset));
+check('노하우 수정: 휴지통은 사장만', /isBrandCopy\(entry\) \|\| !isOwner/.test(read('src/app/owner/edit/[id].tsx')));
+check('코치: 다른 매장 넣기 넛지는 사장만', /isOwnerHere && st\.role === 'owner'/.test(read('src/app/owner/coach.tsx')));
+check('owner/_layout: 잠긴 매니저 → /billing', /role === 'manager' && seatLocked\) return <Redirect href="\/billing"/.test(read('src/app/owner/_layout.tsx')));
+for (const f of ['src/app/owner/_layout.tsx', 'src/app/junior/_layout.tsx']) check(`${f}: 내 멤버십 실시간 구독`, /subscribeMyMembership\(userId/.test(read(f)));
 
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
