@@ -765,8 +765,19 @@ Deno.serve(async (req) => {
     // 0093: 'owners' = 그 매장의 관리자(사장+매니저), ownerOnly 면 사장만(F-2), 'staff' = 그 매장의 직원(junior).
     // unit_members 기준이라 주매장이 다른 멤버도 정확히 잡히고, 매니저가 staff 쪽으로 중복 수신하지 않는다.
     const { data: rows } = await admin
-      .from('unit_members').select('user_id').eq('unit_id', callerUnit).in('role', audienceRoles(audience, ownerOnly) ?? []);
+      .from('unit_members').select('user_id, role').eq('unit_id', callerUnit).in('role', audienceRoles(audience, ownerOnly) ?? []);
     recipientIds = (rows ?? []).map((r: { user_id: string }) => r.user_id);
+    // ★0317: 좌석이 잠긴 매니저는 관리 권한이 없다(0315 auth_can_manage) → 관리자 알림을 보내지 않는다.
+    //   판정은 서버 seat_locked_for 하나(0264). 옛 DB(0317 전)는 실행 권한이 없어 오류 → 예전처럼 보낸다(fail-open).
+    if (audience === 'owners') {
+      const managers = (rows ?? []).filter((r: { role: string }) => r.role === 'manager').map((r: { user_id: string }) => r.user_id);
+      const locked = new Set<string>();
+      for (const uid of managers) {
+        const { data: isLocked, error: lockErr } = await admin.rpc('seat_locked_for', { p_unit: callerUnit, p_uid: uid });
+        if (!lockErr && isLocked === true) locked.add(uid);
+      }
+      if (locked.size) recipientIds = recipientIds.filter((id) => !locked.has(id));
+    }
     // D2: 비공개 방 공지는 그 방 멤버에게만. 방에 없는 직원은 앱에서 공지를 볼 수 없다(0147 can_see_room).
     //   방이 호출자 매장 것이 아니거나 지워졌으면 보내지 않는다(내용이 방 밖으로 새지 않게 닫는 쪽).
     const roomId = clip(payload.roomId, 80);

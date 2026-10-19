@@ -14,6 +14,7 @@ import { PLANS } from '@/lib/config/tiers';
 import { SHOW_BILLING } from '@/lib/config/store-policy';
 // 제목·주소는 레지스트리가 정한다(P1 · 벨·푸시·엣지·탭이 같은 표). 여기서는 어느 행이 알림인지(술어)만 판정한다.
 import { NOTIF, taskRoute as registryTaskRoute } from '@/lib/notif/registry';
+import { routeForRole } from '@/lib/utils/roles';
 import type { QuizAssignment, TrainingCourse as TrainingCourseRow } from '@/lib/quiz/types';
 
 /** 알림 목록 최대 개수 — 무한 누적 방지(최신 우선). */
@@ -27,7 +28,9 @@ export type JuniorNotifKind =
   // 합류 결과(0247 member_notices approved·rejected) — 신청한 사람에게.
   | 'join_approved' | 'join_rejected'
   // 매니저 지정·해제(0315 member_notices role_changed) — 서버가 넣은 문구 그대로.
-  | 'role';
+  | 'role'
+  // 내보내짐(0317 · 0247 member_notices removed) — 계정 단위 축(합류 결과와 같은 갈래).
+  | 'member_removed';
 /** 주소는 레지스트리(NOTIF[kind].route)가 만든다 — 문자열 리터럴 유니온을 여기서 다시 적지 않는다. */
 export type JuniorNotifRoute = string;
 
@@ -308,6 +311,7 @@ export function buildJuniorNotifications(args: {
       out.push(roleNoticeRow(n, ackAt));
       continue;
     }
+    if (n.kind === 'left' || n.kind === 'account_deleted') continue; // 사장이 받는 행(ownerReceivedRows)
     out.push({
       id: `sched_${n.id}`,
       kind: 'schedule',
@@ -344,6 +348,18 @@ function roleNoticeRow(n: ScheduleNotice, ackAt?: string | null): JuniorNotif {
 export function buildJoinNotifRows(joinNotices: JoinNotice[], joinAckAt: string | null): JuniorNotif[] {
   const out: JuniorNotif[] = [];
   for (const n of joinNotices) {
+    if (n.kind === 'removed') {
+      out.push({
+        id: `member_removed_${n.id}`,
+        kind: 'member_removed',
+        title: NOTIF.member_removed.title(n.store_name || '매장'),
+        body: n.body,
+        at: n.created_at,
+        unread: isAfterAck(n.created_at, joinAckAt),
+        route: NOTIF.member_removed.route('junior'),
+      });
+      continue;
+    }
     const ok = n.kind === 'approved';
     const spec = ok ? NOTIF.join_approved : NOTIF.join_rejected;
     out.push({
@@ -363,6 +379,8 @@ export function buildJoinNotifRows(joinNotices: JoinNotice[], joinAckAt: string 
 // 사장이 대응해야 할 것: 합류 승인 대기 · 답변 대기 질문 · 알바가 올린 제안 · 승인 대기 교대.
 // + 입금 신고 검토 결과(0083) — 처리 대기가 아니라 "우리가 답한 결과"라 사장이 반드시 봐야 한다.
 export type OwnerNotifKind =
+  // 직원 나감·탈퇴(0317 · 0247 member_notices left·account_deleted)
+  | 'member_left'
   | 'join_request' | 'question' | 'suggestion' | 'swap_approval' | 'mention'
   | 'payment_approved' | 'payment_rejected'
   // 0191 사장 알림 — 좌석 잠김 · AI 사용량 80%·100%
@@ -514,6 +532,19 @@ function ownerReceivedRows(received: ManagerReceivedArgs): OwnerNotif[] {
   for (const r of buildManagerReceived(received)) {
     // 배정은 그 항목 주소(레지스트리 · 사장 화면 세트)를 그대로 쓴다.
     if (r.kind === 'assign') out.push({ ...r, kind: r.kind });
+  }
+  // 직원 나감·탈퇴(0317 · 0247 → 사장 멤버십에게만). 서버 문구 그대로. 탭하면 직원 관리.
+  for (const n of received.scheduleNotices ?? []) {
+    if (n.kind !== 'left' && n.kind !== 'account_deleted') continue;
+    out.push({
+      id: `member_left_${n.id}`,
+      kind: 'member_left',
+      title: n.title,
+      body: n.body,
+      at: n.created_at,
+      unread: isAfterAck(n.created_at, received.ackAt),
+      route: NOTIF.member_left.route('owner'),
+    });
   }
   return out;
 }
@@ -693,7 +724,7 @@ function ownerRows(args: {
 //   그대로 받아 눌러도 직원 홈으로 튕겼다. 질문과 내 제안 결과는 물어보기 탭(/junior/chat)에서 본다.
 export type ManagerNotifKind =
   | 'mention' | 'swap_approval' | 'question' | 'assign' | 'suggestion_approved' | 'suggestion_rejected' | 'role'
-  | 'schedule' | 'shift_time';
+  | 'schedule' | 'shift_time' | 'quiz_done' | 'q_answered' | 'training' | 'swap' | 'swap_approved' | 'swap_rejected';
 export type ManagerNotifRoute = string;
 export type ManagerNotif = Omit<OwnerNotif, 'kind' | 'route'> & { kind: ManagerNotifKind; route: ManagerNotifRoute };
 
@@ -706,8 +737,10 @@ export type ManagerReceivedArgs = {
   userId: string;
   nameOf: (id: string) => string;
   ackAt?: string | null;
-  /** 0315: 내 member_notices(지금 매장 · useScheduleStore.notices). 매니저 목록은 이 중 역할 변경만 쓴다. */
+  /** 0315: 내 member_notices(지금 매장 · useScheduleStore.notices) — 근무 알림 · 역할 변경. */
   scheduleNotices?: ScheduleNotice[];
+  /** 받은 교대 요청 본문의 근무 시각용(없으면 날짜만 · 허브와 같다). */
+  shiftTemplates?: ShiftTemplate[];
 };
 
 /** ② 나에게 온 것 — 매니저가 열 수 있는 경로로. 카운트와 목록이 같은 배열을 보게 이 함수 하나만 쓴다. */
@@ -747,22 +780,6 @@ function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
     });
   }
 
-  // 내 근무 알림(D9 · 0289) + 역할 변경(0315) — 직원 벨과 같은 member_notices 행. 매니저도 근무하는 사람이다.
-  //   서버(put_schedule_notice)는 결정한 사람 본인에게 넣지 않는다 → 결정자 행(교대·시간 수정 승인 대기)과 겹치지 않는다.
-  //   근무표는 매니저 허용 목록 안이라 사장 화면 주소(/owner/schedule)로 연다.
-  for (const n of args.scheduleNotices ?? []) {
-    if (n.kind === 'role_changed') { out.push({ ...roleNoticeRow(n, ackAt), kind: 'role' }); continue; }
-    out.push({
-      id: `sched_${n.id}`,
-      kind: 'schedule',
-      title: n.title,
-      body: n.body,
-      at: n.created_at,
-      unread: isAfterAck(n.created_at, ackAt),
-      route: NOTIF.schedule.route('owner'),
-    });
-  }
-
   return out;
 }
 
@@ -776,17 +793,34 @@ function managerOwnerRows(ownerArgs: Parameters<typeof ownerRows>[0]): ManagerNo
   const mine = new Set((ownerArgs.timeRequests ?? []).filter((t) => t.staff_id === ownerArgs.userId).map((t) => `shift_time_${t.id}`));
   const out: ManagerNotif[] = [];
   for (const r of ownerRows(ownerArgs)) {
-    if (r.kind === 'mention' || r.kind === 'swap_approval') out.push({ ...r, kind: r.kind });
+    if (r.kind === 'mention' || r.kind === 'swap_approval' || r.kind === 'quiz_done') out.push({ ...r, kind: r.kind });
     else if (r.kind === 'shift_time' && !mine.has(r.id)) out.push({ ...r, kind: 'shift_time' });
-    // 질문은 직원 화면 세트(물어보기 탭)의 그 질문으로(F-2 · /owner/coach 는 허용 목록 밖이다).
-    else if (r.kind === 'question' && answerable.has(r.id)) out.push({ ...r, kind: 'question', route: NOTIF.question.route('junior', r.id.slice('q_'.length)) });
+    // 질문은 사장과 같은 처리 화면(/owner/coach?uqId= · 0315 부터 매니저 허용 · 답·노하우 저장은 RLS auth_can_manage).
+    else if (r.kind === 'question' && answerable.has(r.id)) out.push({ ...r, kind: 'question' });
   }
   return out;
 }
 
+/** ③ 매니저 본인이 받는 사람인 축 — 직원 벨과 같은 행 빌더를 그대로 쓴다(같은 규칙 = 정의 하나).
+ *  내 질문에 온 답 · 안 푼 퀴즈 · 받은 교대 요청 · 내 교대 결과 · 내 근무 알림 · 역할 변경. 주소는 routeForRole 로 매니저 화면에.
+ *  멘션·배정·내 제안 결과는 ①②가 이미 그린다 — 여기서 빼서 두 번 뜨지 않게 한다. */
+const MANAGER_PERSONAL = new Set<JuniorNotifKind>(['q_answered', 'training', 'swap', 'swap_approved', 'swap_rejected', 'schedule', 'role']);
+function managerPersonalRows(ownerArgs: Parameters<typeof ownerRows>[0], received: ManagerReceivedArgs): ManagerNotif[] {
+  const rows = buildJuniorNotifications({
+    feed: [], swaps: ownerArgs.swaps, templates: received.shiftTemplates ?? [], nameOf: received.nameOf, userId: received.userId,
+    today: received.today, ackAt: received.ackAt, queue: ownerArgs.queue, scheduleNotices: received.scheduleNotices,
+    assignments: ownerArgs.assignments, courses: ownerArgs.courses,
+  });
+  // 받은 교대 요청은 나를 지목한 것만 — 대타(cover) 공개 요청 푸시는 직원(staff)에게만 간다(푸시 = 목록).
+  const targetedToMe = new Set(ownerArgs.swaps.filter((s) => s.target_staff_id === received.userId).map((s) => `swap_${s.id}`));
+  return rows
+    .filter((r) => MANAGER_PERSONAL.has(r.kind) && (r.kind !== 'swap' || targetedToMe.has(r.id)))
+    .map((r) => ({ ...r, kind: r.kind as ManagerNotifKind, route: routeForRole(r.route, 'manager') }));
+}
+
 /** 매니저 행 전부(정렬·상한 전). 목록과 배지가 이 배열 하나를 본다. */
 const managerRows = (ownerArgs: Parameters<typeof ownerRows>[0], received: ManagerReceivedArgs): ManagerNotif[] =>
-  [...managerOwnerRows(ownerArgs), ...buildManagerReceived(received)];
+  [...managerOwnerRows(ownerArgs), ...buildManagerReceived(received), ...managerPersonalRows(ownerArgs, received)];
 
 /** 매니저 알림 목록 = ① 사장 축 중 행동할 수 있는 것 + ② 개인 수신 축. */
 export function buildManagerNotifications(

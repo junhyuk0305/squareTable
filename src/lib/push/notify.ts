@@ -187,14 +187,14 @@ export const notifyOwnersSwapApproval = (when: string) =>
     body: `교대 요청이 승인을 기다려요 · ${when}`,
   });
 
-// 근무 시간 수정 요청(J2 · 0243) — 승인은 사장만 한다. 매니저에게 보내면 누를 수 없는 승인 칸으로 간다(F-2).
+// 근무 시간 수정 요청(J2 · 0243) — 0316 부터 매니저도 결정한다 → 관리자(사장+매니저)에게. 요청자 본인은 엣지가 뺀다.
+//   잠긴 매니저는 엣지가 뺀다(0317). 매니저 벨에도 같은 행이 뜬다(managerOwnerRows · 내 요청 제외).
 // itemId = 요청 id → 근무표 승인 칸이 그 요청 카드로 스크롤한다(벨 항목과 같은 주소).
 export const notifyOwnersShiftTimeRequest = (name: string, when: string, requestId?: string) =>
   pushNotify({
     audience: 'owners',
     kind: 'shift_time',
     itemId: requestId,
-    ownerOnly: true,
     title: NOTIF.shift_time.title(name),
     body: when,
   });

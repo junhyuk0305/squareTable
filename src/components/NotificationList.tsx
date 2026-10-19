@@ -34,8 +34,12 @@ export const JUNIOR_KIND_UI: Record<JuniorNotifKind, { icon: IconName; tint: str
   join_rejected: { icon: 'person-remove', tint: BrandColors.accentSoft },
   // 매니저 지정·해제(0315 member_notices role_changed) — 직원 명부의 매니저 배지와 같은 리본.
   role: { icon: 'ribbon', tint: BrandColors.brandSoft },
+  // 내보내짐(0317 · 0247 removed) — 합류 반려와 같은 사람 아이콘.
+  member_removed: { icon: 'person-remove', tint: BrandColors.accentSoft },
 };
 export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: string }> = {
+  // 직원 나감·탈퇴(0317 · 0247 left·account_deleted).
+  member_left: { icon: 'person-remove', tint: BrandColors.accentSoft },
   join_request: { icon: 'person-add', tint: BrandColors.yellowSoft },
   question: { icon: 'chatbubble-ellipses', tint: BrandColors.yellowSoft },
   suggestion: { icon: 'bulb', tint: BrandColors.brandSoft },

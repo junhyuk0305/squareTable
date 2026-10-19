@@ -107,5 +107,106 @@ try {
   console.log(`✗ 앱 발송 표: ${e.message}`);
 }
 
+// ④ ★규칙(2026-10-19): 푸시가 오는 알림은 받는 사람의 목록(벨·허브)에도 뜬다 — 역할(사장·매니저·직원)마다.
+//   표 = 사건 → 역할 → 그 역할 목록에 뜨는 행 kind('EXCEPT:이유' = 결정에 의한 예외). 새 푸시 종류를 표에 안 넣으면 실패.
+//   받는 역할은 손으로 적지 않고 발송에서 끌어낸다: owners = 사장+매니저(ownerOnly 면 사장) · staff = 직원 · join_owners = 사장.
+//   'user'(한 사람) 와 서버 크론 발송은 받을 수 있는 역할을 표가 말한다. 행 kind 는 그 역할 빌더 본문에 있어야 한다.
+try {
+  const { NOTIF } = loadRegistry();
+  const lib = read('src/lib/utils/notifications.ts');
+  const fnBody = (name) => {
+    const s = lib.search(new RegExp(`(export )?function ${name}\\(`));
+    if (s < 0) throw new Error(`notifications.ts: ${name} 없음`);
+    return lib.slice(s, lib.indexOf('\n}\n', s));
+  };
+  const personal = /const MANAGER_PERSONAL = new Set<[^>]+>\(\[([^\]]*)\]\)/.exec(lib)?.[1] ?? '';
+  const REGION = {
+    junior: fnBody('buildJuniorNotifications') + fnBody('roleNoticeRow'),
+    owner: fnBody('ownerRows') + fnBody('ownerReceivedRows'),
+    // 매니저 = 사장 축 중 행동할 것 + 나에게 온 것 + 직원 빌더 재사용분(MANAGER_PERSONAL 에 적힌 kind 만).
+    manager: fnBody('managerOwnerRows') + fnBody('buildManagerReceived') + personal,
+  };
+  // 계정 단위 축(합류 결과·내보내짐)은 역할과 무관하게 허브가 그린다(useCrossNotifRows → buildJoinCrossNotifs → buildJoinNotifRows).
+  const HUB = fnBody('buildJoinNotifRows');
+  const hubWired = /buildJoinCrossNotifs\(/.test(read('src/lib/hooks/useCrossNotifRows.ts'));
+  const has = (role, k) => k.startsWith('hub:') ? hubWired && new RegExp(`'${k.slice(4)}'`).test(HUB)
+    : k.startsWith('src:') ? new RegExp(k.slice(4)).test(REGION[role])
+    : new RegExp(`'${k}'`).test(REGION[role]);
+  const ROLES = ['owner', 'manager', 'junior'];
+  // 사건 → { 역할: 목록 행 kind | 'EXCEPT:…' }. 받지 않는 역할은 적지 않는다.
+  const RULE = {
+    // ── 앱이 부르는 발송(registry pushTag) ──
+    mention: { owner: 'mention', manager: 'mention', junior: 'mention' },
+    assign: { owner: 'assign', manager: 'assign', junior: 'assign' },
+    training: { manager: 'training', junior: 'training' },
+    quiz_done: { owner: 'quiz_done', manager: 'quiz_done' },
+    question: { owner: 'question', manager: 'question', junior: 'question' },
+    q_answered: { manager: 'q_answered', junior: 'q_answered' },
+    suggestion: { owner: 'suggestion' },
+    suggestion_result: { manager: 'suggestion_approved', junior: 'suggestion_approved' },
+    join_request: { owner: 'join_request' },
+    role: { manager: 'role', junior: 'role' },
+    swap: { manager: 'swap', junior: 'swap' },
+    swap_result: { manager: 'swap_approved', junior: 'swap_approved' },
+    swap_approval: { owner: 'swap_approval', manager: 'swap_approval' },
+    shift_time: { owner: 'shift_time', manager: 'shift_time' },
+    // ── 서버 크론 발송(member_notices · 0247/0289/0315) ──
+    'mn:approved': { junior: 'hub:join_approved' },
+    'mn:rejected': { junior: 'hub:join_rejected' },
+    'mn:removed': { manager: 'hub:member_removed', junior: 'hub:member_removed' },
+    'mn:left': { owner: 'member_left' },
+    'mn:account_deleted': { owner: 'member_left' },
+    'mn:owner_deleted': {}, // 넣는 곳이 없다(0247 close_member_tenure 는 알림 없음)
+    'mn:question_answered': {}, // 넣는 곳이 없다(답 알림은 앱 q_answered 푸시)
+    'mn:swap_confirmed': { manager: 'schedule', junior: 'schedule' },
+    'mn:shift_time_result': { manager: 'schedule', junior: 'schedule' },
+    'mn:shift_changed': { manager: 'schedule', junior: 'schedule' },
+    'mn:role_changed': { manager: 'role', junior: 'role' },
+    // ── 서버 크론 발송(그 밖) ──
+    'cron:owner_alerts': { owner: 'src:const raw of alerts' }, // 0191 · ownerRows 가 owner_alerts 행을 그대로 그린다
+    'cron:task_reminders': { manager: 'assign', junior: 'assign' }, // 배정된 할일 시각 — 배정 행
+    'cron:quiz_sends': { manager: 'training', junior: 'training' }, // 예약 퀴즈 발송 — 안 푼 퀴즈 행
+    'cron:unit_closures': { junior: 'EXCEPT:허브 closure 행(crossStoreNotifs · 매장 벨 밖)', manager: 'EXCEPT:허브 closure 행(crossStoreNotifs · 매장 벨 밖)' },
+    // ── 결정에 의한 예외 ──
+    'notice': { owner: 'EXCEPT:공지는 푸시·벨 둘 다 없음(10-16 · 채팅 맨 위 고정 공지)' },
+  };
+  const notify = read('src/lib/push/notify.ts');
+  const audOf = (kind) => [...notify.matchAll(/pushNotify\(\{([\s\S]*?)\}\)/g)].map((m) => m[1])
+    .filter((b) => new RegExp(`kind:\\s*'${kind}'`).test(b))
+    .map((b) => ({ aud: /audience:\s*'(\w+)'/.exec(b)?.[1], ownerOnly: /ownerOnly:\s*true/.test(b) }));
+  const rolesOfAud = ({ aud, ownerOnly }) =>
+    aud === 'owners' ? (ownerOnly ? ['owner'] : ['owner', 'manager']) : aud === 'staff' ? ['junior'] : aud === 'join_owners' ? ['owner'] : [];
+  // (a) registry 의 푸시 종류는 전부 표에 있다 · 발송 갈래가 정하는 역할이 표에 있다.
+  for (const [kind, spec] of Object.entries(NOTIF)) {
+    if (!spec.pushTag) continue;
+    n++;
+    if (!RULE[kind]) { fail++; console.log(`✗ 푸시⇒목록 표에 없다: ${kind} (역할별 목록 행을 정하고 RULE 에 넣는다)`); continue; }
+    for (const a of audOf(kind)) for (const role of rolesOfAud(a)) {
+      n++;
+      if (!RULE[kind][role]) { fail++; console.log(`✗ ${kind}: '${a.aud}' 푸시를 ${role} 가 받는데 표에 그 역할 목록 행이 없다`); }
+    }
+  }
+  // (b) member_notices 종류(최신 CHECK)는 전부 표에 있다 — 새 서버 알림 종류가 목록 없이 크론 푸시만 나가는 것을 막는다.
+  const migs = (await import('node:fs')).readdirSync(join(ROOT, 'supabase/migrations')).filter((f) => /^\d{4}_.*\.sql$/.test(f)).sort();
+  const lastCheck = migs.map((f) => read(`supabase/migrations/${f}`)).filter((s) => /member_notices_kind_check\s+check/.test(s)).pop() ?? '';
+  const mnKinds = [...(/member_notices_kind_check\s+check\s*\(kind in \(([^)]*)\)/.exec(lastCheck)?.[1] ?? '').matchAll(/'(\w+)'/g)].map((m) => m[1]);
+  n++;
+  if (mnKinds.length < 10) { fail++; console.log(`✗ member_notices 종류를 ${mnKinds.length}개만 읽었다`); }
+  for (const k of mnKinds) { n++; if (!RULE[`mn:${k}`]) { fail++; console.log(`✗ 푸시⇒목록 표에 없다: member_notices '${k}'`); } }
+  // (c) 표의 역할마다 그 역할 빌더에 행 kind 가 있다(예외 제외).
+  for (const [ev, byRole] of Object.entries(RULE)) for (const role of ROLES) {
+    const k = byRole[role];
+    if (!k || k.startsWith('EXCEPT:')) continue;
+    n++;
+    if (!has(role, k)) { fail++; console.log(`✗ 푸시⇒목록 위반: ${ev} → ${role} 목록에 '${k}' 행이 없다`); }
+  }
+  // (d) 공지는 푸시하지 않는다(결정 예외의 전제) — notify.ts 에 공지 발송이 생기면 이 예외를 다시 본다.
+  n++;
+  if (/kind:\s*'notice'/.test(notify) || NOTIF.notice) { fail++; console.log('✗ 공지 푸시가 생겼다 — 10-16 예외(벨 없음)를 다시 정한다'); }
+} catch (e) {
+  fail++; n++;
+  console.log(`✗ 푸시⇒목록 표: ${e.message}`);
+}
+
 console.log(`${fail ? '✗' : '✓'} 푸시 탭 경로 표 동기화: ${n - fail - skip}/${n} 일치 · skip ${skip}`);
 process.exit(fail ? 1 : 0);

@@ -3832,7 +3832,8 @@ export async function fetchScheduleNotices(): Promise<ReadResult<ScheduleNotice[
     .from('member_notices')
     .select('id, kind, title, body, created_at')
     .eq('unit_id', _unitId)
-    .in('kind', ['swap_confirmed', 'shift_time_result', 'shift_changed', 'role_changed']) // role_changed = 0315 매니저 지정·해제
+    // role_changed = 0315 매니저 지정·해제 · left·account_deleted = 0317 직원 나감·탈퇴(사장이 받는다)
+    .in('kind', ['swap_confirmed', 'shift_time_result', 'shift_changed', 'role_changed', 'left', 'account_deleted'])
     .order('created_at', { ascending: false })
     .limit(50);
   if (error) {
@@ -3849,7 +3850,7 @@ export async function fetchJoinNotices(): Promise<ReadResult<JoinNotice[]>> {
   const { data, error } = await supabase
     .from('member_notices')
     .select('id, unit_id, kind, store_name, body, created_at')
-    .in('kind', ['approved', 'rejected'])
+    .in('kind', ['approved', 'rejected', 'removed']) // removed = 0317 내보내짐(푸시가 오는 알림은 목록에도)
     .order('created_at', { ascending: false })
     .limit(20);
   if (error) {

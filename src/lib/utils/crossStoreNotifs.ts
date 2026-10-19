@@ -29,7 +29,7 @@ export type CrossNotifRow = (JuniorNotif | OwnerNotif | ManagerNotif | ClosureNo
 /** 합류 결과(0247 · 계정 단위) → 허브 행. 행 빌더·읽음 판정은 매장 벨과 같은 것(buildJoinNotifRows · accountAckAt).
  *  unitId = 그 알림의 매장(반려된 매장은 내 매장 목록에 없다 → storeName 으로 칩을 그린다). */
 export function buildJoinCrossNotifs(joinNotices: JoinNotice[], joinAckAt: string | null): CrossNotifRow[] {
-  const byId = new Map(joinNotices.map((n) => [`${n.kind === 'approved' ? 'join_approved' : 'join_rejected'}_${n.id}`, n]));
+  const byId = new Map(joinNotices.map((n) => [`${n.kind === 'removed' ? 'member_removed' : n.kind === 'approved' ? 'join_approved' : 'join_rejected'}_${n.id}`, n]));
   return buildJoinNotifRows(joinNotices, joinAckAt).map((r) => {
     const n = byId.get(r.id);
     return { ...r, unitId: n?.unit_id ?? '', storeName: n?.store_name ?? undefined };

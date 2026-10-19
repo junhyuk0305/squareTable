@@ -51,7 +51,8 @@ export default function OwnerNotificationsScreen() {
   const swaps = useScheduleStore((s) => s.swaps);
   // 근무 시간 수정 요청(0243 · 대기만) — 근무표 승인 칸과 같은 원장.
   const timeRequests = useScheduleStore((s) => s.timeRequests);
-  const scheduleNotices = useScheduleStore((s) => s.notices); // 매니저 역할 변경 행(0315)
+  const scheduleNotices = useScheduleStore((s) => s.notices); // 매니저 근무 알림·역할 변경 행(0315)
+  const shiftTemplates = useScheduleStore((s) => s.templates); // 매니저가 받은 교대 요청 본문의 시각
   const staff = useStaffStore((s) => s.staff);
   const owner = useStaffStore((s) => s.owner);
   const pending = useStaffStore((s) => s.pending);
@@ -115,11 +116,11 @@ export default function OwnerNotificationsScreen() {
     // 매니저에게 배정한 사람은 사장이다 — 명부 SSOT(memberNameOf · 사장 포함). '직원'은 명부에 없을 때만.
     const nameOf = (id: string) => memberNameOf({ owner, staff }, id) ?? '직원';
     const ownerArgs = { queue, suggestions, swaps, pending, nameOf, feed, userId: me, ackAt, claims, alerts, assignments, courses, timeRequests };
-    const received = { feed, taskTemplates: templates, done, today, suggestions, userId: me, nameOf, ackAt, scheduleNotices };
+    const received = { feed, taskTemplates: templates, done, today, suggestions, userId: me, nameOf, ackAt, scheduleNotices, shiftTemplates };
     // 사장도 나에게 온 배정을 받는다(D11 · 폰에 푸시가 오는 것과 같은 축).
     if (role !== 'manager') return buildOwnerNotifications(ownerArgs, received);
     return buildManagerNotifications(ownerArgs, received);
-  }, [queue, suggestions, swaps, pending, owner, staff, feed, me, ackAt, claims, alerts, role, templates, done, today, assignments, courses, timeRequests, scheduleNotices]);
+  }, [queue, suggestions, swaps, pending, owner, staff, feed, me, ackAt, claims, alerts, role, templates, done, today, assignments, courses, timeRequests, scheduleNotices, shiftTemplates]);
 
   // '모두 읽기' = ① 멘션은 read_by 기록(기존 경로) + ② 처리형(합류·질문·제안·교대)은 ack 시각(0078)으로
   // 배지·강조 해제. 항목은 목록에 남아 계속 처리할 수 있고, 새 항목은 ack 이후라 다시 배지에 잡힌다.

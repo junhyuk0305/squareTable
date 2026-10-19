@@ -131,7 +131,10 @@ check('사장 알림 없음', !ids.some((i) => i.startsWith('alert_')));
 check('입금 결과 없음', !mgr.some((r) => r.kind === 'payment_approved' || r.kind === 'payment_rejected'));
 check('모든 행이 열 수 있는 곳으로 간다', mgr.length > 0 && mgr.every(opens), show(routes));
 const q = mgr.find((r) => r.id === 'q_uq_other');
-check('동료 질문 → /junior/chat(그 질문)', q?.route === '/junior/chat?uqId=uq_other', show(q?.route));
+// 10-19: 매니저도 사장과 같은 질문 처리 화면(/owner/coach?uqId=)으로 — 0315 허용 목록 · 답·노하우 저장은 RLS auth_can_manage.
+check('동료 질문 → /owner/coach(그 질문 · 사장과 같은 주소)', q?.route === '/owner/coach?uqId=uq_other', show(q?.route));
+check('shift_time 푸시: 매니저도 받는다(ownerOnly 아님)', !/kind: 'shift_time',[\s\S]{0,80}ownerOnly: true/.test(notifySrc));
+check('엣지: 잠긴 매니저는 관리자 푸시 제외(seat_locked_for)', /audience === 'owners'[\s\S]{0,400}seat_locked_for/.test(read('supabase/functions/push/index.ts')));
 check('내가 물은 질문은 안 뜬다(물어보기 탭에서 답할 수 없다)', !ids.includes('q_uq_mine'));
 const res = mgr.find((r) => r.id === 'sugres_sg_mine_done');
 check('내 제안 결과 → /junior/chat', res?.route === '/junior/chat', show(res?.route));

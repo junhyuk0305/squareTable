@@ -97,7 +97,8 @@ export type ShiftTimeRequest = {
 export type ScheduleNotice = {
   id: number;
   // 0315 role_changed = 매니저 지정·해제(같은 member_notices 갈래 · 벨이 역할 행으로 그린다).
-  kind: 'swap_confirmed' | 'shift_time_result' | 'shift_changed' | 'role_changed';
+  // 0317 left·account_deleted = 직원 나감·탈퇴(사장이 받는다 · 0247) — 벨이 사장 행으로 그린다.
+  kind: 'swap_confirmed' | 'shift_time_result' | 'shift_changed' | 'role_changed' | 'left' | 'account_deleted';
   title: string;
   body: string;
   created_at: string;

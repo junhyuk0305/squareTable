@@ -111,6 +111,17 @@ export const NOTIF = {
     route: (_s) => '/junior/hub',
     badgeUnit: '합류 결과',
   },
+  // 내보내짐(0247 removed) · 직원 나감·탈퇴(0247 left·account_deleted → 사장) — 서버 크론 푸시만 있던 것을 목록에도(0317).
+  //   문구는 서버가 넣은 그대로(내보내짐은 매장 이름으로 만든다). 내보내진 사람은 그 매장이 없으니 매장 목록으로.
+  member_removed: {
+    title: (store) => `${store} 구성원에서 빠졌어요`,
+    route: (_s) => '/stores',
+    badgeUnit: '합류 결과',
+  },
+  member_left: {
+    route: (_s) => '/owner/staff',
+    badgeUnit: '나간 직원',
+  },
   // 매니저 지정·해제 — 원천은 서버가 넣는 member_notices(0315 role_changed). 푸시는 서버 크론(sweepMemberNotices)이 보내고
   // 앱은 쏘지 않는다(엣지가 'role' user 요청을 무시한다). 벨·허브는 그 행을 문구 그대로 그린다(notifications.ts roleNoticeRow).
   // pushTag 는 옛 앱 요청을 엣지가 알아보는 이름으로 남긴다.
