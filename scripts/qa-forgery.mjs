@@ -260,6 +260,13 @@ try {
     for (let i = 0; i < 5; i++) await A1.c.rpc('join_by_invite', { p_code: String(100000 + i) });
     const { error: e0 } = await A1.c.rpc('join_by_invite', { p_code: '999998' });
     check('14-1 초대코드를 5번 틀리면 잠긴다', /too_many_attempts/.test(e0?.message ?? ''), e0?.message ?? '잠기지 않았다');
+    const lk = await one(srv.from('code_locks').select('locked_until').eq('uid', A1.id).eq('kind', 'join'));
+    const mins = lk ? (new Date(lk.locked_until) - Date.now()) / 60000 : 0;
+    check('14-1c 잠금은 5분이다(0325)', mins > 4 && mins <= 5, JSON.stringify(lk));
+    // 잠금이 풀린 것으로 당긴다 → 한 번 더 틀려도 잠기지 않는다(풀리기 전 실패는 세지 않는다).
+    await srv.from('code_locks').update({ locked_until: new Date(Date.now() - 1000).toISOString() }).eq('uid', A1.id).eq('kind', 'join');
+    const { error: eR } = await A1.c.rpc('join_by_invite', { p_code: '999997' });
+    check('14-1d 잠금이 풀리면 처음부터 센다', !eR, eR?.message);
     // 같은 역할은 번호를 같이 못 쓴다 → 새 계정은 번호 없는 계정이 된다. 번호 없는 계정은 아예 대입할 수 없어야 한다.
     const A2 = await signUp(`qa_forg_a2_${s}@example.com`, { name: 'QA대입2', role: 'junior', phone: phones[4] });
     const { error: e1 } = await A2.c.rpc('join_by_invite', { p_code: '999999' });
