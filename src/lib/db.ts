@@ -998,7 +998,10 @@ export async function redeemPromoCode(code: string): Promise<DbResult<PromoRedee
   if (!HAS_SUPABASE) return { data: null, error: null };
   const { data, error } = await supabase.rpc('redeem_promo_code', { p_code: code });
   // returns table → 배열로 온다(admin_activate_store 계열과 동일).
-  return { data: (data as PromoRedeemRow[])?.[0] ?? null, error: error as DbErr };
+  const row = (data as PromoRedeemRow[])?.[0] ?? null;
+  // ★0323: 없는 코드는 예외 대신 빈 결과다(시도 기록이 남아야 대입 잠금이 쌓인다) → 화면 문구 키로 바꿔 준다.
+  if (!error && !row) return { data: null, error: { message: 'code_not_found' } as DbErr };
+  return { data: row, error: error as DbErr };
 }
 
 // ── 알림 수신 선호(notification_prefs) — 서버(엣지 push 함수)가 발송 직전에 읽는 SSOT ─────────
@@ -1659,6 +1662,23 @@ export async function fetchAiAnswers(days = 30, limit = AI_ANSWER_LIMIT): Promis
   }
   const rows = ((data ?? []) as AiAnswerRow[]).filter((r) => (r.matched_entry_ids ?? []).length > 0);
   return { data: rows.slice(0, limit), error: null };
+}
+
+/** 동료가 사장 대신 답한 질문(0320 peer_answer_log) — 서버가 적고 관리자만 읽는다. 답한 질문은 사장 목록에서 빠지므로 여기서 본다. */
+export type PeerAnswerRow = { uq_id: string; query_text: string | null; answerer_name: string | null; entry_id: string; answered_at: string };
+export async function fetchPeerAnswers(days = 30): Promise<DbResult<PeerAnswerRow[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase
+    .from('peer_answer_log')
+    .select('uq_id, query_text, answerer_name, entry_id, answered_at')
+    .gte('answered_at', sinceTs(days))
+    .order('answered_at', { ascending: false })
+    .limit(AI_ANSWER_LIMIT);
+  if (error) {
+    readFail('fetchPeerAnswers', error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: (data ?? []) as PeerAnswerRow[], error: null };
 }
 
 export async function insertChatQuery(cq: ChatQuery): Promise<boolean> {
@@ -3453,6 +3473,32 @@ export async function fetchAttendance(): Promise<ReadResult<AttendanceRecord[]>>
     return { data: [], error: true };
   }
   return { data: (data ?? []) as AttendanceRecord[], error: false };
+}
+/** 출퇴근 수정 이력 한 줄(0322 attendance_edits) — 서버가 적고 아무도 못 고친다. 관리자만 읽는다. */
+export type AttendanceEdit = {
+  attendance_id: string;
+  edited_role: 'staff' | 'owner';
+  action: 'insert' | 'update' | 'delete';
+  old_check_in: string | null;
+  old_check_out: string | null;
+  new_check_in: string | null;
+  new_check_out: string | null;
+  edited_at: string;
+};
+/** 한 직원의 출퇴근 수정 이력(오래된 것부터). 사장 근무표가 "원래 시각"·"직원이 지운 기록"을 보여 줄 때 쓴다. */
+export async function fetchAttendanceEdits(staffId: string): Promise<ReadResult<AttendanceEdit[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
+  const { data, error } = await supabase
+    .from('attendance_edits')
+    .select('attendance_id, edited_role, action, old_check_in, old_check_out, new_check_in, new_check_out, edited_at')
+    .eq('staff_id', staffId)
+    .order('edited_at', { ascending: true })
+    .limit(PAGE_LIMIT);
+  if (error) {
+    readFail('fetchAttendanceEdits', error);
+    return { data: [], error: true };
+  }
+  return { data: (data ?? []) as AttendanceEdit[], error: false };
 }
 /**
  * 한 직원의 한 달 출퇴근(A8). 출근 기록 화면이 지난달을 볼 때 쓴다 — 위 조회는 매장 전체 최근 1,000건이라

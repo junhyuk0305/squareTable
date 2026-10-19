@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
+import { fetchAttendanceEdits, type AttendanceEdit } from '@/lib/db';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { computePay, shiftsToPayRecords, reconcileSchedule, wageForMonth, settingsForMonth, payWindow } from '@/lib/utils/payroll';
@@ -87,6 +88,34 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   const monthRecs = useMemo(
     () => records.filter((r) => r.staff_id === staffId && r.date.startsWith(ym)).sort((a, b) => b.date.localeCompare(a.date)),
     [records, staffId, ym],
+  );
+
+  // 직원이 고친 흔적(0322 attendance_edits) — 사장 화면에서만 읽는다. 서버가 적고 직원은 못 지운다.
+  //   기록마다 직원의 첫 수정 직전 값이 "원래 시각"이다. 직원이 지운 기록은 목록 아래에 따로 남긴다.
+  const [edits, setEdits] = useState<AttendanceEdit[]>([]);
+  useEffect(() => {
+    if (role !== 'owner') return;
+    let alive = true;
+    void fetchAttendanceEdits(staffId).then((r) => {
+      if (alive && !r.error) setEdits(r.data);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [role, staffId, records]);
+  const staffOrigin = useMemo(() => {
+    const m = new Map<string, AttendanceEdit>();
+    for (const e of edits) if (e.edited_role === 'staff' && e.action !== 'delete' && !m.has(e.attendance_id)) m.set(e.attendance_id, e);
+    return m;
+  }, [edits]);
+  const staffDeleted = useMemo(
+    () =>
+      edits.filter((e) => {
+        if (e.edited_role !== 'staff' || e.action !== 'delete' || !e.old_check_in) return false;
+        const d = new Date(e.old_check_in);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === ym;
+      }),
+    [edits, ym],
   );
 
   const totalMin = monthRecs.reduce((a, r) => a + r.work_minutes, 0);
@@ -365,6 +394,7 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
                       )}
                     </View>
                     <Text style={styles.recDur}>{open ? '퇴근 미기록' : fmtDuration(r.work_minutes)}</Text>
+                    {staffOrigin.has(r.id) && <Text style={styles.recOrigin}>{originText(staffOrigin.get(r.id)!)}</Text>}
                   </View>
                   <Ionicons name="create-outline" size={18} color={InkColors.ink3} />
                 </Pressable>
@@ -397,6 +427,11 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
               </Appear>
             );
           })}
+          {staffDeleted.map((e, i) => (
+            <Text key={`del_${e.attendance_id}_${i}`} style={styles.recDeleted}>
+              직원이 지운 기록 · {new Date(e.old_check_in!).getDate()}일 {spanText(e.old_check_in, e.old_check_out)}
+            </Text>
+          ))}
         </View>
         </Appear>
 
@@ -409,6 +444,14 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
       <RoleTabBar role={role} />
     </SafeAreaView>
   );
+}
+
+function spanText(cin: string | null, cout: string | null): string {
+  return `${cin ? hhmm(cin) : '—'}~${cout ? hhmm(cout) : '근무 중'}`;
+}
+/** 직원이 처음 고치기 직전 값. 직원이 직접 넣은 기록은 원래 값이 없다. */
+function originText(e: AttendanceEdit): string {
+  return e.action === 'insert' ? '직원이 직접 추가한 기록' : `원래 ${spanText(e.old_check_in, e.old_check_out)} · 직원이 고침`;
 }
 
 function TimeEditRow({ cin, cout, onCin, onCout }: { cin: string; cout: string; onCin: (v: string) => void; onCout: (v: string) => void }) {
@@ -473,6 +516,8 @@ const styles = StyleSheet.create({
   recTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   recTime: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
   recDur: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
+  recOrigin: { fontSize: 12, color: BrandColors.accent, marginTop: 2 },
+  recDeleted: { fontSize: 12, color: BrandColors.accent, paddingVertical: 6 },
   badgeInk: { ...BadgeStyles.box, backgroundColor: BrandColors.brandSoft },
   badgeInkText: { ...BadgeStyles.text, color: InkColors.ink2 },
   badgeAccent: { ...BadgeStyles.box, backgroundColor: BrandColors.accentSoft },

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -16,7 +16,7 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { isTodoQuestion, isTodoSuggestion } from '@/lib/hooks/useOwnerTodoCount';
 import { sortByUrgency } from '@/lib/utils/unknownQuery';
 import { formatAsked } from '@/lib/utils/time';
-import { AI_ANSWER_LIMIT, type AiAnswerRow as AiAnswer } from '@/lib/db';
+import { AI_ANSWER_LIMIT, fetchPeerAnswers, type AiAnswerRow as AiAnswer, type PeerAnswerRow } from '@/lib/db';
 
 import { InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
@@ -102,6 +102,19 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
   const badAnswers = useMemo(() => aiAnswers.filter((r) => r.satisfaction === 'down'), [aiAnswers]);
   const okAnswers = useMemo(() => aiAnswers.filter((r) => r.satisfaction !== 'down'), [aiAnswers]);
   const [badOpen, setBadOpen] = useState(false);
+
+  // '동료가 답한 질문'(0320) — 동료가 답하면 그 질문은 위 '답할 질문'에서 빠진다. 누가 무엇으로 답했는지를 사장이 여기서 본다.
+  //   기록은 서버가 적고 아무도 못 지운다. 읽기 실패는 이 묶음만 숨긴다(질문 목록 자체는 위에서 따로 실패를 말한다).
+  const [peerAnswers, setPeerAnswers] = useState<PeerAnswerRow[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void fetchPeerAnswers().then(({ data }) => {
+      if (alive && data) setPeerAnswers(data);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [queue]);
 
   // 히어로 = 가장 오래 기다린 질문(sortByUrgency 의 1번 — 사장 홈 히어로와 같은 건). 나머지가 아래 목록.
   const hero = pending[0];
@@ -243,6 +256,25 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
           />
         </View>
       )}
+
+      {peerAnswers.length > 0 && (
+        <View style={styles.group}>
+          <SectionLabel title="동료가 답한 질문" hint={`최근 30일 ${peerAnswers.length}건`} />
+          <PagedList
+            items={peerAnswers}
+            render={(r, i) => (
+              <Appear key={`${r.uq_id}_${i}`} delay={stagger(i)}>
+                <Pressable onPress={() => goEntry(r.entry_id)} style={styles.peerRow} accessibilityRole="button">
+                  <Text style={styles.peerQ} numberOfLines={2}>{r.query_text ?? ''}</Text>
+                  <Text style={styles.peerMeta} numberOfLines={1}>
+                    {`${r.answerer_name ?? '동료'}님이 '${entryTitleOf(r.entry_id) ?? '노하우'}'로 답했어요 · ${formatAsked(r.answered_at, '방금 전')}`}
+                  </Text>
+                </Pressable>
+              </Appear>
+            )}
+          />
+        </View>
+      )}
     </View>
   );
 }
@@ -299,4 +331,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: InkColors.line,
   },
   moreText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
+
+  // '동료가 답한 질문' 한 줄 — '더 보기'와 같은 인셋·구분선. 누르면 답으로 쓴 노하우를 연다.
+  peerRow: {
+    minHeight: 48, gap: 2,
+    paddingHorizontal: Space.lg, paddingVertical: Space.md,
+    borderBottomWidth: 1, borderBottomColor: InkColors.line,
+  },
+  peerQ: { fontSize: 15, color: InkColors.ink },
+  peerMeta: { fontSize: 13, color: InkColors.ink2 },
 });

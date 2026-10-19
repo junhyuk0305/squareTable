@@ -114,11 +114,12 @@ async function matchCode(admin: any, phone: string, code: string): Promise<CodeC
   if (!row) return { ok: false, status: 400, reason: 'expired' };
   if (row.attempts >= MAX_ATTEMPTS) return { ok: false, status: 429, reason: 'too_many' };
   if (Date.now() > new Date(row.expires_at).getTime()) return { ok: false, status: 400, reason: 'expired' };
-  if (await sha256Hex(`${phone}:${code}`) !== row.code_hash) {
-    const { error: aErr } = await admin.from('phone_otps').update({ attempts: row.attempts + 1 }).eq('phone', phone);
-    if (aErr) { console.error('otp: attempts update failed:', aErr.message); return { ok: false, status: 500, reason: 'db' }; }
-    return { ok: false, status: 400, reason: 'mismatch' };
-  }
+  // ★0323: 대조 전에 시도 1회를 DB 에서 원자적으로 차지한다(attempts < 5 일 때만 +1).
+  //   예전엔 읽은 값 + 1 을 썼다 — 틀린 번호를 동시에 20번 보내면 17번이 대조됐다(qa-forgery 4-1).
+  const { data: claimed, error: aErr } = await admin.rpc('otp_claim_attempt', { p_phone: phone });
+  if (aErr) { console.error('otp: attempt claim failed:', aErr.message); return { ok: false, status: 500, reason: 'db' }; }
+  if (claimed == null) return { ok: false, status: 429, reason: 'too_many' };
+  if (await sha256Hex(`${phone}:${code}`) !== row.code_hash) return { ok: false, status: 400, reason: 'mismatch' };
   return { ok: true, row };
 }
 

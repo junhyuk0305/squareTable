@@ -158,33 +158,52 @@ try {
   const t2b = await invokePush(ownerA, { title: 'x' });
   check('T2b 검증: audience 누락 → 400', t2b.status === 400, `status=${t2b.status}`);
 
+  // ★0324: 앱이 부르는 푸시는 실제 사건 행이 있어야 나간다(위조 차단). 아래 검사는 앱처럼 사건을 먼저 만들고 그 id 로 보낸다.
+  //   질문(question)은 사건마다 새 행이라 같은 사건 중복 차단(push_client_events)에 걸리지 않는다.
+  let qn = 0;
+  const ask = async (client) => {
+    const id = `uq_qapush_${s}_${++qn}`;
+    const { error } = await client.from('unknown_queries').insert({ id, unit_id: unitA, query_text: `QA 질문 ${qn}`, status: 'pending_owner_answer' });
+    if (error) throw new Error(`질문 넣기 실패: ${error.message}`);
+    return id;
+  };
+  const day = new Date().toISOString().slice(0, 10);
+  const mentionFeed = async (client, authorId, targetId) => {
+    const id = `wf_qapush_${s}_${++qn}`;
+    const { error } = await client.from('work_feed').upsert({ id, unit_id: unitA, feed_date: day, mentions: [targetId],
+      data: { id, kind: 'message', text: '@확인', authorId, authorName: 'x', createdAt: new Date().toISOString(), mentions: [targetId] } });
+    if (error) throw new Error(`멘션 글 실패: ${error.message}`);
+    return id;
+  };
+
   // ── T3 owners 해석: 직원A1 → 매장A 사장 1명 ───────────────────────────────
-  const t3 = await invokePush(staffA1, { audience: 'owners', title: '합류', body: 'b' });
+  const t3 = await invokePush(staffA1, { audience: 'owners', tag: 'question', itemId: await ask(staffA1), title: '답변 대기 질문', body: 'b' });
   check('T3 owners 해석: staffA1→ownerA 1명', t3.status === 200 && t3.json?.recipients === 1, `status=${t3.status} ${JSON.stringify(t3.json)}`);
 
   // ── T4 staff 해석 + 자기제외 ──────────────────────────────────────────────
   //  직원A1 → staff: 자기 빼고 staffA2 1명.  사장A → staff: staffA1+staffA2 = 2명.
-  const t4a = await invokePush(staffA1, { audience: 'staff', title: '공지' });
+  const t4a = await invokePush(staffA1, { audience: 'staff', tag: 'question', itemId: await ask(staffA1), title: '동료 질문' });
   check('T4a staff 자기제외: staffA1→ staffA2 1명(본인 제외)', t4a.status === 200 && t4a.json?.recipients === 1, `${JSON.stringify(t4a.json)}`);
-  const t4b = await invokePush(ownerA, { audience: 'staff', title: '공지' });
+  const t4b = await invokePush(ownerA, { audience: 'staff', tag: 'question', itemId: await ask(ownerA), title: '동료 질문' });
   check('T4b staff 전체: ownerA→ staffA1+staffA2 2명', t4b.status === 200 && t4b.json?.recipients === 2, `${JSON.stringify(t4b.json)}`);
 
   // ── T5 owners 자기제외: 사장A → owners: 매장A 사장은 본인뿐 → 0명 ──────────
-  const t5 = await invokePush(ownerA, { audience: 'owners', title: 'x' });
+  const t5 = await invokePush(ownerA, { audience: 'owners', tag: 'question', itemId: await ask(ownerA), title: 'x' });
   check('T5 owners 자기제외: ownerA→ 0명(본인뿐)', t5.status === 200 && t5.json?.recipients === 0, `${JSON.stringify(t5.json)}`);
 
   // ── T6 user 같은 매장: 사장A → user=staffA1 → 1명 ─────────────────────────
-  const t6 = await invokePush(ownerA, { audience: 'user', tag: 'mention', userId: staffA1Id, title: '교대 확정' });
+  const t6 = await invokePush(ownerA, { audience: 'user', tag: 'mention', userId: staffA1Id, itemId: await mentionFeed(ownerA, ownerAId, staffA1Id), title: '언급' });
   check('T6 user 같은 매장: ownerA→staffA1 1명', t6.status === 200 && t6.json?.recipients === 1, `${JSON.stringify(t6.json)}`);
 
   // ── T7 ★크로스테넌트 격리: 사장A → user=ownerB → 403 cross_tenant ─────────
-  const t7 = await invokePush(ownerA, { audience: 'user', tag: 'mention', userId: ownerBId, title: '침투' });
+  // 사건 행은 있어도(매장A 글이 ownerB 를 멘션) 받는 사람이 다른 매장이면 막힌다.
+  const t7 = await invokePush(ownerA, { audience: 'user', tag: 'mention', userId: ownerBId, itemId: await mentionFeed(ownerA, ownerAId, ownerBId), title: '침투' });
   check('T7 ★격리: ownerA→user=ownerB 거부(403 cross_tenant)', t7.status === 403 && t7.json?.error === 'cross_tenant', `status=${t7.status} ${JSON.stringify(t7.json)}`);
-  const t7b = await invokePush(ownerA, { audience: 'user', tag: 'mention', userId: staffB1Id, title: '침투2' });
+  const t7b = await invokePush(ownerA, { audience: 'user', tag: 'mention', userId: staffB1Id, itemId: await mentionFeed(ownerA, ownerAId, staffB1Id), title: '침투2' });
   check('T7b ★격리: ownerA→user=staffB1 거부(403 cross_tenant)', t7b.status === 403 && t7b.json?.error === 'cross_tenant', `status=${t7b.status} ${JSON.stringify(t7b.json)}`);
 
   // ── T8 join_owners: 신청 대기자 → 매장A 사장 1명(아직 소속 아님) ──────────
-  const t8 = await invokePush(pendingA, { audience: 'join_owners', title: '합류 신청' });
+  const t8 = await invokePush(pendingA, { audience: 'join_owners', tag: 'join', title: '합류 신청' });
   check('T8 join_owners: pending→ownerA 1명', t8.status === 200 && t8.json?.recipients === 1, `${JSON.stringify(t8.json)}`);
 
   // ── T9 방어: unit 없는 유저 → 403 no_unit ─────────────────────────────────
@@ -217,20 +236,20 @@ try {
   //  기준선: ownerA→staff = staffA1+staffA2 2명(T4b에서 확인).
   const t12s = await saveUnitPrefs(staffA2, unitA, { muted: true });
   check('T12a save_unit_member_prefs muted=true 성공', !t12s.error, t12s.error?.message ?? '');
-  const t12 = await invokePush(ownerA, { audience: 'staff', title: '공지' });
+  const t12 = await invokePush(ownerA, { audience: 'staff', tag: 'question', itemId: await ask(ownerA), title: '동료 질문' });
   check('T12b ★매장 음소거: staffA2 억제 → recipients=1', t12.status === 200 && t12.json?.recipients === 1, JSON.stringify(t12.json));
 
   const now = kstNowMin();
   const inStart = hhmm(now - 30), inEnd = hhmm(now + 30); // 지금을 감싸는 60분 창(자정 넘김도 엣지가 처리)
   const t13s = await saveUnitPrefs(staffA2, unitA, { muted: false, quiet: true, start: inStart, end: inEnd });
   check('T13a save 매장 quiet(지금 포함) 성공', !t13s.error, t13s.error?.message ?? '');
-  const t13 = await invokePush(ownerA, { audience: 'staff', title: '공지' });
+  const t13 = await invokePush(ownerA, { audience: 'staff', tag: 'question', itemId: await ask(ownerA), title: '동료 질문' });
   check(`T13b ★매장 방해금지 지금 포함(${inStart}~${inEnd}): staffA2 억제 → recipients=1`, t13.status === 200 && t13.json?.recipients === 1, JSON.stringify(t13.json));
 
   const outStart = hhmm(now + 120), outEnd = hhmm(now + 180);
   const t14s = await saveUnitPrefs(staffA2, unitA, { muted: false, quiet: true, start: outStart, end: outEnd });
   check('T14a save 매장 quiet(지금 제외) 성공', !t14s.error, t14s.error?.message ?? '');
-  const t14 = await invokePush(ownerA, { audience: 'staff', title: '공지' });
+  const t14 = await invokePush(ownerA, { audience: 'staff', tag: 'question', itemId: await ask(ownerA), title: '동료 질문' });
   check(`T14b 매장 방해금지 지금 제외(${outStart}~${outEnd}): 억제 안 함 → recipients=2 복귀`, t14.status === 200 && t14.json?.recipients === 2, JSON.stringify(t14.json));
 
 } catch (e) {
