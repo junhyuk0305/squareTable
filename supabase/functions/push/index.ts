@@ -719,11 +719,12 @@ Deno.serve(async (req) => {
   const pendingUnit = me?.pending_unit_id as string | null;
 
   const audience = payload.audience;
-  const title = clip(payload.title, MAX_TITLE);
-  const body = clip(payload.body, MAX_BODY);
+  // ★0324: 앱이 보낸 title·body 는 쓰지 않는다. 사건 행을 확인한 서버 문구(push_client_event)로 보낸다.
+  //   옛 앱은 title 을 늘 싣는다 — 빈 요청을 걸러 내는 용도로만 본다.
   const tag = clip(payload.tag, 80) || undefined;
-  const ownerOnly = payload.ownerOnly === true;
-  if (!title || !audience) return json(400, { error: 'missing_fields' });
+  // 제안 알림은 사장만 받는다(F-2) — 옛 앱 플래그와 무관하게 서버가 정한다.
+  const ownerOnly = payload.ownerOnly === true || tag === 'suggestion';
+  if (typeof payload.title !== 'string' || !payload.title.trim() || !audience) return json(400, { error: 'missing_fields' });
   if (audience !== 'user' && !audienceRoles(audience)) return json(400, { error: 'unknown_audience' });
   // ★0315: 역할 변경 알림은 서버(set_member_role → member_notices)가 보낸다. 옛 앱이 계속 보내는
   //   'role' 요청은 아무에게도 보내지 않고 200 으로 끝낸다(옛 앱은 결과를 안 본다 · 위조 '매니저가 됐어요' 차단).
@@ -742,6 +743,23 @@ Deno.serve(async (req) => {
   const scopeUnit = audience === 'join_owners' ? pendingUnit : callerUnit;
   if (!scopeUnit) return json(403, { error: 'no_unit' });
   if (rateLimited(scopeUnit)) return json(429, { error: 'rate_limited' });
+
+  // ★0324: 이 요청에 맞는 사건이 DB 에 정말 있는가. 없으면(위조·중복·잠김·폐지된 공지) 아무에게도 보내지 않는다.
+  //   옛 앱은 결과를 보지 않으므로 200 으로 조용히 끝낸다(지시서 §3-1).
+  const eventTarget = audience === 'user' ? clip(payload.userId, 80) : '';
+  const { data: ev, error: evErr } = await admin.rpc('push_client_event', {
+    p_caller: caller.id, p_unit: callerUnit, p_pending_unit: pendingUnit, p_audience: audience,
+    p_tag: tag ?? null, p_item_id: clip(payload.itemId, 80) || null,
+    p_target: /^[0-9a-f-]{36}$/i.test(eventTarget) ? eventTarget : null,
+  });
+  if (evErr) {
+    console.error('[push] push_client_event failed:', evErr.message);
+    return json(500, { error: 'verify_failed' });
+  }
+  const event = Array.isArray(ev) ? ev[0] : ev;
+  if (!event?.ok) return json(200, { sent: 0, recipients: 0, ignored: event?.reason ?? 'unverified' });
+  const title = String(event.title ?? '');
+  const body = String(event.body ?? '');
 
   // ── 대상 사용자 해석 (항상 호출자가 속한/신청한 매장으로 제한) ──
   let recipientIds: string[] = [];
@@ -798,7 +816,7 @@ Deno.serve(async (req) => {
   if (recipientIds.length === 0) return json(200, { sent: 0, recipients: 0 });
 
   // 탭 화면과 매장은 서버가 정한다. 클라이언트가 보낸 url · route · unitId 는 버린다(보안 M8 · Q24).
-  const route = clientPushRoute(audience, tag, payload.itemId);
+  const route = clientPushRoute(audience, tag, event.item_id ?? undefined);
   const r = await deliver(admin, scopeUnit, recipientIds, { title, body, url: route, route, tag });
   return json(200, { sent: r.sent, recipients: r.recipients, pruned: r.pruned, suppressed: r.suppressed });
 });

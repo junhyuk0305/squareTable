@@ -135,6 +135,8 @@
     "qa:old-client-compat": "node --no-warnings scripts/qa-old-client-compat.mjs",
     "qa:shift-requests": "node scripts/qa-shift-requests.mjs",
     "qa:definer-filters": "node scripts/qa-definer-filters.mjs",
+    "qa:forgery": "node --no-warnings scripts/qa-forgery.mjs",
+    "check:client-trust": "node scripts/check-client-trust.mjs",
     "qa:wage-rates": "node scripts/qa-wage-rates.mjs",
     "qa:store-slots": "node scripts/qa-store-slots.mjs",
     "qa:delete-store": "node scripts/qa-delete-store.mjs",
