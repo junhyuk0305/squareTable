@@ -97,6 +97,10 @@ try {
     // [OK] 앱의 '할 일 완료' 자동 글(직원이 만든다)은 계속 올라간다.
     const id4 = `fdone_${day}_wt_forg_${s}`;
     const { error: e4 } = await J.c.from('work_feed').upsert({ id: id4, unit_id: S1, feed_date: day, data: { id: id4, kind: 'task_done', text: 'QA직원J · 할일 완료', authorId: J.id, authorName: 'QA직원J', authorRole: 'junior', createdAt: now } }, { onConflict: 'id', ignoreDuplicates: true });
+    const id5 = `wf_notice_${s}`;
+    const { error: e5 } = await J.c.from('work_feed').upsert({ id: id5, unit_id: S1, feed_date: day, data: { id: id5, kind: 'notice', text: '직원 공지', authorId: J.id, authorName: 'QA직원J', authorRole: 'junior', createdAt: now, important: true, pinned: true } });
+    const r5 = await one(srv.from('work_feed').select('data').eq('id', id5));
+    check('2-5 [OK] 직원도 공지를 올린다(0177) · 고정·긴급 표시는 빠진다', !e5 && !!r5 && !r5.data.pinned && !r5.data.important, e5?.message ?? JSON.stringify(r5?.data));
     check('2-4 [OK] 직원의 할 일 완료 글은 그대로 올라간다', !e4 && !!(await one(srv.from('work_feed').select('id').eq('id', id4))), e4?.message);
   }
 
@@ -207,6 +211,13 @@ try {
     const { error: e0 } = await J.c.from('attendance').upsert({ id, unit_id: S1, staff_id: J.id, date: day, check_in: new Date().toISOString(), check_out: null, work_minutes: 0, edited_by: null });
     const r0 = await one(srv.from('attendance').select('edited_by').eq('id', id));
     check('10-1 [OK] 출근 버튼 기록은 수정 표시가 없다', !e0 && r0 && r0.edited_by == null, e0?.message ?? JSON.stringify(r0));
+    // 앱의 퇴근 = 열린 기록 전체를 upsert(INSERT … ON CONFLICT DO UPDATE). 출근을 3시간 전으로 당겨 둔 뒤 퇴근한다.
+    const pin = new Date(Date.now() - 3 * 3600_000).toISOString();
+    await srv.from('attendance').update({ check_in: pin }).eq('id', id);
+    const { error: e9 } = await J.c.from('attendance').upsert({ id, unit_id: S1, staff_id: J.id, date: day, check_in: pin, check_out: new Date().toISOString(), work_minutes: 180, edited_by: null });
+    const r9 = await one(srv.from('attendance').select('edited_by, work_minutes').eq('id', id));
+    const { count: c9 } = await srv.from('attendance_edits').select('attendance_id', { count: 'exact', head: true }).eq('attendance_id', id);
+    check('10-9 [OK] 퇴근 버튼(upsert)은 수정 표시도 이력도 없다', !e9 && r9?.edited_by == null && r9?.work_minutes === 180 && (c9 ?? 0) === 0, e9?.message ?? JSON.stringify({ r9, c9 }));
     const ci = `${day}T00:00:00.000Z`, co = `${day}T01:00:00.000Z`;
     const { error: e1 } = await J.c.from('attendance').upsert({ id, unit_id: S1, staff_id: J.id, date: day, check_in: ci, check_out: co, work_minutes: 999, edited_by: 'owner' });
     const r1 = await one(srv.from('attendance').select('edited_by, work_minutes').eq('id', id));
@@ -216,8 +227,8 @@ try {
     await J.c.from('attendance').update({ edited_by: null }).eq('id', id);
     const r2 = await one(srv.from('attendance').select('edited_by').eq('id', id));
     check('10-5 직원 수정 표시를 지울 수 없다', r2?.edited_by === 'staff', JSON.stringify(r2));
-    const { data: hist } = await O.c.from('attendance_edits').select('attendance_id, old_check_in, new_check_in, edited_by_uid').eq('attendance_id', id);
-    check('10-6 사장이 고치기 전 값을 본다', (hist ?? []).some((h) => h.edited_by_uid === J.id && h.new_check_in), JSON.stringify(hist));
+    const { data: hist } = await O.c.from('attendance_edits').select('attendance_id, action, old_check_in, new_check_in, edited_by_uid').eq('attendance_id', id).order('edited_at');
+    check('10-6 사장이 고치기 전 값을 본다(첫 이력 = 수정 · 원래 출근 시각)', hist?.[0]?.action === 'update' && hist[0].edited_by_uid === J.id && !!hist[0].old_check_in && hist.length === 1, JSON.stringify(hist));
     await J.c.from('attendance_edits').delete().eq('attendance_id', id);
     const { count } = await srv.from('attendance_edits').select('attendance_id', { count: 'exact', head: true }).eq('attendance_id', id);
     check('10-7 직원이 수정 이력을 지울 수 없다', (count ?? 0) > 0, `count=${count}`);

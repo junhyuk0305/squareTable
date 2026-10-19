@@ -5,7 +5,8 @@
 -- 해법: 엣지가 push_client_event 로 "이 요청에 해당하는 사건 행이 정말 있는가"를 묻는다. 있으면 그 행에서 만든 서버 문구로 보내고, 없으면 200·sent 0 으로 끝낸다.
 --   · 사건 하나는 한 번만 알린다(push_client_events 24시간 · 같은 key).
 --   · 잠긴 매장·잠긴 좌석의 사람은 보내지 않는다.
---   · itemId 를 안 보내는 옛 요청(suggestion·swap 계열·training)은 "보낸 사람이 10분 안에 만든 아직 안 알린 행" 중 가장 최근 것으로 찾는다.
+--   · itemId 를 안 보내는 옛 요청(suggestion·swap 계열·training)은 "보낸 사람이 24시간 안에 만든 아직 안 알린 행" 중 가장 최근 것으로 찾는다.
+--     (시각 열 일부를 앱이 보내서, 기기 시계가 늦어도 알림이 사라지지 않게 창을 넓게 둔다 · 행마다 한 번만 알리므로 위조 폭은 같다.)
 -- 옛 앱 호환: 옛 앱(iOS 1.0.1·안드 vc8)은 사건을 만든 직후 엣지를 부른다 → 행이 있어 그대로 간다. 문구는 앱 문구와 같은 문장으로 서버가 만든다(src/lib/push/notify.ts · notif/registry.ts).
 --   서버 발송(트리거)으로 옮기는 것은 다음 앱 빌드 때 한다(중복 발송을 피하려고 · 사용자 결정 10-20).
 
@@ -70,7 +71,7 @@ begin
 
     elsif p_tag = 'suggestion' and p_audience = 'owners' then
       select s.id, s.text into r from public.playbook_suggestions s
-       where s.unit_id = p_unit and s.proposer_id = p_caller and s.status = 'pending' and s.created_at > now() - interval '10 minutes'
+       where s.unit_id = p_unit and s.proposer_id = p_caller and s.status = 'pending' and s.created_at > now() - interval '24 hours'
          and not exists (select 1 from public.push_client_events e where e.key = 'suggestion:' || s.id)
        order by s.created_at desc limit 1;
       if r.id is null then return query select false, 'no_event', null::text, null::text, null::text; return; end if;
@@ -79,7 +80,7 @@ begin
     elsif p_tag = 'swap-approval' and p_audience = 'owners' then
       select s.id, s.date into r from public.swap_requests s
        where s.unit_id = p_unit and s.archived_tenure_id is null
-         and s.accepted_by = p_caller::text and s.status = 'accepted' and s.updated_at > now() - interval '10 minutes'
+         and s.accepted_by = p_caller::text and s.status = 'accepted' and s.updated_at > now() - interval '24 hours'
          and not exists (select 1 from public.push_client_events e where e.key = 'swap-approval:' || s.id)
        order by s.updated_at desc limit 1;
       if r.id is null then return query select false, 'no_event', null::text, null::text, null::text; return; end if;
@@ -103,7 +104,7 @@ begin
     elsif p_tag = 'swap-req' and p_audience in ('staff', 'user') then
       select s.id, s.date into r from public.swap_requests s
        where s.unit_id = p_unit and s.archived_tenure_id is null
-         and s.requester_id = p_caller::text and s.status = 'open' and s.created_at > now() - interval '10 minutes'
+         and s.requester_id = p_caller::text and s.status = 'open' and s.created_at > now() - interval '24 hours'
          and (case when p_audience = 'user'
                    then (s.target_staff_id = p_target::text or p_target::text = any(coalesce(s.target_staff_ids, '{}')))
                    else s.target_staff_id is null and coalesce(cardinality(s.target_staff_ids), 0) = 0 end)
@@ -118,7 +119,7 @@ begin
     elsif p_tag = 'swap-result' and p_audience = 'user' and v_manage then
       select s.id, s.date, s.status into r from public.swap_requests s
        where s.unit_id = p_unit and s.archived_tenure_id is null
-         and s.requester_id = p_target::text and s.status in ('approved', 'rejected') and s.updated_at > now() - interval '10 minutes'
+         and s.requester_id = p_target::text and s.status in ('approved', 'rejected') and s.updated_at > now() - interval '24 hours'
          and not exists (select 1 from public.push_client_events e where e.key = 'swap-result:' || s.id)
        order by s.updated_at desc limit 1;
       if r.id is null then return query select false, 'no_event', null::text, null::text, null::text; return; end if;
@@ -133,7 +134,7 @@ begin
 
     elsif p_tag = 'suggestion-result' and p_audience = 'user' and v_manage then
       select s.id, s.text, s.status into r from public.playbook_suggestions s
-       where s.unit_id = p_unit and s.proposer_id = p_target and s.status in ('approved', 'rejected') and s.reviewed_at > now() - interval '10 minutes'
+       where s.unit_id = p_unit and s.proposer_id = p_target and s.status in ('approved', 'rejected') and s.reviewed_at > now() - interval '24 hours'
          and not exists (select 1 from public.push_client_events e where e.key = 'suggestion-result:' || s.id)
        order by s.reviewed_at desc limit 1;
       if r.id is null then return query select false, 'no_event', null::text, null::text, null::text; return; end if;
@@ -160,7 +161,7 @@ begin
       select t.id, coalesce(pe.title, wt.text, '') as title into r from public.training_requests t
         left join public.playbook_entries pe on pe.id = t.entry_id
         left join public.work_templates wt on wt.id = t.template_id
-       where t.unit_id = p_unit and t.staff_id = p_target and t.created_by = p_caller and t.created_at > now() - interval '10 minutes'
+       where t.unit_id = p_unit and t.staff_id = p_target and t.created_by = p_caller and t.created_at > now() - interval '24 hours'
          and not exists (select 1 from public.push_client_events e where e.key = 'training:' || t.id)
        order by t.created_at desc limit 1;
       if r.id is null then return query select false, 'no_event', null::text, null::text, null::text; return; end if;
@@ -174,7 +175,9 @@ begin
 
   -- 같은 사건은 24시간에 한 번만 알린다.
   perform pg_advisory_xact_lock(hashtext('push_client_event:' || v_key));
-  if exists (select 1 from public.push_client_events e where e.key = v_key and e.sent_at > now() - interval '24 hours') then
+  --   합류·배정·멘션은 같은 대상에게 다시 일어날 수 있는 사건이라(반려 뒤 재신청 · 뺐다가 재배정) 10분만 막는다.
+  if exists (select 1 from public.push_client_events e where e.key = v_key
+              and e.sent_at > now() - case when p_tag in ('join', 'assign', 'mention') then interval '10 minutes' else interval '24 hours' end) then
     return query select false, 'duplicate', null::text, null::text, null::text; return;
   end if;
   insert into public.push_client_events (key) values (v_key);

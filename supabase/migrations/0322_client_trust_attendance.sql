@@ -64,10 +64,10 @@ begin
   v_manage := public.auth_can_manage();
   v_role := case when v_manage then 'owner' else 'staff' end;
 
-  if tg_op = 'DELETE' then
-    perform public.attendance_log_edit(old.id, old.unit_id, old.staff_id, v_role, 'delete', old.check_in, old.check_out, null, null);
-    return old;
-  end if;
+  -- ★이력은 여기서 적지 않는다. 앱의 퇴근은 upsert(INSERT … ON CONFLICT DO UPDATE)라 충돌 판정 전에
+  --   BEFORE INSERT 가 먼저 돈다 — 여기서 적으면 정상 퇴근마다 가짜 '직접 추가' 이력이 남는다(검증 10-20).
+  --   실제로 반영된 쓰기만 AFTER 트리거(attendance_log_after)가 적는다.
+  if tg_op = 'DELETE' then return old; end if;
 
   -- 근무 분은 서버가 센다.
   new.work_minutes := case when new.check_in is not null and new.check_out is not null
@@ -80,29 +80,53 @@ begin
       new.edited_by := null;
       return new;
     end if;
-    if not v_manage or new.edited_by is not null then
-      new.edited_by := v_role;
-      perform public.attendance_log_edit(new.id, new.unit_id, new.staff_id, v_role, 'insert', null, null, new.check_in, new.check_out);
-    end if;
+    if not v_manage or new.edited_by is not null then new.edited_by := v_role; end if;
     return new;
   end if;
 
   -- UPDATE
-  if new.check_in is not distinct from old.check_in and new.check_out is not distinct from old.check_out then
-    -- 시각이 그대로면 표시도 그대로(직원은 'staff' 를 지울 수 없다 · 사장 표시를 사칭할 수 없다).
-    new.edited_by := old.edited_by;
-    return new;
-  end if;
-  -- 퇴근 버튼: 출근 그대로 · 열린 기록을 지금 닫는다.
-  v_punch := new.check_in is not distinct from old.check_in and old.check_out is null and public.attendance_is_now(new.check_out);
-  if v_punch and not v_manage then
+  if not public.attendance_times_edited(old.check_in, old.check_out, new.check_in, new.check_out, v_manage) then
+    -- 시각이 그대로거나 퇴근 버튼이면 표시도 그대로(직원은 'staff' 를 지울 수 없다 · 사장 표시를 사칭할 수 없다).
     new.edited_by := old.edited_by;
     return new;
   end if;
   new.edited_by := v_role;
-  perform public.attendance_log_edit(old.id, old.unit_id, old.staff_id, v_role, 'update', old.check_in, old.check_out, new.check_in, new.check_out);
   return new;
 end $$;
+
+-- 수정으로 볼 시각 변경인가: 시각이 바뀌었고, 직원의 퇴근 버튼(출근 그대로 · 열린 기록을 지금 닫음)이 아니다.
+create or replace function public.attendance_times_edited(p_oin timestamptz, p_oout timestamptz, p_nin timestamptz, p_nout timestamptz, p_manage boolean)
+returns boolean language sql stable set search_path = public as $$
+  select (p_nin is distinct from p_oin or p_nout is distinct from p_oout)
+     and not (not p_manage and p_nin is not distinct from p_oin and p_oout is null and public.attendance_is_now(p_nout))
+$$;
+
+-- 이력은 실제로 반영된 쓰기만 적는다(AFTER). upsert 의 INSERT 단계가 충돌로 UPDATE 가 되면 AFTER INSERT 는 돌지 않는다.
+create or replace function public.attendance_log_after()
+returns trigger language plpgsql security invoker set search_path = public as $$
+declare v_manage boolean; v_role text;
+begin
+  if current_user <> 'authenticated' or auth.uid() is null then return null; end if;
+  v_manage := public.auth_can_manage();
+  v_role := case when v_manage then 'owner' else 'staff' end;
+  if tg_op = 'INSERT' then
+    -- 출근 버튼(edited_by null)은 수정이 아니다.
+    if new.edited_by is not null then
+      perform public.attendance_log_edit(new.id, new.unit_id, new.staff_id, v_role, 'insert', null, null, new.check_in, new.check_out);
+    end if;
+  elsif tg_op = 'UPDATE' then
+    if public.attendance_times_edited(old.check_in, old.check_out, new.check_in, new.check_out, v_manage) then
+      perform public.attendance_log_edit(old.id, old.unit_id, old.staff_id, v_role, 'update', old.check_in, old.check_out, new.check_in, new.check_out);
+    end if;
+  else
+    perform public.attendance_log_edit(old.id, old.unit_id, old.staff_id, v_role, 'delete', old.check_in, old.check_out, null, null);
+  end if;
+  return null;
+end $$;
+
 drop trigger if exists trg_attendance_staff_edit_guard on public.attendance;
 create trigger trg_attendance_staff_edit_guard before insert or update or delete on public.attendance
   for each row execute function public.attendance_staff_edit_guard();
+drop trigger if exists trg_attendance_log_after on public.attendance;
+create trigger trg_attendance_log_after after insert or update or delete on public.attendance
+  for each row execute function public.attendance_log_after();

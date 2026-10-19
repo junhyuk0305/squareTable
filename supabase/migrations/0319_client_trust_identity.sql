@@ -5,7 +5,7 @@
 -- 해법: 앱이 테이블에 **직접** 쓸 때(current_user = 'authenticated') BEFORE 트리거가 신원 열을 auth.uid() 로 덮어쓴다.
 --   정의자 RPC(mark_feed_read·toggle_feed_reaction·edit_feed_text 등)는 current_user 가 함수 소유자라 이 트리거를 지나친다.
 --   그래서 트리거 함수는 SECURITY INVOKER 로 둔다(정의자로 두면 current_user 가 늘 소유자가 되어 판정이 무너진다).
--- 옛 앱 호환: 옛 앱은 자기 신원을 정직하게 보낸다 → 덮어써도 같은 값이다. 위조한 값만 바뀐다. 예외는 '직원의 공지 올리기'(앱에 없는 경로)뿐.
+-- 옛 앱 호환: 옛 앱은 자기 신원을 정직하게 보낸다 → 덮어써도 같은 값이다. 위조한 값만 바뀐다(직원 공지도 그대로 올라간다 · 0177).
 --   함수 시그니처·테이블 모양은 그대로다. work_rooms 는 앱이 직접 update 하지 않는다(db.ts 는 insert·select 만).
 
 -- ── 공용: 신원 배열 거르기 ───────────────────────────────────────────────────
@@ -54,8 +54,7 @@ begin
   v_manage := public.auth_can_manage();
 
   if tg_op = 'INSERT' then
-    -- 공지는 관리자만 올린다(앱도 관리자 화면에서만 올린다).
-    if d ->> 'kind' = 'notice' and not v_manage then raise exception 'notice_manager_only' using errcode = '42501'; end if;
+    -- 공지는 누구나 올린다(0177 사용자 결정). 고정·긴급 표시만 관리자 몫이다(아래).
     d := d || jsonb_build_object(
       'authorId',   v_uid,
       'authorName', coalesce(public.my_profile_name(), d ->> 'authorName', ''),

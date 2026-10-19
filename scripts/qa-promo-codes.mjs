@@ -183,8 +183,9 @@ async function main() {
   check('④ 중단 코드 거부(code_inactive)', /code_inactive/.test(errOf(e4)), errOf(e4).slice(0, 60) || '통과돼버림');
   const { error: e4b } = await C.c.rpc('redeem_promo_code', { p_code: C_EXP });
   check('④ 기한 지난 코드 거부(code_expired)', /code_expired/.test(errOf(e4b)), errOf(e4b).slice(0, 60) || '통과돼버림');
-  const { error: e4c } = await C.c.rpc('redeem_promo_code', { p_code: `QA${s}NOPE` });
-  check('④ 없는 코드 거부(code_not_found)', /code_not_found/.test(errOf(e4c)), errOf(e4c).slice(0, 60) || '통과돼버림');
+  // ★0323: 없는 코드는 예외가 아니라 빈 결과다(시도 기록이 남아야 대입 잠금이 쌓인다). 앱은 db.ts 가 code_not_found 로 바꾼다.
+  const { data: d4c, error: e4c } = await C.c.rpc('redeem_promo_code', { p_code: `QA${s}NOPE` });
+  check('④ 없는 코드 거부(빈 결과 · 0323)', !e4c && (d4c ?? []).length === 0, errOf(e4c).slice(0, 60) || JSON.stringify(d4c));
 
   // ── 5) 직원 리딤 차단 ──────────────────────────────────────────────────────
   const { error: e5 } = await J.c.rpc('redeem_promo_code', { p_code: C_OK });
