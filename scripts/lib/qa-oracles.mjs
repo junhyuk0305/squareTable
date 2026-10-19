@@ -214,7 +214,8 @@ function ctx(text, re) {
 /** R6 — 빈 상태 문구("…없어요")가 보이면 탭바·뒤로 말고 누를 것이 하나는 있다. */
 export function r6(snap) {
   // "문제가 없어요·이상이 없어요" 는 상태 보고지 빈 목록이 아니다(10-17 1차 /billing 오탐).
-  const empties = snap.leafTexts.filter((t) => /없어요/.test(t) && !/(문제|이상)[가이] 없어요/.test(t));
+  // "이 달 출퇴근 기록이 없어요" 는 누를 것이 없는 게 맞다(10-20 사용자 확인).
+  const empties = snap.leafTexts.filter((t) => /없어요/.test(t) && !/(문제|이상)[가이] 없어요/.test(t) && !/출퇴근 기록이 없어요/.test(t));
   if (!empties.length) return res('skip', ['빈 상태 문구 없음']);
   const actions = snap.clickables.filter((c) => !c.zero && !c.unreachable && !c.covered && !c.tab && !c.back);
   if (actions.length) return res('pass', [`빈 문구 ${empties.length} · 행동 ${actions.length}`]);

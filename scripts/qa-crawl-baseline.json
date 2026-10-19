@@ -304,12 +304,6 @@
    ]
   },
   {
-   "key": "junior|/junior/timesheet|R6",
-   "detail": [
-    "\"이 달 출퇴근 기록이 없어요.\" 옆에 행동 버튼 0"
-   ]
-  },
-  {
    "key": "owner|/owner/brand-link|R3",
    "detail": [
     "<44 \" 연결 해제\" @34,535 101×34"
@@ -491,12 +485,6 @@
    "key": "owner|/owner/timesheet/[staffId]|R4",
    "detail": [
     "이 달 출퇴근 기록이 없어요.(388×53)"
-   ]
-  },
-  {
-   "key": "owner|/owner/timesheet/[staffId]|R6",
-   "detail": [
-    "\"이 달 출퇴근 기록이 없어요.\" 옆에 행동 버튼 0"
    ]
   },
   {
