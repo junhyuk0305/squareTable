@@ -32,6 +32,8 @@ export const JUNIOR_KIND_UI: Record<JuniorNotifKind, { icon: IconName; tint: str
   // 합류 결과(0247) — 승인은 결과(초록), 반려는 사장 쪽 join_request 와 같은 사람 아이콘에 반려 톤.
   join_approved: { icon: 'person-add', tint: '#E4F2E8' },
   join_rejected: { icon: 'person-remove', tint: BrandColors.accentSoft },
+  // 매니저 지정·해제(0315 member_notices role_changed) — 직원 명부의 매니저 배지와 같은 리본.
+  role: { icon: 'ribbon', tint: BrandColors.brandSoft },
 };
 export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: string }> = {
   join_request: { icon: 'person-add', tint: BrandColors.yellowSoft },

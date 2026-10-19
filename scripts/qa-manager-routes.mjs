@@ -171,6 +171,17 @@ check("직원 설정: 매니저에게 '노하우'·'퀴즈' 행", /label="노하
 check('노하우 수정: 휴지통은 사장만', /isBrandCopy\(entry\) \|\| !isOwner/.test(read('src/app/owner/edit/[id].tsx')));
 check('코치: 다른 매장 넣기 넛지는 사장만', /isOwnerHere && st\.role === 'owner'/.test(read('src/app/owner/coach.tsx')));
 check('owner/_layout: 잠긴 매니저 → /billing', /role === 'manager' && seatLocked\) return <Redirect href="\/billing"/.test(read('src/app/owner/_layout.tsx')));
+{
+  // 0315/0316: 역할 변경 행 — 매니저 목록에 직원 홈으로, 배지에도 센다.
+  const rn = { id: 9, kind: 'role_changed', title: '매니저가 됐어요', body: 'QA', created_at: '2099-01-01T00:00:00Z' };
+  const mRows = N.buildManagerNotifications(ownerArgs, { ...received, scheduleNotices: [rn] });
+  const r = mRows.find((x) => x.id === 'role_9');
+  check('매니저: 역할 변경 행 → /junior/home', r?.kind === 'role' && r?.route === '/junior/home', show(r));
+  check('매니저: 역할 변경 행을 배지가 센다', N.managerUnreadCount(ownerArgs, { ...received, scheduleNotices: [rn] }) === N.managerUnreadCount(ownerArgs, received) + 1);
+  const sch = read('src/app/owner/schedule.tsx');
+  check('근무표: 시간 수정 요청을 매니저에게도(자기 요청 제외)', /pendingTimeRequests\(timeRequests\)\.filter\(\(r\) => isOwner \|\| r\.staff_id !== myId\)/.test(sch));
+  check('0316: decide_shift_time = auth_can_manage + cannot_decide_self', /not public\.auth_can_manage\(\) then raise exception 'owner_only'[\s\S]*cannot_decide_self/.test(read('supabase/migrations/0316_manager_shift_time_and_role_notice.sql')));
+}
 for (const f of ['src/app/owner/_layout.tsx', 'src/app/junior/_layout.tsx']) check(`${f}: 내 멤버십 실시간 구독`, /subscribeMyMembership\(userId/.test(read(f)));
 
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);

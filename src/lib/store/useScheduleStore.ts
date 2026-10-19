@@ -96,7 +96,8 @@ export type ShiftTimeRequest = {
 /** 내 근무 알림(D9 · 0289 member_notices) — 대타 확정 · 시간 수정 결과 · 근무표 변경. 푸시는 서버 크론이 보낸다. */
 export type ScheduleNotice = {
   id: number;
-  kind: 'swap_confirmed' | 'shift_time_result' | 'shift_changed';
+  // 0315 role_changed = 매니저 지정·해제(같은 member_notices 갈래 · 벨이 역할 행으로 그린다).
+  kind: 'swap_confirmed' | 'shift_time_result' | 'shift_changed' | 'role_changed';
   title: string;
   body: string;
   created_at: string;

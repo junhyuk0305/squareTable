@@ -67,6 +67,7 @@ export default function OwnerScheduleScreen() {
   const owner = useStaffStore((s) => s.owner);
   // 직원 관리·매장 설정은 사장 전용 — 매니저에겐 그리로 가는 버튼을 그리지 않는다.
   const isOwner = useSessionStore((s) => s.role) === 'owner';
+  const myId = useSessionStore((s) => s.userId);
   const config = useScheduleStore((s) => s.config);
   const templates = useScheduleStore((s) => s.templates);
   const swaps = useScheduleStore((s) => s.swaps);
@@ -104,8 +105,12 @@ export default function OwnerScheduleScreen() {
 
   // 사장 컨펌 대기(직원이 수락 완료한) 요청. 판정 SSOT는 pendingApprovals — 홈 '다음 행동'이 같은 수를 쓴다.
   const pending = useMemo(() => pendingApprovals(swaps, today), [swaps, today]);
-  // 직원의 근무 시간 수정 요청(J2). 승인은 사장만 한다(0243) — 매니저에게는 누를 수 없는 카드를 그리지 않는다.
-  const timePending = useMemo(() => (isOwner ? pendingTimeRequests(timeRequests) : []), [isOwner, timeRequests]);
+  // 직원의 근무 시간 수정 요청(J2). 0316 부터 매니저도 결정한다(decide_shift_time · auth_can_manage).
+  //   매니저 자기 요청은 서버가 거부한다(cannot_decide_self) — 누를 수 없는 카드를 그리지 않는다.
+  const timePending = useMemo(
+    () => pendingTimeRequests(timeRequests).filter((r) => isOwner || r.staff_id !== myId),
+    [isOwner, myId, timeRequests],
+  );
   const approvalCount = pending.length + timePending.length;
 
   // 요청 카드 위치 = 승인 섹션 y + 카드 목록 y + 카드 y(각각 onLayout · 스크롤 내용 기준). 같은 id 로는 한 번만 움직인다.
@@ -289,7 +294,7 @@ export default function OwnerScheduleScreen() {
         <View style={styles.section}>
           <SectionLabel
             icon="swap-horizontal-outline"
-            title={isOwner ? '승인할 요청' : '교대 승인'}
+            title="승인할 요청"
             trailing={
               approvalCount > 0 ? (
                 <View style={styles.badge}>
@@ -301,9 +306,7 @@ export default function OwnerScheduleScreen() {
           {approvalCount === 0 ? (
             <View style={styles.emptyBox}>
               <Text style={styles.emptyText}>
-                {isOwner
-                  ? '승인할 요청이 없어요.\n교대 합의와 근무 시간 수정 요청이 여기로 올라와요.'
-                  : '승인할 교대 요청이 없어요.\n직원이 서로 합의하면 여기로 올라와요.'}
+                {'승인할 요청이 없어요.\n교대 합의와 근무 시간 수정 요청이 여기로 올라와요.'}
               </Text>
             </View>
           ) : (

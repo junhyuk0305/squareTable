@@ -111,7 +111,9 @@ export const NOTIF = {
     route: (_s) => '/junior/hub',
     badgeUnit: '합류 결과',
   },
-  // 벨 항목 없음(알려진 예외) — 화면 세트가 바뀌는 사건이라 다음 진입에서 바로 보인다.
+  // 매니저 지정·해제 — 원천은 서버가 넣는 member_notices(0315 role_changed). 푸시는 서버 크론(sweepMemberNotices)이 보내고
+  // 앱은 쏘지 않는다(엣지가 'role' user 요청을 무시한다). 벨·허브는 그 행을 문구 그대로 그린다(notifications.ts roleNoticeRow).
+  // pushTag 는 옛 앱 요청을 엣지가 알아보는 이름으로 남긴다.
   role: {
     route: (_s) => '/junior/home',
     pushTag: 'role', badgeUnit: '역할 변경', audience: ['user'],

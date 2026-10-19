@@ -25,7 +25,9 @@ export type JuniorNotifKind =
   // P1 역 ④ — 푸시 tag 가 있던 사건의 인앱 kind. q_answered = 내 질문에 답이 옴 · training = 퀴즈 도착.
   | 'q_answered' | 'training'
   // 합류 결과(0247 member_notices approved·rejected) — 신청한 사람에게.
-  | 'join_approved' | 'join_rejected';
+  | 'join_approved' | 'join_rejected'
+  // 매니저 지정·해제(0315 member_notices role_changed) — 서버가 넣은 문구 그대로.
+  | 'role';
 /** 주소는 레지스트리(NOTIF[kind].route)가 만든다 — 문자열 리터럴 유니온을 여기서 다시 적지 않는다. */
 export type JuniorNotifRoute = string;
 
@@ -300,7 +302,12 @@ export function buildJuniorNotifications(args: {
   }
 
   // 내 근무 알림(D9) — 서버가 넣은 문구 그대로. 푸시(5분 크론)와 같은 행이다. 탭하면 근무표로.
+  // 0315: 같은 member_notices 갈래로 역할 변경(role_changed)도 온다 → 역할 행으로 그린다.
   for (const n of scheduleNotices) {
+    if (n.kind === 'role_changed') {
+      out.push(roleNoticeRow(n, ackAt));
+      continue;
+    }
     out.push({
       id: `sched_${n.id}`,
       kind: 'schedule',
@@ -318,7 +325,21 @@ export function buildJuniorNotifications(args: {
   return out.sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_NOTIFS);
 }
 
-/** 합류 결과(0247 member_notices approved·rejected) 행 — 서버가 승인·반려 때 넣은 행. 푸시는 같은 행을 크론이 보낸다.
+/** 매니저 지정·해제 행(0315 member_notices role_changed). 직원 벨·매니저 벨이 이 하나를 쓴다(역 ⑧ id = role_<행 id>).
+ *  탭하면 직원 홈(F-2) — 매니저도 직원 홈을 쓴다. 문구는 서버가 넣은 그대로. */
+function roleNoticeRow(n: ScheduleNotice, ackAt?: string | null): JuniorNotif {
+  return {
+    id: `role_${n.id}`,
+    kind: 'role',
+    title: n.title,
+    body: n.body,
+    at: n.created_at,
+    unread: isAfterAck(n.created_at, ackAt),
+    route: NOTIF.role.route('junior'),
+  };
+}
+
+/** 합류 결과(0247 member_notices approved·rejected) 행 —서버가 승인·반려 때 넣은 행. 푸시는 같은 행을 크론이 보낸다.
  *  매장 이름이 제목에 들어간다(역 ⑧ id = kind_<행 id>). 읽음 기준은 accountAckAt(결정 3) — 매장 벨·허브·배지가 이 하나를 본다. */
 export function buildJoinNotifRows(joinNotices: JoinNotice[], joinAckAt: string | null): JuniorNotif[] {
   const out: JuniorNotif[] = [];
@@ -671,7 +692,7 @@ function ownerRows(args: {
 //   합류 승인·제안 검토·사장 알림(요금제·본사)·입금 결과는 사장 전용 화면이라 뺀다(0201). 예전엔 사장 축을
 //   그대로 받아 눌러도 직원 홈으로 튕겼다. 질문과 내 제안 결과는 물어보기 탭(/junior/chat)에서 본다.
 export type ManagerNotifKind =
-  | 'mention' | 'swap_approval' | 'question' | 'assign' | 'suggestion_approved' | 'suggestion_rejected';
+  | 'mention' | 'swap_approval' | 'question' | 'assign' | 'suggestion_approved' | 'suggestion_rejected' | 'role';
 export type ManagerNotifRoute = string;
 export type ManagerNotif = Omit<OwnerNotif, 'kind' | 'route'> & { kind: ManagerNotifKind; route: ManagerNotifRoute };
 
@@ -684,6 +705,8 @@ export type ManagerReceivedArgs = {
   userId: string;
   nameOf: (id: string) => string;
   ackAt?: string | null;
+  /** 0315: 내 member_notices(지금 매장 · useScheduleStore.notices). 매니저 목록은 이 중 역할 변경만 쓴다. */
+  scheduleNotices?: ScheduleNotice[];
 };
 
 /** ② 나에게 온 것 — 매니저가 열 수 있는 경로로. 카운트와 목록이 같은 배열을 보게 이 함수 하나만 쓴다. */
@@ -721,6 +744,11 @@ function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
       // 물어보기 탭 '내 공간'에 내가 보낸 제안 목록이 있다(직원과 같은 곳 · F-2). /owner/categories 는 허용 목록 밖이다.
       route: NOTIF.suggestion_result.route('junior'),
     });
+  }
+
+  // 매니저가 된 알림(0315) — 지정된 순간 받은 사람은 이미 매니저라 이 목록에서 보인다.
+  for (const n of args.scheduleNotices ?? []) {
+    if (n.kind === 'role_changed') out.push({ ...roleNoticeRow(n, ackAt), kind: 'role' });
   }
 
   return out;

@@ -3832,7 +3832,7 @@ export async function fetchScheduleNotices(): Promise<ReadResult<ScheduleNotice[
     .from('member_notices')
     .select('id, kind, title, body, created_at')
     .eq('unit_id', _unitId)
-    .in('kind', ['swap_confirmed', 'shift_time_result', 'shift_changed'])
+    .in('kind', ['swap_confirmed', 'shift_time_result', 'shift_changed', 'role_changed']) // role_changed = 0315 매니저 지정·해제
     .order('created_at', { ascending: false })
     .limit(50);
   if (error) {

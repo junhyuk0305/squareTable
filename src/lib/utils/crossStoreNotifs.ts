@@ -56,7 +56,8 @@ const ownerArgsOf = (d: UnitNotifData, me: string, nameOf: (id: string) => strin
 const receivedArgsOf = (
   d: UnitNotifData, me: string, today: string, nameOf: (id: string) => string, ackAt?: string | null,
 ): ManagerReceivedArgs =>
-  ({ feed: d.feed, taskTemplates: d.taskTemplates, done: d.done, today, suggestions: d.suggestions, userId: me, nameOf, ackAt });
+  ({ feed: d.feed, taskTemplates: d.taskTemplates, done: d.done, today, suggestions: d.suggestions, userId: me, nameOf, ackAt,
+     scheduleNotices: d.scheduleNotices }); // 0315/0316: 매니저 허브 행에 역할 변경
 
 /** 매장 하나의 안읽음 카운트 — 그 매장에서의 역할(unit_members.role)에 맞는 기존 카운터 재사용.
  *  ackAt = 그 매장의 '모두 읽기' 기준 시각(0078, unit_member_prefs — 전 매장 행을 이미 당겨둠). */

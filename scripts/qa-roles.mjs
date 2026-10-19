@@ -130,6 +130,12 @@ try {
   check("★0315: 'role' 푸시 위조 → 보내지 않음(200·sent 0)", fr.status === 200 && (frj.sent ?? 0) === 0, `status=${fr.status} ${JSON.stringify(frj)}`);
   const fs = await pushAs({ audience: 'user', userId: mId, tag: 'suggestion-result', title: '제안이 반영됐어요', body: 'QA' });
   check('★0315: 직원의 결과 알림 위조 거부(403)', fs.status === 403, `status=${fs.status}`);
+  // 0316: 근무 시간 수정 요청 결정은 관리자. 없는 요청 id 로 관문만 잰다(상태 변화 없음).
+  const dtM = await M.rpc('decide_shift_time', { p_id: `scr_${P}none_${s}`, p_approve: false });
+  check('★0316: 매니저 시간 수정 결정 관문 통과(없는 요청=not_found)', /not_found/.test(dtM.error?.message ?? ''), dtM.error?.message ?? '(성공?)');
+  const dtJ = await J.rpc('decide_shift_time', { p_id: `scr_${P}none_${s}`, p_approve: false });
+  check('★0316: 직원 시간 수정 결정 거부(owner_only)', /owner_only/.test(dtJ.error?.message ?? ''), dtJ.error?.message ?? '(차단 안 됨!)');
+  skipped('★0316: 매니저 자기 요청 결정 거부(cannot_decide_self)', '고정 매니저의 근무에 시간 수정 요청을 심어야 한다');
   skipped('★0315: 좌석 잠긴 매니저의 관리 권한 거부(auth_can_manage=false)', '고정 매장 store_001 을 무료로 내리고 직원 4명 이상이어야 잴 수 있다');
 
   // ── ③ 매니저 허용 도메인 ─────────────────────────────────────────────────

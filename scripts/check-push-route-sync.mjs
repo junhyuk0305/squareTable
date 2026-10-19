@@ -83,8 +83,8 @@ try {
   if (edge('user', 'no-such-tag', ID) !== '/') { fail++; console.log('✗ 엣지가 모르는 tag 를 "/" 로 보내지 않는다'); }
 
   // ③ 역 ④: pushTag 가 있는 kind 는 벨 빌더에도 있어야 한다(kind 문자열이 notifications.ts 안에 보여야 한다).
-  //   알려진 빈칸은 통과로 세지 않고 skip 으로 찍는다 — role(화면 세트 변경 · 벨 불필요).
-  const KNOWN_GAPS = ['role'];
+  //   알려진 빈칸은 통과로 세지 않고 skip 으로 찍는다. role 은 0315/0316 에서 벨 행(roleNoticeRow)이 생겨 빠졌다.
+  const KNOWN_GAPS = [];
   const bell = read('src/lib/utils/notifications.ts');
   for (const [kind] of pushKinds) {
     n++;
