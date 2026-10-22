@@ -15,7 +15,6 @@ import {
   useWorkStore,
   courseEntriesOf,
   understandingOf,
-  staffWhoUnderstandEntries,
 } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { isBrandHidden } from '@/lib/brand/copy';
@@ -95,13 +94,11 @@ export type QuizListRow = {
   /** 받는 사람 수 = 발송 원장의 사람 수. 아직 발행 전이면 0. */
   recipients: number;
   /**
-   * 실제로 **푼** 사람 수(`completedAt`). `passed` 와 다른 값이다 —
-   * 저건 "담긴 노하우를 전부 아는 사람"이라 다 풀어도 틀리면 안 오른다.
+   * 실제로 **푼** 사람 수(`completedAt`).
    * 응시 중/완료를 가르는 것은 **풀었나**이지 맞혔나가 아니다(2026-09-11).
+   * ★P4(2026-10-22): 노하우 이해 기록으로 센 `passed` 는 뺐다. 퀴즈 화면은 이해 기록을 쓰지 않는다.
    */
   answered: number;
-  /** 담긴 노하우를 **전부** 아는 사람 수(업무 통과와 같은 규칙). */
-  passed: number;
   /** 목록 한 줄의 부제 — 재고 수가 아니라 **일정**을 말한다. */
   caption: string;
 };
@@ -110,16 +107,14 @@ export type QuizListRow = {
  * 퀴즈 홈 상단 지표(2026-08-26). 목록만 있던 화면이 "만든 것의 나열"로만 읽혀 다음에 뭘 할지가 안 보였다.
  *
  * ★고르는 기준: **사장이 다음 행동을 정하는 데 쓰는 값**만 넣는다. 보기 좋은 숫자는 넣지 않는다.
- * ★개인 지표는 없다(감시원칙 D1~D5). `passed/recipients` 는 사람이 아니라 **퀴즈의 진행**이라
- *   n/m명 표기가 허용되는 자리다 — 이름과 붙여 놓지 않는다.
+ * ★개인 지표는 없다(감시원칙 D1~D5).
  */
 export type QuizBoardStats = {
   /** 나가고 있는 퀴즈 = 보냈거나 예약된 것. 초안은 아직 아무 일도 안 한다. */
   live: number;
   /** 초안 = 만들다 만 것. 이 값이 크면 "만들기는 되는데 못 내보내고 있다"는 뜻이다. */
   drafts: number;
-  /** 나가고 있는 퀴즈들의 통과 인원 합 / 받은 사람 합. */
-  passed: number;
+  /** 나가고 있는 퀴즈들의 받은 사람 합. */
   recipients: number;
   /** 문제로 나가는 노하우 수 / 발행된 노하우 수 — "다음에 뭘 퀴즈로 만들까"의 근거다. */
   covered: number;
@@ -437,11 +432,10 @@ export function useQuizBoard() {
         staleCount: mine.filter((q) => isStale(q)).length,
         recipients: latestSends.length,
         answered: latestSends.filter((a) => !!a.completedAt).length,
-        passed: staffWhoUnderstandEntries(understanding, entryIds, { now, dueDays: c.due_days ?? null }).length,
         caption,
       };
     });
-  }, [courses, courseEntries, sendsByCourse, understanding, now, quizItems, entries, isStale]);
+  }, [courses, courseEntries, sendsByCourse, quizItems, entries, isStale]);
 
   /**
    * 홈 상단 지표 — `buildQuizzes()` 결과에서만 센다. 화면이 다시 세지 않는다(판정 복제 금지).
@@ -455,7 +449,6 @@ export function useQuizBoard() {
       return {
         live: live.length,
         drafts: rows.length - live.length,
-        passed: live.reduce((n, r) => n + r.passed, 0),
         recipients: live.reduce((n, r) => n + r.recipients, 0),
         covered,
         publishedEntries: published.length,
@@ -487,7 +480,7 @@ export function useQuizBoard() {
       const stale = items > 0 && staleCountOf(e.id) > 0;
       const miss = items > 0 && missPctOf(e.id) > QUIZ_MISS_HALF_PCT;
       const status =
-        items === 0 ? '문항 없음' : `${n}명 중 ${known}명 앎${stale ? ' · 노하우 변경됨' : miss ? ' · 높은 오답률' : ''}`;
+        items === 0 ? '문항 없음' : `노하우 이해 ${known}/${n}명${stale ? ' · 노하우 변경됨' : miss ? ' · 높은 오답률' : ''}`;
       const name = getSectionMeta(e.section).label;
       const list = by.get(name) ?? [];
       list.push({ id: e.id, title: e.title, level, status, stale, miss });

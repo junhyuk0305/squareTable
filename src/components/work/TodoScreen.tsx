@@ -438,7 +438,7 @@ export function TodoScreen({
                           {uNames.length > 0 && (
                             <View style={s.uBadge}>
                               <Ionicons name="ribbon-outline" size={11} color={BrandColors.good} />
-                              <Text style={s.uBadgeText} numberOfLines={1}>{uNames.join('·')} 이해 확인</Text>
+                              <Text style={s.uBadgeText} numberOfLines={1}>{uNames.join('·')} 노하우 이해</Text>
                             </View>
                           )}
                           {selfCheckable && (

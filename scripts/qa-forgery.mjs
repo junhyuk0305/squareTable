@@ -178,8 +178,11 @@ try {
     await K.c.from('knowhow_understanding').upsert({ unit_id: S1, entry_id: E1, staff_name: 'QA직원K', verified_at: now }, { onConflict: 'entry_id,staff_id' });
     const r2 = await one(srv.from('knowhow_understanding').select('verified_at').eq('staff_id', K.id).eq('entry_id', E1));
     check('7-2 퀴즈를 맞히지 않고 이해 확인(verified_at)을 찍을 수 없다', !r2?.verified_at, JSON.stringify(r2));
-    // [OK] 옛 앱 흐름: 문항 채점(grade_quiz) → 다 맞으면 이해 확인 저장(응시 기록 저장과 순서가 정해져 있지 않다).
+    // [OK] 앱 흐름: 문항 채점(grade_quiz) → 응시 저장(quiz_staff_record) → 다 맞으면 이해 확인 저장.
+    //   0333: 이해 확인의 근거는 저장된 제출이다. 채점만으로는 안 찍힌다(qa:quiz-invariants I6).
     const { data: g } = await J.c.rpc('grade_quiz', { p_item_id: QI, p_response: 1 });
+    const { error: recErr } = await J.c.rpc('quiz_staff_record', { p_rows: [{ item_id: QI, response: 1, ord: 0 }] });
+    if (recErr) console.log('  quiz_staff_record', recErr.message);
     await J.c.from('knowhow_understanding').upsert({ unit_id: S1, entry_id: E1, staff_name: 'QA직원J', verified_at: now }, { onConflict: 'entry_id,staff_id' });
     const r3 = await one(srv.from('knowhow_understanding').select('verified_at').eq('staff_id', J.id).eq('entry_id', E1));
     check('7-3 [OK] 문항을 맞힌 뒤의 이해 확인은 저장된다', !!(g?.[0]?.correct ?? g?.correct) && !!r3?.verified_at, JSON.stringify({ g, r3 }));

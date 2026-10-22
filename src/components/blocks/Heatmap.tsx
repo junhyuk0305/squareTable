@@ -44,7 +44,7 @@ export type HeatGroup = { name: string; cells: HeatCell[] };
  *  · 매장 노하우 탭: 색 = 한 달간 물어본 횟수 · 회색 = 안 물어봄 · 주황 = 확인 필요 · 빨강 = 오래 손 안 댐
  */
 export type HeatLegend = { empty: string; scale: [string, string]; stale: string; miss: string };
-const QUIZ_LEGEND: HeatLegend = { empty: '문항 없음', scale: ['아는 직원', '전원'], stale: '노하우 변경됨', miss: '높은 오답률' };
+const QUIZ_LEGEND: HeatLegend = { empty: '문항 없음', scale: ['노하우 이해', '전원'], stale: '노하우 변경됨', miss: '높은 오답률' };
 
 /** 0단계 면은 cellEmpty 가 연한 회색으로 덮는다. */
 const LEVEL_BG: Record<HeatLevel, string> = {

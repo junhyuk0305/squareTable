@@ -107,19 +107,19 @@ export function useJuniorHomeData(): JuniorHomeData {
   //  발송된 퀴즈는 quizTodo(progress.ts)가 SSOT다. 카드와 벨도 같은 함수를 쓴다.
   //  발송 원장이 없는 옛 퀴즈만 "눌러서 갈 곳이 실제로 있는 것"을 최소 조건으로 센다:
   //   ① 코스에 담긴 노하우이고 ② 낼 문항이 있고(0109: 문항 0건 = 의도된 미노출)
-  //   ③ 코스가 하한(min_items)을 채워 직원에게 열려 있고 ④ 내 통과 기록이 아직 없는 것.
+  //   ③ 코스가 하한(min_items)을 채워 직원에게 열려 있고 ④ 이 퀴즈에서 아직 내 제출이 없는 노하우가 있는 것.
+  //  ★P4: ④는 노하우 이해 기록이 아니라 서버가 제출에서 적은 응시 행(quiz_attempts · quiz_attempt_items 에서 나옴)으로 본다.
   //  주기 코스의 '다시 확인'(due)은 안 푼 게 아니라 재확인이라 여기서 세지 않는다.
   //  ★세는 단위는 **퀴즈**다(2026-10-15 안드로이드 QA #4). 예전엔 노하우를 세서 퀴즈 1개를 보냈는데 '안 푼 퀴즈 4개'가 떴다.
   //  ★나에게 **실제로 나간** 퀴즈만 센다 — WorkBoard 카드와 같은 조건(발송 원장이 있으면 내 sent 행이 있어야 한다).
   const courses = useWorkStore((s) => s.courses);
   const courseEntries = useWorkStore((s) => s.courseEntries);
-  const understanding = useWorkStore((s) => s.understanding);
+  const quizAttempts = useWorkStore((s) => s.quizAttempts);
   const quizCounts = useWorkStore((s) => s.quizCounts);
   const assignments = useWorkStore((s) => s.assignments);
   const quizProgress = useWorkStore((s) => s.quizProgress);
   const quizProgressError = useWorkStore((s) => s.quizProgressError);
   const openQuizCount = useMemo(() => {
-    const passed = new Set(understanding.filter((u) => u.staffId === userId).map((u) => u.entryId));
     const views = trainingCourseViews(courses);
     // ★0332 · P3: 발송된 퀴즈는 quizTodo 하나로 센다(카드·벨과 같은 함수 · 재발송은 최신 하나 · 1회성은 앞선 하나).
     //   만들던 퀴즈·외부 사람용은 카드가 안 뜨니 넘기지 않는다(E1 · staffCanSeeCourse).
@@ -128,7 +128,7 @@ export function useJuniorHomeData(): JuniorHomeData {
       return n > 0 && staffCanSeeCourse(c, n);
     });
     let open = quizTodo(assignments, quizProgress, { userId, courses: sentCourses }).length;
-    // 발송 원장이 없는 옛 퀴즈(0139 이전)만 아래 옛 규칙으로 센다. P4 에서 없앤다.
+    // 발송 원장이 없는 옛 퀴즈(0139 이전)만 아래 규칙으로 센다.
     for (const c of views) {
       const sends = assignments.filter((a) => a.courseId === c.id);
       if (sends.length > 0 || !staffCanSeeCourse(c, sends.length)) continue;
@@ -136,10 +136,13 @@ export function useJuniorHomeData(): JuniorHomeData {
         .map((e) => e.entryId)
         .filter((id) => (quizCounts[id] ?? 0) > 0);
       if (list.length < c.minItems) continue;
-      if (list.some((id) => !passed.has(id))) open += 1;
+      const submitted = new Set(
+        quizAttempts.filter((a) => a.staffId === userId && a.courseId === c.id).map((a) => a.entryId),
+      );
+      if (list.some((id) => !submitted.has(id))) open += 1;
     }
     return open;
-  }, [courses, courseEntries, understanding, quizCounts, assignments, quizProgress, userId]);
+  }, [courses, courseEntries, quizAttempts, quizCounts, assignments, quizProgress, userId]);
 
   // 2026-08-07: '많이 물어본 노하우'(popularKnowhow)와 물어보기 전송(submitChat)은 제거했다 —
   // 홈 섹션이 3개로 줄며(정본 §12) 둘 다 읽는 곳이 없어졌다. 노하우 발견성은 노하우 탭이,
