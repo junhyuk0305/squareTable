@@ -263,7 +263,7 @@ export function QuizEditorSheet({
     setErr(null);
     setBusy(true);
     const ok = await guardWrite(
-      isNew ? insertQuizItem(item) : updateQuizItem(item.id, { format: item.format, kind: item.kind, payload: item.payload, entry_ids: item.entry_ids }),
+      isNew ? insertQuizItem({ ...item, course_id: item.course_id ?? courseId }) : updateQuizItem(item.id, { format: item.format, kind: item.kind, payload: item.payload, entry_ids: item.entry_ids }),
       () => {},
       '문제 저장에 실패했어요.',
     );

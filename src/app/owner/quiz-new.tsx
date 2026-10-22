@@ -390,7 +390,7 @@ export default function QuizNewScreen() {
           setMade([...out]);
           continue;
         }
-        const item: QuizItem = {
+        const item: QuizItem & { course_id: string } = {
           ...d,
           id: d.id || genId('qz'),
           unit_id: d.unit_id || unitId,

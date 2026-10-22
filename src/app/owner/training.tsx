@@ -209,7 +209,8 @@ export default function OwnerTrainingScreen() {
    * ★보낸 퀴즈에는 삭제를 두지 않는다(보관만). 응시 기록의 course_id 가 on delete set null 이라
    *   지우면 그 사람의 응시가 어느 퀴즈였는지 영영 못 되짚는다 — 그건 되돌릴 수 없는 손실이다.
    * ★초안은 아직 아무에게도 안 나갔고 응시도 없어서(status='draft' 판정이 그것을 보장한다)
-   *   지워도 잃는 기록이 없다. course_entries·quiz_items 는 FK cascade 로 같이 정리된다.
+   *   지워도 잃는 기록이 없다. course_entries·quiz_items·발송·링크는 FK cascade 로 같이 지워진다
+   *   (quiz_items 는 0328 부터 cascade · 그 전엔 set null 이라 공유 문항으로 남았다). 응시 스냅샷(quiz_attempt_items)은 남는다.
    */
   const dropDraft = useCallback(async () => {
     const t = dropTarget;

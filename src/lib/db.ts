@@ -2485,7 +2485,7 @@ export async function gradeQuiz(itemId: string, response: QuizResponse): Promise
 }
 
 /** 문항 저장(관리 권한만, RLS qi_insert). id 는 호출부가 만든다(training_requests 와 같은 관례). */
-export async function insertQuizItem(item: QuizItem): Promise<boolean> {
+export async function insertQuizItem(item: QuizItem & { course_id: string }): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return write(
     'insertQuizItem',
@@ -2499,8 +2499,8 @@ export async function insertQuizItem(item: QuizItem): Promise<boolean> {
       source: item.source,
       status: item.status,
       created_by: item.created_by ?? null,
-      // 어느 퀴즈의 문항인가(0307). 만들기·편집·복제·본사 작업실이 넣는다. 없으면 옛 규칙(노하우 겹침)으로 나간다.
-      course_id: item.course_id ?? null,
+      // 어느 퀴즈의 문항인가(0307). 필수다(0330 NOT NULL). 문항은 정확히 한 퀴즈에 속한다.
+      course_id: item.course_id,
     }),
   );
 }
