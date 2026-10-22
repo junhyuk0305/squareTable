@@ -4,12 +4,9 @@ import { View, Text, ScrollView, ActivityIndicator, StyleSheet } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 
-import {
-  fetchQuizCoursePerson,
-  fetchGuestAttemptItems,
-  type PersonAttemptRow,
-  type GuestAttemptItemRow,
-} from '@/lib/db';
+import { fetchQuizCourseAttemptItems, type CourseAttemptItemRow } from '@/lib/db';
+import { personBoard, submissionsLabel } from '@/lib/quiz/metrics';
+import { latestCourseAnswers } from '@/lib/quiz/courseStats';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { Appear, stagger } from '@/components/Appear';
 import { SectionLabel } from '@/components/SectionLabel';
@@ -27,9 +24,10 @@ import { Space } from '@/lib/theme/layout';
  * 사장이 물은 것은 "이 사람 어떤지"이고, 그건 한 줄 펼침으로는 안 나온다 — 몇 번 봤고, 정답률이
  * 얼마고, 무엇을 어떻게 틀렸나가 같이 있어야 한다. 그래서 화면을 하나 낸다.
  *
- * ★정답률은 **응시 기록**에서 온다(0199 `quiz_course_person`). 문항을 중간에 고치거나 늘려서
- *   사람마다 문항 수가 달라도 성립한다 — 분모가 그 사람이 실제로 받은 문항 수다.
- * ★문항별 정오는 응시 시점 **스냅샷**(0160·0190)이라, 지금 문항과 달라도 그 사람이 본 그대로 나온다.
+ * ★숫자는 **답 행**(fetchQuizCourseAttemptItems)에서 metrics.personBoard 가 만든다(P5 · N05·N16).
+ *   정답률 = 문항마다 그 사람의 첫 답(Q2). 틀린 문항 = 첫 답에서 틀린 문항 수(같은 문항을 두 번 세지 않는다).
+ *   업무 자청 응시(source='self', Q1)는 뺀다.
+ * ★문항별 정오는 문항마다 **마지막 답**이다. 응시 시점 **스냅샷**(0160·0190)이라, 지금 문항과 달라도 그 사람이 본 그대로 나온다.
  * ★게스트(링크) 응시는 여기 오지 않는다 — `/owner/quiz/guest/[sub]` 가 맡는다(신원 축이 다르다).
  * ⛔ 사람끼리 비교하는 값(등수·평균 대비)은 두지 않는다(감시원칙 D1~D5).
  */
@@ -46,8 +44,7 @@ export default function QuizPersonResultScreen() {
     void hydrateStaff();
   }, [hydrateStaff]);
 
-  const [attempts, setAttempts] = useState<PersonAttemptRow[]>([]);
-  const [rows, setRows] = useState<GuestAttemptItemRow[]>([]);
+  const [rows, setRows] = useState<CourseAttemptItemRow[]>([]);
   // 주소에 퀴즈·사람이 없으면 읽을 것이 없다 — 그 경우는 **처음부터** 도착한 것으로 둔다
   // (이펙트에서 setLoaded 를 부르면 연쇄 렌더가 된다: 이 저장소 lint 규칙이 막는 자리).
   const [loaded, setLoaded] = useState(() => !courseId || !staffId);
@@ -57,16 +54,11 @@ export default function QuizPersonResultScreen() {
   useEffect(() => {
     if (!cid || !sid) return;
     let alive = true;
-    // ★E4: 문항별 기록은 이 사람의 **가장 최근 응시(submission)** 스냅샷을 통째로 읽는다.
-    //   예전엔 지금 문항 id 로 매장 전체 최근 500줄을 받아 한 사람으로 걸렀다 — 줄이 잘리거나
-    //   사장이 지운 문항이 빠져 목록이 비거나 줄었다.
-    void fetchQuizCoursePerson(cid, sid, true).then(async (att) => {
+    // ★E4: 이 퀴즈의 답 스냅샷 전부를 페이지로 끝까지 읽는다(줄 상한으로 잘리지 않는다). 사람으로는 아래에서 거른다.
+    void fetchQuizCourseAttemptItems(cid).then(({ data, error: err }) => {
       if (!alive) return;
-      setAttempts(att);
-      const sub = att[0]?.submissionId; // RPC 가 최근순으로 준다
-      const mine = sub ? await fetchGuestAttemptItems(sub, true) : [];
-      if (!alive) return;
-      setRows(mine);
+      if (err) { setError(true); setLoaded(true); return; }
+      setRows((data ?? []).filter((r) => r.staffId === sid && r.source !== 'self'));
       setError(false);
       setLoaded(true);
     }).catch(() => { if (alive) { setError(true); setLoaded(true); } });
@@ -77,20 +69,26 @@ export default function QuizPersonResultScreen() {
 
   /** 대시보드 네 칸 — 전부 이 사람의 값이다. 남과 비교하는 칸은 없다. */
   const board = useMemo(() => {
-    const asked = attempts.reduce((a, r) => a + r.asked, 0);
-    const correct = attempts.reduce((a, r) => a + r.correct, 0);
-    const last = attempts[0]?.takenAt ?? null; // RPC 가 최근순으로 준다
-    return {
-      times: attempts.length,
-      rate: asked > 0 ? Math.round((correct / asked) * 100) : null,
-      wrong: Math.max(0, asked - correct),
-      last,
-    };
-  }, [attempts]);
+    const b = personBoard(rows, sid);
+    const last = rows.reduce<string | null>((m, r) => (!m || r.takenAt > m ? r.takenAt : m), null);
+    return { ...b, last };
+  }, [rows, sid]);
 
-  /** 최근 한 번의 답만 보여준다 — 같은 문항을 두 번 풀면 줄이 겹쳐 무엇이 최근인지 못 읽는다. */
-  //   rows 는 이미 가장 최근 응시 한 건의 줄이다(위 이펙트).
-  const latest = useMemo(() => [...rows].sort((a, b) => a.ord - b.ord), [rows]);
+  /** 제출 기록 — 제출 한 건 = 그 제출에 담긴 답들. 최근순. */
+  const attempts = useMemo(() => {
+    const by = new Map<string, { submissionId: string; takenAt: string; asked: number; correct: number }>();
+    for (const r of rows) {
+      const cur = by.get(r.submissionId) ?? { submissionId: r.submissionId, takenAt: r.takenAt, asked: 0, correct: 0 };
+      cur.asked += 1;
+      if (r.correct) cur.correct += 1;
+      if (r.takenAt > cur.takenAt) cur.takenAt = r.takenAt;
+      by.set(r.submissionId, cur);
+    }
+    return [...by.values()].sort((a, b) => b.takenAt.localeCompare(a.takenAt));
+  }, [rows]);
+
+  /** 문항마다 마지막 답 하나 — 같은 문항을 두 번 풀면 줄이 겹쳐 무엇이 최근인지 못 읽는다. */
+  const latest = useMemo(() => latestCourseAnswers(rows).sort((a, b) => a.ord - b.ord), [rows]);
 
   if (!staffLoaded || !loaded) {
     return (
@@ -112,7 +110,7 @@ export default function QuizPersonResultScreen() {
       <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
         {error ? (
           <EmptyState title="결과를 불러오지 못했어요" body="잠시 후 다시 시도해 주세요." cta={{ label: '다시 시도', onPress: () => setReload((n) => n + 1) }} />
-        ) : board.times === 0 ? (
+        ) : board.submissions === 0 ? (
           <EmptyState
             title="아직 안 풀었어요"
             body="이 퀴즈를 풀면 여기에 문항별 결과가 남아요."
@@ -122,9 +120,10 @@ export default function QuizPersonResultScreen() {
           <>
             <Appear>
               <View style={st.board}>
-                <Cell label="정답률" value={board.rate == null ? '—' : `${board.rate}%`} tone="rate" />
-                <Cell label="응시" value={`${board.times}번`} tone="people" />
-                <Cell label="틀린 문항" value={`${board.wrong}개`} />
+                {/* 칸은 이름표 + 값이다. 숫자는 metrics.personBoard 값 그대로다. */}
+                <Cell label="정답률" value={board.rate.pct == null ? '—' : `${board.rate.pct}%`} tone="rate" />
+                <Cell label="제출" value={`${board.submissions}번`} tone="people" />
+                <Cell label="틀린 문항" value={`${board.wrongItems}개`} />
                 <Cell label="마지막" value={takenDayLabel(board.last) || '—'} />
               </View>
             </Appear>
@@ -132,7 +131,7 @@ export default function QuizPersonResultScreen() {
             {/* 응시가 여러 번이면 회차별 점수를 짧게 — 늘었나 줄었나가 여기서 읽힌다. */}
             {attempts.length > 1 ? (
               <Appear delay={60} style={{ gap: Space.sm }}>
-                <SectionLabel title="응시 기록" hint={`${attempts.length}번`} />
+                <SectionLabel title="제출 기록" hint={submissionsLabel(attempts.length)} />
                 <View style={st.listCard}>
                   {attempts.map((a, i) => (
                     <View key={a.submissionId} style={[st.tryRow, i > 0 && st.tryRowTop]}>
@@ -154,7 +153,7 @@ export default function QuizPersonResultScreen() {
               <Appear delay={120} style={{ gap: Space.sm }}>
                 <SectionLabel
                   title="문항별"
-                  hint={attempts.length > 1 ? `가장 최근 응시 · ${latest.length}문제` : `${latest.length}문제`}
+                  hint={attempts.length > 1 ? `문항마다 마지막 답 · ${latest.length}문제` : `${latest.length}문제`}
                 />
                 <View style={st.list}>
                   {latest.map((r, i) => (

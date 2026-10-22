@@ -214,8 +214,16 @@ export type ItemAnswers = { answers: number; missRate: number; warn: boolean };
  */
 export function itemAnswers(answers: readonly MetricAnswer[], itemId: string): ItemAnswers {
   const mine = answers.filter((r) => r.itemId === itemId && r.source !== 'self');
-  const missRate = mine.length ? mine.filter((r) => !r.correct).length / mine.length : 0;
-  return { answers: mine.length, missRate, warn: mine.length >= ITEM_MISS_MIN_ANSWERS && missRate >= ITEM_MISS_RATE };
+  return answersStat(mine.length, mine.filter((r) => !r.correct).length);
+}
+
+/**
+ * 이미 센 답 수·오답 수에서 같은 판정(N18). 노하우 행(quiz_stats 집계)처럼 답 행이 없는 곳이 쓴다.
+ * 경고 기준은 itemAnswers 와 같다.
+ */
+export function answersStat(answers: number, misses: number): ItemAnswers {
+  const missRate = answers > 0 ? misses / answers : 0;
+  return { answers, missRate, warn: answers >= ITEM_MISS_MIN_ANSWERS && missRate >= ITEM_MISS_RATE };
 }
 
 export function itemAnswersLabel(s: ItemAnswers): string {

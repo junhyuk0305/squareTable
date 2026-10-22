@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 
 const out = mkdtempSync(join(tmpdir(), 'quiz-progress-'));
 execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', 'src/lib/quiz/progress.ts', '--outDir', out, '--module', 'commonjs', '--target', 'es2020', '--skipLibCheck', '--ignoreConfig'], { stdio: 'pipe' });
-const { pendingCourseAssignment: pending, isNextQuizRequest, quizTodo } = createRequire(import.meta.url)(join(out, 'progress.js'));
+const { pendingCourseAssignment: pending, isNextQuizRequest, quizTodo, legacyQuizOpen } =createRequire(import.meta.url)(join(out, 'progress.js'));
 const a = { id: 'a', courseId: 'A', userId: 'me', sentAt: '2026-10-22', completedAt: null };
 const b = { ...a, id: 'b', courseId: 'B', completedAt: '2026-10-22' };
 const progress = [{ assignmentId: 'a', pendingEntryIds: ['shared'], totalItems: 4, answeredItems: 3 }, { assignmentId: 'b', pendingEntryIds: [], totalItems: 4, answeredItems: 4 }];
@@ -50,4 +50,8 @@ assert.equal(copy.roundStepText(2, { answered: 0, total: 6 }), '이번에 2문�
 assert.equal(copy.roundStepText(2), '2문제 남았어요');
 assert.equal(copy.cardProgressText({ answered: 0, total: 6 }), '아직 시작 전', 'N12: zero is a state word');
 assert.equal(copy.cardProgressText({ answered: 3, total: 6 }), '3/6문제', 'N12: card counts answered items');
-console.log('quiz progress: 27 regression checks passed');
+// P4 옛 퀴즈: 판정은 퀴즈별로 읽은 내 제출 집합만 본다(최근 200행 목록에 기대지 않는다).
+assert.equal(legacyQuizOpen(['e1', 'e2'], new Set(['e1', 'e2'])), false, 'legacy quiz fully submitted is done');
+assert.equal(legacyQuizOpen(['e1', 'e2'], new Set(['e1'])), true, 'legacy quiz with unsubmitted entry stays open');
+assert.equal(legacyQuizOpen(['e1'], null), true, 'legacy read failure keeps the quiz (no vanish)');
+console.log('quiz progress: 30 regression checks passed');

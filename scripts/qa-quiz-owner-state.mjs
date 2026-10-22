@@ -98,6 +98,8 @@ const it = m.itemAnswers(ans, 'i1');
 assert.equal(it.answers, 5, 'self excluded from item answers');
 assert.equal(m.itemAnswersLabel(it), '답안 5건 · 오답 40%');
 assert.equal(it.warn, true);
+assert.deepEqual({ ...m.answersStat(5, 2) }, { ...it }, 'N18 entry-level counts use the same warn rule as item answers');
+assert.equal(m.answersStat(4, 4).warn, false, 'N18 below min answers never warns');
 const pb = m.personBoard(ans, 'a');
 assert.deepEqual({ rate: { ...pb.rate }, wrongItems: pb.wrongItems, submissions: pb.submissions }, { rate: { asked: 2, correct: 1, pct: 50 }, wrongItems: 1, submissions: 2 }, 'N05 person first attempt, no double count');
 assert.equal(m.roundLabel([{ correct: true }, { correct: false }], 6), '6문제 중 1개 맞힘', 'N17 denominator = quiz item count');
@@ -112,3 +114,48 @@ assert.equal(e.linkSubmitResultOf({ message: 'Failed to fetch' }), 'network');
 for (const k of ['ok', 'link_closed', 'rate_limited', 'bad_input', 'network']) assert.ok(e.LINK_SUBMIT_MESSAGE[k], k);
 assert.equal(e.quizErrorMessage({ message: 'last_quiz_item' }).includes('보관'), true);
 console.log('PASS quiz metrics: state, progress, Q1/Q2 rate, guest submissions, item answers, person board, link submit results');
+
+// ── P5-4 래칫: 화면에서 숫자에 "명"·"정답률"·"완료"를 직접 붙이지 않는다(metrics.ts 가 만든다).
+// 대상 = src/app/owner/quiz* · training.tsx · TrainingCard.tsx. 주석은 뺀다.
+// 예외는 아래 표에만 둔다. 줄 조각(파일 안에서 유일해야 한다) + 이유. 쓰이지 않는 예외도 실패다(표가 썩지 않게).
+const RATCHET_ALLOW = [
+  { file: 'src/app/owner/quiz/[id].tsx', snippet: '${quotaOut}명은 최근 7일에', why: '다시 알리기 토스트. 주 2회 상한에 걸린 사람 수(recipientReadiness)라 퀴즈 진행 숫자가 아니다' },
+  { file: 'src/app/owner/quiz-new.tsx', snippet: '`${to.length}명에게 보내요`', why: '만들기 화면에서 고른 받는 사람 수. 발송 전 선택 인원이라 metrics 정의 밖이다' },
+  { file: 'src/app/owner/quiz-new.tsx', snippet: '`${to.length}명에게 보내기` : `${to.length}명에게 예약하기`', why: '같은 선택 인원의 버튼 문구' },
+];
+{
+  const root = new URL('../', import.meta.url);
+  const targets = [];
+  const walk = (dir) => {
+    for (const f of fs.readdirSync(new URL(dir, root), { withFileTypes: true })) {
+      const p = `${dir}/${f.name}`;
+      if (f.isDirectory()) walk(p);
+      else if (/\.tsx?$/.test(f.name)) targets.push(p);
+    }
+  };
+  for (const f of fs.readdirSync(new URL('src/app/owner', root), { withFileTypes: true })) {
+    if (!f.name.startsWith('quiz')) continue;
+    if (f.isDirectory()) walk(`src/app/owner/${f.name}`);
+    else targets.push(`src/app/owner/${f.name}`);
+  }
+  targets.push('src/app/owner/training.tsx', 'src/components/work/TrainingCard.tsx');
+  // 숫자(또는 ${…}/{…} 값) 바로 뒤의 명·완료, 바로 앞의 정답률·완료.
+  const glued = /(?:\}|\d)\s*(?:명|완료)|(?:정답률|완료)\s*(?:\$\{|\{|\d)/;
+  const used = new Set();
+  const bad = [];
+  for (const file of targets) {
+    const src = fs.readFileSync(new URL(file, root), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
+      .replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+    src.split('\n').forEach((line, i) => {
+      if (!glued.test(line)) return;
+      const allow = RATCHET_ALLOW.findIndex((a) => a.file === file && line.includes(a.snippet));
+      if (allow >= 0) used.add(allow);
+      else bad.push(`${file}:${i + 1}: ${line.trim()}`);
+    });
+  }
+  assert.deepEqual(bad, [], 'P5 ratchet: number glued to 명/정답률/완료 outside metrics.ts — use metrics labels or add an allow entry with a reason');
+  const stale = RATCHET_ALLOW.filter((_, i) => !used.has(i)).map((a) => `${a.file}: ${a.snippet}`);
+  assert.deepEqual(stale, [], 'P5 ratchet: allow entries that no longer match — remove them');
+  console.log(`PASS quiz P5 ratchet: ${targets.length} files, ${RATCHET_ALLOW.length} allowed exceptions`);
+}

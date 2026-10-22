@@ -2657,6 +2657,26 @@ export async function fetchQuizAttempts(): Promise<QuizAttemptRow[]> {
   }));
 }
 /**
+ * 발송 원장 없는 옛 퀴즈의 "내가 제출한 노하우"(P4). 행 수 상한에 기대지 않게 퀴즈를 골라 읽는다.
+ * 행은 서버가 제출(quiz_attempt_items)에서 적는다. 실패하면 null(화면은 안 푼 것으로 남긴다).
+ * @returns course_id → 제출한 entry_id 집합
+ */
+export async function fetchMySubmittedEntries(staffId: string, courseIds: string[]): Promise<Record<string, Set<string>> | null> {
+  const out: Record<string, Set<string>> = {};
+  if (!HAS_SUPABASE || courseIds.length === 0) return out;
+  const { data, error } = await supabase
+    .from('quiz_attempts')
+    .select('entry_id, course_id')
+    .eq('staff_id', staffId)
+    .in('course_id', courseIds);
+  if (error) {
+    readFail('fetchMySubmittedEntries', error);
+    return null;
+  }
+  for (const r of (data as any[]) ?? []) (out[r.course_id] ??= new Set()).add(r.entry_id);
+  return out;
+}
+/**
  * 응시 기록 남기기(직원 본인) — **문항별 + 노하우별 집계를 서버가 한 번에 적는다**(0190).
  *
  * 2026-09-11 이전에는 클라가 센 correct/total 만 `quiz_attempts` 에 넣었고 문항별로는
@@ -2874,6 +2894,11 @@ export type QuizCourseStat = {
   /** 응시한 사람 수 */ people: number;
   /** 나간 문항 수 합 = 정답률 분모 */ asked: number;
   /** 맞힌 문항 수 합 = 정답률 분자 */ correct: number;
+  /** 0332 Q2 정답률 분모·분자(metrics.rateFromStat). 옛 서버는 열이 없어 undefined. */
+  firstAsked?: number;
+  firstCorrect?: number;
+  /** 0332 링크 제출 수. 옛 서버는 undefined. */
+  guestSubmissions?: number;
 };
 export async function fetchQuizCourseStats(strict = false): Promise<Record<string, QuizCourseStat>> {
   if (!HAS_SUPABASE) return {};
@@ -2892,6 +2917,9 @@ export async function fetchQuizCourseStats(strict = false): Promise<Record<strin
       people: Number(r.people ?? 0),
       asked: Number(r.asked ?? 0),
       correct: Number(r.correct ?? 0),
+      firstAsked: r.first_asked == null ? undefined : Number(r.first_asked),
+      firstCorrect: r.first_correct == null ? undefined : Number(r.first_correct),
+      guestSubmissions: r.guest_submissions == null ? undefined : Number(r.guest_submissions),
     };
   }
   return out;
@@ -2938,24 +2966,6 @@ export async function fetchRecipientReadiness(
   }));
 }
 
-/** 한 사람의 이 퀴즈 응시 목록(제출 단위 점수·시각) — 개인 상세 화면의 위쪽 대시보드. */
-export type PersonAttemptRow = { submissionId: string; takenAt: string; asked: number; correct: number };
-export async function fetchQuizCoursePerson(courseId: string, staffId: string, strict = false): Promise<PersonAttemptRow[]> {
-  if (!HAS_SUPABASE || !courseId || !staffId) return [];
-  const { data, error } = await supabase.rpc('quiz_course_person', { p_course_id: courseId, p_staff_id: staffId });
-  if (error) {
-    readFail('fetchQuizCoursePerson', error);
-    if (strict) throw error;
-    return [];
-  }
-  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
-    submissionId: String(r.submission_id),
-    takenAt: String(r.taken_at),
-    asked: Number(r.asked ?? 0),
-    correct: Number(r.correct ?? 0),
-  }));
-}
-
 /** 직원 한 명이 낸 답 한 줄(0190). 게스트판과 같은 모양 + 누가 언제인지가 붙는다. */
 export type StaffAttemptItemRow = GuestAttemptItemRow & { staffId: string; submissionId: string; takenAt: string };
 
@@ -2965,6 +2975,8 @@ export type CourseAttemptItemRow = GuestAttemptItemRow & {
   takenAt: string;
   courseId: string | null;
   entryIds: string[];
+  /** 0332. 'self' = 업무 자청 응시(Q1 · 퀴즈 숫자에서 뺀다). 옛 서버는 undefined. */
+  source?: 'assignment' | 'link' | 'self';
 };
 
 /** 현재 문항의 상태와 관계없이 제출 당시의 코스·문항 스냅샷을 모두 읽는다. */
@@ -2984,6 +2996,7 @@ export async function fetchQuizCourseAttemptItems(courseId: string): Promise<DbR
       payload: r.payload ?? {}, response: r.response ?? null, correct: r.correct === true,
       staffId: r.staff_id ?? null, submissionId: r.submission_id, takenAt: r.created_at,
       courseId: r.course_id ?? null, entryIds: r.entry_ids ?? [],
+      source: r.source ?? undefined,
     });
     if ((data ?? []).length < pageSize) break;
   }

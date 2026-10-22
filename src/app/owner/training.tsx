@@ -7,7 +7,17 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useQuizBoard, type QuizListRow } from '@/lib/quiz/useQuizBoard';
 import { BrandCopyBadges } from '@/components/owner/BrandCopyBadges';
-import { useQuizCourseStats, ratePct, peopleLabel, type QuizCourseStat } from '@/lib/quiz/courseStats';
+import { useQuizCourseStats, type QuizCourseStat } from '@/lib/quiz/courseStats';
+import {
+  QUIZ_STATE_LABEL,
+  allDone,
+  answersStat,
+  doneLabel,
+  guestSubmissionsLabel,
+  itemAnswersLabel,
+  rateFromStat,
+  rateLabel,
+} from '@/lib/quiz/metrics';
 import { fetchGuestQuizSubmissions, upsertTrainingCourse, deleteTrainingCourse, type GuestSubmissionRow } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
@@ -55,7 +65,7 @@ export default function OwnerTrainingScreen() {
   const router = useRouter();
   const {
     entries, entryById, boardLoaded, boardError, buildQuizzes, buildStats, buildHeatmap, heatHead, buildFixQueue,
-    staffCount, bumpQuiz, bumpSends, missPctOf, openLinkCourseIds, linkedCourseIds, archived, reloadCourses,
+    staffCount, bumpQuiz, bumpSends, quizStats, openLinkCourseIds, linkedCourseIds, archived, reloadCourses,
   } = useQuizBoard();
 
   /** 응시 기준 집계(0199) — 정답률·응시인원. 발송 원장과 출처가 달라 훅도 따로다(courseStats 주석). */
@@ -99,7 +109,7 @@ export default function OwnerTrainingScreen() {
    * ★만든 순(position)으로 두면 오늘 손봐야 할 퀴즈가 아홉 번째 줄에 앉는다(2026-08-26 실측 화면).
    */
   const live = useMemo(() => {
-    const rank = (r: QuizListRow) => (r.staleCount > 0 ? 2 : r.recipients > r.answered ? 1 : 0);
+    const rank = (r: QuizListRow) => (r.staleCount > 0 ? 2 : r.progress.notDone > 0 ? 1 : 0);
     return [...quizzes].filter((r) => r.status !== 'draft').sort((a, b) => rank(b) - rank(a));
   }, [quizzes]);
   /**
@@ -108,8 +118,8 @@ export default function OwnerTrainingScreen() {
    * ★링크(외부)만 나간 퀴즈는 받는 사람 원장이 없어 `recipients` 가 0이다 — 완료로 치지 않는다.
    *   링크는 열려 있는 동안 계속 응시 중이고, 그 결과는 퀴즈 상세의 '배포' 자리에서 본다.
    */
-  const running = useMemo(() => live.filter((r) => r.recipients === 0 || r.answered < r.recipients), [live]);
-  const finished = useMemo(() => live.filter((r) => r.recipients > 0 && r.answered >= r.recipients), [live]);
+  const running = useMemo(() => live.filter((r) => !allDone(r.progress)), [live]);
+  const finished = useMemo(() => live.filter((r) => allDone(r.progress)), [live]);
   const [tab, setTab] = useState<'running' | 'done'>('running');
   const drafts = useMemo(() => quizzes.filter((r) => r.status === 'draft'), [quizzes]);
 
@@ -271,7 +281,8 @@ export default function OwnerTrainingScreen() {
         <SegmentTabs
           style={st.topTabs}
           items={[
-            { key: 'running', label: '응시 중', count: running.length + (guests.length > 0 ? 1 : 0) },
+            // N24: 탭 숫자와 목록 제목 힌트는 같은 값(퀴즈 수)이다. 합류 전 응시 줄은 퀴즈가 아니라 세지 않는다.
+            { key: 'running', label: '응시 중', count: running.length },
             { key: 'done', label: '응시 완료', count: finished.length },
           ]}
           value={tab}
@@ -455,13 +466,14 @@ export default function OwnerTrainingScreen() {
                           onPress={() => setGuestOpen(true)}
                           style={({ pressed }) => [st.row, running.length > 0 && st.rowDivider, pressed && { opacity: 0.6 }]}
                           accessibilityRole="button"
-                          accessibilityLabel={`합류 전 응시 ${guests.length}명 보기`}
+                          accessibilityLabel={`합류 전 응시 ${guestSubmissionsLabel(guests.length)} 보기`}
                         >
                           <View style={st.rowText}>
                             <Text style={st.rowTitle} numberOfLines={1}>합류 전 응시</Text>
-                            <Text style={st.rowSub} numberOfLines={1}>링크로 푼 사람 {guests.length}명</Text>
+                            {/* N16: 행 수 = 제출 수다(같은 손님이 두 번 내면 2건). 사람 수로 말하지 않는다. */}
+                            <Text style={st.rowSub} numberOfLines={1}>{guestSubmissionsLabel(guests.length)}</Text>
                           </View>
-                          <ProgressPill text={`${guests.length}명`} tone="neutral" />
+                          <ProgressPill text={`${guests.length}건`} tone="neutral" />
                         </Pressable>
                       ) : null}
                     </View>
@@ -617,7 +629,9 @@ export default function OwnerTrainingScreen() {
                     >
                       <View style={st.rowText}>
                         <Text style={st.rowTitle} numberOfLines={1}>{r.text}</Text>
-                        <Text style={st.rowSub} numberOfLines={1}>응시 {r.attempts}명 · 오답 {missPctOf(r.entryId)}%</Text>
+                        <Text style={st.rowSub} numberOfLines={1}>
+                          {itemAnswersLabel(answersStat(r.attempts, quizStats[r.entryId]?.misses ?? 0))}
+                        </Text>
                       </View>
                       <ProgressPill text="고치기" tone="behind" />
                     </Pressable>
@@ -748,18 +762,15 @@ function QuizRowView({
   /** 있으면 우측에 지우기 아이콘. 만들던 퀴즈(초안) 줄에만 준다. */
   onDelete?: () => void;
 }) {
-  let pill = '초안';
-  let tone: ProgressTone = 'neutral';
+  // 상태어·진행 문구는 metrics 가 만든다(N09·N11). 발송 중이면 "완료 3/5명"이 알약이다.
+  let pill = QUIZ_STATE_LABEL[row.status];
+  let tone: ProgressTone = row.status === 'draft' || row.status === 'archived' ? 'neutral' : 'progress';
   if (row.staleCount > 0) {
     pill = '노하우 변경됨';
     tone = 'behind';
-  } else if (row.status === 'scheduled') {
-    pill = '발송 예정';
-    tone = 'progress';
-  } else if (row.status === 'sent') {
-    const all = row.recipients > 0 && row.answered >= row.recipients;
-    pill = all ? '응시 완료' : `${row.answered}/${row.recipients}명`;
-    tone = all ? 'done' : 'progress';
+  } else if (row.status === 'sending') {
+    pill = doneLabel(row.progress) || pill;
+    tone = allDone(row.progress) ? 'done' : 'progress';
   }
 
   /**
@@ -770,19 +781,25 @@ function QuizRowView({
   const meta = [
     row.itemCount > 0 ? `문제 ${row.itemCount}개` : '문제 없음',
     row.entryCount > 0 ? `노하우 ${row.entryCount}개` : '',
-    link === 'open' ? '링크 열림' : link === 'closed' ? '링크 닫힘' : '',
+    // 링크만 열린 퀴즈는 알약이 "링크 열림"을 말한다. 발송도 한 퀴즈는 여기서 링크 상태를 말한다.
+    link === 'open' && row.status !== 'link_open' ? QUIZ_STATE_LABEL.link_open : link === 'closed' ? '링크 닫힘' : '',
   ]
     .filter(Boolean)
     .join(' · ');
 
   /**
-   * 정답률·응시인원(2026-09-13 사장 요청) — 색으로 뜻을 가른다: **정답률 파랑 · 응시 다른 색**.
-   * ★정답률은 표본이 없으면 '—' 다. 0% 는 "다 틀렸다"는 사실 주장이라 미응시와 섞으면 안 된다.
-   * ★응시는 받는 사람이 정해진 내부 퀴즈면 분모를 같이 말하고(3/5명), 링크만 나간 퀴즈는 인원만 말한다.
+   * 정답률·진행(2026-09-13 사장 요청) — 색으로 뜻을 가른다: **정답률 파랑 · 진행 다른 색**.
+   * ★정답률 = metrics.rateFromStat(직원 첫 응시 + 링크 제출 전부). 0332 열이 없는 옛 서버는 '—' 다.
+   *   옛 누적 asked/correct 로 대신하지 않는다.
+   * ★진행 = "완료 3/5명"(받은 직원만) · 링크 제출은 "링크 제출 N건"(사람 수가 아니다, N16).
    * 초안(아직 안 보낸 것)에는 안 그린다 — 잴 것이 없다.
    */
-  const rate = ratePct(stat);
-  const showStats = row.status !== 'draft';
+  const showStats = row.status !== 'draft' && row.status !== 'archived';
+  const gs = stat?.guestSubmissions;
+  const progressText = [
+    doneLabel(row.progress),
+    gs != null && (gs > 0 || row.progress.recipients === 0) ? guestSubmissionsLabel(gs) : '',
+  ].filter(Boolean).join(' · ');
 
   return (
     <View style={[st.rowWrap, divider && st.rowDivider]}>
@@ -802,12 +819,8 @@ function QuizRowView({
           <Text style={st.rowSub} numberOfLines={1}>{row.caption}</Text>
           {showStats ? (
             <View style={st.statRow}>
-              <Text style={st.statLabel}>정답률</Text>
-              <Text style={st.statRate}>{rate == null ? '—' : `${rate}%`}</Text>
-              <Text style={st.statLabel}>응시</Text>
-              <Text style={st.statPeople}>
-                {peopleLabel(stat, { answered: row.answered, recipients: row.recipients })}
-              </Text>
+              <Text style={st.statRate}>{rateLabel(rateFromStat(stat))}</Text>
+              {progressText ? <Text style={st.statPeople}>{progressText}</Text> : null}
             </View>
           ) : null}
         </View>

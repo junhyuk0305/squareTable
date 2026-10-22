@@ -40,28 +40,7 @@ export function latestCourseAnswers<T extends { itemId: string; takenAt: string 
   return [...latest.values()];
 }
 
-/**
- * 정답률 % — 표본이 없으면 **null**이다(0%가 아니다).
- * 0% 는 "다 틀렸다"는 사실 주장이고, 아무도 안 풀은 것과 섞으면 안 된다.
- */
-export function ratePct(stat: QuizCourseStat | undefined): number | null {
-  if (!stat || stat.asked <= 0) return null;
-  return Math.round((stat.correct / stat.asked) * 100);
-}
-
-/**
- * 응시인원 문구 — 받는 사람이 정해진 내부 퀴즈는 분모를 같이 말하고(3/5명),
- * 링크로만 나간 퀴즈는 분모가 없으므로 인원만 말한다(12명).
- * `answered`·`recipients` 는 발송 원장 값(useQuizBoard)에서 온다 — 이 파일이 다시 세지 않는다.
- */
-export function peopleLabel(
-  stat: QuizCourseStat | undefined,
-  ledger: { answered: number; recipients: number },
-): string {
-  if (ledger.recipients > 0) return `${ledger.answered}/${ledger.recipients}명`;
-  const n = stat?.people ?? 0;
-  return n > 0 ? `${n}명` : '아직 없음';
-}
+// 정답률·응시 문구는 metrics.ts(rateFromStat·doneLabel·guestSubmissionsLabel)가 만든다(P5).
 
 export function useQuizCourseStats() {
   const [byCourse, setByCourse] = useState<Record<string, QuizCourseStat>>({});

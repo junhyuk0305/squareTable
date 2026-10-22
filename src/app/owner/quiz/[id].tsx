@@ -6,7 +6,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { useQuizBoard, QUIZ_MISS_MIN_ATTEMPTS, QUIZ_MISS_RATE } from '@/lib/quiz/useQuizBoard';
+import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
+import {
+  PERSON_STATE_LABEL,
+  guestSubmissions,
+  guestSubmissionsLabel,
+  itemAnswers,
+  itemAnswersLabel,
+  personState,
+  resultsEmpty,
+  roundLabel,
+  staffProgress,
+} from '@/lib/quiz/metrics';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore, courseEntriesOf } from '@/lib/store/useWorkStore';
@@ -145,7 +156,10 @@ export default function QuizDetailScreen() {
       .catch(() => { if (alive) setSendStatusError(true); });
     return () => { alive = false; };
   }, [id, sends, itemsReload]);
-  const allUserIds = useMemo(() => [...new Set([...sends.map((a) => a.userId), ...staffItems.flatMap((r) => r.staffId ? [r.staffId] : [])])], [sends, staffItems]);
+  /** 퀴즈 숫자에 쓰는 답 — 업무 자청 응시(source='self', Q1)는 뺀다. 옛 서버는 source 가 없어 전부 남는다. */
+  const quizAnswers = useMemo(() => staffItems.filter((r) => r.source !== 'self'), [staffItems]);
+  const latestSends = useMemo(() => latestQuizAssignments(sends), [sends]);
+  const allUserIds = useMemo(() => [...new Set([...sends.map((a) => a.userId), ...quizAnswers.flatMap((r) => r.staffId ? [r.staffId] : [])])], [sends, quizAnswers]);
   // 받을 수 있는 상태인가(P5 · 0309) — 기기 0건·알림 끔은 보낸 뒤에도 '미응시'로만 보였다. RPC 없는 서버는 빈 맵.
   const [readiness, setReadiness] = useState<Record<string, RecipientReadinessRow>>({});
   useEffect(() => {
@@ -156,34 +170,36 @@ export default function QuizDetailScreen() {
     return () => { alive = false; };
   }, [unitId, allUserIds]);
   /** 사람 줄 아래 한 줄 — 상태 문구는 여기 한 함수에서만 고른다(문구 표 = recipientReadiness.ts). */
-  const rowStateText = (p: { id: string; passed: boolean; sent: boolean }): string => {
-    if (p.passed) return '응시 완료';
+  // 상태어는 metrics.PERSON_STATE_LABEL 이고, 받기 전 준비 상태 꼬리(readiness)만 붙인다(N17).
+  const rowStateText = (p: { id: string; state: keyof typeof PERSON_STATE_LABEL }): string => {
+    if (p.state === 'done' || p.state === 'in_progress') return PERSON_STATE_LABEL[p.state];
     const pre = readinessText(readiness[p.id]?.blockedReason);
-    if (p.sent) return pre ? `미응시 · ${pre}` : '미응시';
-    return readinessText(blocked[p.id]) ?? pre ?? '발송 중';
+    if (p.state === 'not_started') return pre ? `${PERSON_STATE_LABEL.not_started} · ${pre}` : PERSON_STATE_LABEL.not_started;
+    return readinessText(blocked[p.id]) ?? pre ?? PERSON_STATE_LABEL.not_sent;
   };
 
   const people = useMemo(
     () => allUserIds.map((uid) => {
       const s = staff.find((x) => x.id === uid);
-      const a = latestQuizAssignments(sends).find((x) => x.userId === uid);
-      const history = staffItems.filter((r) => r.staffId === uid);
+      const a = latestSends.find((x) => x.userId === uid);
+      const history = quizAnswers.filter((r) => r.staffId === uid);
       // 한 코스를 노하우별로 나눠 푼다. 제출 하나 대신 이번 발송의 문항별 마지막 답을 센다.
       const mine = latestCourseAnswers(history, a?.sentAt);
-      const started = mine.length > 0;
       return {
         id: uid,
         name: s?.name ?? '나간 직원',
-        passed: !!a?.completedAt,
-        sent: !!a?.sentAt,
-        started,
+        state: personState(a, quizAnswers),
         mine,
       };
     }),
-    [allUserIds, staff, sends, staffItems],
+    [allUserIds, staff, latestSends, quizAnswers],
   );
-  const passedCount = people.filter((p) => p.passed).length;
-  const notDone = people.filter((p) => !p.passed && p.sent);
+  /** 이번 발송 진행(N11·N17) — 링 분모 = 실제로 받은 사람. 다시 알리기 = 받았고 완료 전(푸는 중 + 아직 안 풂). */
+  const progress = useMemo(() => staffProgress(latestSends, quizAnswers), [latestSends, quizAnswers]);
+  const notDone = people.filter((p) => p.state === 'in_progress' || p.state === 'not_started');
+  /** 결과 탭 빈 상태(N10) — 받은 직원도 답도(손님 포함) 없을 때만. */
+  const noResults = resultsEmpty(sends, quizAnswers);
+  const guestCount = guestSubmissions(quizAnswers);
 
   /** 근거가 바뀐 뒤 다시 안 만든 문항(0114). 판정은 이미 DB 트리거가 해 뒀고 보여줄 자리가 없었다. */
   const staleItems = useMemo(
@@ -435,7 +451,7 @@ export default function QuizDetailScreen() {
         {/* 세그먼트를 바꾸면 내용이 통째로 갈린다 — key={seg} 로 그때마다 한 번 올라오게 한다. */}
         <Appear key={seg} style={st.segBody}>
         {seg === 'people' ? (
-          people.length === 0 ? (
+          noResults ? (
             <EmptyState
               title="아직 아무에게도 안 보냈어요"
               body="문항을 검토하고 받는 사람을 고르면 보낼 수 있어요."
@@ -444,7 +460,9 @@ export default function QuizDetailScreen() {
           ) : (
             <>
               <View style={st.ringCard}>
-                <ProgressRing value={passedCount} total={people.length} label="응시 완료" />
+                {progress.recipients > 0 ? (
+                  <ProgressRing value={progress.done} total={progress.recipients} label={PERSON_STATE_LABEL.done} />
+                ) : null}
                 {/* 기본 정보는 줄글이 아니라 이름표+값이다(2026-09-13) — "받은 날부터 3일 안에 ·
                     다시 확인은 저희가 챙겨요"는 한 줄에 두 가지를 이어 붙여 무엇이 무엇의 값인지가 안 보였다. */}
                 <View style={st.factTable}>
@@ -462,6 +480,24 @@ export default function QuizDetailScreen() {
                   답이 된다. 그 셋을 한 줄 밑에 넣을 수는 없어 화면을 나눴다(`/owner/quiz/person`).
                   ⚠️ 개인 오답을 사장이 보는 것은 2026-09-11 사용자 결정이다 — 0103·0112 의
                      "개인 오답 저장 금지"를 뒤집은 자리이므로, 되돌릴 땐 0190 과 같이 본다. */}
+              {/* 링크 손님 결과(N10) — 손님만 풀었어도 결과 탭이 비지 않는다. 제출별 결과는 설정 탭 링크 섹션에 있다. */}
+              {guestCount > 0 ? (
+                <View style={st.listCard}>
+                  <Pressable
+                    onPress={() => setSeg('settings')}
+                    style={({ pressed }) => [st.row, pressed && { opacity: 0.6 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${guestSubmissionsLabel(guestCount)} 보기`}
+                  >
+                    <View style={st.rowText}>
+                      <Text style={st.rowTitle} numberOfLines={1}>{guestSubmissionsLabel(guestCount)}</Text>
+                      <Text style={st.rowSub} numberOfLines={1}>설정 탭에서 제출마다 볼 수 있어요</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
+                  </Pressable>
+                </View>
+              ) : null}
+              {people.length > 0 ? (
               <View style={st.listCard}>
                 {people.map((p, i) => {
                   const mine = p.mine;
@@ -477,17 +513,17 @@ export default function QuizDetailScreen() {
                       <View style={st.rowText}>
                         <Text style={st.rowTitle} numberOfLines={1}>{p.name}</Text>
                         <Text style={st.rowSub} numberOfLines={1}>
-                          {done
-                            ? `${mine.length}문제 중 ${mine.filter((r) => r.correct).length}개 맞힘`
-                            : rowStateText(p)}
+                          {/* N17: 분모는 이 퀴즈의 문항 수다(낸 답 수가 아니다). */}
+                          {done ? roundLabel(mine, items.length) : rowStateText(p)}
                         </Text>
                       </View>
-                      <ProgressPill text={p.passed ? '응시 완료' : p.started ? '응시 중' : '아직 안 풂'} tone={p.passed ? 'done' : 'neutral'} />
+                      <ProgressPill text={PERSON_STATE_LABEL[p.state]} tone={p.state === 'done' ? 'done' : p.state === 'in_progress' ? 'progress' : 'neutral'} />
                       {done ? <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} /> : null}
                     </Pressable>
                   );
                 })}
               </View>
+              ) : null}
               {/* '다시 알리기'는 설정 탭(배포 섹션)으로 옮겼다 — 결과 탭은 결과만 본다(2026-09-13).
                   판정(누가 안 풀었나)은 여기 `notDone` 그대로이고, 버튼만 그쪽에서 그린다. */}
             </>
@@ -514,7 +550,7 @@ export default function QuizDetailScreen() {
           <>
             <View style={st.listCard}>
               {items.map((q, i) => {
-                const s = statOf(staffItems, q);
+                const s = itemAnswers(quizAnswers, q.id);
                 const stale = staleItems.some((x) => x.id === q.id);
                 return (
                   <Appear key={q.id} delay={stagger(i)}>
@@ -529,19 +565,16 @@ export default function QuizDetailScreen() {
                         {i + 1} · {FORMATS[q.format]?.label ?? q.format}
                       </Text>
                       <Text style={st.rowSub} numberOfLines={1}>
-                        {s.attempts === 0
-                          ? '미응시'
-                          : s.attempts < QUIZ_MISS_MIN_ATTEMPTS
-                            ? '표본 부족'
-                            : `답안 ${s.attempts}건 · 오답 ${Math.round(s.rate * 100)}%`}
+                        {itemAnswersLabel(s)}
                       </Text>
                     </View>
+                    {/* 경고 기준은 metrics.itemAnswers 의 warn 하나다(N18). 목록 경고행과 같다. */}
                     {stale ? (
                       <ProgressPill text="노하우 변경됨" tone="behind" />
-                    ) : s.attempts >= QUIZ_MISS_MIN_ATTEMPTS && s.rate >= QUIZ_MISS_RATE ? (
-                      <ProgressPill text={`${Math.round(s.rate * 100)}%`} tone="behind" />
+                    ) : s.warn ? (
+                      <ProgressPill text={`${Math.round(s.missRate * 100)}%`} tone="behind" />
                     ) : (
-                      <ProgressPill text={s.attempts === 0 ? '—' : '괜찮음'} tone={s.attempts === 0 ? 'neutral' : 'done'} />
+                      <ProgressPill text={s.answers === 0 ? '—' : '괜찮음'} tone={s.answers === 0 ? 'neutral' : 'done'} />
                     )}
                   </Pressable>
                   </Appear>
@@ -551,10 +584,7 @@ export default function QuizDetailScreen() {
 
             {/* C2 되먹임 — 우리만의 차별점. 오답률을 직원 평가가 아니라 **노하우 결함 신호**로 뒤집는다. */}
             {items
-              .filter((q) => {
-                const s = statOf(staffItems, q);
-                return s.attempts >= QUIZ_MISS_MIN_ATTEMPTS && s.rate >= QUIZ_MISS_RATE;
-              })
+              .filter((q) => itemAnswers(quizAnswers, q.id).warn)
               .slice(0, 1)
               .map((q) => {
                 const eid = (q.entry_ids ?? [])[0];
@@ -721,11 +751,6 @@ function SheetOption({ label, badge, danger, onPress }: { label: string; badge?:
       {badge ? <Text style={st.optBadge}>{badge}</Text> : null}
     </Pressable>
   );
-}
-
-function statOf(rows: CourseAttemptItemRow[], q: QuizItem): { attempts: number; rate: number } {
-  const mine = rows.filter((r) => r.itemId === q.id);
-  return { attempts: mine.length, rate: mine.length ? mine.filter((r) => !r.correct).length / mine.length : 0 };
 }
 
 /** 링 아래 기본 정보 — 이름표와 값을 짝지어 돌려준다(값은 명사형, 워딩 §5). */

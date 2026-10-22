@@ -27,16 +27,23 @@ import { cycleLabel } from '@/lib/quiz/schedule';
 import { itemsOfCourse } from '@/lib/quiz/courseItems';
 import { latestQuizAssignments } from '@/lib/quiz/courseStats';
 import type { QuizAssignment, QuizItem, TrainingCourse } from '@/lib/quiz/types';
+import type { QuizLinkRow } from '@/lib/db';
+import {
+  ITEM_MISS_MIN_ANSWERS,
+  ITEM_MISS_RATE,
+  answersStat,
+  quizState,
+  staffProgress,
+  type QuizState,
+  type StaffProgress,
+} from '@/lib/quiz/metrics';
 
-/** 오답 잦음 판정(0103) — 표본이 이만큼 쌓이고 오답률이 이 선을 넘으면 노하우 결함 신호. */
-export const QUIZ_MISS_MIN_ATTEMPTS = 5;
-export const QUIZ_MISS_RATE = 0.4;
 /**
- * "높은 오답률"(퀴즈 개발계획 §10-4 · 2026-08-27 확정) — **낸 퀴즈에서 절반 넘게 오답**.
- * 인원 하한·최근 발송 기준 없음. 옛 홈의 `missPct > 0`(한 명이 한 번 틀려도 경고)은 오류였다.
- * 위 0103 기준(표본 5·40%)은 노하우 행의 오답률 **표기**용이라 그대로 두고, 경고행·히트맵 테두리는 이걸 쓴다.
+ * 오답 경고 기준(N18) — metrics.ts 하나다. 옛 "절반 넘게 오답"(50%) 기준은 없앴다.
+ * 표기·경고행·히트맵 테두리·상세 문항 경고가 모두 answersStat/itemAnswers 의 warn 을 쓴다.
  */
-export const QUIZ_MISS_HALF_PCT = 50;
+export const QUIZ_MISS_MIN_ATTEMPTS = ITEM_MISS_MIN_ANSWERS;
+export const QUIZ_MISS_RATE = ITEM_MISS_RATE;
 /** 히트맵 머리줄 "이번 주 ↑n칸" — 최근 7일에 확인된 칸 수(knowhow_understanding.verified_at 실측, R4). */
 const WEEK_MS = 7 * 86_400_000;
 
@@ -74,31 +81,21 @@ export type QuizRow = {
   risky: boolean;
 };
 
-/**
- * 퀴즈 한 건의 상태(1층 목록). **화면 어휘로 코스는 없다** — 퀴즈 1건 = 코스 1건이다.
- *  · draft     = 아직 안 보냄(예약일도 없음)
- *  · scheduled = 예약해 뒀고 아직 아무에게도 안 나감
- *  · sent      = 한 명이라도 받았다
- */
-export type QuizStatus = 'draft' | 'scheduled' | 'sent';
-
 export type QuizListRow = {
   course: TrainingCourse;
-  status: QuizStatus;
+  /** 퀴즈 상태 = metrics.quizState(N09). 링크만 열린 퀴즈는 'link_open' 이다(초안이 아니다). */
+  status: QuizState;
   /** 담긴 노하우 수. 0이면 아직 재료가 없다. */
   entryCount: number;
   /** 실제로 나가는 활성 문항 수(보관 제외). 0이면 눌러도 낼 게 없다. */
   itemCount: number;
   /** 근거가 바뀐 뒤 다시 안 만든 문항 수(0114). */
   staleCount: number;
-  /** 받는 사람 수 = 발송 원장의 사람 수. 아직 발행 전이면 0. */
-  recipients: number;
   /**
-   * 실제로 **푼** 사람 수(`completedAt`).
-   * 응시 중/완료를 가르는 것은 **풀었나**이지 맞혔나가 아니다(2026-09-11).
-   * ★P4(2026-10-22): 노하우 이해 기록으로 센 `passed` 는 뺐다. 퀴즈 화면은 이해 기록을 쓰지 않는다.
+   * 이번 발송의 직원 진행 = metrics.staffProgress(N11). recipients 는 실제로 받은(sent) 사람만 센다.
+   * 목록은 답 행을 읽지 않아 started 는 0이고 받았고 완료 전이면 notStarted 로 센다.
    */
-  answered: number;
+  progress: StaffProgress;
   /** 목록 한 줄의 부제 — 재고 수가 아니라 **일정**을 말한다. */
   caption: string;
 };
@@ -233,6 +230,7 @@ export function useQuizBoard() {
 
   // ── 링크 원장(0113) ───────────────────────────────────────────────────
   // 어느 퀴즈가 '외부용'인지는 **링크가 있느냐**로 안다 — 코스에 새 플래그를 두지 않는다(이미 있는 사실).
+  const [links, setLinks] = useState<QuizLinkRow[]>([]);
   const [linkedCourseIds, setLinkedCourseIds] = useState<Set<string>>(new Set());
   const [openLinkCourseIds, setOpenLinkCourseIds] = useState<Set<string>>(new Set());
   const [linksLoaded, setLinksLoaded] = useState(false);
@@ -241,6 +239,7 @@ export function useQuizBoard() {
     void fetchQuizLinks(true).then((rows) => {
       if (!alive) return;
       readFailed('links', false);
+      setLinks(rows);
       setLinkedCourseIds(new Set(rows.map((l) => l.courseId)));
       setOpenLinkCourseIds(
         new Set(rows.filter((l) => !l.revokedAt && Date.parse(l.expiresAt) > Date.now()).map((l) => l.courseId)),
@@ -299,11 +298,19 @@ export function useQuizBoard() {
     [quizItems, entryById],
   );
 
-  /** 원시 오답률 % (표본 하한 없음). "높은 오답률" 판정(§10-4)은 `> QUIZ_MISS_HALF_PCT` 하나다. */
+  /** 원시 오답률 % (표본 하한 없음). "높은 오답률" 판정은 missWarnOf 하나다. */
   const missPctOf = useCallback(
     (entryId: string) => {
       const qs = quizStats[entryId];
       return qs && qs.attempts > 0 ? Math.round((qs.misses / qs.attempts) * 100) : 0;
+    },
+    [quizStats],
+  );
+  /** "높은 오답률" = metrics.answersStat 의 warn(N18). 상세 문항 경고와 같은 기준이다. */
+  const missWarnOf = useCallback(
+    (entryId: string) => {
+      const qs = quizStats[entryId];
+      return !!qs && answersStat(qs.attempts, qs.misses).warn;
     },
     [quizStats],
   );
@@ -385,12 +392,18 @@ export function useQuizBoard() {
       const sends = sendsByCourse.get(c.id) ?? [];
       const latestSends = latestQuizAssignments(sends);
       const sent = sends.filter((a) => !!a.sentAt);
-      const status: QuizStatus = sent.length > 0 ? 'sent' : c.start_at ? 'scheduled' : 'draft';
+      const courseLinks = links.filter((l) => l.courseId === c.id);
+      const status = quizState(c, sends, courseLinks, now);
 
       const cycle = cycleLabel(c.due_days);
       let caption: string;
-      if (status === 'draft') {
+      if (status === 'draft' || status === 'archived') {
         caption = '아직 안 보냄';
+      } else if (status === 'link_open') {
+        // 링크만 열린 퀴즈의 일정 = 열린 링크 중 가장 늦은 만료일(한국 날짜).
+        const until = Math.max(...courseLinks.filter((l) => !l.revokedAt && Date.parse(l.expiresAt) > now).map((l) => Date.parse(l.expiresAt)));
+        const kst = new Date(until + 9 * 3600_000);
+        caption = `${kst.getUTCMonth() + 1}월 ${kst.getUTCDate()}일까지 링크`;
       } else if (status === 'scheduled') {
         caption = `${dayLabel(c.start_at)}에 보내요`;
       } else {
@@ -430,12 +443,11 @@ export function useQuizBoard() {
         entryCount: entryIds.length,
         itemCount: mine.length,
         staleCount: mine.filter((q) => isStale(q)).length,
-        recipients: latestSends.length,
-        answered: latestSends.filter((a) => !!a.completedAt).length,
+        progress: staffProgress(latestSends, []),
         caption,
       };
     });
-  }, [courses, courseEntries, sendsByCourse, quizItems, entries, isStale]);
+  }, [courses, courseEntries, sendsByCourse, links, now, quizItems, entries, isStale]);
 
   /**
    * 홈 상단 지표 — `buildQuizzes()` 결과에서만 센다. 화면이 다시 세지 않는다(판정 복제 금지).
@@ -449,7 +461,7 @@ export function useQuizBoard() {
       return {
         live: live.length,
         drafts: rows.length - live.length,
-        recipients: live.reduce((n, r) => n + r.recipients, 0),
+        recipients: live.reduce((n, r) => n + r.progress.recipients, 0),
         covered,
         publishedEntries: published.length,
         staleItems: rows.reduce((n, r) => n + r.staleCount, 0),
@@ -478,7 +490,7 @@ export function useQuizBoard() {
         level = r >= 1 ? 4 : r >= 0.67 ? 3 : r >= 0.34 ? 2 : 1;
       }
       const stale = items > 0 && staleCountOf(e.id) > 0;
-      const miss = items > 0 && missPctOf(e.id) > QUIZ_MISS_HALF_PCT;
+      const miss = items > 0 && missWarnOf(e.id);
       const status =
         items === 0 ? '문항 없음' : `노하우 이해 ${known}/${n}명${stale ? ' · 노하우 변경됨' : miss ? ' · 높은 오답률' : ''}`;
       const name = getSectionMeta(e.section).label;
@@ -490,7 +502,7 @@ export function useQuizBoard() {
     return [...by]
       .map(([name, cells]) => ({ name, cells }))
       .sort((a, b) => pale(b.cells) - pale(a.cells) || a.name.localeCompare(b.name, 'ko'));
-  }, [entries, staff.length, understanding, now, quizCountOf, staleCountOf, missPctOf]);
+  }, [entries, staff.length, understanding, now, quizCountOf, staleCountOf, missWarnOf]);
 
   /** 머리줄 값 — 허브 링과 같은 원장(owner_knowhow_stats). 이번 주 ↑n = 최근 7일 확인 기록 수. */
   const heatHead = useMemo(() => {
@@ -510,7 +522,7 @@ export function useQuizBoard() {
       const live = rows.filter((r) => r.status !== 'draft');
       const staleLive = live.filter((r) => r.staleCount > 0);
       const liveEntryIds = new Set(live.flatMap((r) => courseEntriesOf(courseEntries, r.course.id).map((x) => x.entryId)));
-      const missLive = buildRows(null).filter((r) => liveEntryIds.has(r.entryId) && missPctOf(r.entryId) > QUIZ_MISS_HALF_PCT);
+      const missLive = buildRows(null).filter((r) => liveEntryIds.has(r.entryId) && missWarnOf(r.entryId));
       const preview: string[] = [];
       if (staleLive[0]) preview.push(`${staleLive[0].course.name} — 옛 정답이 나가는 중`);
       if (missLive[0]) preview.push(`${missLive[0].text} — 오답 ${missPctOf(missLive[0].entryId)}%`);
@@ -523,7 +535,7 @@ export function useQuizBoard() {
       ];
       return { staleLive, missLive, count: staleLive.length + missLive.length, preview, staleIdle };
     },
-    [courseEntries, buildRows, missPctOf, quizItems, entries, isStale, archived],
+    [courseEntries, buildRows, missPctOf, missWarnOf, quizItems, entries, isStale, archived],
   );
 
   /**
