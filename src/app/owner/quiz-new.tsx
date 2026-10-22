@@ -120,7 +120,7 @@ export default function QuizNewScreen() {
   const addCourseEntry = useWorkStore((s) => s.addCourseEntry);
   const courseEntries = useWorkStore((s) => s.courseEntries);
   /** 이어서 만들기·"안 물어본 노하우만"이 쓰는 값. 판정은 여기(useQuizBoard)에만 있다(복제 금지). */
-  const { courses, quizCountOf, boardLoaded } = useQuizBoard();
+  const { courses, quizCountOf, boardLoaded, boardError, reloadCourses, bumpQuiz, bumpSends } = useQuizBoard();
 
   useEffect(() => {
     void hydrateStaff();
@@ -444,16 +444,19 @@ export default function QuizNewScreen() {
    *   그중 하나만 줄로 보이지만, 보낼 때는 코스의 활성 문항이 전부 나간다.
    */
   const [resumed, setResumed] = useState(false);
+  const [resumeError, setResumeError] = useState(false);
   useEffect(() => {
-    if (!resumeId || resumed || !boardLoaded || !entriesLoaded || !staffLoaded) return;
+    if (!resumeId || resumed || !boardLoaded || boardError || !entriesLoaded || !staffLoaded) return;
     // 없어진(보관·삭제된) 퀴즈면 조용히 새로 만들기로 둔다 — 빈 4단계로 데려가지 않는다.
     const c = courses.find((x) => x.id === resumeId) ?? null;
     const eids = c ? courseEntriesOf(courseEntries, c.id).map((r) => r.entryId) : [];
     let alive = true;
     // 읽을 것이 없어도 **콜백에서** 상태를 바꾼다 — 이펙트 본문의 동기 setState 는 연쇄 렌더를 부른다.
-    const p = eids.length === 0 ? Promise.resolve({ data: [] as QuizItem[] }) : fetchQuizItems(eids);
-    void p.then(({ data }) => {
+    const p = eids.length === 0 ? Promise.resolve({ data: [] as QuizItem[], error: null }) : fetchQuizItems(eids);
+    void p.then(({ data, error }) => {
       if (!alive) return;
+      setResumeError(!!error);
+      if (error) return;
       if (!c) { setResumed(true); return; }
       // 이 퀴즈의 문항만(0307) — 같은 노하우로 만든 다른 퀴즈의 문항은 여기 줄에 안 오른다.
       const active = itemsOfCourse((data ?? []).filter((q) => q.status === 'active'), c.id, eids);
@@ -481,9 +484,9 @@ export default function QuizNewScreen() {
       // ★1단계로 둔다(2026-09-13) — 실어 온 값은 그대로 보이고, 사장은 이름부터 확인하며 넘어간다.
       setStep(1);
       setResumed(true);
-    });
+    }).catch(() => { if (alive) setResumeError(true); });
     return () => { alive = false; };
-  }, [resumeId, resumed, boardLoaded, entriesLoaded, staffLoaded, courses, courseEntries, staff, entryById]);
+  }, [resumeId, resumed, boardLoaded, boardError, entriesLoaded, staffLoaded, courses, courseEntries, staff, entryById]);
 
   const dropItem = async (m: Made) => {
     if (!m.item) return;
@@ -573,6 +576,14 @@ export default function QuizNewScreen() {
 
   // 이어서 만들기 — 실어 오기 전에는 1단계를 그리지 않는다. 안 그러면 "누가 풀 건가요"가
   // 스쳤다가 4단계로 튄다(게이트 없이 화면을 먼저 마운트하는 것이 금지된 바로 그것이다).
+  if (boardError || resumeError) {
+    return (
+      <SafeAreaView style={st.safe} edges={['bottom']}>
+        <ScreenTitleHeader title="퀴즈 만들기" backFallback />
+        <EmptyState title="퀴즈를 불러오지 못했어요" body="잠시 후 다시 시도해 주세요." cta={{ label: '다시 시도', onPress: () => { reloadCourses(); bumpQuiz(); bumpSends(); } }} />
+      </SafeAreaView>
+    );
+  }
   if (resumeId && !resumed) {
     return (
       <SafeAreaView style={st.safe} edges={['bottom']}>

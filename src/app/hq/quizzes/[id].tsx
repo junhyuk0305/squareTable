@@ -76,6 +76,7 @@ export default function HqQuizBuilderScreen() {
   const [made, setMade] = useState<Made[]>([]);
   const [items, setItems] = useState<QuizItem[]>([]);
   const [itemsReload, setItemsReload] = useState(0);
+  const [itemsError, setItemsError] = useState(false);
   const [phase, setPhase] = useState<'idle' | 'generating' | 'saving'>('idle');
   const [note, setNote] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -101,34 +102,43 @@ export default function HqQuizBuilderScreen() {
   // 고른 노하우의 문항(정답 포함 원본 — 관리 권한 RLS). 작업실이 활성 매장이라 매장 앱과 같은 호출이 그대로 작업실을 읽는다.
   useEffect(() => {
     let alive = true;
-    const p = picked.length === 0 ? Promise.resolve({ data: [] as QuizItem[] }) : fetchQuizItems(picked);
-    void p.then(({ data }) => {
+    const p = picked.length === 0 || !courseRef.current ? Promise.resolve({ data: [] as QuizItem[], error: false }) : fetchQuizItems(picked);
+    void p.then(({ data, error }) => {
       if (!alive) return;
+      setItemsError(!!error);
+      if (error) return;
       // 이 퀴즈의 문항만(0307) — 작업실에서 같은 노하우로 만든 다른 퀴즈의 문항은 섞지 않는다.
       const cid = courseRef.current;
       const all = (data ?? []).filter((q) => q.status === 'active');
-      const active = cid ? itemsOfCourse(all, cid, picked) : all;
+      const active = cid ? itemsOfCourse(all, cid, picked) : [];
       setItems(active);
       // 문항이 있는 노하우는 ok 로 — 만들기를 다시 눌러도 있는 것은 다시 만들지 않는다.
       setMade((m) => m.map((x) => (x.state === 'idle' || x.state === 'ok'
         ? { ...x, state: active.some((q) => (q.entry_ids ?? []).includes(x.entryId)) ? 'ok' : 'idle' }
         : x)));
-    });
+    }).catch(() => { if (alive) setItemsError(true); });
     return () => { alive = false; };
   }, [picked, itemsReload]);
 
   const togglePick = async (eid: string) => {
     if (phase !== 'idle') return;
+    setPhase('saving');
+    setErr(null);
     if (picked.includes(eid)) {
+      if (courseRef.current && !(await deleteCourseEntry(courseRef.current, eid))) {
+        setPhase('idle'); setErr('노하우를 빼지 못했어요. 다시 시도해 주세요.'); return;
+      }
       setPicked((p) => p.filter((x) => x !== eid));
       setMade((m) => m.filter((x) => x.entryId !== eid));
-      // 이미 코스가 있으면 항목도 뺀다(문항은 남는다 — 다른 퀴즈가 쓸 수 있고, 되돌리기 쉽다).
-      if (courseRef.current) await deleteCourseEntry(courseRef.current, eid);
+      setPhase('idle');
       return;
+    }
+    if (courseRef.current && wsUnitId && !(await insertCourseEntry(courseRef.current, eid, picked.length, wsUnitId))) {
+      setPhase('idle'); setErr('노하우를 담지 못했어요. 다시 시도해 주세요.'); return;
     }
     setPicked((p) => [...p, eid]);
     setMade((m) => [...m, { entryId: eid, state: 'idle' }]);
-    if (courseRef.current && wsUnitId) await insertCourseEntry(courseRef.current, eid, picked.length, wsUnitId);
+    setPhase('idle');
   };
 
   /** 코스 행이 없으면 만든다(작업실 unit). 이름이 비면 첫 노하우 제목으로. */
@@ -183,11 +193,12 @@ export default function HqQuizBuilderScreen() {
       let next: Made['state'] = 'thin';
       try {
         const out = quota ? [] : await generateQuizItems([entry], undefined, { unitId: wsUnitId, createdBy: userId, max: 1, pool });
+        let savedCount = 0;
         for (const it of out) {
           const saved = await insertQuizItem({ ...it, unit_id: wsUnitId, created_by: userId, course_id: cid });
-          if (saved) any = true;
+          if (saved) { any = true; savedCount++; }
         }
-        if (out.length > 0) next = 'ok';
+        if (out.length > 0) next = savedCount === out.length ? 'ok' : 'error';
       } catch (e) {
         if (e instanceof QuizQuotaError) { quota = true; next = 'error'; }
         else next = 'error';
@@ -257,7 +268,7 @@ export default function HqQuizBuilderScreen() {
       // 직접 쓴 첫 문항이면 코스가 아직 없을 수 있다 — AI 경로와 같은 순서로 먼저 만든다.
       const cid = await ensureCourse();
       if (!cid) { setEditErr('퀴즈를 만들지 못했어요. 잠시 뒤 다시 시도해 주세요.'); return; }
-      const made = await insertQuizItem({ ...editing, payload: editPayload });
+      const made = await insertQuizItem({ ...editing, payload: editPayload, course_id: cid });
       if (!made) { setEditErr('저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.'); return; }
       setEditing(null);
       setCreating(false);
@@ -280,13 +291,13 @@ export default function HqQuizBuilderScreen() {
 
   // ready 게이트 — 작업실 진입이 실패하면 빌더를 열지 않는다(빈 칸에 골라 놓고 저장에서 실패하는 것이 가장 나쁘다).
   if (!loaded || !entriesLoaded) return <HqPage title="퀴즈"><ScreenLoading label="퀴즈를 불러오고 있어요…" /></HqPage>;
-  if (storeError || entriesError || !wsUnitId) {
+  if (storeError || entriesError || itemsError || !wsUnitId) {
     return (
       <HqPage title="퀴즈" sub="빌더를 열 수 없어요" actions={<HqButton label="목록으로" onPress={() => router.replace('/hq/quizzes')} />}>
-        {storeError || entriesError ? (
+        {storeError || entriesError || itemsError ? (
           <HqLoadError
-            title={storeError ? '퀴즈를 불러오지 못했어요' : '노하우를 불러오지 못했어요'}
-            onRetry={() => Promise.all([refresh(), refreshKnowhow()])}
+            title={storeError || itemsError ? '퀴즈를 불러오지 못했어요' : '노하우를 불러오지 못했어요'}
+            onRetry={() => { setItemsReload((n) => n + 1); return Promise.all([refresh(), refreshKnowhow()]); }}
             testID="hq-quiz-editor-error"
           />
         ) : (

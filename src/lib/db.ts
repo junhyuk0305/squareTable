@@ -2202,11 +2202,12 @@ export async function recordQuizStats(rows: QuizStatRow[]): Promise<void> {
   if (error) console.warn('[recordQuizStats]', error.message); // 집계 실패가 채점 UX를 막으면 안 된다
 }
 /** 활성 매장의 문항 오답 집계(RLS: 사장·매니저만) — entry_id → {attempts, misses}. */
-export async function fetchQuizStats(): Promise<Record<string, { attempts: number; misses: number }>> {
+export async function fetchQuizStats(strict = false): Promise<Record<string, { attempts: number; misses: number }>> {
   if (!HAS_SUPABASE) return {};
   const { data, error } = await supabase.from('knowhow_quiz_stats').select('entry_id, attempt_count, miss_count');
   if (error) {
     readFail('fetchQuizStats', error);
+    if (strict) throw error;
     return {};
   }
   const out: Record<string, { attempts: number; misses: number }> = {};
@@ -2396,9 +2397,12 @@ export async function fetchQuizItemsForAttempt(
   entryIds: string[],
   limit = 3,
   courseId?: string | null,
+  assignmentId?: string | null,
 ): Promise<DbResult<QuizItem[]>> {
   if (!HAS_SUPABASE || entryIds.length === 0) return { data: [], error: null };
-  const { data, error } = await supabase.rpc('quiz_items_for', {
+  const { data, error } = await supabase.rpc(assignmentId ? 'quiz_assignment_items' : 'quiz_items_for', assignmentId ? {
+    p_assignment_id: assignmentId, p_limit: limit, p_entry_ids: entryIds,
+  } : {
     p_entry_ids: entryIds,
     p_limit: limit,
     ...(courseId ? { p_course_id: courseId } : {}),
@@ -2556,6 +2560,8 @@ export async function deleteTrainingCourse(id: string): Promise<boolean> {
 export type QuizAttemptRow = {
   id: string;
   entryId: string;
+  courseId: string | null;
+  submissionId: string | null;
   /** 로그인 직원이면 uid, 외부 링크 손님이면 null. */
   staffId: string | null;
   /** 외부 링크 손님이면 이름, 직원이면 null. */
@@ -2569,7 +2575,7 @@ export async function fetchQuizAttempts(): Promise<QuizAttemptRow[]> {
   if (!HAS_SUPABASE) return [];
   const { data, error } = await supabase
     .from('quiz_attempts')
-    .select('id, entry_id, staff_id, guest_name, total, correct, taken_at')
+    .select('id, entry_id, course_id, submission_id, staff_id, guest_name, total, correct, taken_at')
     .order('taken_at', { ascending: false })
     .limit(200);
   if (error) {
@@ -2578,6 +2584,7 @@ export async function fetchQuizAttempts(): Promise<QuizAttemptRow[]> {
   }
   return (data ?? []).map((r: any) => ({
     id: r.id, entryId: r.entry_id, staffId: r.staff_id ?? null, guestName: r.guest_name ?? null,
+    courseId: r.course_id ?? null, submissionId: r.submission_id ?? null,
     total: r.total ?? 0, correct: r.correct ?? 0, takenAt: r.taken_at ?? '',
   }));
 }
@@ -2589,16 +2596,19 @@ export async function fetchQuizAttempts(): Promise<QuizAttemptRow[]> {
  * **사장이 개인 오답을 본다** — 그래서 definer RPC 한 번으로 두 표를 같이 채운다.
  * 겸사겸사 채점이 서버로 갔다: 게스트 경로와 같은 `quiz_grade_item` 이 정오답을 정한다.
  *
- * 기록 실패가 응시 UX 를 막으면 안 되므로 호출부는 fire-and-forget 으로 쓴다.
+ * 저장 성공을 확인한 뒤 완료를 표시한다. 재시도는 같은 requestId를 보낸다.
  * @returns submission_id — 한 번의 응시를 묶는 열쇠. 못 적었으면 null.
  */
 export async function recordStaffQuizAttempt(
   rows: { itemId: string; response: unknown; ord: number }[],
+  courseId?: string | null,
+  requestId?: string | null,
 ): Promise<string | null> {
   if (!HAS_SUPABASE) return null;
   if (rows.length === 0) return null;
-  const { data, error } = await supabase.rpc('quiz_staff_record', {
+  const { data, error } = await supabase.rpc(requestId ? 'quiz_staff_record_v2' : 'quiz_staff_record', {
     p_rows: rows.map((r) => ({ item_id: r.itemId, response: r.response ?? null, ord: r.ord })),
+    ...(requestId ? { p_course_id: courseId ?? null, p_request_id: requestId } : {}),
   });
   if (error) {
     reportError('db.write:recordStaffQuizAttempt', error);
@@ -2648,18 +2658,22 @@ export type GuestSubmissionRow = {
  * ★submission_id 가 없는 옛 행(0160 이전 링크 응시)은 빼고 돌려준다 — 묶을 열쇠도 없고
  *   문항별 상세도 없어서 카드로 세울 수 없다. 점수만 남은 그 행들은 이 화면의 대상이 아니다.
  */
-export async function fetchGuestQuizSubmissions(): Promise<GuestSubmissionRow[]> {
+export async function fetchGuestQuizSubmissions(strict = false): Promise<GuestSubmissionRow[]> {
   if (!HAS_SUPABASE) return [];
-  const { data, error } = await supabase
-    .from('quiz_attempts')
-    .select('entry_id, course_id, guest_name, guest_phone, guest_phone_verified, submission_id, total, correct, taken_at, reviewed_at, cleared_at')
-    .not('guest_name', 'is', null)
-    .not('submission_id', 'is', null)
-    .order('taken_at', { ascending: false })
-    .limit(500);
-  if (error) {
-    readFail('fetchGuestQuizSubmissions', error);
-    return [];
+  const data: any[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data: page, error } = await supabase
+      .from('quiz_attempts')
+      .select('id, entry_id, course_id, guest_name, guest_phone, guest_phone_verified, submission_id, total, correct, taken_at, reviewed_at, cleared_at')
+      .not('guest_name', 'is', null).not('submission_id', 'is', null)
+      .order('taken_at', { ascending: false }).order('id').range(offset, offset + 499);
+    if (error) {
+      readFail('fetchGuestQuizSubmissions', error);
+      if (strict) throw error;
+      return [];
+    }
+    data.push(...(page ?? []));
+    if ((page ?? []).length < 500) break;
   }
 
   // ① 총 응시 횟수는 **정리한 것까지** 세어야 "이 사람 세 번째예요"가 참이 된다 → 거르기 전에 센다.
@@ -2708,13 +2722,18 @@ export async function fetchGuestQuizSubmissions(): Promise<GuestSubmissionRow[]>
   // ③ 점수는 **문항 수**로 말한다. quiz_attempts 의 합은 노하우별 귀속이라 한 문항이 노하우 두 건에
   //    걸리면 2로 세어진다(0160 §집계) — 그러면 목록의 "5/7"과 상세 화면의 문항 5개가 어긋난다.
   //    문항별 상세가 있으면 그쪽을 정본으로 덮는다. 없으면(읽기 실패·권한 밖) 위 합을 그대로 둔다.
-  const { data: items, error: itemErr } = await supabase
-    .from('quiz_attempt_items')
-    .select('submission_id, correct')
-    .in('submission_id', cards.map((c) => c.submissionId));
-  if (itemErr) {
-    readFail('fetchGuestQuizSubmissions.items', itemErr);
-    return cards;
+  const items: any[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data: page, error } = await supabase.from('quiz_attempt_items')
+      .select('id, submission_id, correct').is('staff_id', null)
+      .order('id').range(offset, offset + 499);
+    if (error) {
+      readFail('fetchGuestQuizSubmissions.items', error);
+      if (strict) throw error;
+      return [];
+    }
+    items.push(...(page ?? []));
+    if ((page ?? []).length < 500) break;
   }
   const tally = new Map<string, { total: number; correct: number }>();
   for (const it of items ?? []) {
@@ -2744,7 +2763,8 @@ export async function fetchGuestQuizSubmissions(): Promise<GuestSubmissionRow[]>
       .select('entry_id, training_courses(part_id, store_parts(name))')
       .in('entry_id', entryIds);
     if (ceErr) {
-      readFail('fetchGuestQuizSubmissions.parts', ceErr);   // 파트는 곁가지다 — 카드는 그대로 돌려준다
+      readFail('fetchGuestQuizSubmissions.parts', ceErr);
+    if (strict) throw ceErr;   // 파트는 곁가지다 — 카드는 그대로 돌려준다
     } else {
       const partsOf = new Map<string, Set<string>>();
       for (const r of ce ?? []) {
@@ -2787,11 +2807,12 @@ export type QuizCourseStat = {
   /** 나간 문항 수 합 = 정답률 분모 */ asked: number;
   /** 맞힌 문항 수 합 = 정답률 분자 */ correct: number;
 };
-export async function fetchQuizCourseStats(): Promise<Record<string, QuizCourseStat>> {
+export async function fetchQuizCourseStats(strict = false): Promise<Record<string, QuizCourseStat>> {
   if (!HAS_SUPABASE) return {};
   const { data, error } = await supabase.rpc('quiz_course_stats');
   if (error) {
     readFail('fetchQuizCourseStats', error);
+    if (strict) throw error;
     return {};
   }
   const out: Record<string, QuizCourseStat> = {};
@@ -2810,11 +2831,12 @@ export async function fetchQuizCourseStats(): Promise<Record<string, QuizCourseS
 
 /** 아직 안 나간 이유(0274) — 근무표에 없음 · 연속 2회 안 열어 자동 정지. 이유가 없는 사람은 맵에 없다. */
 export type QuizSendBlock = 'not_scheduled' | 'auto_stopped';
-export async function fetchQuizSendStatus(courseId: string): Promise<Record<string, QuizSendBlock>> {
+export async function fetchQuizSendStatus(courseId: string, strict = false): Promise<Record<string, QuizSendBlock>> {
   if (!HAS_SUPABASE || !courseId) return {};
   const { data, error } = await supabase.rpc('quiz_send_status', { p_course_id: courseId });
   if (error) {
     readFail('fetchQuizSendStatus', error);
+    if (strict) throw error;
     return {};
   }
   const out: Record<string, QuizSendBlock> = {};
@@ -2850,11 +2872,12 @@ export async function fetchRecipientReadiness(
 
 /** 한 사람의 이 퀴즈 응시 목록(제출 단위 점수·시각) — 개인 상세 화면의 위쪽 대시보드. */
 export type PersonAttemptRow = { submissionId: string; takenAt: string; asked: number; correct: number };
-export async function fetchQuizCoursePerson(courseId: string, staffId: string): Promise<PersonAttemptRow[]> {
+export async function fetchQuizCoursePerson(courseId: string, staffId: string, strict = false): Promise<PersonAttemptRow[]> {
   if (!HAS_SUPABASE || !courseId || !staffId) return [];
   const { data, error } = await supabase.rpc('quiz_course_person', { p_course_id: courseId, p_staff_id: staffId });
   if (error) {
     readFail('fetchQuizCoursePerson', error);
+    if (strict) throw error;
     return [];
   }
   return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
@@ -2867,6 +2890,67 @@ export async function fetchQuizCoursePerson(courseId: string, staffId: string): 
 
 /** 직원 한 명이 낸 답 한 줄(0190). 게스트판과 같은 모양 + 누가 언제인지가 붙는다. */
 export type StaffAttemptItemRow = GuestAttemptItemRow & { staffId: string; submissionId: string; takenAt: string };
+
+export type CourseAttemptItemRow = GuestAttemptItemRow & {
+  staffId: string | null;
+  submissionId: string;
+  takenAt: string;
+  courseId: string | null;
+  entryIds: string[];
+};
+
+/** 현재 문항의 상태와 관계없이 제출 당시의 코스·문항 스냅샷을 모두 읽는다. */
+export async function fetchQuizCourseAttemptItems(courseId: string): Promise<DbResult<CourseAttemptItemRow[]>> {
+  if (!HAS_SUPABASE || !courseId) return { data: [], error: null };
+  const rows: CourseAttemptItemRow[] = [];
+  const pageSize = 500;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase.rpc('quiz_course_attempt_items', { p_course_id: courseId })
+      .order('created_at', { ascending: false }).order('id').range(offset, offset + pageSize - 1);
+    if (error) {
+      readFail('fetchQuizCourseAttemptItems', error);
+      return { data: null, error: error as DbErr };
+    }
+    for (const r of (data ?? []) as any[]) rows.push({
+      id: r.id, itemId: r.item_id, ord: r.ord ?? 0, format: r.format ?? '',
+      payload: r.payload ?? {}, response: r.response ?? null, correct: r.correct === true,
+      staffId: r.staff_id ?? null, submissionId: r.submission_id, takenAt: r.created_at,
+      courseId: r.course_id ?? null, entryIds: r.entry_ids ?? [],
+    });
+    if ((data ?? []).length < pageSize) break;
+  }
+  return { data: rows, error: null };
+}
+
+export type QuizAssignmentProgress = {
+  assignmentId: string;
+  courseId: string;
+  pendingEntryIds: string[];
+  pendingItemIds: string[];
+  totalItems: number;
+  answeredItems: number;
+};
+
+/** 본인 발송별 진행. 노하우 이해 기록이나 최근 200행 표본으로 대신 계산하지 않는다. */
+export async function fetchQuizAssignmentProgress(): Promise<DbResult<QuizAssignmentProgress[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const data: any[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const page = await supabase.rpc('quiz_assignment_progress')
+      .order('assignment_id').range(offset, offset + 499);
+    if (page.error) {
+      readFail('fetchQuizAssignmentProgress', page.error);
+      return { data: null, error: page.error as DbErr };
+    }
+    data.push(...(page.data ?? []));
+    if ((page.data ?? []).length < 500) break;
+  }
+  return { data: ((data ?? []) as any[]).map((r) => ({
+    assignmentId: r.assignment_id, courseId: r.course_id,
+    pendingEntryIds: r.pending_entry_ids ?? [], pendingItemIds: r.pending_item_ids ?? [],
+    totalItems: Number(r.total_items ?? 0), answeredItems: Number(r.answered_items ?? 0),
+  })), error: null };
+}
 
 /**
  * 이 퀴즈의 문항들을 **직원이 어떻게 풀었나**(0190) — 문항 id 로 되짚는다.
@@ -2901,7 +2985,7 @@ export async function fetchStaffAttemptItems(itemIds: string[]): Promise<StaffAt
 }
 
 /** 한 번의 제출을 문항 순서대로. RLS 상 관리 권한만 읽는다(qai_select) — 직원·게스트는 0행이다. */
-export async function fetchGuestAttemptItems(submissionId: string): Promise<GuestAttemptItemRow[]> {
+export async function fetchGuestAttemptItems(submissionId: string, strict = false): Promise<GuestAttemptItemRow[]> {
   if (!HAS_SUPABASE || !submissionId) return [];
   const { data, error } = await supabase
     .from('quiz_attempt_items')
@@ -2910,6 +2994,7 @@ export async function fetchGuestAttemptItems(submissionId: string): Promise<Gues
     .order('ord');
   if (error) {
     readFail('fetchGuestAttemptItems', error);
+    if (strict) throw error;
     return [];
   }
   return (data ?? []).map((r: any) => ({
@@ -3007,18 +3092,21 @@ const toAssignment = (r: any): QuizAssignment => ({
 });
 
 /** 활성 매장의 발송 원장 — 관리 권한은 전체, 직원은 본인 것만(RLS qz_select). */
-export async function fetchQuizAssignments(): Promise<QuizAssignment[]> {
+export async function fetchQuizAssignments(strict = false): Promise<QuizAssignment[]> {
   if (!HAS_SUPABASE) return [];
-  const { data, error } = await supabase
-    .from('quiz_assignments')
-    .select(QUIZ_ASSIGNMENT_COLS)
-    .order('scheduled_on', { ascending: false })
-    .limit(500);
-  if (error) {
-    readFail('fetchQuizAssignments', error);
-    return [];
+  const rows: QuizAssignment[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await supabase.from('quiz_assignments').select(QUIZ_ASSIGNMENT_COLS)
+      .order('scheduled_on', { ascending: false }).order('id').range(offset, offset + 499);
+    if (error) {
+      readFail('fetchQuizAssignments', error);
+      if (strict) throw error;
+      return [];
+    }
+    rows.push(...(data ?? []).map(toAssignment));
+    if ((data ?? []).length < 500) break;
   }
-  return (data ?? []).map(toAssignment);
+  return rows;
 }
 
 /**
@@ -3154,7 +3242,7 @@ export type QuizLinkRow = {
   createdAt: string;
 };
 /** 이 매장의 링크 전체(관리 권한만 — RLS ql_select). 만료·회수 판정은 화면이 한다. */
-export async function fetchQuizLinks(): Promise<QuizLinkRow[]> {
+export async function fetchQuizLinks(strict = false): Promise<QuizLinkRow[]> {
   if (!HAS_SUPABASE) return [];
   const { data, error } = await supabase
     .from('quiz_links')
@@ -3162,6 +3250,7 @@ export async function fetchQuizLinks(): Promise<QuizLinkRow[]> {
     .order('created_at', { ascending: false });
   if (error) {
     readFail('fetchQuizLinks', error);
+    if (strict) throw error;
     return [];
   }
   return (data ?? []).map((r: any) => ({
@@ -3273,19 +3362,20 @@ export async function submitQuizLink(
   token: string,
   guest: { name: string; phone: string | null; phoneVerified: boolean }, // phone null = 안 적음(0195 선택)
   answers: { itemId: string; response: QuizResponse }[],
+  requestId?: string,
 ): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  if (answers.length === 0) return true;
+  if (!HAS_SUPABASE || answers.length === 0) return false;
   // ★write() 를 쓰지 않는다 — 0행 유령 성공 방지(위 writeStrict 주석의 P1-6 과 같은 문제).
   //   quiz_link_submit 은 **적힌 행 수**를 돌려주고, 낸 답이 전부 버려져도(그 사이 문항이 지워졌거나
   //   코스에서 빠진 경우) 예외 없이 0 을 준다. error 만 보면 "사장님께 전달됐어요"라고 말하게 되는데,
   //   손님은 다시 풀 방법이 없고 사장은 영원히 모른다 — 이 화면이 문구를 둘로 가른 이유가 그것이다.
-  const { data, error } = await supabase.rpc('quiz_link_submit', {
+  const { data, error } = await supabase.rpc(requestId ? 'quiz_link_submit_v2' : 'quiz_link_submit', {
     p_token: token,
     p_guest_name: guest.name,
     p_guest_phone: guest.phone,
     p_phone_verified: guest.phoneVerified,
     p_answers: answers.map((a) => ({ item_id: a.itemId, response: a.response })),
+    ...(requestId ? { p_request_id: requestId } : {}),
   });
   if (error) {
     console.warn('[db] submitQuizLink:', error.message);

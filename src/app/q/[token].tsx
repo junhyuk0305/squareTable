@@ -31,6 +31,7 @@ import { openQuizLink, fetchQuizLinkItems, gradeQuizLink, submitQuizLink, type Q
 import { usePhoneOtp } from '@/lib/otp';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { formatPhone, isValidPhone, normalizePhone } from '@/lib/utils/validation';
+import { genId } from '@/lib/utils/id';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -69,6 +70,9 @@ export default function QuizLinkScreen() {
   const [given, setGiven] = useState<GivenAnswer[]>([]);
   /** 화면에서 점수를 못 잰 문항 수. 0 이 아니면 **분모가 사장 화면과 다르다**고 말한다. */
   const [missed, setMissed] = useState(0);
+  const requestId = useRef<string | null>(null);
+  const sending = useRef(false);
+  const finishing = useRef(false);
 
   const router = useRouter();
   // 번호를 고치면 훅이 정규화 번호 비교로 sent/verified 를 자동으로 푼다(signup 과 같은 사용법).
@@ -97,8 +101,9 @@ export default function QuizLinkScreen() {
     const { data, error } = await fetchQuizLinkItems(tk);
     // 못 불러온 것(장애)과 낼 게 없는 것(닫힘)을 구분한다 — 뭉치면 장애가 "만료"로 보인다.
     if (error) { setPhase('failed'); return; }
-    // 아직 렌더러가 없는 형태(레지스트리 미등록)는 거른다 — 빈 화면 대신 안 낸다.
+    // 지원하지 않는 문항을 빼고 제출하면 응시 분모가 달라진다.
     const usable = (data ?? []).filter((it) => !!QUIZ_RENDERERS[it.format]);
+    if (usable.length !== (data ?? []).length) { setPhase('failed'); return; }
     if (usable.length === 0) { setPhase('closed'); return; }
     setItems(usable);
     setPhase('quiz');
@@ -113,23 +118,36 @@ export default function QuizLinkScreen() {
    */
   const send = useCallback(
     async (answers: GivenAnswer[]) => {
+      if (sending.current || answers.length === 0) return;
+      sending.current = true;
+      requestId.current ??= genId('qlr');
       setPhase('saving');
       // 노하우별 집계는 **서버가** 한다(0160) — 여기서는 낸 답을 그대로 넘긴다.
       // ★기다렸다가 결과를 말한다. fire-and-forget 으로 두면 저장이 실패해도 손님에게
       //   "사장님께 전달됐어요"라고 말하게 된다 — 손님은 다시 풀 방법이 없고 사장은 영원히 모른다.
-      const ok = await submitQuizLink(
-        tk,
-        { name: name.trim(), phone: phoneOk ? normalizePhone(phone) : null, phoneVerified: phoneOk && otp.verified },
-        answers,
-      );
-      setSaved(ok);
-      setPhase('done');
+      try {
+        const ok = await submitQuizLink(
+          tk,
+          { name: name.trim(), phone: phoneOk ? normalizePhone(phone) : null, phoneVerified: phoneOk && otp.verified },
+          answers,
+          requestId.current,
+        );
+        setSaved(ok);
+        setPhase('done');
+      } catch {
+        setSaved(false);
+        setPhase('done');
+      } finally {
+        sending.current = false;
+      }
     },
     [name, otp.verified, phone, phoneOk, tk],
   );
 
   const finish = useCallback(
     async (answers: GivenAnswer[]) => {
+      if (finishing.current || answers.length === 0) return;
+      finishing.current = true;
       setPhase('saving');
       setGiven(answers);
       // 점수는 **다 낸 뒤에** 한 번에 받는다(2026-09-13) — 풀이 중에 문항마다 채점하면 답을 고치러
@@ -143,11 +161,11 @@ export default function QuizLinkScreen() {
       const graded: boolean[] = [];
       let ungraded = 0;
       for (let i = 0; i < answers.length; i += GRADE_CHUNK) {
-        const part = await Promise.all(
+        const part = await Promise.allSettled(
           answers.slice(i, i + GRADE_CHUNK).map((a) => gradeQuizLink(tk, a.itemId, a.response)),
         );
         for (const g of part) {
-          if (g.data) graded.push(!!g.data.correct);
+          if (g.status === 'fulfilled' && g.value.data) graded.push(!!g.value.data.correct);
           else ungraded++;
         }
       }
@@ -310,7 +328,7 @@ export default function QuizLinkScreen() {
               ) : null}
               {/* 못 잰 문항이 있으면 **여기 숫자가 전부가 아니라고 말한다** — 안 말하면 손님과
                   사장이 서로 다른 점수를 보면서 둘 다 맞다고 믿는다. 기록은 낸 답 전부로 남는다. */}
-              {missed > 0 ? (
+              {missed > 0 && saved ? (
                 <Text style={st.doneNote}>{missed}문제는 여기서 점수를 못 쟀어요. 사장님께는 푼 것 전부가 갔어요.</Text>
               ) : null}
               {/* 저장이 실패했으면 "전달됐어요"라고 말하지 않는다 — 손님은 다시 풀 방법이 없고

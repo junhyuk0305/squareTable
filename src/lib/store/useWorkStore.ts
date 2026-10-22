@@ -40,6 +40,8 @@ import {
   fetchTrainingCourses,
   fetchQuizItemCounts,
   fetchQuizAssignments,
+  fetchQuizAssignmentProgress,
+  type QuizAssignmentProgress,
   fetchQuizAttempts,
   markQuizOpened,
   markQuizCompleted,
@@ -124,25 +126,19 @@ export function courseEntriesOf(entries: CourseEntryRow[], courseId: string): Co
 }
 
 /**
- * 이 노하우들이 담긴 퀴즈 중, 나에게 **이미 나갔고 아직 안 끝난** 발송의 id 들(0139).
+ * 직접 연 발송 중 나에게 이미 나갔고 아직 안 끝난 발송만 고른다.
  *
  * ★자동 정지(연속 2회 무시)를 푸는 신호를 어디에 찍을지 정하는 유일한 자리다.
  *  아직 안 나간 행(sentAt null)은 열 수도 끝낼 수도 없다 — 0140 RPC 도 같은 조건으로 막는다.
  */
 function pendingAssignmentIds(
-  s: { assignments: QuizAssignment[]; courseEntries: CourseEntryRow[] },
-  entryIds: string[],
+  s: { assignments: QuizAssignment[] },
+  assignmentId?: string,
 ): string[] {
-  if (entryIds.length === 0) return [];
-  // ★내 행만. 사장 계정에는 RLS 로 **매장 전체** 발송이 내려오므로(qz_select) 이 필터가 없으면
-  //   사장이 자청 퀴즈를 풀 때마다 남의 발송 수만큼 RPC 를 헛으로 두드린다(전부 false 로 튕기지만).
+  if (!assignmentId) return [];
   const me = useSessionStore.getState().userId;
-  if (!me) return [];
-  const want = new Set(entryIds);
-  const courses = new Set(s.courseEntries.filter((e) => want.has(e.entryId)).map((e) => e.courseId));
-  if (courses.size === 0) return [];
   return s.assignments
-    .filter((a) => a.userId === me && courses.has(a.courseId) && !!a.sentAt && !a.completedAt)
+    .filter((a) => a.id === assignmentId && a.userId === me && !!a.sentAt && !a.completedAt)
     .map((a) => a.id);
 }
 /** 정기 훈련 due 판정 — 통과 기록이 없거나 마지막 통과가 매장 주기(dueDays)보다 오래됐으면 다시 확인할 때. */
@@ -543,11 +539,12 @@ export function lastQuizAttemptOf(
   attempts: QuizAttemptRow[],
   entryIds: string[],
   staffId: string,
+  courseId?: string | null,
 ): QuizAttemptRow | null {
   const want = new Set(entryIds);
   let last: QuizAttemptRow | null = null;
   for (const a of attempts) {
-    if (a.staffId !== staffId || !want.has(a.entryId)) continue;
+    if (a.staffId !== staffId || !want.has(a.entryId) || (a.courseId ?? null) !== (courseId ?? null)) continue;
     // taken_at 은 ISO 문자열이라 사전순 비교 = 시간순 비교다.
     if (!last || a.takenAt > last.takenAt) last = a;
   }
@@ -711,6 +708,8 @@ type State = {
   courseEntries: CourseEntryRow[];
   /** 나에게 온 퀴즈 발송 원장(0139). 직원은 RLS 로 본인 것만 내려온다. */
   assignments: QuizAssignment[];
+  quizProgress: QuizAssignmentProgress[];
+  quizProgressError: boolean;
   /** ⚠️레거시(0099 training_items) — 1단계 '껍데기 업무 정리'가 대상을 찾는 데만 읽는다. */
   training: TrainingItemRow[];
   /** 퀴즈 코스 행(0108) — 활성 코스만, position 순. 개수 상한·재확인 주기의 SSOT. */
@@ -743,11 +742,11 @@ type State = {
   /** 완료 캡처(②) 넛지 결과 기록 — 남기면 skips 리셋, 건너뛰면 +1. 둘 다 오늘 다시 안 띄우게 date 갱신. */
   noteCaptureNudge: (kind: 'submit' | 'skip') => void;
   /** 이해 확인(④) 통과 기록 — 푼 문항의 근거 노하우 전부. 낙관적 추가 + 실패 롤백(멱등). */
-  markUnderstood: (entryIds: string[], staffId: string, staffName: string) => Promise<void>;
+  markUnderstood: (entryIds: string[], staffId: string, staffName: string) => Promise<boolean>;
   /** 사장이 보낸 퀴즈를 열었다(0140). 자동 정지를 푸는 유일한 신호 — 응시 시작 시점에 부른다. */
-  noteQuizOpened: (entryIds: string[]) => void;
-  /** 응시를 마쳤다(맞힘과 무관 · E4). 그 노하우가 담긴 내 발송의 완료 여부는 서버가 판정한다(0275). */
-  noteQuizFinished: (entryIds: string[]) => void;
+  noteQuizOpened: (entryIds: string[], assignmentId?: string) => void;
+  /** 응시를 마쳤다(맞힘과 무관 · E4). 직접 연 발송의 완료 여부는 서버가 판정한다. */
+  noteQuizFinished: (entryIds: string[], assignmentId?: string) => Promise<void>;
   /** 코스에 노하우 담기(0111) — 껍데기 업무를 만들지 않는다. 성공 여부 반환. */
   addCourseEntry: (courseId: string, entryId: string) => Promise<boolean>;
   /** 코스에서 노하우 빼기 — 노하우·통과 기록·다른 코스 소속은 남는다. */
@@ -792,6 +791,8 @@ export const useWorkStore = create<State>((set, get) => ({
   understanding: [],
   courseEntries: [],
   assignments: [],
+  quizProgress: [],
+  quizProgressError: false,
   training: [],
   courses: [],
   trainingRequests: [],
@@ -826,20 +827,22 @@ export const useWorkStore = create<State>((set, get) => ({
       fetchTrainingCourses(),
       fetchTrainingRequests(),
       fetchQuizItemCounts(),
-      fetchQuizAssignments(),
+      fetchQuizAssignments(true),
       fetchQuizAttempts(),
+      fetchQuizAssignmentProgress(),
       ]),
       () => null,
     );
     if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 업무를 쓰지 않는다
-    if (all === null) { set({ loaded: true, loadError: true }); return; }
-    const [templates, done, feed, knowhowLinks, understanding, courseEntries, training, courses, trainingRequests, quizCounts, assignments, quizAttempts] = all;
+    if (all === null) { set({ loaded: true, loadError: true, quizProgressError: true, quizProgress: [] }); return; }
+    const [templates, done, feed, knowhowLinks, understanding, courseEntries, training, courses, trainingRequests, quizCounts, assignments, quizAttempts, quizProgress] = all;
     // 아직 서버에 안 닿은 체크는 스냅샷 위에 다시 얹는다 — 안 그러면 빠른 연속 체크가 되돌아간다.
     const live = overlayPendingDone(done.data, feed.data, fetchedAt);
     set({
       // 서버에 아직 없는 실패·저장 중 내 메시지는 다시 얹는다(D4 · J15 ① 재전송이 새로고침에 지워지지 않게).
       templates: templates.data, done: live.done, feed: carryUnsent(live.feed, get().feed, sendingIds),
       knowhowLinks, understanding, courseEntries, training, trainingRequests, assignments, quizAttempts,
+      quizProgress: quizProgress.data ?? [], quizProgressError: !!quizProgress.error,
       // 직원에게 보일 코스만(비활성 제외) 사장 화면과 같은 순서로 — 카드 순서 = 사장이 정한 순서.
       // 숨긴 본사 퀴즈도 뺀다. 직원은 RLS(0231 tc_select)가 1선이고 이건 2선이다(사장 계정·0231 전 DB).
       courses: (courses.data ?? []).filter((c) => c.active && !isBrandHidden(c)).sort((a, b) => a.position - b.position),
@@ -854,7 +857,7 @@ export const useWorkStore = create<State>((set, get) => ({
     } catch (e) {
       console.warn('[work] hydrate threw:', e);
       if (isStaleEpoch(epoch)) return;
-      set({ loaded: true, loadError: true });
+      set({ loaded: true, loadError: true, quizProgressError: true, quizProgress: [] });
     }
   }),
 
@@ -1021,8 +1024,8 @@ export const useWorkStore = create<State>((set, get) => ({
    *  (due_quiz_sends 의 자동 정지는 opened_at 이 유일한 해제 신호다). 응시 화면이 반드시 부른다.
    * 기록 실패가 응시를 막으면 안 되므로 결과를 기다리지 않는다.
    */
-  noteQuizOpened: (entryIds) => {
-    for (const id of pendingAssignmentIds(get(), entryIds)) void markQuizOpened(id);
+  noteQuizOpened: (_entryIds, assignmentId) => {
+    for (const id of pendingAssignmentIds(get(), assignmentId)) void markQuizOpened(id);
   },
 
   /**
@@ -1032,19 +1035,25 @@ export const useWorkStore = create<State>((set, get) => ({
    * 서버가 **이번 호출로** 완료를 찍었을 때(true)만 사장에게 알린다(역 ⑥ · 아직 남았으면 false · 이미 완료된 발송도 false 0313).
    * 이름은 세션 이름, 퀴즈 이름은 코스 목록.
    */
-  noteQuizFinished: (entryIds) => {
-    for (const id of pendingAssignmentIds(get(), entryIds)) {
-      void markQuizCompleted(id).then((done) => {
-        if (!done) return;
-        const a = get().assignments.find((x) => x.id === id);
-        if (!a) return;
-        notifyOwnersQuizDone(a.courseId, useSessionStore.getState().userName, get().courses.find((c) => c.id === a.courseId)?.name ?? '');
-      });
+  noteQuizFinished: async (_entryIds, assignmentId) => {
+    for (const id of pendingAssignmentIds(get(), assignmentId)) {
+      const done = await markQuizCompleted(id);
+      if (!done) continue;
+      const a = get().assignments.find((x) => x.id === id);
+      if (a) notifyOwnersQuizDone(a.courseId, useSessionStore.getState().userName, get().courses.find((c) => c.id === a.courseId)?.name ?? '');
+    }
+    await get().hydrate();
+    if (get().quizProgressError) throw new Error('Quiz progress refresh failed');
+    const progress = get().quizProgress.find((p) => p.assignmentId === assignmentId);
+    const assignment = get().assignments.find((a) => a.id === assignmentId);
+    // 문항은 모두 저장됐는데 발송 완료 갱신이 실패했다면 같은 제출로 다시 시도한다.
+    if (progress && progress.totalItems > 0 && progress.pendingItemIds.length === 0 && assignment && !assignment.completedAt) {
+      throw new Error('Quiz completion update failed');
     }
   },
 
   markUnderstood: async (entryIds, staffId, staffName) => {
-    if (entryIds.length === 0) return;
+    if (entryIds.length === 0) return true;
     const mine = (u: UnderstandingRow) => u.staffId === staffId && entryIds.includes(u.entryId);
     const prev = get().understanding.filter(mine);
     const at = new Date().toISOString();
@@ -1052,7 +1061,7 @@ export const useWorkStore = create<State>((set, get) => ({
     // 쓰기 중 매장이 바뀌면 prev(이전 매장 행)를 되살리지 않는다 — 새 매장 hydrate 가 채운다(아래 롤백들도 같다).
     const epoch = currentTenantEpoch();
     set((s) => ({ understanding: [...s.understanding.filter((u) => !mine(u)), ...rows] }));
-    await guardWrite(
+    return guardWrite(
       insertKnowhowUnderstanding(entryIds, staffName),
       // ★실패 시 **내가 건드린 행만** 되돌린다. 전체 배열을 스냅샷으로 덮으면 그 사이 도착한
       //   realtime 변경(다른 직원의 통과)까지 조용히 사라진다(detachKnowhow 와 같은 규칙).

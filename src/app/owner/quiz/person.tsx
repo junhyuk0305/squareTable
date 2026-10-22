@@ -51,6 +51,8 @@ export default function QuizPersonResultScreen() {
   // 주소에 퀴즈·사람이 없으면 읽을 것이 없다 — 그 경우는 **처음부터** 도착한 것으로 둔다
   // (이펙트에서 setLoaded 를 부르면 연쇄 렌더가 된다: 이 저장소 lint 규칙이 막는 자리).
   const [loaded, setLoaded] = useState(() => !courseId || !staffId);
+  const [error, setError] = useState(false);
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     if (!cid || !sid) return;
@@ -58,17 +60,18 @@ export default function QuizPersonResultScreen() {
     // ★E4: 문항별 기록은 이 사람의 **가장 최근 응시(submission)** 스냅샷을 통째로 읽는다.
     //   예전엔 지금 문항 id 로 매장 전체 최근 500줄을 받아 한 사람으로 걸렀다 — 줄이 잘리거나
     //   사장이 지운 문항이 빠져 목록이 비거나 줄었다.
-    void fetchQuizCoursePerson(cid, sid).then(async (att) => {
+    void fetchQuizCoursePerson(cid, sid, true).then(async (att) => {
       if (!alive) return;
       setAttempts(att);
       const sub = att[0]?.submissionId; // RPC 가 최근순으로 준다
-      const mine = sub ? await fetchGuestAttemptItems(sub) : [];
+      const mine = sub ? await fetchGuestAttemptItems(sub, true) : [];
       if (!alive) return;
       setRows(mine);
+      setError(false);
       setLoaded(true);
-    });
+    }).catch(() => { if (alive) { setError(true); setLoaded(true); } });
     return () => { alive = false; };
-  }, [cid, sid]);
+  }, [cid, sid, reload]);
 
   const name = staff.find((s) => s.id === sid)?.name ?? '나간 직원';
 
@@ -107,7 +110,9 @@ export default function QuizPersonResultScreen() {
       <Stack.Screen options={{ title: name }} />
       <ScreenTitleHeader title={name} backFallback />
       <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
-        {board.times === 0 ? (
+        {error ? (
+          <EmptyState title="결과를 불러오지 못했어요" body="잠시 후 다시 시도해 주세요." cta={{ label: '다시 시도', onPress: () => setReload((n) => n + 1) }} />
+        ) : board.times === 0 ? (
           <EmptyState
             title="아직 안 풀었어요"
             body="이 퀴즈를 풀면 여기에 문항별 결과가 남아요."
@@ -143,7 +148,7 @@ export default function QuizPersonResultScreen() {
 
             {latest.length === 0 ? (
               <Text style={st.noteText}>
-                {'문항별 기록이 없어요.\n0190 이전에 푼 응시는 점수만 남아 있어요.'}
+                {'문항별 기록이 없어요.\n이전 응시는 점수만 남아 있을 수 있어요.'}
               </Text>
             ) : (
               <Appear delay={120} style={{ gap: Space.sm }}>

@@ -54,12 +54,12 @@ import { EmptyStyles } from '@/lib/theme/empty';
 export default function OwnerTrainingScreen() {
   const router = useRouter();
   const {
-    entries, entryById, boardLoaded, buildQuizzes, buildStats, buildHeatmap, heatHead, buildFixQueue,
+    entries, entryById, boardLoaded, boardError, buildQuizzes, buildStats, buildHeatmap, heatHead, buildFixQueue,
     staffCount, bumpQuiz, bumpSends, missPctOf, openLinkCourseIds, linkedCourseIds, archived, reloadCourses,
   } = useQuizBoard();
 
   /** 응시 기준 집계(0199) — 정답률·응시인원. 발송 원장과 출처가 달라 훅도 따로다(courseStats 주석). */
-  const { statOf, loaded: statsLoaded } = useQuizCourseStats();
+  const { statOf, loaded: statsLoaded, error: statsError, reload: reloadStats } = useQuizCourseStats();
 
   const quizzes = useMemo(() => buildQuizzes(), [buildQuizzes]);
   const stats = useMemo(() => buildStats(quizzes), [buildStats, quizzes]);
@@ -83,7 +83,8 @@ export default function OwnerTrainingScreen() {
       // 훅 상태는 마운트 때 그대로라, 방금 보낸 퀴즈가 '응시 중'에 안 떴다(문항만 새로 읽고 코스는 안 읽었다).
       reloadCourses();
       bumpSends();
-    }, [bumpQuiz, reloadCourses, bumpSends]),
+      reloadStats();
+    }, [bumpQuiz, reloadCourses, bumpSends, reloadStats]),
   );
   const [fixOpen, setFixOpen] = useState(false);
   const [draftOpen, setDraftOpen] = useState(false);
@@ -98,7 +99,7 @@ export default function OwnerTrainingScreen() {
    * ★만든 순(position)으로 두면 오늘 손봐야 할 퀴즈가 아홉 번째 줄에 앉는다(2026-08-26 실측 화면).
    */
   const live = useMemo(() => {
-    const rank = (r: QuizListRow) => (r.staleCount > 0 ? 2 : r.recipients > r.passed ? 1 : 0);
+    const rank = (r: QuizListRow) => (r.staleCount > 0 ? 2 : r.recipients > r.answered ? 1 : 0);
     return [...quizzes].filter((r) => r.status !== 'draft').sort((a, b) => rank(b) - rank(a));
   }, [quizzes]);
   /**
@@ -119,16 +120,20 @@ export default function OwnerTrainingScreen() {
    */
   const [guests, setGuests] = useState<GuestSubmissionRow[]>([]);
   const [guestsLoaded, setGuestsLoaded] = useState(false);
+  const [guestsError, setGuestsError] = useState(false);
+  const [guestReload, setGuestReload] = useState(0);
   useFocusEffect(
     useCallback(() => {
       let alive = true;
-      void fetchGuestQuizSubmissions().then((rows) => {
-        if (alive) { setGuests(rows); setGuestsLoaded(true); }
-      });
+      void fetchGuestQuizSubmissions(true).then((rows) => {
+        if (alive) { setGuestsError(false); setGuests(rows); setGuestsLoaded(true); }
+      }).catch(() => { if (alive) { setGuestsError(true); setGuestsLoaded(true); } });
       return () => {
         alive = false;
       };
-    }, []),
+    // 조회 실패 후 같은 화면에서 다시 요청하는 토큰이다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [guestReload]),
   );
 
   /** 낼 수 있는 재료. 발행된 노하우가 0이면 만들기 자체가 성립하지 않는다(A3). */
@@ -143,7 +148,9 @@ export default function OwnerTrainingScreen() {
    * 그릴 준비 — 퀴즈 판(boardLoaded)·링크 응시 결과·응시 집계가 **다** 와야 한다.
    * ★집계를 빼면 줄이 "정답률 —" 으로 먼저 떴다가 값으로 바뀐다(= 아직 안 온 것을 없는 것처럼 말한 셈).
    */
-  const ready = boardLoaded && guestsLoaded && statsLoaded;
+  const loadError = boardError || guestsError || statsError;
+  const ready = boardLoaded && guestsLoaded && statsLoaded && !loadError;
+  const retry = () => { reloadCourses(); bumpQuiz(); bumpSends(); reloadStats(); setGuestReload((n) => n + 1); };
 
   // 퀴즈 화면 사용 안내.
   useGuideOnce('owner_quiz_v1', ready);
@@ -276,7 +283,9 @@ export default function OwnerTrainingScreen() {
       <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
         {/* ★전부 도착 전엔 로딩이다. 코스만 기다리면 "초안"이 먼저 떴다가 "3/5명"으로 뒤바뀐다
             (아직 안 온 것을 없는 것처럼 말하는 것 = 08-07 정본 §0-1 이 금지한 바로 그것). */}
-        {!ready ? (
+        {loadError ? (
+          <EmptyState title="퀴즈를 불러오지 못했어요" body="잠시 후 다시 시도해 주세요." cta={{ label: '다시 시도', onPress: retry }} />
+        ) : !ready ? (
           <View style={st.loadingWrap}>
             <ActivityIndicator color={InkColors.ink3} />
             <Text style={st.loadingText}>퀴즈를 불러오는 중...</Text>
@@ -747,8 +756,8 @@ function QuizRowView({
     pill = '발송 예정';
     tone = 'progress';
   } else if (row.status === 'sent') {
-    const all = row.recipients > 0 && row.passed >= row.recipients;
-    pill = all ? '전원 통과' : `${row.passed}/${row.recipients}명`;
+    const all = row.recipients > 0 && row.answered >= row.recipients;
+    pill = all ? '응시 완료' : `${row.answered}/${row.recipients}명`;
     tone = all ? 'done' : 'progress';
   }
 

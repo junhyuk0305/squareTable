@@ -12,8 +12,33 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { fetchQuizCourseStats, type QuizCourseStat } from '@/lib/db';
+import type { QuizAssignment } from '@/lib/quiz/types';
 
 export type { QuizCourseStat };
+
+/** 수신자별 최신 예약·발송. 과거 완료가 새 발송의 상태를 덮지 않는다. */
+export function latestQuizAssignments(rows: readonly QuizAssignment[]): QuizAssignment[] {
+  const latest = new Map<string, QuizAssignment>();
+  for (const row of rows) {
+    const key = `${row.courseId}:${row.userId}`;
+    const prev = latest.get(key);
+    if (!prev || row.scheduledOn > prev.scheduledOn ||
+      (row.scheduledOn === prev.scheduledOn && (row.sentAt ?? '') > (prev.sentAt ?? ''))) latest.set(key, row);
+  }
+  return [...latest.values()];
+}
+
+/** 한 코스를 여러 번 나눠 푼 답안 중 문항별 마지막 답. null은 아직 발송 전이다. */
+export function latestCourseAnswers<T extends { itemId: string; takenAt: string }>(rows: readonly T[], sentAt?: string | null): T[] {
+  if (sentAt === null) return [];
+  const latest = new Map<string, T>();
+  for (const row of rows) {
+    if (sentAt && row.takenAt < sentAt) continue;
+    const prev = latest.get(row.itemId);
+    if (!prev || row.takenAt > prev.takenAt) latest.set(row.itemId, row);
+  }
+  return [...latest.values()];
+}
 
 /**
  * 정답률 % — 표본이 없으면 **null**이다(0%가 아니다).
@@ -41,20 +66,22 @@ export function peopleLabel(
 export function useQuizCourseStats() {
   const [byCourse, setByCourse] = useState<Record<string, QuizCourseStat>>({});
   const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
   const [nonce, setNonce] = useState(0);
   const reload = useCallback(() => setNonce((n) => n + 1), []);
 
   useEffect(() => {
     let alive = true;
-    void fetchQuizCourseStats().then((m) => {
+    void fetchQuizCourseStats(true).then((m) => {
       if (!alive) return;
       setByCourse(m);
+      setError(false);
       setLoaded(true);
-    });
+    }).catch(() => { if (alive) { setError(true); setLoaded(true); } });
     return () => { alive = false; };
   }, [nonce]);
 
   const statOf = useCallback((courseId: string): QuizCourseStat | undefined => byCourse[courseId], [byCourse]);
 
-  return { byCourse, statOf, loaded, reload };
+  return { byCourse, statOf, loaded, error, reload };
 }

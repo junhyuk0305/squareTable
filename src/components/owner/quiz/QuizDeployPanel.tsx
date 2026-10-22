@@ -15,7 +15,8 @@
  * ★'기간'은 토큰을 그대로 두고 만료만 민다 — 지우고 새로 만들면 **이미 보낸 주소가 죽는다.**
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -30,11 +31,13 @@ import {
   type GuestSubmissionRow,
 } from '@/lib/db';
 import { maskTail4, scoreText, takenDayLabel } from '@/lib/quiz/guestResult';
+import { addDaysKst as addDays, dayLabelKst } from '@/lib/quiz/schedule';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { genId } from '@/lib/utils/id';
 import { BottomSheet } from '@/components/BottomSheet';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { EmptyState } from '@/components/EmptyState';
 import { MiniCalendar } from '@/components/blocks/MiniCalendar';
 import { SectionLabel } from '@/components/SectionLabel';
 import {
@@ -62,11 +65,6 @@ function kstDay(ms: number): string {
   return `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, '0')}-${String(k.getUTCDate()).padStart(2, '0')}`;
 }
 
-function addDays(day: string, n: number): string {
-  const t = Date.parse(`${day}T00:00:00+09:00`);
-  return kstDay(t + n * 86_400_000 - 9 * 3600_000);
-}
-
 /** 고른 날의 **끝**이 만료다 — 그 날 낮에 열었더니 이미 닫혀 있으면 안 된다. */
 function endOfDayIso(day: string): string {
   return new Date(`${addDays(day, 1)}T00:00:00+09:00`).toISOString();
@@ -75,8 +73,7 @@ function endOfDayIso(day: string): string {
 function shortDate(iso: string): string {
   const t = Date.parse(iso);
   if (!Number.isFinite(t)) return '';
-  const d = new Date(t);
-  return `${d.getMonth() + 1}월 ${d.getDate()}일`;
+  return dayLabelKst(kstDay(t - 1));
 }
 
 /** 달력 시트가 무엇을 하는 중인가 — 새로 만드는 중이거나, 열려 있는 링크의 기간을 미는 중이거나. */
@@ -89,30 +86,34 @@ export function QuizDeployPanel({ course, onOpenResult }: { course: TrainingCour
   // ★목록이 오기 전에 그리면 이미 열려 있는 링크가 있어도 없는 것처럼 보인다 — 사장은 같은
   //   퀴즈의 링크를 한 번 더 발급한다. 실패해도 true 로 확정한다(영영 로딩 금지).
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadCount, setReloadCount] = useState(0);
   const [busy, setBusy] = useState(false);
   // 렌더 중 Date.now() 금지(React 컴파일러) — 마운트 시 1회면 만료 판정에 충분하다.
-  const [now] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
   const [today] = useState(() => kstDay(Date.now()));
   const [pick, setPick] = useState<DayPick | null>(null);
   const [day, setDay] = useState(() => addDays(kstDay(Date.now()), DEFAULT_OPEN_DAYS));
 
   const reload = useCallback(async () => {
-    const rows = await fetchQuizLinks();
-    setLinks(rows.filter((l) => l.courseId === course.id));
-    setLoaded(true);
-  }, [course.id]);
+    setReloadCount((n) => n + 1);
+  }, []);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let alive = true;
     // 링크와 응시 결과는 **같이** 와야 한다 — 링크만 먼저 그리면 결과 자리가 비었다가 채워진다.
-    void Promise.all([fetchQuizLinks(), fetchGuestQuizSubmissions()]).then(([rows, got]) => {
+    void Promise.all([fetchQuizLinks(true), fetchGuestQuizSubmissions(true)]).then(([rows, got]) => {
       if (!alive) return;
       setLinks(rows.filter((l) => l.courseId === course.id));
       setSubs(got.filter((s) => s.courseId === course.id));
+      setNow(Date.now());
+      setLoadError(false);
       setLoaded(true);
-    });
+    }).catch(() => { if (alive) { setLoadError(true); setLoaded(true); } });
     return () => { alive = false; };
-  }, [course.id]);
+  // 조회 실패 후 같은 화면에서 다시 요청하는 토큰이다.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [course.id, reloadCount]));
 
   const live = useMemo(
     () => links.filter((l) => !l.revokedAt && Date.parse(l.expiresAt) > now),
@@ -172,6 +173,7 @@ export function QuizDeployPanel({ course, onOpenResult }: { course: TrainingCour
   };
 
   if (!loaded) return <ScreenLoading label="링크를 불러오고 있어요…" />;
+  if (loadError) return <EmptyState title="링크를 불러오지 못했어요" body="잠시 후 다시 시도해 주세요." cta={{ label: '다시 시도', onPress: () => { void reload(); } }} />;
 
   return (
     <View style={st.wrap}>

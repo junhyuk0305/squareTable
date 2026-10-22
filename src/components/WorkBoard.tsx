@@ -1,3 +1,4 @@
+import { pendingCourseAssignment, isNextQuizRequest } from '@/lib/quiz/progress';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
@@ -60,6 +61,8 @@ type TrainingCardView = {
   lastResult: { total: number; correct: number } | null;
   /** 나에게 나간 이 퀴즈의 발송 id 전부(quiz_assignments.id). 푸시·벨의 `?quiz=<발송 id>` 가 이 카드를 고른다(P1 역 ⑤). */
   sentIds?: string[];
+  assignmentId?: string;
+  completionRecovery?: boolean;
 };
 
 // 채팅에 한 번에 보낼 수 있는 사진 최대 장수.
@@ -138,6 +141,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const quizAttempts = useWorkStore((s) => s.quizAttempts);
   // 발송 원장(0139) — 직원은 RLS 로 본인 것만 내려온다. 카드 노출 판정에 쓴다.
   const assignments = useWorkStore((s) => s.assignments);
+  const quizProgress = useWorkStore((s) => s.quizProgress);
+  const quizProgressError = useWorkStore((s) => s.quizProgressError);
   // 노하우 첨부 검색·칩 제목 해석용 — 업무 화면에서도 노하우를 로드해 둔다(coalesce 로 중복 방지).
   const entries = usePlaybookStore((s) => s.entries);
   const addEntry = usePlaybookStore((s) => s.add);
@@ -150,7 +155,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // 완료 직후 1턴 캡처(②) — 대상 업무(있으면 시트 노출).
   const [capture, setCapture] = useState<{ templateId: string; text: string } | null>(null);
   // 이해 확인(④) — 제목 + 퀴즈 소스(노하우들). 통과 처리는 시트가 실제로 푼 노하우 id 를 돌려준다(0111).
-  const [selfCheck, setSelfCheck] = useState<{ title: string; sops: QuizInput['sops']; courseId?: string | null } | null>(null);
+  const [selfCheck, setSelfCheck] = useState<{ title: string; sops: QuizInput['sops']; courseId?: string | null; assignmentId?: string } | null>(null);
   // 정기 훈련 due 판정 기준 시각 — 렌더 중 Date.now() 금지(컴파일러 순수성), 마운트 시 1회로 충분(주기=30일).
   const [trainingNow] = useState(() => Date.now());
   const toggleTask = useWorkStore((s) => s.toggleTask);
@@ -475,7 +480,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
         .filter((id) => hasEntryQuiz(id) && !!titleOf(id)),
     );
 
-    const cards: { course: TrainingCardCourse; items: TrainingCardItem[]; sentIds?: string[] }[] = [];
+    const cards: { course: TrainingCardCourse; items: TrainingCardItem[]; sentIds?: string[]; assignmentId?: string; completionRecovery?: boolean }[] = [];
     const placedAsked = new Set<string>();
     for (const c of trainingCourseViews(courses)) {
       // ★발송 원장(0139)이 있는 퀴즈는 **나에게 실제로 나간 것만** 뜬다.
@@ -490,6 +495,32 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
         .sort((x, y) => (x.sentAt ?? '').localeCompare(y.sentAt ?? ''));
       const mySent = mySends.at(-1);
       if (sends.length > 0 && !mySent) continue;
+      if (sends.length > 0) {
+        const pending = pendingCourseAssignment(c.id, userId, sends, quizProgress, quizParam);
+        if (!pending) continue;
+        if (pending.progress.answeredItems >= pending.progress.totalItems) {
+          cards.push({
+            course: { id: c.id, key: c.key, name: c.name, dueDays: c.dueDays, dueOn: pending.assignment.dueOn },
+            items: [{ id: pending.assignment.id, text: c.name, state: 'next' }],
+            assignmentId: pending.assignment.id,
+            sentIds: [pending.assignment.id],
+            completionRecovery: true,
+          });
+          continue;
+        }
+        const ids = new Set(pending.progress.pendingEntryIds);
+        const items = courseEntriesOf(courseEntries, c.id)
+          .filter((e) => ids.has(e.entryId) && !!titleOf(e.entryId))
+          .map((e, i): TrainingCardItem => ({ id: e.entryId, text: titleOf(e.entryId)!, state: i === 0 ? 'next' : 'todo' }));
+        if (items.length === 0) continue;
+        cards.push({
+          course: { id: c.id, key: c.key, name: c.name, dueDays: c.dueDays, dueOn: pending.assignment.dueOn },
+          items,
+          assignmentId: pending.assignment.id,
+          sentIds: mySends.filter((a) => !a.completedAt).map((a) => a.id),
+        });
+        continue;
+      }
 
       const list = courseEntriesOf(courseEntries, c.id)
         .map((e) => ({ id: e.entryId, text: titleOf(e.entryId) }))
@@ -527,9 +558,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       .filter((x) => !!x.text)
       .map((x) => ({ id: x.id, text: x.text, state: 'asked' as const }));
     if (orphans.length > 0) {
-      const host = cards.find((c) => c.course.dueDays !== null);
-      if (host) host.items = [...host.items, ...orphans];
-      else cards.push({ course: { id: null, key: '__requested__', name: '요청받은 퀴즈', dueDays: REGULAR_DUE_DAYS_DEFAULT }, items: orphans });
+      cards.push({ course: { id: null, key: '__requested__', name: '요청받은 퀴즈', dueDays: REGULAR_DUE_DAYS_DEFAULT }, items: orphans });
     }
 
     // 카드가 여러 장 쌓이지 않게 — 1회성 코스는 앞선 하나만(먼저 배울 것이 먼저).
@@ -547,22 +576,29 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       )
       // 지난번 결과(0112) — 집계는 스토어 셀렉터가 한다(판정을 화면에 복제하지 않는다).
       .map((c) => {
-        const last = lastQuizAttemptOf(quizAttempts, c.items.map((it) => it.id), userId);
+        const last = lastQuizAttemptOf(quizAttempts, c.items.map((it) => it.id), userId, c.course.id);
         return { ...c, lastResult: last ? { total: last.total, correct: last.correct } : null };
       });
-  }, [isOwner, courses, courseEntries, understanding, entryById, quizCounts, quizAttempts, userId, trainingNow, trainingRequests, assignments, quizParam]);
+  }, [isOwner, courses, courseEntries, understanding, entryById, quizCounts, quizAttempts, userId, trainingNow, trainingRequests, assignments, quizProgress, quizParam]);
 
   // 카드의 퀴즈 시작 — 항목이 노하우 하나라 그 노하우만 소스로 넣는다(푼 만큼만 통과 처리).
   // ★열었다는 신호를 여기서 찍는다(0140). 이게 빠지면 사장이 보낸 퀴즈가 "무시됐다"로 세어져
   //   연속 2회 뒤 그 사람에게 영영 안 나간다(0139 자동 정지).
   const startTrainingCheck = useCallback(
-    (entryId: string, courseId: string | null) => {
+    (entryId: string, courseId: string | null, assignmentId?: string) => {
+      const progress = quizProgress.find((p) => p.assignmentId === assignmentId);
+      if (assignmentId && progress && progress.totalItems > 0 && progress.answeredItems >= progress.totalItems) {
+        void useWorkStore.getState().noteQuizFinished([], assignmentId)
+          .then(() => showToast('퀴즈 완료 상태를 갱신했어요.'))
+          .catch(() => showToast('완료 상태를 갱신하지 못했어요. 다시 시도해 주세요.'));
+        return;
+      }
       const title = entryById.get(entryId)?.title;
       if (!title) return;
-      useWorkStore.getState().noteQuizOpened([entryId]);
-      setSelfCheck({ title, sops: sopsOf([entryId]), courseId });
+      useWorkStore.getState().noteQuizOpened([entryId], assignmentId);
+      setSelfCheck({ title, sops: sopsOf([entryId]), courseId, assignmentId });
     },
-    [entryById, sopsOf],
+    [entryById, sopsOf, quizProgress],
   );
 
   /**
@@ -576,17 +612,18 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     if (!pendingQuiz) return;
     // 카드는 할일·노하우·명부가 다 온 뒤에야 생긴다(trainingCards 는 assignments + playbook). workLoaded 만 보면
     // 빈 카드 목록에서 '열었다'로 소진돼 아무것도 안 열린다 → 그 발송의 카드가 생길 때까지 들고 있다가 연다.
-    const card = trainingCards.find((c) => c.sentIds?.includes(pendingQuiz)) ?? (boardLoaded ? trainingCards[0] : undefined);
+    const card = trainingCards.find((c) => c.sentIds?.includes(pendingQuiz)) ?? (boardLoaded && isNextQuizRequest(pendingQuiz) ? trainingCards[0] : undefined);
     if (!card && !boardLoaded) return;
     const next = card?.items.find((it) => it.state === 'asked') ?? card?.items.find((it) => it.state === 'next' || it.state === 'due');
     let alive = true;
     void Promise.resolve().then(() => {
       if (!alive) return;
       quizOpened();
-      if (card && next) startTrainingCheck(next.id, card.course.id);
+      if (card && next) startTrainingCheck(next.id, card.course.id, card.assignmentId);
+      else showToast(quizProgressError ? '퀴즈를 불러오지 못했어요. 다시 시도해 주세요.' : '지금 풀 수 있는 퀴즈가 없어요.');
     });
     return () => { alive = false; };
-  }, [pendingQuiz, quizOpened, boardLoaded, trainingCards, startTrainingCheck]);
+  }, [pendingQuiz, quizOpened, boardLoaded, trainingCards, startTrainingCheck, quizProgressError]);
 
   /**
    * ?feed=<피드 id> — 피드가 온 뒤 그 글의 종류로 착지를 가른다. 공지·댓글(→ 그 공지)은 공지 패널을 열고 그 공지로,
@@ -929,16 +966,23 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       <Stack.Screen options={headerOptions} />
       {/* 어떤 코스 카드가 몇 장 뜨는지는 trainingCards 메모가 판정(하한·주기·1회성 우선·요청 예외).
           ★대화방 **위쪽 흐름**에 둔다 — 떠 있는 헤더·칩바는 WorkChat 안에서 뜨므로 카드를 덮지 않는다. */}
+      {view === 'chat' && quizProgressError && !isOwner && (
+        <LoadErrorState title="퀴즈 진행 상태를 불러오지 못했어요" onRetry={() => void useWorkStore.getState().hydrate()} />
+      )}
       {view === 'chat' &&
         trainingCards.map((c, i) => (
           <Appear key={c.course.key} delay={stagger(i)}>
+            {c.completionRecovery ? (
+              <LoadErrorState title={`${c.course.name} 답안은 제출됐어요. 완료 상태를 갱신해 주세요.`} onRetry={() => startTrainingCheck(c.items[0].id, c.course.id, c.assignmentId)} />
+            ) : (
             <TrainingCard
               course={c.course}
               items={c.items}
               lastResult={c.lastResult}
               onOpenKnowhow={openKnowhow}
-              onStartCheck={startTrainingCheck}
+              onStartCheck={(entryId, courseId) => startTrainingCheck(entryId, courseId, c.assignmentId)}
             />
+            )}
           </Appear>
         ))}
 
@@ -1188,8 +1232,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           title={selfCheck.title}
           sops={selfCheck.sops}
           courseId={selfCheck.courseId}
-          onPass={(entryIds) => void markUnderstood(entryIds, userId, userName)}
-          onFinished={(entryIds) => useWorkStore.getState().noteQuizFinished(entryIds)}
+          assignmentId={selfCheck.assignmentId}
+          onPass={(entryIds) => markUnderstood(entryIds, userId, userName)}
+          onFinished={(entryIds) => useWorkStore.getState().noteQuizFinished(entryIds, selfCheck.assignmentId)}
           // ★닫을 때 다시 읽는다 — 응시 기록(0112)은 realtime publication 멤버가 아니라서
           //   틀리고 닫으면 카드의 "지난번 …" 한 줄이 방금 푼 것 이전 값을 계속 말한다.
           //   통과했을 때는 knowhow_understanding 구독이 재조회를 걸지만 오답에는 그 신호가 없다.

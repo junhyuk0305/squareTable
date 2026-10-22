@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { RoleTabBar, goToTab } from '@/components/RoleTabBar';
 import { AppTopBar } from '@/components/AppTopBar';
 import { Appear, stagger } from '@/components/Appear';
+import { LoadErrorState } from '@/components/LoadErrorState';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { JuniorWelcomeCoach } from '@/components/junior/JuniorWelcomeCoach';
 import { SectionLabel } from '@/components/SectionLabel';
@@ -59,6 +60,7 @@ export default function JuniorHomeScreen() {
     todayTasks,
     today,
     openQuizCount,
+    quizProgressError,
   } = useJuniorHomeData();
 
   // 첫 진입 사용 안내 — 본문이 다 선 뒤에만(loaded 전엔 빈 화면 위에 뜬다).
@@ -184,7 +186,11 @@ export default function JuniorHomeScreen() {
             Appear로 감싸지 않는다 — 0건일 때 빈 래퍼가 남아 목록 간격만 벌어진다. */}
         {/* ★누르면 업무 채팅이 아니라 **퀴즈가 바로 열린다**(2026-10-15 안드로이드 QA #5) — `quiz=` 는 WorkBoard 가
             카드의 다음 노하우로 응시 시트를 연다. 값은 누를 때마다 달라야 같은 탭을 두 번 눌러도 다시 열린다. */}
+        {quizProgressError ? (
+          <LoadErrorState title="퀴즈 진행 상태를 불러오지 못했어요" onRetry={() => void useWorkStore.getState().hydrate()} />
+        ) : (
         <AlertRow label="안 푼 퀴즈" count={openQuizCount} onPress={() => goToTab(`/junior/work?quiz=${Date.now()}`)} />
+        )}
           </>
         )}
       </ScrollView>

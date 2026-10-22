@@ -106,6 +106,20 @@ console.log('\n━━ t4 짝 재료 게이트(pairing.ts) ━━');
   check('같은 재료면 같은 짝 세트가 나온다(Math.random 금지)',
     JSON.stringify(a) === JSON.stringify(b), ''); }
 
+{
+  const pool = [
+    { id: 'a', title: '머리카락 클레임', section: null, square: { situation: '새 음료에 +1샷 또는 사이즈업을 무상 제공' } },
+    { id: 'b', title: '피크타임 운영', section: null, square: { situation: '아메리카노 3잔이면 한 번에 6샷' } },
+    { ...entry('c', '월요일 주문', 2), section: null },
+  ];
+  check('추가량·조건부 합계를 기준량 짝으로 바꾸지 않는다', findPairSet(pool, pool) === null);
+}
+
+{
+  const pool = OK.map((e) => ({ ...e, square: { situation: `${e.square.standard.value}샷 사용` } }));
+  check('본문에서 숫자만 발견한 후보는 확정 짝으로 내지 않는다', findPairSet(pool, pool) === null);
+}
+
 // ⛔ 임시 폴더를 지우지 않는다. 방금 require 한 .js 를 물고 있는 채로 rmSync 를 부르면 노드가
 //    **조용히 죽는다**(exit 이벤트도 안 뜬다). 여기서는 직후가 끝이라 지금까지 안 드러났을 뿐이고,
 //    같은 코드를 qa-training 의 델타 절에 옮겼을 때 그 뒤 백엔드 절이 통째로 사라졌다(2026-08-25 실측).

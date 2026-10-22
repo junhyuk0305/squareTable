@@ -1,29 +1,29 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useQuizBoard, QUIZ_MISS_MIN_ATTEMPTS, QUIZ_MISS_RATE } from '@/lib/quiz/useQuizBoard';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { useWorkStore, courseEntriesOf, staffWhoUnderstandEntries } from '@/lib/store/useWorkStore';
+import { useWorkStore, courseEntriesOf } from '@/lib/store/useWorkStore';
 import { BrandCopyPanel } from '@/components/owner/BrandCopyPanel';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
 import {
   fetchQuizItems,
-  fetchStaffAttemptItems,
+  fetchQuizCourseAttemptItems,
   fetchQuizSendStatus,
   fetchRecipientReadiness,
   upsertTrainingCourse,
   insertQuizAssignments,
   insertQuizItem,
   updateQuizItem,
-  type StaffAttemptItemRow,
+  type CourseAttemptItemRow,
   type QuizSendBlock,
   type RecipientReadinessRow,
 } from '@/lib/db';
@@ -31,6 +31,7 @@ import { readinessText } from '@/lib/recipientReadiness';
 import { genId } from '@/lib/utils/id';
 import { FORMATS } from '@/lib/quiz/formats';
 import { itemsOfCourse } from '@/lib/quiz/courseItems';
+import { latestQuizAssignments, latestCourseAnswers } from '@/lib/quiz/courseStats';
 // KST 오늘은 일정 SSOT 하나만 쓴다(이 파일·만들기·설정 패널에 복붙돼 있던 것을 걷었다).
 import { todayKst, addDaysKst, cycleLabel } from '@/lib/quiz/schedule';
 import { Appear, stagger } from '@/components/Appear';
@@ -73,9 +74,8 @@ export default function QuizDetailScreen() {
   const { id, tab } = useLocalSearchParams<{ id: string; tab?: string }>();
   const unitId = useSessionStore((s) => s.unitId);
 
-  const { courses, boardLoaded, quizStats, sendsByCourse, bumpSends, reloadCourses } = useQuizBoard();
+  const { courses, boardLoaded, boardError, sendsByCourse, bumpSends, reloadCourses, bumpQuiz } = useQuizBoard();
   const courseEntries = useWorkStore((s) => s.courseEntries);
-  const understanding = useWorkStore((s) => s.understanding);
   const addCourseEntry = useWorkStore((s) => s.addCourseEntry);
   const entries = usePlaybookStore((s) => s.entries);
   const staff = useStaffStore((s) => s.staff);
@@ -86,7 +86,7 @@ export default function QuizDetailScreen() {
   }, [hydrateStaff]);
 
   const [seg, setSeg] = useState<Seg>(tab === 'settings' ? 'settings' : tab === 'items' ? 'items' : 'people');
-  const [staffItems, setStaffItems] = useState<StaffAttemptItemRow[]>([]);
+  const [staffItems, setStaffItems] = useState<CourseAttemptItemRow[]>([]);
   const [moreOpen, setMoreOpen] = useState(false);
   const [preview, setPreview] = useState<QuizItem | null>(null);
   /** 문항 줄을 누르면 뜨는 작은 메뉴 — 미리보기 / 고치기 / 빼기. 줄 안에 버튼 3개를 넣으면 알약과 겹친다. */
@@ -104,26 +104,23 @@ export default function QuizDetailScreen() {
   const [items, setItems] = useState<QuizItem[]>([]);
   const [itemsLoaded, setItemsLoaded] = useState(false);
   const [itemsReload, setItemsReload] = useState(0);
+  const [itemsError, setItemsError] = useState(false);
+  useFocusEffect(useCallback(() => {
+    reloadCourses(); bumpSends(); bumpQuiz(); setItemsReload((n) => n + 1);
+  }, [reloadCourses, bumpSends, bumpQuiz]));
   useEffect(() => {
     let alive = true;
-    // 담긴 노하우가 없으면 읽을 것도 없다 — 조회 없이 빈 목록으로 되돌린다(이펙트 안 동기 set 회피).
-    const p = entryIds.length === 0 ? Promise.resolve({ data: [] as QuizItem[] }) : fetchQuizItems(entryIds);
-    void p.then(({ data }) => {
+    const p = entryIds.length === 0 ? Promise.resolve({ data: [] as QuizItem[], error: null }) : fetchQuizItems(entryIds);
+    void Promise.all([p, fetchQuizCourseAttemptItems(id ?? '')]).then(([questions, answers]) => {
       if (!alive) return;
-      // 이 퀴즈의 문항만(0307). 노하우 겹침으로 읽은 결과에는 같은 노하우로 만든 다른 퀴즈의 문항이 섞여 온다 —
-      // 그래서 노하우 4개를 골랐는데 '문항 6개'로 보였다(2026-10-15 안드로이드 QA #1).
-      const active = itemsOfCourse((data ?? []).filter((q) => q.status === 'active'), id ?? '', entryIds);
-      setItems(active);
+      setItemsError(!!questions.error || !!answers.error);
+      if (!questions.error && !answers.error) {
+        setItems(itemsOfCourse((questions.data ?? []).filter((q) => q.status === 'active'), id ?? '', entryIds));
+        setStaffItems(answers.data ?? []);
+      }
       setItemsLoaded(true);
-      // 문항이 정해진 뒤에야 "누가 이 문항들을 어떻게 풀었나"를 읽을 수 있다(0190) —
-      // quiz_attempt_items 에 코스가 없어 문항 id 집합이 열쇠다.
-      void fetchStaffAttemptItems(active.map((q) => q.id)).then((rows) => {
-        if (alive) setStaffItems(rows);
-      });
-    });
-    return () => {
-      alive = false;
-    };
+    }).catch(() => { if (alive) { setItemsError(true); setItemsLoaded(true); } });
+    return () => { alive = false; };
   }, [id, entryIds, itemsReload]);
 
   const sends = useMemo(() => sendsByCourse.get(id ?? '') ?? [], [sendsByCourse, id]);
@@ -137,12 +134,14 @@ export default function QuizDetailScreen() {
   const currentDue = fixedDue ?? latestSend?.dueOn ?? null;
   // 아직 안 나간 사람의 이유(E3 · 0274). 판정은 서버가 한다(due_quiz_sends 와 같은 조건).
   const [blocked, setBlocked] = useState<Record<string, QuizSendBlock>>({});
+  const [sendStatusError, setSendStatusError] = useState(false);
   useEffect(() => {
     let alive = true;
-    void fetchQuizSendStatus(id ?? '').then((m) => { if (alive) setBlocked(m); });
+    void fetchQuizSendStatus(id ?? '', true).then((m) => { if (alive) { setSendStatusError(false); setBlocked(m); } })
+      .catch(() => { if (alive) setSendStatusError(true); });
     return () => { alive = false; };
-  }, [id, sends]);
-  const allUserIds = useMemo(() => [...new Set(sends.map((a) => a.userId))], [sends]);
+  }, [id, sends, itemsReload]);
+  const allUserIds = useMemo(() => [...new Set([...sends.map((a) => a.userId), ...staffItems.flatMap((r) => r.staffId ? [r.staffId] : [])])], [sends, staffItems]);
   // 받을 수 있는 상태인가(P5 · 0309) — 기기 0건·알림 끔은 보낸 뒤에도 '미응시'로만 보였다. RPC 없는 서버는 빈 맵.
   const [readiness, setReadiness] = useState<Record<string, RecipientReadinessRow>>({});
   useEffect(() => {
@@ -154,43 +153,33 @@ export default function QuizDetailScreen() {
   }, [unitId, allUserIds]);
   /** 사람 줄 아래 한 줄 — 상태 문구는 여기 한 함수에서만 고른다(문구 표 = recipientReadiness.ts). */
   const rowStateText = (p: { id: string; passed: boolean; sent: boolean }): string => {
-    if (p.passed) return '통과';
+    if (p.passed) return '응시 완료';
     const pre = readinessText(readiness[p.id]?.blockedReason);
     if (p.sent) return pre ? `미응시 · ${pre}` : '미응시';
     return readinessText(blocked[p.id]) ?? pre ?? '발송 중';
   };
 
-  // 주기 due 판정 기준 시각 — 렌더 중 Date.now() 금지(컴파일러 순수성). 마운트 1회로 충분하다.
-  const [now] = useState(() => Date.now());
-
-  /** 통과 = 담긴 노하우를 **전부** 아는 사람(업무 통과와 같은 규칙). 주기를 반영한다. */
-  const passedIds = useMemo(
-    () =>
-      new Set(
-        staffWhoUnderstandEntries(understanding, entryIds, {
-          now,
-          dueDays: course?.due_days ?? null,
-        }).map((r) => r.staffId),
-      ),
-    [understanding, entryIds, course, now],
-  );
-
   const people = useMemo(
-    () =>
-      allUserIds.map((uid) => {
-        const s = staff.find((x) => x.id === uid);
-        const a = sends.find((x) => x.userId === uid);
-        return {
-          id: uid,
-          name: s?.name ?? '나간 직원',
-          passed: passedIds.has(uid),
-          sent: !!a?.sentAt,
-        };
-      }),
-    [allUserIds, staff, sends, passedIds],
+    () => allUserIds.map((uid) => {
+      const s = staff.find((x) => x.id === uid);
+      const a = latestQuizAssignments(sends).find((x) => x.userId === uid);
+      const history = staffItems.filter((r) => r.staffId === uid);
+      // 한 코스를 노하우별로 나눠 푼다. 제출 하나 대신 이번 발송의 문항별 마지막 답을 센다.
+      const mine = latestCourseAnswers(history, a?.sentAt);
+      const started = mine.length > 0;
+      return {
+        id: uid,
+        name: s?.name ?? '나간 직원',
+        passed: !!a?.completedAt,
+        sent: !!a?.sentAt,
+        started,
+        mine,
+      };
+    }),
+    [allUserIds, staff, sends, staffItems],
   );
   const passedCount = people.filter((p) => p.passed).length;
-  const notDone = people.filter((p) => !p.passed);
+  const notDone = people.filter((p) => !p.passed && p.sent);
 
   /** 근거가 바뀐 뒤 다시 안 만든 문항(0114). 판정은 이미 DB 트리거가 해 뒀고 보여줄 자리가 없었다. */
   const staleItems = useMemo(
@@ -364,6 +353,14 @@ export default function QuizDetailScreen() {
    * ★`coursesLoaded` 만 보면 문항 세그먼트가 "아직 문항이 없어요"로 먼저 떴다가 채워지고,
    *   결과 세그먼트의 이름이 "나간 직원"으로 스쳤다가 진짜 이름으로 바뀐다(2026-08-26).
    */
+  if (boardError || itemsError || sendStatusError) {
+    return (
+      <SafeAreaView style={st.safe} edges={['bottom']}>
+        <ScreenTitleHeader title="퀴즈" backFallback />
+        <EmptyState title="퀴즈를 불러오지 못했어요" body="잠시 후 다시 시도해 주세요." cta={{ label: '다시 시도', onPress: () => { reloadCourses(); bumpSends(); bumpQuiz(); setItemsReload((n) => n + 1); } }} />
+      </SafeAreaView>
+    );
+  }
   if (!boardLoaded || !itemsLoaded || !staffLoaded) {
     return (
       <SafeAreaView style={st.safe} edges={['bottom']}>
@@ -442,7 +439,7 @@ export default function QuizDetailScreen() {
           ) : (
             <>
               <View style={st.ringCard}>
-                <ProgressRing value={passedCount} total={people.length} label="통과" />
+                <ProgressRing value={passedCount} total={people.length} label="응시 완료" />
                 {/* 기본 정보는 줄글이 아니라 이름표+값이다(2026-09-13) — "받은 날부터 3일 안에 ·
                     다시 확인은 저희가 챙겨요"는 한 줄에 두 가지를 이어 붙여 무엇이 무엇의 값인지가 안 보였다. */}
                 <View style={st.factTable}>
@@ -462,16 +459,15 @@ export default function QuizDetailScreen() {
                      "개인 오답 저장 금지"를 뒤집은 자리이므로, 되돌릴 땐 0190 과 같이 본다. */}
               <View style={st.listCard}>
                 {people.map((p, i) => {
-                  const mine = staffItems.filter((r) => r.staffId === p.id);
+                  const mine = p.mine;
                   const done = mine.length > 0;
                   return (
                     <Pressable
                       key={p.id}
                       onPress={() => router.push(`/owner/quiz/person?course=${id}&staff=${p.id}` as never)}
-                      disabled={!done}
                       style={({ pressed }) => [st.row, i > 0 && st.rowDivider, pressed && { opacity: 0.6 }]}
                       accessibilityRole="button"
-                      accessibilityLabel={done ? `${p.name} 응시 결과 보기` : p.name}
+                      accessibilityLabel={`${p.name} 응시 결과 보기`}
                     >
                       <View style={st.rowText}>
                         <Text style={st.rowTitle} numberOfLines={1}>{p.name}</Text>
@@ -481,7 +477,7 @@ export default function QuizDetailScreen() {
                             : rowStateText(p)}
                         </Text>
                       </View>
-                      <ProgressPill text={p.passed ? '다 맞힘' : '아직 안 풂'} tone={p.passed ? 'done' : 'neutral'} />
+                      <ProgressPill text={p.passed ? '응시 완료' : p.started ? '응시 중' : '아직 안 풂'} tone={p.passed ? 'done' : 'neutral'} />
                       {done ? <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} /> : null}
                     </Pressable>
                   );
@@ -513,7 +509,7 @@ export default function QuizDetailScreen() {
           <>
             <View style={st.listCard}>
               {items.map((q, i) => {
-                const s = statOf(quizStats, q);
+                const s = statOf(staffItems, q);
                 const stale = staleItems.some((x) => x.id === q.id);
                 return (
                   <Appear key={q.id} delay={stagger(i)}>
@@ -532,7 +528,7 @@ export default function QuizDetailScreen() {
                           ? '미응시'
                           : s.attempts < QUIZ_MISS_MIN_ATTEMPTS
                             ? '표본 부족'
-                            : `응시 ${s.attempts}명 · 오답 ${Math.round(s.rate * 100)}%`}
+                            : `답안 ${s.attempts}건 · 오답 ${Math.round(s.rate * 100)}%`}
                       </Text>
                     </View>
                     {stale ? (
@@ -551,7 +547,7 @@ export default function QuizDetailScreen() {
             {/* C2 되먹임 — 우리만의 차별점. 오답률을 직원 평가가 아니라 **노하우 결함 신호**로 뒤집는다. */}
             {items
               .filter((q) => {
-                const s = statOf(quizStats, q);
+                const s = statOf(staffItems, q);
                 return s.attempts >= QUIZ_MISS_MIN_ATTEMPTS && s.rate >= QUIZ_MISS_RATE;
               })
               .slice(0, 1)
@@ -718,15 +714,9 @@ function SheetOption({ label, badge, danger, onPress }: { label: string; badge?:
   );
 }
 
-function statOf(
-  stats: Record<string, { attempts: number; misses: number }>,
-  q: QuizItem,
-): { attempts: number; rate: number } {
-  // 오답 통계(0103)는 **노하우 단위**다. 문항의 근거 노하우 것을 그대로 읽는다(여기서 다시 세지 않는다).
-  const eid = (q.entry_ids ?? [])[0];
-  const s = eid ? stats[eid] : undefined;
-  const attempts = s?.attempts ?? 0;
-  return { attempts, rate: attempts > 0 ? (s?.misses ?? 0) / attempts : 0 };
+function statOf(rows: CourseAttemptItemRow[], q: QuizItem): { attempts: number; rate: number } {
+  const mine = rows.filter((r) => r.itemId === q.id);
+  return { attempts: mine.length, rate: mine.length ? mine.filter((r) => !r.correct).length / mine.length : 0 };
 }
 
 /** 링 아래 기본 정보 — 이름표와 값을 짝지어 돌려준다(값은 명사형, 워딩 §5). */

@@ -26,6 +26,7 @@ import { getSectionMeta } from '@/lib/utils/category';
 import type { HeatCell, HeatGroup, HeatLevel } from '@/components/blocks/Heatmap';
 import { cycleLabel } from '@/lib/quiz/schedule';
 import { itemsOfCourse } from '@/lib/quiz/courseItems';
+import { latestQuizAssignments } from '@/lib/quiz/courseStats';
 import type { QuizAssignment, QuizItem, TrainingCourse } from '@/lib/quiz/types';
 
 /** 오답 잦음 판정(0103) — 표본이 이만큼 쌓이고 오답률이 이 선을 넘으면 노하우 결함 신호. */
@@ -136,16 +137,22 @@ function dayLabel(ymd: string | null | undefined): string {
 }
 
 export function useQuizBoard() {
+  const [readErrors, setReadErrors] = useState<Record<string, boolean>>({});
+  const readFailed = useCallback((key: string, failed: boolean) => setReadErrors((v) => ({ ...v, [key]: failed })), []);
   const courseEntries = useWorkStore((s) => s.courseEntries);
   const understanding = useWorkStore((s) => s.understanding);
   const workLoaded = useWorkStore((s) => s.loaded);
+  const workError = useWorkStore((s) => s.loadError);
   const entries = usePlaybookStore((s) => s.entries);
   const playbookLoaded = usePlaybookStore((s) => s.loaded);
+  const playbookError = usePlaybookStore((s) => s.loadError);
   // 히트맵(§10-1) — 칸의 분모는 직원 수, 머리줄 비율은 허브 링과 **같은 값**(owner_knowhow_stats).
   const staff = useStaffStore((s) => s.staff);
   const staffLoaded = useStaffStore((s) => s.loaded);
+  const staffError = useStaffStore((s) => s.loadError);
   const knowhowStats = useHubStore((s) => s.knowhowStats);
   const knowhowStatsLoaded = useHubStore((s) => s.knowhowStatsLoaded);
+  const knowhowStatsError = useHubStore((s) => s.knowhowStatsLoadError);
   const unitId = useSessionStore((s) => s.unitId);
 
   useEffect(() => {
@@ -168,18 +175,26 @@ export function useQuizBoard() {
   const [archived, setArchived] = useState<TrainingCourse[]>([]);
   const [coursesLoaded, setCoursesLoaded] = useState(false);
   const [courseReload, setCourseReload] = useState(0);
-  const reloadCourses = useCallback(() => setCourseReload((v) => v + 1), []);
+  const reloadCourses = useCallback(() => {
+    setCourseReload((v) => v + 1);
+    void useWorkStore.getState().hydrate();
+    void usePlaybookStore.getState().hydrate();
+    void useStaffStore.getState().hydrate();
+    void useHubStore.getState().hydrateKnowhowStats();
+  }, []);
   useEffect(() => {
     let alive = true;
-    void fetchTrainingCourses().then(({ data }) => {
+    void fetchTrainingCourses().then(({ data, error }) => {
       if (!alive) return;
+      readFailed('courses', !!error);
+      if (error) { setCoursesLoaded(true); return; }
       const all = data ?? [];
       setCourses(all.filter((c) => c.active).sort((a, b) => a.position - b.position));
       setArchived(all.filter((c) => !c.active).sort((a, b) => a.position - b.position));
       setCoursesLoaded(true);
-    });
+    }).catch(() => { if (alive) { readFailed('courses', true); setCoursesLoaded(true); } });
     return () => { alive = false; };
-  }, [courseReload]);
+  }, [courseReload, unitId, readFailed]);
 
   // ── 문항(0107)·오답 집계(0103) ────────────────────────────────────────
   const trainedEntryIds = useMemo(() => [...new Set(courseEntries.map((e) => e.entryId))], [courseEntries]);
@@ -188,21 +203,25 @@ export function useQuizBoard() {
   const [quizReload, setQuizReload] = useState(0);
   const bumpQuiz = useCallback(() => setQuizReload((v) => v + 1), []);
   useEffect(() => {
-    if (trainedEntryIds.length === 0) return; // 담긴 게 없으면 읽을 것도 없다
     let alive = true;
-    void fetchQuizItems(trainedEntryIds).then(({ data }) => {
-      if (alive) { setQuizItems(data ?? []); setQuizItemsLoaded(true); }
-    });
+    const request = trainedEntryIds.length ? fetchQuizItems(trainedEntryIds) : Promise.resolve({ data: [], error: false });
+    void request.then(({ data, error }) => {
+      if (!alive) return;
+      readFailed('items', !!error);
+      if (!error) setQuizItems(data ?? []);
+      setQuizItemsLoaded(true);
+    }).catch(() => { if (alive) { readFailed('items', true); setQuizItemsLoaded(true); } });
     return () => { alive = false; };
-  }, [trainedEntryIds, quizReload]);
+  }, [trainedEntryIds, quizReload, unitId, readFailed]);
 
   const [quizStats, setQuizStats] = useState<Record<string, { attempts: number; misses: number }>>({});
   const [statsLoaded, setStatsLoaded] = useState(false);
   useEffect(() => {
     let alive = true;
-    void fetchQuizStats().then((s) => { if (alive) { setQuizStats(s); setStatsLoaded(true); } });
+    void fetchQuizStats(true).then((s) => { if (alive) { readFailed('stats', false); setQuizStats(s); setStatsLoaded(true); } })
+      .catch(() => { if (alive) { readFailed('stats', true); setStatsLoaded(true); } });
     return () => { alive = false; };
-  }, []);
+  }, [courseReload, unitId, readFailed]);
 
   // ── 발송 원장(0139) ───────────────────────────────────────────────────
   // 사장은 매장 전체, 직원은 본인 것만 내려온다(RLS qz_select) — 화면이 다시 거르지 않는다.
@@ -212,9 +231,10 @@ export function useQuizBoard() {
   const bumpSends = useCallback(() => setSendReload((v) => v + 1), []);
   useEffect(() => {
     let alive = true;
-    void fetchQuizAssignments().then((rows) => { if (alive) { setAssignments(rows); setSendsLoaded(true); } });
+    void fetchQuizAssignments(true).then((rows) => { if (alive) { readFailed('sends', false); setAssignments(rows); setSendsLoaded(true); } })
+      .catch(() => { if (alive) { readFailed('sends', true); setSendsLoaded(true); } });
     return () => { alive = false; };
-  }, [sendReload]);
+  }, [sendReload, unitId, readFailed]);
 
   // ── 링크 원장(0113) ───────────────────────────────────────────────────
   // 어느 퀴즈가 '외부용'인지는 **링크가 있느냐**로 안다 — 코스에 새 플래그를 두지 않는다(이미 있는 사실).
@@ -223,16 +243,17 @@ export function useQuizBoard() {
   const [linksLoaded, setLinksLoaded] = useState(false);
   useEffect(() => {
     let alive = true;
-    void fetchQuizLinks().then((rows) => {
+    void fetchQuizLinks(true).then((rows) => {
       if (!alive) return;
+      readFailed('links', false);
       setLinkedCourseIds(new Set(rows.map((l) => l.courseId)));
       setOpenLinkCourseIds(
-        new Set(rows.filter((l) => !l.revokedAt && Date.parse(l.expiresAt) > now).map((l) => l.courseId)),
+        new Set(rows.filter((l) => !l.revokedAt && Date.parse(l.expiresAt) > Date.now()).map((l) => l.courseId)),
       );
       setLinksLoaded(true);
-    });
+    }).catch(() => { if (alive) { readFailed('links', true); setLinksLoaded(true); } });
     return () => { alive = false; };
-  }, [now]);
+  }, [courseReload, unitId, readFailed]);
 
   const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
 
@@ -367,6 +388,7 @@ export function useQuizBoard() {
     return courses.map((c) => {
       const entryIds = courseEntriesOf(courseEntries, c.id).map((r) => r.entryId);
       const sends = sendsByCourse.get(c.id) ?? [];
+      const latestSends = latestQuizAssignments(sends);
       const sent = sends.filter((a) => !!a.sentAt);
       const status: QuizStatus = sent.length > 0 ? 'sent' : c.start_at ? 'scheduled' : 'draft';
 
@@ -413,8 +435,8 @@ export function useQuizBoard() {
         entryCount: entryIds.length,
         itemCount: mine.length,
         staleCount: mine.filter((q) => isStale(q)).length,
-        recipients: new Set(sends.map((a) => a.userId)).size,
-        answered: new Set(sends.filter((a) => !!a.completedAt).map((a) => a.userId)).size,
+        recipients: latestSends.length,
+        answered: latestSends.filter((a) => !!a.completedAt).length,
         passed: staffWhoUnderstandEntries(understanding, entryIds, { now, dueDays: c.due_days ?? null }).length,
         caption,
       };
@@ -500,14 +522,15 @@ export function useQuizBoard() {
       if (staleLive[0]) preview.push(`${staleLive[0].course.name} — 옛 정답이 나가는 중`);
       if (missLive[0]) preview.push(`${missLive[0].text} — 오답 ${missPctOf(missLive[0].entryId)}%`);
       const staleOf = (c: TrainingCourse) =>
-        courseEntriesOf(courseEntries, c.id).reduce((k, x) => k + staleCountOf(x.entryId), 0);
+        itemsOfCourse(servableItems, c.id, courseEntriesOf(courseEntries, c.id).map((x) => x.entryId))
+          .filter((q) => q.status === 'active' && isStale(q)).length;
       const staleIdle = [
         ...rows.filter((r) => r.status === 'draft' && r.staleCount > 0).map((r) => ({ course: r.course, archived: false, staleCount: r.staleCount })),
         ...archived.map((c) => ({ course: c, archived: true, staleCount: staleOf(c) })).filter((x) => x.staleCount > 0),
       ];
       return { staleLive, missLive, count: staleLive.length + missLive.length, preview, staleIdle };
     },
-    [courseEntries, buildRows, missPctOf, staleCountOf, archived],
+    [courseEntries, buildRows, missPctOf, servableItems, isStale, archived],
   );
 
   /**
@@ -539,6 +562,7 @@ export function useQuizBoard() {
     setCourses,
     coursesLoaded,
     boardLoaded,
+    boardError: workError || playbookError || staffError || knowhowStatsError || Object.values(readErrors).some(Boolean),
     reloadCourses,
     quizReload,
     bumpQuiz,

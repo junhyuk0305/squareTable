@@ -39,21 +39,28 @@ export default function GuestQuizResultScreen() {
 
   const [card, setCard] = useState<GuestSubmissionRow | null>(null);
   const [items, setItems] = useState<GuestAttemptItemRow[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const loadKey = `${submissionId}:${retry}`;
+  const loaded = loadedFor === loadKey;
 
   useEffect(() => {
     let alive = true;
-    void Promise.all([fetchGuestQuizSubmissions(), fetchGuestAttemptItems(submissionId)]).then(([subs, rows]) => {
+    void Promise.all([fetchGuestQuizSubmissions(true), fetchGuestAttemptItems(submissionId, true)]).then(([subs, rows]) => {
       if (!alive) return;
       setCard(subs.find((s) => s.submissionId === submissionId) ?? null);
       setItems(rows);
-      setLoaded(true);
+      setFailed(false);
+      setLoadedFor(loadKey);
+    }).catch(() => {
+      if (alive) { setFailed(true); setLoadedFor(loadKey); }
     });
     return () => {
       alive = false;
     };
-  }, [submissionId]);
+  }, [submissionId, loadKey]);
 
   const correctCount = useMemo(() => items.filter((i) => i.correct).length, [items]);
 
@@ -89,6 +96,11 @@ export default function GuestQuizResultScreen() {
             <ActivityIndicator color={InkColors.ink3} />
             <Text style={st.loadingText}>결과를 불러오는 중...</Text>
           </View>
+        ) : failed ? (
+          <View style={st.loadingWrap}>
+            <Text style={qst.emptyText}>결과를 불러오지 못했어요.</Text>
+            <GhostButton label="다시 불러오기" onPress={() => setRetry((n) => n + 1)} />
+          </View>
         ) : (
           <>
             <Appear>
@@ -123,7 +135,7 @@ export default function GuestQuizResultScreen() {
         )}
       </ScrollView>
 
-      {loaded ? (
+      {loaded && !failed && card ? (
         <View style={st.foot}>
           <PrimaryButton label="확인했어요" onPress={() => void mark('reviewed')} disabled={busy} />
           <GhostButton icon="archive-outline" label="정리하기" onPress={() => void mark('cleared')} disabled={busy} />

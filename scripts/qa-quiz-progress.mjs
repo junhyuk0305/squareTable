@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createRequire } from 'node:module';
+
+const out = mkdtempSync(join(tmpdir(), 'quiz-progress-'));
+execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', 'src/lib/quiz/progress.ts', '--outDir', out, '--module', 'commonjs', '--target', 'es2020', '--skipLibCheck', '--ignoreConfig'], { stdio: 'pipe' });
+const { pendingCourseAssignment: pending, isNextQuizRequest } = createRequire(import.meta.url)(join(out, 'progress.js'));
+const a = { id: 'a', courseId: 'A', userId: 'me', sentAt: '2026-10-22', completedAt: null };
+const b = { ...a, id: 'b', courseId: 'B', completedAt: '2026-10-22' };
+const progress = [{ assignmentId: 'a', pendingEntryIds: ['shared'], totalItems: 4, answeredItems: 3 }, { assignmentId: 'b', pendingEntryIds: [], totalItems: 4, answeredItems: 4 }];
+assert.equal(pending('A', 'me', [a, b], progress)?.assignment.id, 'a', 'B completion must not hide A sharing same knowhow');
+assert.equal(pending('B', 'me', [a, b], progress), null);
+assert.equal(pending('A', 'someone-else', [a, b], progress), null, 'other user cannot receive assignment');
+assert.equal(pending('A', 'me', [a], []), null, 'missing server progress is not a fabricated pending quiz');
+assert.equal(pending('A', 'me', [a], [{ ...progress[0], totalItems: 0 }]), null, 'no active items cannot become a quiz');
+const newer = { ...a, id: 'new', sentAt: '2026-10-23' };
+const rows = [...progress, { ...progress[0], assignmentId: 'new' }];
+assert.equal(pending('A', 'me', [a, newer], rows)?.assignment.id, 'new');
+assert.equal(pending('A', 'me', [a, newer], rows, 'a')?.assignment.id, 'a', 'notification must open its assignment');
+assert.equal(pending('A', 'me', [{ ...a, completedAt: 'done' }, newer], rows, 'a'), null, 'completed notification must not open a different assignment');
+assert.equal(isNextQuizRequest('1792598400000'), true);
+assert.equal(isNextQuizRequest('missing-assignment'), false, 'unknown notification is not next-quiz request');
+assert.equal(pending('A', 'me', [a], [{ ...progress[0], pendingEntryIds: [], answeredItems: 4 }])?.assignment.id, 'a', 'saved answers with failed completion must remain recoverable');
+console.log('quiz progress: 11 regression checks passed');

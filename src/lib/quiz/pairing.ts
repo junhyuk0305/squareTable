@@ -170,7 +170,13 @@ export function findPairSet(
   const valuesOf = (e: PlaybookEntry): NumericValue[] => {
     let v = cache.get(e.id);
     if (!v) {
-      v = numericValues(e);
+      // 본문 숫자는 생성 후보일 뿐이다. 추가량·조건부 합계는 제목의 기준량이 아니다.
+      // AI 검토 없이 직접 출제하는 짝짓기는 명시적으로 등록한 기준값만 쓴다.
+      const standard = e.square?.standard;
+      v = standard?.kind === 'count'
+        ? numericValues({ ...e, title: '', square: { ...e.square, situation: '', quagmire: '', uncover: '',
+          action: { steps: [] }, extract: { do: '', dont: '' }, result: { before: '', after: '', metric: '' }, standard } })
+        : [];
       cache.set(e.id, v);
     }
     return v;

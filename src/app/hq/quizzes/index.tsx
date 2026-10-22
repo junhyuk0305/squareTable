@@ -98,7 +98,12 @@ export default function HqQuizzesScreen() {
       // ★required 는 **직영 대상에만** 걸린다(서버가 relation 으로 거른다). 가맹이 섞여도 거부하지 않는다.
       //   배포와 같은 트랜잭션이라 배포가 거부되면 필수도 같이 되감긴다.
       const r = await deploy(id, [...targets], required);
-      if (r.error) { setBusy(false); setDeployErr(r.error); return; }
+      if (r.error) {
+        setBusy(false);
+        setDeployErr(r.error);
+        if (all.length) setResult(`${new Set(all.map((x) => x.unit_id)).size}곳에 ${all.length}건을 처리했어요.`);
+        return;
+      }
       all.push(...(r.data ?? []));
     }
     setBusy(false);
@@ -106,8 +111,9 @@ export default function HqQuizzesScreen() {
     const added = all.reduce((s, x) => s + x.entries_added, 0);
     // 숫자를 그대로 말한다 — '배포 완료'만 띄우면 대기로 빠진 매장을 본사가 모른다.
     setResult(
-      [n('created') ? `새로 ${n('created')}곳` : '', n('updated') ? `갱신 ${n('updated')}곳` : '',
-       n('pending') ? `새 버전 대기 ${n('pending')}곳` : '', added ? `노하우 ${added}건 함께` : ''].filter(Boolean).join(' · ') || '바뀐 것이 없어요',
+      [all.length ? `매장 ${new Set(all.map((x) => x.unit_id)).size}곳` : '',
+       n('created') ? `새로 ${n('created')}건` : '', n('updated') ? `갱신 ${n('updated')}건` : '',
+       n('pending') ? `새 버전 대기 ${n('pending')}건` : '', added ? `노하우 ${added}건 함께` : ''].filter(Boolean).join(' · ') || '바뀐 것이 없어요',
     );
     setPicked(new Set());
   };

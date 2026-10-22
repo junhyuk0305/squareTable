@@ -1,3 +1,4 @@
+import { pendingCourseAssignment } from '@/lib/quiz/progress';
 import { useMemo } from 'react';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -34,6 +35,7 @@ export type JuniorHomeData = {
   today: string;
   /** 아직 통과 못 한 퀴즈(노하우) 수 — 홈 경고행(AlertRow)용. 0이면 행이 안 그려진다. */
   openQuizCount: number;
+  quizProgressError: boolean;
 };
 
 /** 직원 홈 화면의 뷰모델 — 스토어 셀렉터 읽기 + 파생값 계산 + 30초 틱을 한곳에 모은다. */
@@ -114,6 +116,8 @@ export function useJuniorHomeData(): JuniorHomeData {
   const understanding = useWorkStore((s) => s.understanding);
   const quizCounts = useWorkStore((s) => s.quizCounts);
   const assignments = useWorkStore((s) => s.assignments);
+  const quizProgress = useWorkStore((s) => s.quizProgress);
+  const quizProgressError = useWorkStore((s) => s.quizProgressError);
   const openQuizCount = useMemo(() => {
     const passed = new Set(understanding.filter((u) => u.staffId === userId).map((u) => u.entryId));
     let open = 0;
@@ -121,7 +125,10 @@ export function useJuniorHomeData(): JuniorHomeData {
       // 만들던 퀴즈·외부 사람용은 카드가 안 뜨니 세지 않는다(E1 · WorkBoard 와 같은 판정).
       const sends = assignments.filter((a) => a.courseId === c.id);
       if (!staffCanSeeCourse(c, sends.length)) continue;
-      if (sends.length > 0 && !sends.some((a) => a.userId === userId && !!a.sentAt)) continue;
+      if (sends.length > 0) {
+        if (pendingCourseAssignment(c.id, userId, sends, quizProgress)) open += 1;
+        continue;
+      }
       const list = courseEntriesOf(courseEntries, c.id)
         .map((e) => e.entryId)
         .filter((id) => (quizCounts[id] ?? 0) > 0);
@@ -129,7 +136,7 @@ export function useJuniorHomeData(): JuniorHomeData {
       if (list.some((id) => !passed.has(id))) open += 1;
     }
     return open;
-  }, [courses, courseEntries, understanding, quizCounts, assignments, userId]);
+  }, [courses, courseEntries, understanding, quizCounts, assignments, quizProgress, userId]);
 
   // 2026-08-07: '많이 물어본 노하우'(popularKnowhow)와 물어보기 전송(submitChat)은 제거했다 —
   // 홈 섹션이 3개로 줄며(정본 §12) 둘 다 읽는 곳이 없어졌다. 노하우 발견성은 노하우 탭이,
@@ -150,5 +157,6 @@ export function useJuniorHomeData(): JuniorHomeData {
     todayTasks,
     today,
     openQuizCount,
+    quizProgressError,
   };
 }
