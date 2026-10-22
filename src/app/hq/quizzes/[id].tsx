@@ -75,7 +75,8 @@ export default function HqQuizBuilderScreen() {
   const [name, setName] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
   const [made, setMade] = useState<Made[]>([]);
-  const [items, setItems] = useState<QuizItem[]>([]);
+  // 서버 원본(코스 id 와 함께). 이 퀴즈에 나가는 문항 판정은 아래 useMemo 의 itemsOfCourse 하나다(노하우가 늦게 와도 다시 조회하지 않는다).
+  const [rawItems, setRawItems] = useState<{ cid: string | null; rows: QuizItem[] }>({ cid: null, rows: [] });
   const [itemsReload, setItemsReload] = useState(0);
   const [itemsError, setItemsError] = useState(false);
   const [phase, setPhase] = useState<'idle' | 'generating' | 'saving'>('idle');
@@ -110,16 +111,19 @@ export default function HqQuizBuilderScreen() {
       if (error) return;
       // 이 퀴즈의 문항만(0307) — 작업실에서 같은 노하우로 만든 다른 퀴즈의 문항은 섞지 않는다.
       const cid = courseRef.current;
-      const all = (data ?? []).filter((q) => q.status === 'active');
-      const active = cid ? itemsOfCourse(all, cid, picked) : [];
-      setItems(active);
-      // 문항이 있는 노하우는 ok 로 — 만들기를 다시 눌러도 있는 것은 다시 만들지 않는다.
+      setRawItems({ cid, rows: data ?? [] });
+      // 문항이 있는 노하우는 ok 로 — 만들기를 다시 눌러도 있는 것은 다시 만들지 않는다(이 퀴즈 소속 활성 문항이면 충분).
+      const mine = cid ? (data ?? []).filter((q) => q.course_id === cid && q.status === 'active') : [];
       setMade((m) => m.map((x) => (x.state === 'idle' || x.state === 'ok'
-        ? { ...x, state: active.some((q) => (q.entry_ids ?? []).includes(x.entryId)) ? 'ok' : 'idle' }
+        ? { ...x, state: mine.some((q) => (q.entry_ids ?? []).includes(x.entryId)) ? 'ok' : 'idle' }
         : x)));
     }).catch(() => { if (alive) setItemsError(true); });
     return () => { alive = false; };
   }, [picked, itemsReload]);
+  const items = useMemo(
+    () => (rawItems.cid ? itemsOfCourse(rawItems.rows, rawItems.cid, picked, entries) : []),
+    [rawItems, picked, entries],
+  );
 
   const togglePick = async (eid: string) => {
     if (phase !== 'idle') return;

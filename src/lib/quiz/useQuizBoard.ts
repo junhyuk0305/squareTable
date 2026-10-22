@@ -428,7 +428,7 @@ export function useQuizBoard() {
       }
 
       // 이 퀴즈의 문항(0307) — 노하우별 합으로 세면 같은 노하우의 다른 퀴즈 문항과 두 노하우에 걸친 문항이 겹쳐 센다.
-      const mine = itemsOfCourse(servableItems, c.id, entryIds).filter((q) => q.status === 'active');
+      const mine = itemsOfCourse(quizItems, c.id, entryIds, entries);
       return {
         course: c,
         status,
@@ -441,7 +441,7 @@ export function useQuizBoard() {
         caption,
       };
     });
-  }, [courses, courseEntries, sendsByCourse, understanding, now, servableItems, isStale]);
+  }, [courses, courseEntries, sendsByCourse, understanding, now, quizItems, entries, isStale]);
 
   /**
    * 홈 상단 지표 — `buildQuizzes()` 결과에서만 센다. 화면이 다시 세지 않는다(판정 복제 금지).
@@ -522,15 +522,15 @@ export function useQuizBoard() {
       if (staleLive[0]) preview.push(`${staleLive[0].course.name} — 옛 정답이 나가는 중`);
       if (missLive[0]) preview.push(`${missLive[0].text} — 오답 ${missPctOf(missLive[0].entryId)}%`);
       const staleOf = (c: TrainingCourse) =>
-        itemsOfCourse(servableItems, c.id, courseEntriesOf(courseEntries, c.id).map((x) => x.entryId))
-          .filter((q) => q.status === 'active' && isStale(q)).length;
+        itemsOfCourse(quizItems, c.id, courseEntriesOf(courseEntries, c.id).map((x) => x.entryId), entries)
+          .filter((q) => isStale(q)).length;
       const staleIdle = [
         ...rows.filter((r) => r.status === 'draft' && r.staleCount > 0).map((r) => ({ course: r.course, archived: false, staleCount: r.staleCount })),
         ...archived.map((c) => ({ course: c, archived: true, staleCount: staleOf(c) })).filter((x) => x.staleCount > 0),
       ];
       return { staleLive, missLive, count: staleLive.length + missLive.length, preview, staleIdle };
     },
-    [courseEntries, buildRows, missPctOf, servableItems, isStale, archived],
+    [courseEntries, buildRows, missPctOf, quizItems, entries, isStale, archived],
   );
 
   /**

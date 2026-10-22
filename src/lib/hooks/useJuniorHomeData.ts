@@ -1,4 +1,4 @@
-import { pendingCourseAssignment } from '@/lib/quiz/progress';
+import { quizTodo } from '@/lib/quiz/progress';
 import { useMemo } from 'react';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -104,8 +104,8 @@ export function useJuniorHomeData(): JuniorHomeData {
   );
 
   // 안 푼 퀴즈 — 홈 경고행(AlertRow)에 쓸 **개수 하나**만 만든다.
-  //  카드 렌더 판정(어느 코스 카드를 몇 장 띄울지·요청 예외·1회성 우선)은 WorkBoard 가 SSOT다.
-  //  여기서 그 판정을 복제하지 않으려고, "눌러서 갈 곳이 실제로 있는 것"만 최소 조건으로 센다:
+  //  발송된 퀴즈는 quizTodo(progress.ts)가 SSOT다. 카드와 벨도 같은 함수를 쓴다.
+  //  발송 원장이 없는 옛 퀴즈만 "눌러서 갈 곳이 실제로 있는 것"을 최소 조건으로 센다:
   //   ① 코스에 담긴 노하우이고 ② 낼 문항이 있고(0109: 문항 0건 = 의도된 미노출)
   //   ③ 코스가 하한(min_items)을 채워 직원에게 열려 있고 ④ 내 통과 기록이 아직 없는 것.
   //  주기 코스의 '다시 확인'(due)은 안 푼 게 아니라 재확인이라 여기서 세지 않는다.
@@ -120,15 +120,18 @@ export function useJuniorHomeData(): JuniorHomeData {
   const quizProgressError = useWorkStore((s) => s.quizProgressError);
   const openQuizCount = useMemo(() => {
     const passed = new Set(understanding.filter((u) => u.staffId === userId).map((u) => u.entryId));
-    let open = 0;
-    for (const c of trainingCourseViews(courses)) {
-      // 만들던 퀴즈·외부 사람용은 카드가 안 뜨니 세지 않는다(E1 · WorkBoard 와 같은 판정).
+    const views = trainingCourseViews(courses);
+    // ★0332 · P3: 발송된 퀴즈는 quizTodo 하나로 센다(카드·벨과 같은 함수 · 재발송은 최신 하나 · 1회성은 앞선 하나).
+    //   만들던 퀴즈·외부 사람용은 카드가 안 뜨니 넘기지 않는다(E1 · staffCanSeeCourse).
+    const sentCourses = views.filter((c) => {
+      const n = assignments.filter((a) => a.courseId === c.id).length;
+      return n > 0 && staffCanSeeCourse(c, n);
+    });
+    let open = quizTodo(assignments, quizProgress, { userId, courses: sentCourses }).length;
+    // 발송 원장이 없는 옛 퀴즈(0139 이전)만 아래 옛 규칙으로 센다. P4 에서 없앤다.
+    for (const c of views) {
       const sends = assignments.filter((a) => a.courseId === c.id);
-      if (!staffCanSeeCourse(c, sends.length)) continue;
-      if (sends.length > 0) {
-        if (pendingCourseAssignment(c.id, userId, sends, quizProgress)) open += 1;
-        continue;
-      }
+      if (sends.length > 0 || !staffCanSeeCourse(c, sends.length)) continue;
       const list = courseEntriesOf(courseEntries, c.id)
         .map((e) => e.entryId)
         .filter((id) => (quizCounts[id] ?? 0) > 0);

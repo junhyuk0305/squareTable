@@ -460,7 +460,7 @@ export default function QuizNewScreen() {
       if (error) return;
       if (!c) { setResumed(true); return; }
       // 이 퀴즈의 문항만(0307) — 같은 노하우로 만든 다른 퀴즈의 문항은 여기 줄에 안 오른다.
-      const active = itemsOfCourse((data ?? []).filter((q) => q.status === 'active'), c.id, eids);
+      const active = itemsOfCourse(data ?? [], c.id, eids, entries);
       // 이어서 만들기는 코스가 이미 있다 — ensureCourse 가 또 만들지 않도록 같은 값을 실어 둔다.
       courseRef.current = { id: c.id, key: c.key };
       setCourseId(c.id);
@@ -487,7 +487,7 @@ export default function QuizNewScreen() {
       setResumed(true);
     }).catch(() => { if (alive) setResumeError(true); });
     return () => { alive = false; };
-  }, [resumeId, resumed, boardLoaded, boardError, entriesLoaded, staffLoaded, courses, courseEntries, staff, entryById]);
+  }, [resumeId, resumed, boardLoaded, boardError, entriesLoaded, staffLoaded, courses, courseEntries, staff, entries, entryById]);
 
   const dropItem = async (m: Made) => {
     if (!m.item) return;

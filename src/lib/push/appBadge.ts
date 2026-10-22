@@ -91,6 +91,12 @@ export function useAppBadgeSync(): void {
   const templates = useWorkStore((s) => s.templates);
   const done = useWorkStore((s) => s.done);
   const assignments = useWorkStore((s) => s.assignments);
+  // 0332: 벨과 같은 quizTodo 입력(서버 진행 state · 카드 순서).
+  //   조회 실패(quizProgressError)면 [] 대신 undefined → 완료 여부 폴백(벨과 같은 처리).
+  const quizProgressRaw = useWorkStore((s) => s.quizProgress);
+  const quizProgressError = useWorkStore((s) => s.quizProgressError);
+  const quizProgress = quizProgressError ? undefined : quizProgressRaw;
+  const courses = useWorkStore((s) => s.courses);
   const swaps = useScheduleStore((s) => s.swaps);
   const scheduleNotices = useScheduleStore((s) => s.notices);
   const joinNotices = useStaffStore((s) => s.joinNotices);
@@ -119,7 +125,7 @@ export function useAppBadgeSync(): void {
             { feed, taskTemplates: templates, done, today, suggestions, userId: me, nameOf: () => '', ackAt, scheduleNotices },
           )
         // 레지스트리 badgeUnit 과 같은 축 — 벨(NotificationBell)과 같은 인자(assignments · joinNotices 포함).
-        : juniorUnreadCount(feed, swaps, me, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, joinAckAt);
+        : juniorUnreadCount(feed, swaps, me, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, joinAckAt, quizProgress, courses);
     setAppBadge(count);
-  }, [role, me, signedIn, feed, templates, done, swaps, queue, suggestions, pending, today, ackAt, joinAckAt, claims, scheduleNotices, assignments, joinNotices, timeRequests]);
+  }, [role, me, signedIn, feed, templates, done, swaps, queue, suggestions, pending, today, ackAt, joinAckAt, claims, scheduleNotices, assignments, joinNotices, timeRequests, quizProgress, courses]);
 }

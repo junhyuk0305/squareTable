@@ -64,7 +64,8 @@ export function storeUnreadCount(d: UnitNotifData, role: string, me: string, tod
   const nameOf = nameOfFor(d, role, me);
   // 직원 매장의 d.queue(동료 질문 D4 · 내 질문에 온 답)는 0313 부터 서버가 채운다(#14 (a) 채택 · 매장 안 벨과 같은 수).
   //   합류 결과(계정 단위)는 여기서 세지 않는다 — buildJoinCrossNotifs 행을 훅이 따로 센다.
-  if (!canManage(role)) return juniorUnreadCount(d.feed, d.swaps, me, today, d.taskTemplates, d.done, ackAt, d.suggestions, d.queue, d.scheduleNotices, d.assignments);
+  // 0332: 안 푼 퀴즈는 서버 상태(d.quizProgress)로 매장 벨과 같은 quizTodo 를 쓴다. 옛 서버는 undefined → 완료 여부만.
+  if (!canManage(role)) return juniorUnreadCount(d.feed, d.swaps, me, today, d.taskTemplates, d.done, ackAt, d.suggestions, d.queue, d.scheduleNotices, d.assignments, undefined, undefined, d.quizProgress, d.courses);
   // 0093: 매니저 매장 = 사장 축 중 매니저가 행동할 수 있는 것 + 매니저가 받는 쪽인 축(공지·배정·내 제안 결과).
   //       목록(buildStoreNotifs)과 같은 인자·같은 배열에서 센다(F-2).
   // 사장도 나에게 온 공지·배정을 센다(D11) — 목록(buildStoreNotifs)과 같은 인자(0313: 입금 결과·사장 알림·퀴즈 완료·시간 수정 요청).
@@ -84,7 +85,7 @@ export function buildStoreNotifs(d: UnitNotifData, role: string, me: string, tod
       : canManage(role)
         ? buildOwnerNotifications(ownerArgsOf(d, me, nameOf, ackAt), receivedArgsOf(d, me, today, nameOf, ackAt))
         : buildJuniorNotifications({ feed: d.feed, swaps: d.swaps, templates: [], nameOf, userId: me, today, taskTemplates: d.taskTemplates, done: d.done, ackAt, suggestions: d.suggestions, queue: d.queue,
-            scheduleNotices: d.scheduleNotices, assignments: d.assignments, courses: d.courses });
+            scheduleNotices: d.scheduleNotices, assignments: d.assignments, courses: d.courses, quizProgress: d.quizProgress });
   return rows.map((r) => ({ ...r, unitId: d.unitId }));
 }
 

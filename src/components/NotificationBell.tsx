@@ -59,13 +59,19 @@ export function NotificationBell({ edge = true }: { edge?: boolean } = {}) {
 
   // 안 푼 퀴즈(P1 역 ④)도 배지 축 — 목록(junior/notifications.tsx)과 같은 발송 원장. 합류 결과(0247)도 같은 목록의 축.
   const assignments = useWorkStore((s) => s.assignments);
+  // 0332: 홈·카드와 같은 quizTodo 입력(서버 진행 state · 카드 순서).
+  //   조회가 실패하면 스토어는 [] 를 넣는다 → "진행 없음"(undefined)으로 넘겨 완료 여부 폴백을 쓴다(안 푼 퀴즈가 조용히 사라지지 않게).
+  const quizProgressRaw = useWorkStore((s) => s.quizProgress);
+  const quizProgressError = useWorkStore((s) => s.quizProgressError);
+  const quizProgress = quizProgressError ? undefined : quizProgressRaw;
+  const courses = useWorkStore((s) => s.courses);
   const joinNotices = useStaffStore((s) => s.joinNotices);
   // 합류 결과는 계정 단위 — 읽음 기준은 내 매장 ack 중 가장 늦은 시각(accountAckAt · 목록·허브와 같은 판정).
   const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
   const joinAckAt = accountAckAt(ackByUnit);
   const count = useMemo(
-    () => juniorUnreadCount(feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, joinAckAt),
-    [feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, joinAckAt],
+    () => juniorUnreadCount(feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, joinAckAt, quizProgress, courses),
+    [feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, joinAckAt, quizProgress, courses],
   );
 
   return <BellButton count={count} edge={edge} onPress={() => router.push('/junior/notifications')} />;

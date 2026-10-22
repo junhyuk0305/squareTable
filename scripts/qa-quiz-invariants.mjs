@@ -21,7 +21,7 @@ const out = mkdtempSync(join(tmpdir(), 'quiz-inv-'));
 execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', 'src/lib/quiz/courseItems.ts', 'src/lib/quiz/progress.ts', '--outDir', out, '--module', 'commonjs', '--target', 'es2020', '--skipLibCheck', '--ignoreConfig'], { stdio: 'pipe' });
 const req = createRequire(import.meta.url);
 const { itemsOfCourse } = req(join(out, 'courseItems.js'));
-const { pendingCourseAssignment } = req(join(out, 'progress.js'));
+const { quizTodo } = req(join(out, 'progress.js'));
 
 const opt = { auth: { persistSession: false, autoRefreshToken: false } };
 const mk = () => createClient(URL, ANON, opt);
@@ -105,27 +105,32 @@ try {
       if (sv.err) throw new Error('quiz_course_servable ' + sv.err);
       const staff = k === 'L' ? null : (await must(S1.rpc('quiz_assignment_progress', { p_course_id: C[k] }), 'progress')).at(-1)?.total_items ?? -1;
       const link = (await must(anon.rpc('quiz_link_items', { p_token: T[k] }), 'link items')).length;
-      const ts = itemsOfCourse(ownerItems, C[k], courseEntries[k]).length;
+      const liveEntries = (await must(O.from('playbook_entries').select('id,archived_at,brand_hidden_at').eq('unit_id', UNIT), 'entries'));
+      const ts = itemsOfCourse(ownerItems, C[k], courseEntries[k], liveEntries).length;
       detail[k] = { servable: sv.length, staff, link, ts };
       if ((staff !== null && staff !== sv.length) || link !== sv.length || ts !== sv.length) ok = false;
     }
     check('I1 문항 수 4경로 일치', ok, detail);
   });
 
-  // I7: 같은 입력(직원 1의 발송·진행)으로 홈 개수 = 카드 수 = 벨 수. 현재 코드 경로 재현.
+  // I7: 같은 입력(직원 1의 발송·진행)으로 홈 개수 = 카드 수 = 벨 수.
+  //   P3 뒤 세 곳은 quizTodo 하나를 부른다(useJuniorHomeData · notifications myQuizTodo · WorkBoard 변경안).
+  //   그래서 여기서는 그 함수가 서버 진행으로 계약대로 고르는지를 같이 본다:
+  //   재발송(A 두 번)은 최신 발송 하나 · 1회성은 앞선 하나 · state 는 서버(0332)가 준다.
   await run('I7 홈 = 카드 = 벨', async () => {
     const asg = (await must(S1.from('quiz_assignments').select('*').eq('unit_id', UNIT), 'my assignments'))
       .map((a) => ({ id: a.id, courseId: a.course_id, userId: a.user_id, sentAt: a.sent_at, completedAt: a.completed_at }));
     const prog = (await must(S1.rpc('quiz_assignment_progress', { p_course_id: null }), 'progress'))
-      .map((r) => ({ assignmentId: r.assignment_id, pendingEntryIds: r.pending_entry_ids ?? [], totalItems: r.total_items, answeredItems: r.answered_items }));
-    const courses = [C.A, C.B, C.C].map((id) => ({ id, dueDays: null })); // 1회성 퀴즈
-    // useJuniorHomeData.openQuizCount: 발송이 있는 퀴즈마다 pendingCourseAssignment 가 있으면 +1
-    const open = courses.filter((c) => { const sends = asg.filter((a) => a.courseId === c.id); return sends.length > 0 && !!pendingCourseAssignment(c.id, S1.uid, sends, prog); });
-    // WorkBoard: 같은 후보 중 1회성은 앞선 하나만(firstOnce)
-    const cards = open.length ? open.filter((c) => c === open.find((x) => x.dueDays === null)).length : 0;
-    // notifications.isPendingQuizForMe: 내 발송 중 sent 이고 completed 아닌 행 전부
-    const bell = asg.filter((a) => a.userId === S1.uid && !!a.sentAt && !a.completedAt).length;
-    check('I7 홈 = 카드 = 벨', open.length === cards && cards === bell, { home: open.length, cards, bell });
+      .map((r) => ({ assignmentId: r.assignment_id, pendingEntryIds: r.pending_entry_ids ?? [], totalItems: r.total_items, answeredItems: r.answered_items, state: r.state }));
+    const courses = [C.A, C.B, C.C].map((id) => ({ id, dueDays: null })); // 1회성 퀴즈 · 카드 순서
+    const sentCourses = courses.filter((c) => asg.some((a) => a.courseId === c.id));
+    const home = quizTodo(asg, prog, { userId: S1.uid, courses: sentCourses });
+    const cards = quizTodo(asg, prog, { userId: S1.uid, courses: sentCourses });
+    const bell = quizTodo(asg, prog, { userId: S1.uid, courses: courses.filter((c) => asg.some((a) => a.userId === S1.uid && a.sentAt && a.courseId === c.id)) });
+    const states = Object.fromEntries(prog.map((p) => [p.assignmentId, p.state]));
+    const ok = home.length === cards.length && cards.length === bell.length
+      && home.length === 1 && home[0].assignment.id === AS.s1a2 && states[AS.s1a2] === 'todo';
+    check('I7 홈 = 카드 = 벨', ok, { home: home.length, cards: cards.length, bell: bell.length, picked: home.map((t) => t.assignment.id), states });
   });
 
   // I4: 발송마다 progress.total = servable 수. answered=total>0 일 때만 완료 true.
@@ -152,14 +157,24 @@ try {
     // S1 재응시(오답) → 첫 응시만 세야 한다. 손님 제출 2건(정답 1·오답 1).
     await must(S1.rpc('quiz_staff_record_v2', { p_course_id: C.A, p_request_id: p + '_s1a_retry', p_rows: svA.map((id, i) => ({ item_id: id, response: 1, ord: i })) }), 's1 retry');
     for (const [n, r] of [['g1', 0], ['g2', 1]]) await must(anon.rpc('quiz_link_submit_v2', { p_token: T.A, p_guest_name: `${p}_${n}`, p_guest_phone: null, p_phone_verified: false, p_request_id: `${p}_${n}`, p_answers: [{ item_id: svA[0], response: r }] }), 'guest submit');
-    const rows = await must(srv.from('quiz_attempt_items').select('submission_id,staff_id,correct,created_at').eq('unit_id', UNIT).eq('course_id', C.A), 'attempt items');
-    const firstSub = {};
-    for (const r of [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at))) if (r.staff_id && !firstSub[r.staff_id]) firstSub[r.staff_id] = r.submission_id;
-    const counted = rows.filter((r) => (r.staff_id ? firstSub[r.staff_id] === r.submission_id : true));
-    const want = { asked: counted.length, correct: counted.filter((r) => r.correct).length };
+    // Q1: 업무 자청(코스 없는 v2)은 발송된 퀴즈 A 의 문항을 받지 않는다. 안 보낸 퀴즈 C 문항은 source=self 로 남는다.
+    const selfA = await S2.rpc('quiz_staff_record_v2', { p_course_id: null, p_request_id: p + '_selfA', p_rows: [{ item_id: svA[0], response: 0, ord: 0 }] });
+    const selfC = await must(S2.rpc('quiz_staff_record_v2', { p_course_id: null, p_request_id: p + '_selfC', p_rows: [{ item_id: I.c1, response: 0, ord: 0 }] }), 'self C');
+    const selfRows = await must(srv.from('quiz_attempt_items').select('source,course_id').eq('submission_id', selfC ?? '-'), 'self rows');
+    if (selfA.error || selfA.data !== null || selfRows.length !== 1 || selfRows[0].source !== 'self') throw new Error('Q1 자청 분리 실패 ' + JSON.stringify({ selfA: selfA.error?.message ?? selfA.data, selfRows }));
+    // 정의(metrics.ts quizRate): 직원은 사람·문항마다 가장 이른 답 하나(자청 제외) · 손님은 답 전부.
+    //   옛 열 asked/correct 는 누적 그대로 두고, 새 열 first_asked/first_correct/guest_submissions 를 본다(0332).
+    const rows = await must(srv.from('quiz_attempt_items').select('id,submission_id,staff_id,item_id,correct,created_at,source').eq('unit_id', UNIT).eq('course_id', C.A), 'attempt items');
+    const first = new Map();
+    for (const r of [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))) {
+      if (!r.staff_id || r.source === 'self') continue;
+      const k = r.staff_id + ':' + r.item_id; if (!first.has(k)) first.set(k, r);
+    }
+    const counted = [...first.values(), ...rows.filter((r) => !r.staff_id)];
+    const want = { asked: counted.length, correct: counted.filter((r) => r.correct).length, guest: new Set(rows.filter((r) => !r.staff_id).map((r) => r.submission_id)).size };
     const stat = (await must(O.rpc('quiz_course_stats'), 'stats')).find((r) => r.course_id === C.A);
-    const got = { asked: Number(stat?.asked ?? -1), correct: Number(stat?.correct ?? -1) };
-    check('I8 quiz_course_stats = P5 정의', got.asked === want.asked && got.correct === want.correct, { want, got, rows: rows.length });
+    const got = { asked: Number(stat?.first_asked ?? -1), correct: Number(stat?.first_correct ?? -1), guest: Number(stat?.guest_submissions ?? -1) };
+    check('I8 quiz_course_stats = P5 정의', got.asked === want.asked && got.correct === want.correct && got.guest === want.guest && want.guest === 2, { want, got, rows: rows.length });
   });
 
   // I6: grade_quiz 정답 1건만으로 이해 기록(verified_at)이 생기지 않는다.

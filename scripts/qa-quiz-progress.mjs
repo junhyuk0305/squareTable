@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 
 const out = mkdtempSync(join(tmpdir(), 'quiz-progress-'));
 execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', 'src/lib/quiz/progress.ts', '--outDir', out, '--module', 'commonjs', '--target', 'es2020', '--skipLibCheck', '--ignoreConfig'], { stdio: 'pipe' });
-const { pendingCourseAssignment: pending, isNextQuizRequest } = createRequire(import.meta.url)(join(out, 'progress.js'));
+const { pendingCourseAssignment: pending, isNextQuizRequest, quizTodo } = createRequire(import.meta.url)(join(out, 'progress.js'));
 const a = { id: 'a', courseId: 'A', userId: 'me', sentAt: '2026-10-22', completedAt: null };
 const b = { ...a, id: 'b', courseId: 'B', completedAt: '2026-10-22' };
 const progress = [{ assignmentId: 'a', pendingEntryIds: ['shared'], totalItems: 4, answeredItems: 3 }, { assignmentId: 'b', pendingEntryIds: [], totalItems: 4, answeredItems: 4 }];
@@ -24,4 +24,19 @@ assert.equal(pending('A', 'me', [{ ...a, completedAt: 'done' }, newer], rows, 'a
 assert.equal(isNextQuizRequest('1792598400000'), true);
 assert.equal(isNextQuizRequest('missing-assignment'), false, 'unknown notification is not next-quiz request');
 assert.equal(pending('A', 'me', [a], [{ ...progress[0], pendingEntryIds: [], answeredItems: 4 }])?.assignment.id, 'a', 'saved answers with failed completion must remain recoverable');
-console.log('quiz progress: 11 regression checks passed');
+// quizTodo(0332 · P3): 재발송은 최신 하나 · void 제외 · 1회성은 앞선 하나 · 알림이 가리킨 퀴즈는 규칙보다 앞선다.
+const q = (id, courseId, sentAt, extra = {}) => ({ id, courseId, userId: 'me', sentAt, completedAt: null, ...extra });
+const row = (assignmentId, state, total = 2, answered = 0) => ({ assignmentId, pendingEntryIds: ['e'], totalItems: total, answeredItems: answered, state });
+const sendsT = [q('a1', 'A', '2026-10-20'), q('a2', 'A', '2026-10-21'), q('b1', 'B', '2026-10-21'), q('v1', 'V', '2026-10-21'), q('p1', 'P', '2026-10-21')];
+const rowsT = [row('a1', 'todo'), row('a2', 'todo'), row('b1', 'todo'), row('v1', 'void', 0), row('p1', 'todo')];
+const coursesT = [{ id: 'A', dueDays: null }, { id: 'B', dueDays: null }, { id: 'V', dueDays: null }, { id: 'P', dueDays: 7 }];
+assert.deepEqual(quizTodo(sendsT, rowsT, { userId: 'me' }).map((t) => t.assignment.id).sort(), ['a2', 'b1', 'p1'], 'resend counts once (latest) and void is not a todo');
+assert.deepEqual(quizTodo(sendsT, rowsT, { userId: 'me', courses: coursesT }).map((t) => t.assignment.id), ['a2'], 'card rule: first one-time quiz only, periodic hidden');
+assert.deepEqual(quizTodo(sendsT, rowsT, { userId: 'me', courses: coursesT, preferredId: 'b1' }).map((t) => t.assignment.id), ['a2', 'b1'], 'notified quiz beats the card rule');
+assert.deepEqual(quizTodo(sendsT, [], { userId: 'me' }), [], 'no progress row is not a fabricated todo');
+assert.deepEqual(quizTodo([q('d', 'A', '2026-10-21', { completedAt: 'x' })], [row('d', 'todo')], { userId: 'me' }), [], 'locally completed is done');
+assert.equal(quizTodo([q('n', 'A', '2026-10-21')], [row('n', undefined, 2, 2)], { userId: 'me' })[0]?.state, 'answered', 'old server rows derive state from numbers');
+// 진행 조회 실패: 화면은 [] 대신 undefined 를 넘긴다(quizProgressError). 완료 여부 폴백으로 안 푼 퀴즈가 남아야 한다.
+assert.deepEqual(quizTodo(sendsT, undefined, { userId: 'me' }).map((t) => t.assignment.id).sort(), ['a2', 'b1', 'p1', 'v1'], 'progress read failure falls back to completedAt (quizzes do not vanish)');
+assert.deepEqual(quizTodo([...sendsT.slice(0, 1), q('x', 'B', '2026-10-21', { completedAt: 'x' })], undefined, { userId: 'me' }).map((t) => t.assignment.id), ['a1'], 'fallback still drops completed');
+console.log('quiz progress: 19 regression checks passed');

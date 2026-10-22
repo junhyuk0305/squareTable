@@ -45,6 +45,11 @@ export default function JuniorNotificationsScreen() {
   // 안 푼 퀴즈 알림(P1 역 ④) — WorkBoard 카드와 같은 발송 원장.
   const assignments = useWorkStore((s) => s.assignments);
   const courses = useWorkStore((s) => s.courses);
+  // 0332: 벨 배지·홈·카드와 같은 quizTodo 입력(서버 진행 state).
+  //   조회 실패(quizProgressError)면 [] 대신 undefined → 완료 여부 폴백(벨 배지와 같은 처리).
+  const quizProgressRaw = useWorkStore((s) => s.quizProgress);
+  const quizProgressError = useWorkStore((s) => s.quizProgressError);
+  const quizProgress = quizProgressError ? undefined : quizProgressRaw;
   const workLoaded = useWorkStore((s) => s.loaded);
   const done = useWorkStore((s) => s.done);
   const markNoticeRead = useWorkStore((s) => s.markNoticeRead);
@@ -105,10 +110,11 @@ export default function JuniorNotificationsScreen() {
         scheduleNotices,
         assignments,
         courses,
+        quizProgress,
         joinNotices,
         joinAckAt,
       }),
-    [feed, swaps, templates, owner, staff, me, today, taskTemplates, done, ackAt, suggestions, queue, scheduleNotices, assignments, courses, joinNotices, joinAckAt],
+    [feed, swaps, templates, owner, staff, me, today, taskTemplates, done, ackAt, suggestions, queue, scheduleNotices, assignments, courses, quizProgress, joinNotices, joinAckAt],
   );
 
   const initial = (userName ?? '나').trim().slice(0, 1) || '나';

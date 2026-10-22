@@ -102,7 +102,10 @@ export default function QuizDetailScreen() {
   const entryIds = useMemo(() => courseEntriesOf(courseEntries, id ?? '').map((r) => r.entryId), [courseEntries, id]);
   const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
 
-  const [items, setItems] = useState<QuizItem[]>([]);
+  // 서버 원본. 이 퀴즈에 나가는 문항 판정은 아래 useMemo 의 itemsOfCourse 하나다(노하우가 늦게 와도 다시 조회하지 않는다).
+  const [rawItems, setRawItems] = useState<QuizItem[]>([]);
+  const entriesLoaded = usePlaybookStore((s) => s.loaded);
+  const items = useMemo(() => itemsOfCourse(rawItems, id ?? '', entryIds, entries), [rawItems, id, entryIds, entries]);
   const [itemsLoaded, setItemsLoaded] = useState(false);
   const [itemsReload, setItemsReload] = useState(0);
   const [itemsError, setItemsError] = useState(false);
@@ -116,7 +119,7 @@ export default function QuizDetailScreen() {
       if (!alive) return;
       setItemsError(!!questions.error || !!answers.error);
       if (!questions.error && !answers.error) {
-        setItems(itemsOfCourse((questions.data ?? []).filter((q) => q.status === 'active'), id ?? '', entryIds));
+        setRawItems(questions.data ?? []);
         setStaffItems(answers.data ?? []);
       }
       setItemsLoaded(true);
@@ -362,7 +365,8 @@ export default function QuizDetailScreen() {
       </SafeAreaView>
     );
   }
-  if (!boardLoaded || !itemsLoaded || !staffLoaded) {
+  // 노하우 목록이 와야 문항 판정(itemsOfCourse)이 맞다. 그 전에 빈 문항을 한 번 보이지 않는다.
+  if (!boardLoaded || !itemsLoaded || !staffLoaded || !entriesLoaded) {
     return (
       <SafeAreaView style={st.safe} edges={['bottom']}>
         <Stack.Screen options={{ title: '퀴즈' }} />

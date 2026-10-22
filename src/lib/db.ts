@@ -464,8 +464,10 @@ export type UnitNotifData = {
   // ── 0313 허브에도 매장 벨의 모든 종류(결정 1). 벨이 쓰는 타입 그대로(같은 매퍼) — 빌더의 같은 인자 자리에 넘긴다.
   /** 퀴즈 발송 원장 — 사장·매니저 매장 = 그 매장 전체(quiz_done), 직원 매장 = 내 발송(training). */
   assignments: QuizAssignment[];
-  /** 퀴즈 이름(id·name 만). */
-  courses: { id: string; name: string }[];
+  /** 내 열린 발송의 서버 상태(0332 · quiz 행에 실린 state). 옛 서버는 빈 배열 → 벨이 완료 여부만 본다. */
+  quizProgress: QuizAssignmentProgress[] | undefined;
+  /** 퀴즈 이름과 주기(0332 due_days · null = 1회성). 옛 서버는 dueDays 가 없다. */
+  courses: { id: string; name: string; due_days?: number | null; audience?: 'staff' | 'guest' | null; position?: number }[];
   /** 근무 시간 수정 요청(대기만 · 사장·매니저 매장). */
   timeRequests: ShiftTimeRequest[];
   /** 입금 신고 검토 결과(사장 매장). */
@@ -489,7 +491,7 @@ export async function fetchCrossStoreNotifData(): Promise<DbResult<UnitNotifData
     if (!b) {
       b = {
         unitId, feed: [], swaps: [], taskTemplates: [], done: {}, names: {}, queue: [], suggestions: [], pending: [],
-        assignments: [], courses: [], timeRequests: [], claims: [], alerts: [], scheduleNotices: [],
+        assignments: [], quizProgress: undefined, courses: [], timeRequests: [], claims: [], alerts: [], scheduleNotices: [],
       };
       byUnit.set(unitId, b);
     }
@@ -508,14 +510,33 @@ export async function fetchCrossStoreNotifData(): Promise<DbResult<UnitNotifData
       case 'sugg': b.suggestions.push(p as PlaybookSuggestion); break;
       case 'join': b.pending.push({ id: p.id, name: p.name ?? '', phone_last4: p.phone_last4 ?? '', created_at: p.created_at ?? '' }); break;
       // 0313 — 벨과 같은 매퍼·같은 행 모양(옛 서버는 이 source 를 안 보내 빈 배열로 남는다).
-      case 'quiz': b.assignments.push(toAssignment(p)); break;
-      case 'course': b.courses.push({ id: p.id, name: p.name ?? '' }); break;
+      case 'quiz': {
+        b.assignments.push(toAssignment(p));
+        // 0332: 서버가 상태를 실은 행이 하나라도 있으면 이 매장 벨은 progress 기준으로 센다. 옛 서버는 undefined 로 남는다.
+        const state = quizStateOf(p.state);
+        if (state) {
+          (b.quizProgress ??= []).push({
+            assignmentId: p.id, courseId: p.course_id, pendingEntryIds: [], pendingItemIds: [],
+            totalItems: Number(p.total_items ?? 0), answeredItems: Number(p.answered_items ?? 0), state,
+          });
+        }
+        break;
+      }
+      case 'course': b.courses.push({
+        id: p.id, name: p.name ?? '',
+        ...('due_days' in p ? { due_days: p.due_days ?? null } : {}),
+        ...('audience' in p ? { audience: p.audience ?? null } : {}),
+        ...('position' in p ? { position: Number(p.position ?? 0) } : {}),
+      }); break;
       case 'timereq': b.timeRequests.push(p as ShiftTimeRequest); break;
       case 'claim': b.claims.push(p as PaymentClaim); break;
       case 'alert': b.alerts.push(p as OwnerAlert); break;
       case 'schednotice': b.scheduleNotices.push(p as ScheduleNotice); break;
     }
   }
+  // 0332: 퀴즈 순서를 매장 앱(fetchTrainingCourses order by position)과 같게 — 벨의 "1회성 앞선 하나"가 홈과 같은 퀴즈를 고른다.
+  //   같은 position 은 서버가 준 순서 그대로(안정 정렬).
+  for (const b of byUnit.values()) b.courses.sort((x, y) => (x.position ?? 0) - (y.position ?? 0));
   return { data: [...byUnit.values()], error: null };
 }
 
@@ -2961,7 +2982,13 @@ export type QuizAssignmentProgress = {
   pendingItemIds: string[];
   totalItems: number;
   answeredItems: number;
+  /** 0332 quiz_assignment_state. 옛 서버는 없다 → quizTodo 가 숫자로 같은 규칙을 적용한다. */
+  state?: 'todo' | 'answered' | 'done' | 'void';
 };
+
+const QUIZ_ASSIGNMENT_STATES = ['todo', 'answered', 'done', 'void'] as const;
+const quizStateOf = (v: unknown): QuizAssignmentProgress['state'] =>
+  (QUIZ_ASSIGNMENT_STATES as readonly unknown[]).includes(v) ? (v as QuizAssignmentProgress['state']) : undefined;
 
 /** 본인 발송별 진행. 노하우 이해 기록이나 최근 200행 표본으로 대신 계산하지 않는다. */
 export async function fetchQuizAssignmentProgress(): Promise<DbResult<QuizAssignmentProgress[]>> {
@@ -2981,6 +3008,7 @@ export async function fetchQuizAssignmentProgress(): Promise<DbResult<QuizAssign
     assignmentId: r.assignment_id, courseId: r.course_id,
     pendingEntryIds: r.pending_entry_ids ?? [], pendingItemIds: r.pending_item_ids ?? [],
     totalItems: Number(r.total_items ?? 0), answeredItems: Number(r.answered_items ?? 0),
+    state: quizStateOf(r.state),
   })), error: null };
 }
 
