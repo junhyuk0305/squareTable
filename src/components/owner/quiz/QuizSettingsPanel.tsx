@@ -216,6 +216,13 @@ export function QuizSettingsPanel({
 
       {/* ── 마감 ─────────────────────────────────────────────────────────── */}
       {/* 마감 — 만들기 5단계와 같은 달력(2026-10-15 QA #7). 저장하면 이미 받은 사람의 마감도 이 날짜로 바뀐다. */}
+      {/* N23: 링크 퀴즈는 마감이 없다. 손님은 링크가 열린 동안 푼다. 기간은 아래 배포 칸의 링크에 있다. */}
+      {audience === 'guest' ? (
+        <View style={s.card}>
+          <Text style={qst.fieldLabel}>언제까지 풀까요</Text>
+          <Text style={qst.fieldHint}>링크로 내는 퀴즈는 링크가 열린 날까지 풀 수 있어요. 기간은 아래 링크에서 바꿔요.</Text>
+        </View>
+      ) : (
       <View style={s.card}>
         <Text style={qst.fieldLabel}>언제까지 풀까요</Text>
         <Text style={qst.fieldHint}>저장하면 이미 받은 사람의 마감도 이 날짜로 바뀌어요.</Text>
@@ -248,6 +255,7 @@ export function QuizSettingsPanel({
           </Pressable>
         )}
       </View>
+      )}
 
       {/* ── 배포 ─────────────────────────────────────────────────────────── */}
       <View style={s.labeled}>

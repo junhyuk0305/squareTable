@@ -6,6 +6,7 @@
 
 import { supabase, HAS_SUPABASE } from './supabase';
 import { reportError } from '@/lib/analytics/track';
+import { linkSubmitResultOf, type LinkSubmitResult } from '@/lib/quiz/errors';
 import { useSyncStore } from '@/lib/store/useSyncStore';
 import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery, ChatQuery, Owner, Junior, PaymentClaim, OwnerAlert } from '@/types';
 import type { TaskTemplate, FeedItem, DoneMark, Recurrence } from '@/lib/store/useWorkStore';
@@ -2208,13 +2209,20 @@ export async function deleteTemplateKnowhow(templateId: string, entryIds: string
 export type UnderstandingRow = { entryId: string; staffId: string; staffName: string; verifiedAt: string };
 /** 활성 매장의 전체 이해 확인 기록 — 사장 배지·본인 확인·재확인 주기 판정용(노출 범위는 UI 게이팅). */
 export async function fetchKnowhowUnderstanding(): Promise<UnderstandingRow[]> {
-  if (!HAS_SUPABASE) return [];
+  return (await fetchKnowhowUnderstandingResult()).data;
+}
+/** N08: 실패를 빈 배열로 숨기지 않는 판. 옛 함수는 옛 호출부(useWorkStore) 호환으로 남긴다. */
+export async function fetchKnowhowUnderstandingResult(): Promise<ReadResult<UnderstandingRow[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase.from('knowhow_understanding').select('entry_id, staff_id, staff_name, verified_at');
   if (error) {
     readFail('fetchKnowhowUnderstanding', error);
-    return [];
+    return { data: [], error: true };
   }
-  return (data ?? []).map((r: any) => ({ entryId: r.entry_id, staffId: r.staff_id, staffName: r.staff_name, verifiedAt: r.verified_at ?? '' }));
+  return {
+    data: (data ?? []).map((r: any) => ({ entryId: r.entry_id, staffId: r.staff_id, staffName: r.staff_name, verifiedAt: r.verified_at ?? '' })),
+    error: false,
+  };
 }
 /** 통과 기록 저장(푼 문항의 근거 노하우 전부). staff_id 는 DB default auth.uid()(본인만·위조 차단).
  *  재통과는 verified_at 갱신(0111 ku_update) — 재확인 주기 판정의 근거라 멱등 무시가 아니라 갱신이다. */
@@ -2260,20 +2268,23 @@ export async function fetchQuizStats(strict = false): Promise<Record<string, { a
 // ── 본인 퀴즈 통과 이력(0104 → 0111) — 허브 성장 탭용, 교차 매장·본인 한정(definer RPC) ──────────
 // 0111 에서 읽는 테이블이 knowhow_understanding 으로 바뀌면서 단위도 업무 → 노하우가 됐다.
 export type TrainingHistoryRow = { unitId: string; storeName: string; entryId: string; entryTitle: string; verifiedAt: string };
-export async function fetchMyTrainingHistory(): Promise<TrainingHistoryRow[]> {
-  if (!HAS_SUPABASE) return [];
+export async function fetchMyTrainingHistory(): Promise<ReadResult<TrainingHistoryRow[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase.rpc('my_training_history');
   if (error) {
     readFail('fetchMyTrainingHistory', error);
-    return [];
+    return { data: [], error: true }; // N08: "이력 0건"과 "못 불러옴"을 가른다
   }
-  return (data ?? []).map((r: any) => ({
-    unitId: r.unit_id,
-    storeName: r.store_name,
-    entryId: r.entry_id,
-    entryTitle: r.entry_title,
-    verifiedAt: r.verified_at ?? '',
-  }));
+  return {
+    data: (data ?? []).map((r: any) => ({
+      unitId: r.unit_id,
+      storeName: r.store_name,
+      entryId: r.entry_id,
+      entryTitle: r.entry_title,
+      verifiedAt: r.verified_at ?? '',
+    })),
+    error: false,
+  };
 }
 
 // ── 훈련 코스 항목(0099 → 0108) — ⚠️ 레거시·읽기 전용 ──────────
@@ -2314,7 +2325,11 @@ export async function fetchTrainingItems(): Promise<TrainingItemRow[]> {
 export type CourseEntryRow = { courseId: string; entryId: string; position: number };
 /** 활성 매장의 코스 항목 전체(전 코스 합본) — 코스 분리는 스토어 셀렉터가 한다. */
 export async function fetchCourseEntries(): Promise<CourseEntryRow[]> {
-  if (!HAS_SUPABASE) return [];
+  return (await fetchCourseEntriesResult()).data;
+}
+/** N08: 실패를 빈 배열로 숨기지 않는 판. 옛 함수는 옛 호출부(useWorkStore) 호환으로 남긴다. */
+export async function fetchCourseEntriesResult(): Promise<ReadResult<CourseEntryRow[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase
     .from('course_entries')
     // ★E5: 보관(삭제)한 노하우의 담김은 읽지 않는다(fetchTemplateKnowhow 와 같은 이유).
@@ -2322,9 +2337,9 @@ export async function fetchCourseEntries(): Promise<CourseEntryRow[]> {
     .order('position');
   if (error) {
     readFail('fetchCourseEntries', error);
-    return [];
+    return { data: [], error: true };
   }
-  return (data ?? []).map((r: any) => ({ courseId: r.course_id, entryId: r.entry_id, position: r.position }));
+  return { data: (data ?? []).map((r: any) => ({ courseId: r.course_id, entryId: r.entry_id, position: r.position })), error: false };
 }
 /** 코스에 노하우 담기(관리 권한만, RLS). 충돌 기준 = (course_id, entry_id) — 같은 코스 재추가만 멱등.
  *  unitId 는 본사 빌더가 작업실 id 를 명시할 때만 넘긴다(세션 unitId 가 담당자의 옛 매장일 수 있다 — hq/knowhow/[id] 머리주석). */
@@ -3423,8 +3438,8 @@ export async function submitQuizLink(
   guest: { name: string; phone: string | null; phoneVerified: boolean }, // phone null = 안 적음(0195 선택)
   answers: { itemId: string; response: QuizResponse }[],
   requestId?: string,
-): Promise<boolean> {
-  if (!HAS_SUPABASE || answers.length === 0) return false;
+): Promise<LinkSubmitResult> {
+  if (!HAS_SUPABASE || answers.length === 0) return 'network';
   // ★write() 를 쓰지 않는다 — 0행 유령 성공 방지(위 writeStrict 주석의 P1-6 과 같은 문제).
   //   quiz_link_submit 은 **적힌 행 수**를 돌려주고, 낸 답이 전부 버려져도(그 사이 문항이 지워졌거나
   //   코스에서 빠진 경우) 예외 없이 0 을 준다. error 만 보면 "사장님께 전달됐어요"라고 말하게 되는데,
@@ -3440,15 +3455,16 @@ export async function submitQuizLink(
   if (error) {
     console.warn('[db] submitQuizLink:', error.message);
     reportError('db.write:submitQuizLink', error);
-    return false;
+    return linkSubmitResultOf(error);
   }
   const rows = typeof data === 'number' ? data : Number(data ?? 0);
   if (!(rows > 0)) {
     // 예외가 아니라 "아무것도 안 적혔다"라서 error 가 null 이다. 여기서 잡지 않으면 무음 유실이다.
     reportError('db.write:submitQuizLink', { message: `no_rows_written(${String(data)})` });
-    return false;
+    // 0행은 'network' 로 둔다(N19 미정 항목). 성공이라 말하지 않고, 답을 들고 다시 보내기를 남긴다.
+    return 'network';
   }
-  return true;
+  return 'ok';
 }
 
 // ── 업무보드: 완료 체크 ────────────────────────────────────

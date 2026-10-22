@@ -11,7 +11,7 @@
 //   entryMatrix           — 노하우 교차표 칸. 배포 모달이 "함께 내려갈 노하우 n건"을 **미리** 말하는 데 쓴다(지시서 §3-2).
 import { create } from 'zustand';
 import { coalesce } from '@/lib/store/realtimeSync';
-import { fetchCourseEntries, fetchTrainingCourses, type CourseEntryRow } from '@/lib/db';
+import { fetchCourseEntriesResult, fetchTrainingCourses, type CourseEntryRow } from '@/lib/db';
 import {
   enterBrandWorkspace,
   fetchBrandQuizzes,
@@ -60,13 +60,14 @@ export const useBrandQuizStore = create<State>((set, get) => {
     }
     const [c, ce, l, m, em] = await Promise.all([
       fetchTrainingCourses(),
-      fetchCourseEntries(),
+      fetchCourseEntriesResult(),
       fetchBrandQuizzes(),
       fetchBrandCourseMatrix(),
       fetchBrandDeployMatrix(),
     ]);
     const err = l.error ?? m.error ?? em.error;
-    if (c.error || err) {
+    // N08: 담긴 노하우를 못 읽으면 빈 퀴즈로 보이지 않게 실패로 둔다.
+    if (c.error || ce.error || err) {
       if (err) reportError('brandQuiz.hydrate', err);
       // 부분 실패도 실패다 — 반만 채운 표가 '정상'으로 보이는 게 더 위험하다(useBrandStore 와 같은 규칙).
       set({ wsUnitId: ws.data, loaded: true, error: brandErrorMessage(err, '퀴즈를 불러오지 못했어요.') });
@@ -75,7 +76,7 @@ export const useBrandQuizStore = create<State>((set, get) => {
     set({
       wsUnitId: ws.data,
       courses: (c.data ?? []).filter((x) => x.active),
-      courseEntries: ce,
+      courseEntries: ce.data,
       list: l.data ?? [],
       matrix: m.data ?? [],
       entryMatrix: em.data ?? [],

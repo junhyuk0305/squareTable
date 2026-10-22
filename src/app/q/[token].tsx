@@ -37,6 +37,7 @@ import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { ButtonStyles } from '@/lib/theme/button';
 import type { QuizItem, QuizResponse } from '@/lib/quiz/types';
+import { LINK_SUBMIT_MESSAGE, type LinkSubmitResult } from '@/lib/quiz/errors';
 
 /** 화면에 점수를 띄우기 위한 채점을 **몇 개씩 끊어 보낼지**. 회선이 약한 휴대폰에서 한 번에
  *  수십 개를 쏘면 뒤쪽이 무더기로 실패한다. 기록 자체는 submitQuizLink 한 번에 전부 간다. */
@@ -65,7 +66,10 @@ export default function QuizLinkScreen() {
   const [items, setItems] = useState<QuizItem[]>([]);
   const [marks, setMarks] = useState<boolean[]>([]);
   /** 결과가 실제로 저장됐나 — 이 값으로만 "전달됐어요"를 말한다. */
-  const [saved, setSaved] = useState(false);
+  const [result, setResult] = useState<LinkSubmitResult>('network');
+  const saved = result === 'ok';
+  /** 닫힌 링크·횟수 초과는 다시 보내도 안 된다(N19) — 버튼을 숨긴다. */
+  const canRetry = result !== 'link_closed' && result !== 'rate_limited';
   /** 낸 답 원문. 저장이 실패해도 **들고 있는다** — 그래야 '다시 보내기'가 가능하다. */
   const [given, setGiven] = useState<GivenAnswer[]>([]);
   /** 화면에서 점수를 못 잰 문항 수. 0 이 아니면 **분모가 사장 화면과 다르다**고 말한다. */
@@ -126,16 +130,16 @@ export default function QuizLinkScreen() {
       // ★기다렸다가 결과를 말한다. fire-and-forget 으로 두면 저장이 실패해도 손님에게
       //   "사장님께 전달됐어요"라고 말하게 된다 — 손님은 다시 풀 방법이 없고 사장은 영원히 모른다.
       try {
-        const ok = await submitQuizLink(
+        const r = await submitQuizLink(
           tk,
           { name: name.trim(), phone: phoneOk ? normalizePhone(phone) : null, phoneVerified: phoneOk && otp.verified },
           answers,
           requestId.current,
         );
-        setSaved(ok);
+        setResult(r);
         setPhase('done');
       } catch {
-        setSaved(false);
+        setResult('network');
         setPhase('done');
       } finally {
         sending.current = false;
@@ -334,9 +338,7 @@ export default function QuizLinkScreen() {
               {/* 저장이 실패했으면 "전달됐어요"라고 말하지 않는다 — 손님은 다시 풀 방법이 없고
                   사장은 영원히 모른다. 무엇이 됐고 무엇이 안 됐는지 그대로 말한다. */}
               <Text style={st.centerText}>
-                {saved
-                  ? '결과는 사장님께 전달됐어요. 이 창은 닫으셔도 돼요.'
-                  : '결과를 보내지 못했어요. 답은 그대로 있으니 다시 보내 주세요.'}
+                {LINK_SUBMIT_MESSAGE[result]}
               </Text>
             </View>
           </Appear>
@@ -344,7 +346,7 @@ export default function QuizLinkScreen() {
               ★가입은 **직원 계정**으로만 연다(0157 로 같은 번호의 사장/직원 계정 분리가 가능해졌다). */}
           {/* 못 보냈으면 **다시 보내기**가 먼저다(2026-09-14). 낸 답은 given 에 그대로 있다 —
               연결이 잠깐 끊긴 것만으로 손님이 처음부터 다시 풀게 하지 않는다. */}
-          {!saved && given.length > 0 && (
+          {!saved && canRetry && given.length > 0 && (
             <View style={st.foot}>
               <Appear delay={stagger(1)}>
               <Pressable

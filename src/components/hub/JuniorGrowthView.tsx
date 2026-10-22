@@ -52,13 +52,15 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
   // 훈련 통과 이력(0104) — 교차 매장·본인 한정. 통과만 저장되는 테이블이라 이력 = 통과 이력.
   const [trainingHistory, setTrainingHistory] = useState<TrainingHistoryRow[]>([]);
   const [trainingLoaded, setTrainingLoaded] = useState(false); // 부분 렌더 금지 게이트에 합류(빈상태↔실화면 플립 방지)
+  const [trainingError, setTrainingError] = useState(false); // N08: 못 불러온 것을 "이력 0건"으로 말하지 않는다
   const [showAllTraining, setShowAllTraining] = useState(false);
   useEffect(() => {
     let alive = true;
-    void fetchMyTrainingHistory().then((rows) => {
+    void fetchMyTrainingHistory().then((r) => {
       if (!alive) return;
-      setTrainingHistory(rows);
-      setTrainingLoaded(true); // 에러여도 []로 확정(readFail 로그) — 로딩에 갇히지 않는다
+      setTrainingHistory(r.data);
+      setTrainingError(r.error);
+      setTrainingLoaded(true); // 에러여도 로딩에 갇히지 않는다. 에러는 아래 섹션이 말한다
     });
     return () => { alive = false; };
   }, []);
@@ -101,7 +103,7 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
     return m;
   }, [trainingHistory]);
   // 훈련 통과만 있는 신입(업무 완료·노하우 0)도 실화면을 봐야 한다 — 이력이 있으면 빈 상태가 아니다.
-  const empty = totals.knowhow === 0 && totals.taught === 0 && totals.doneKinds === 0 && trainingHistory.length === 0;
+  const empty = totals.knowhow === 0 && totals.taught === 0 && totals.doneKinds === 0 && trainingHistory.length === 0 && !trainingError;
   const labelOf = (uid: string, fallback: string) => prefFor(uid).nickname || fallback;
 
   // 전부 도착 전엔 무조건 로딩 — 집계만 먼저 그리고 목록이 나중에 튀어나오는 부분 렌더 금지.
@@ -331,6 +333,14 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
       </Appear>
       )}
 
+      {trainingError && (
+        <Appear delay={stagger(3)}>
+          <SectionLabel title="퀴즈로 확인한 노하우" />
+          <View style={styles.card}>
+            <Text style={styles.emptyBody}>퀴즈 기록을 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.</Text>
+          </View>
+        </Appear>
+      )}
       {/* ── 훈련 통과 이력(0104) — 있을 때만. 통과 사실만 말하고 점수·등급을 만들지 않는다 ── */}
       {trainingHistory.length > 0 && (
         <Appear delay={stagger(3)}>

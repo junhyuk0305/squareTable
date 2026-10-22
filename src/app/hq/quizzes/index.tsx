@@ -110,10 +110,13 @@ export default function HqQuizzesScreen() {
     const n = (a: string) => all.filter((x) => x.action === a).length;
     const added = all.reduce((s, x) => s + x.entries_added, 0);
     // 숫자를 그대로 말한다 — '배포 완료'만 띄우면 대기로 빠진 매장을 본사가 모른다.
+    // N20: 결과 문장은 여기서 끝낸다. 화면이 꼬리를 붙이지 않는다.
+    const detail = [n('created') ? `새로 ${n('created')}건` : '', n('updated') ? `갱신 ${n('updated')}건` : '',
+       n('pending') ? `새 버전 대기 ${n('pending')}건` : '', added ? `노하우 ${added}건 함께` : ''].filter(Boolean).join(' · ');
     setResult(
-      [all.length ? `매장 ${new Set(all.map((x) => x.unit_id)).size}곳` : '',
-       n('created') ? `새로 ${n('created')}건` : '', n('updated') ? `갱신 ${n('updated')}건` : '',
-       n('pending') ? `새 버전 대기 ${n('pending')}건` : '', added ? `노하우 ${added}건 함께` : ''].filter(Boolean).join(' · ') || '바뀐 것이 없어요',
+      all.length
+        ? `매장 ${new Set(all.map((x) => x.unit_id)).size}곳에 보냈어요.${detail ? ` ${detail}` : ''}`
+        : '바뀐 것이 없어요.',
     );
     setPicked(new Set());
   };
@@ -259,7 +262,7 @@ export default function HqQuizzesScreen() {
         {deployErr ? <HqNotice tone="warn">{deployErr}</HqNotice> : null}
         {result ? (
           <>
-            <HqNotice tone="i">{result}에 보냈어요.</HqNotice>
+            <HqNotice tone="i">{result}</HqNotice>
             <HqButton label="닫기" variant="pri" onPress={() => setOpenDeploy(false)} />
           </>
         ) : (

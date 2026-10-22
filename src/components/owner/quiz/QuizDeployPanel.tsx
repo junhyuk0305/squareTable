@@ -31,6 +31,7 @@ import {
   type GuestSubmissionRow,
 } from '@/lib/db';
 import { maskTail4, scoreText, takenDayLabel } from '@/lib/quiz/guestResult';
+import { guestSubmissionsLabel } from '@/lib/quiz/metrics';
 import { addDaysKst as addDays, dayLabelKst } from '@/lib/quiz/schedule';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
@@ -228,7 +229,8 @@ export function QuizDeployPanel({ course, onOpenResult }: { course: TrainingCour
           ⛔ 채용 전환 액션(뽑기·합류 초대)은 두지 않는다 — 명시적으로 스코프 밖이다. */}
       {subs.length > 0 && (
         <View style={st.results}>
-          <SectionLabel title="이 링크로 푼 사람" hint={`${subs.length}명`} />
+          {/* N16: 같은 사람이 여러 번 낼 수 있다. 사람 수가 아니라 제출 건수다. */}
+          <SectionLabel title={guestSubmissionsLabel(subs.length)} />
           <View style={st.list}>
             {subs.map((s, i) => (
               <Pressable
