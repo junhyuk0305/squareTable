@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Collapse } from '@/components/Collapse';
 import { ProgressPill, type ProgressTone } from '@/components/blocks/ProgressPill';
+import { cardProgressText, type QuizItemProgress } from '@/lib/quiz/checkCopy';
+import { roundLabel } from '@/lib/quiz/metrics';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -73,17 +75,22 @@ const ITEM_GROUPS: { label: string; states: TrainingCardItem['state'][] }[] = [
 export function TrainingCard({
   course,
   items,
-  lastResult,
+  progress,
+  lastSubmission,
   onOpenKnowhow,
   onStartCheck,
 }: {
   course: TrainingCardCourse;
   items: TrainingCardItem[];
   /**
-   * 이 카드의 노하우들 중 **내가 마지막으로 푼 응시 1건**(0112). 없으면 줄 자체가 없다.
-   * 집계는 `lastQuizAttemptOf`(useWorkStore) 가 한다 — 카드는 받은 값을 그리기만 한다.
+   * @deprecated 그리지 않는다(N14). 노하우 행 하나라 같은 제출의 다른 문항을 틀려도 "통과"로 보였다.
+   * WorkBoard 가 lastSubmission 으로 옮기면 지운다.
    */
   lastResult?: { total: number; correct: number } | null;
+  /** 발송 퀴즈의 서버 진행(answeredItems/totalItems). 없으면 예전처럼 통과 노하우 수로 센다. */
+  progress?: QuizItemProgress | null;
+  /** 이 퀴즈의 내 마지막 제출의 문항별 맞힘(N14). 없으면 "지난번" 줄이 없다. */
+  lastSubmission?: readonly { correct: boolean }[] | null;
   /** 항목 id = 노하우 id(0111). */
   onOpenKnowhow: (entryId: string) => void;
   /** 퀴즈 시작 — 노하우 하나 + 그 노하우가 담긴 퀴즈(0307 · 요청만 담은 카드는 null). */
@@ -110,9 +117,10 @@ export function TrainingCard({
    *  · ★빨강(behind)을 쓰지 않는다 — 주기가 돌아온 것은 직원이 잘못한 게 아니다(재촉 금지).
    *    이 카드가 여러 장 뜨는 것도 아니라 색으로 급함을 다툴 자리가 아니다.
    */
+  // 발송 퀴즈는 서버 progress 의 문항 수로 센다(N12). 카드 항목은 남은 노하우만이라 passed 가 늘 0이다.
   const passedCount = items.filter((it) => it.state === 'passed').length;
-  const progressText = passedCount > 0 ? `${passedCount}/${items.length} 통과` : '아직 시작 전';
-  const progressTone: ProgressTone = passedCount > 0 ? 'progress' : 'neutral';
+  const progressText = progress ? cardProgressText(progress) : passedCount > 0 ? `${passedCount}/${items.length} 통과` : '아직 시작 전';
+  const progressTone: ProgressTone = (progress ? progress.answered : passedCount) > 0 ? 'progress' : 'neutral';
   // 1회성 카드의 'due' = 노하우가 바뀌어 온 재확인(E2) — 처음 배우는 말투를 쓰지 않는다.
   const firstLearn = oneShot && next.state !== 'due';
   const ctaLabel = firstLearn ? '혼자 할 수 있어요' : '다시 확인하기';
@@ -151,11 +159,9 @@ export function TrainingCard({
       ) : null}
 
       {/* 지난번 결과 — 사실만 한 줄(평가 금지). 푼 적이 없으면 줄 자체가 없다. */}
-      {lastResult ? (
+      {lastSubmission && lastSubmission.length > 0 ? (
         <Text style={st.lastText} numberOfLines={1}>
-          {lastResult.correct === lastResult.total
-            ? '지난번 퀴즈 · 통과했어요'
-            : `지난번 퀴즈 · ${lastResult.total}개 중 ${lastResult.correct}개 맞았어요`}
+          지난번 퀴즈 · {roundLabel(lastSubmission, lastSubmission.length)}
         </Text>
       ) : null}
 

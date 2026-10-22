@@ -39,4 +39,15 @@ assert.equal(quizTodo([q('n', 'A', '2026-10-21')], [row('n', undefined, 2, 2)], 
 // 진행 조회 실패: 화면은 [] 대신 undefined 를 넘긴다(quizProgressError). 완료 여부 폴백으로 안 푼 퀴즈가 남아야 한다.
 assert.deepEqual(quizTodo(sendsT, undefined, { userId: 'me' }).map((t) => t.assignment.id).sort(), ['a2', 'b1', 'p1', 'v1'], 'progress read failure falls back to completedAt (quizzes do not vanish)');
 assert.deepEqual(quizTodo([...sendsT.slice(0, 1), q('x', 'B', '2026-10-21', { completedAt: 'x' })], undefined, { userId: 'me' }).map((t) => t.assignment.id), ['a1'], 'fallback still drops completed');
-console.log('quiz progress: 19 regression checks passed');
+// 시트·카드 문구(P5 · N12 · N13): 회차 결과를 퀴즈 결과처럼 말하지 않는다.
+execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', 'src/lib/quiz/checkCopy.ts', '--outDir', out, '--module', 'commonjs', '--target', 'es2020', '--skipLibCheck', '--ignoreConfig'], { stdio: 'pipe' });
+const copy = createRequire(import.meta.url)(join(out, 'checkCopy.js'));
+assert.equal(copy.roundResultText(3, 3, { answered: 0, total: 6 }), '이번 3문제를 다 맞혔어요. 퀴즈는 3문제 남았어요.', 'N13: 6-item quiz, round 1 all correct is not done');
+assert.equal(copy.roundResultText(3, 3, { answered: 3, total: 6 }), '이해 확인이 끝났어요.', 'done only when quiz has no items left');
+assert.equal(copy.roundResultText(3, 1, { answered: 3, total: 6 }), '3개 중 1개 맞았어요. 퀴즈를 다 풀었어요.');
+assert.equal(copy.roundResultText(3, 3), '이해 확인이 끝났어요.', 'no progress prop keeps old copy');
+assert.equal(copy.roundStepText(2, { answered: 0, total: 6 }), '이번에 2문제 남았어요');
+assert.equal(copy.roundStepText(2), '2문제 남았어요');
+assert.equal(copy.cardProgressText({ answered: 0, total: 6 }), '아직 시작 전', 'N12: zero is a state word');
+assert.equal(copy.cardProgressText({ answered: 3, total: 6 }), '3/6문제', 'N12: card counts answered items');
+console.log('quiz progress: 27 regression checks passed');

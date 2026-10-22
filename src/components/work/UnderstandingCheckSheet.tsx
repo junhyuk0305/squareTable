@@ -13,6 +13,7 @@ import { Space } from '@/lib/theme/layout';
 import type { QuizInput, QuizQuestion } from '@/lib/ai/types';
 import { genId } from '@/lib/utils/id';
 import type { QuizGrade, QuizItem, QuizResponse } from '@/lib/quiz/types';
+import { roundResultText, roundStepText, type QuizItemProgress } from '@/lib/quiz/checkCopy';
 
 type Phase = 'loading' | 'quiz' | 'result' | 'empty' | 'quota';
 
@@ -43,7 +44,10 @@ export function UnderstandingCheckSheet({
   onFinished,
   onClose,
   onAsk,
+  quizProgress,
 }: {
+  /** 이 회차를 열기 전 퀴즈 전체 진행(서버 progress 문항 수 · N13). 없으면 회차 결과만 말한다(예전 동작). */
+  quizProgress?: QuizItemProgress | null;
   /** 무엇에 대한 확인인가 — 카드에서 오면 노하우 제목, 할일에서 오면 업무 이름. */
   title: string;
   sops: QuizInput['sops'];
@@ -68,7 +72,7 @@ export function UnderstandingCheckSheet({
         <Text style={s.kicker}>이해 확인 · {title}</Text>
         <Pressable onPress={close} hitSlop={8}><Ionicons name="close" size={20} color={InkColors.ink2} /></Pressable>
       </View>
-      <QuizBody taskText={title} sops={sops} courseId={courseId} assignmentId={assignmentId} onSavingChange={onSavingChange} onPass={onPass} onFinished={onFinished} onClose={onClose} onAsk={onAsk} />
+      <QuizBody taskText={title} sops={sops} courseId={courseId} assignmentId={assignmentId} onSavingChange={onSavingChange} onPass={onPass} onFinished={onFinished} onClose={onClose} onAsk={onAsk} quizProgress={quizProgress} />
     </BottomSheet>
   );
 }
@@ -90,11 +94,13 @@ function QuizBody(props: {
   onClose: () => void;
   onSavingChange: (saving: boolean) => void;
   onAsk?: (seed: string) => void;
+  quizProgress?: QuizItemProgress | null;
 }) {
   const { sops, courseId, assignmentId } = props;
   // 근거 노하우 id 가 하나도 없으면 조회할 게 없다 → 처음부터 폴백으로 시작(이펙트에서 동기 setState 회피).
   const entryIds = useMemo(() => sops.map((sop) => sop.id).filter((id): id is string => !!id), [sops]);
-  const [route, setRoute] = useState<'probe' | 'saved' | 'legacy' | 'failed'>(entryIds.length > 0 ? 'probe' : 'legacy');
+  // unsupported = 이 앱에 없는 형태의 문항(앱 업데이트 필요 · N22). 다시 시도해도 같아서 failed 와 나눈다.
+  const [route, setRoute] = useState<'probe' | 'saved' | 'legacy' | 'failed' | 'unsupported'>(entryIds.length > 0 ? 'probe' : 'legacy');
   const [items, setItems] = useState<QuizItem[]>([]);
   // 시작 고지를 본 뒤에만 문제로 넘어간다 — 분량·시간을 모른 채 시작하게 두지 않는다.
   const [started, setStarted] = useState(false);
@@ -109,7 +115,7 @@ function QuizBody(props: {
         if (error) { setRoute('failed'); return; }
         // 표시할 수 없는 문항을 조용히 빼면 전체 응시를 끝낼 수 없다.
         const usable = (data ?? []).filter((it) => !!QUIZ_RENDERERS[it.format]);
-        if (usable.length !== (data ?? []).length) { setRoute('failed'); return; }
+        if (usable.length !== (data ?? []).length) { setRoute('unsupported'); return; }
         if (usable.length > 0) {
           setItems(usable);
           setRoute('saved');
@@ -130,6 +136,14 @@ function QuizBody(props: {
       <View style={s.center}>
         <Text style={s.noticeText}>문제를 불러오지 못했어요. 다시 시도해 주세요.</Text>
         <Pressable onPress={() => { setRoute('probe'); setRetry((n) => n + 1); }} style={s.softBtn} accessibilityRole="button"><Text style={s.softBtnText}>다시 시도</Text></Pressable>
+      </View>
+    );
+  }
+  if (route === 'unsupported') {
+    return (
+      <View style={s.center}>
+        <Text style={s.noticeText}>이 문제는 지금 앱에서 열 수 없어요.{'\n'}앱을 업데이트하면 풀 수 있어요.</Text>
+        <Pressable onPress={props.onClose} style={s.softBtn} accessibilityRole="button"><Text style={s.softBtnText}>닫기</Text></Pressable>
       </View>
     );
   }
@@ -157,7 +171,7 @@ function QuizBody(props: {
         </>
       );
     }
-    return <SavedQuizBody onSavingChange={props.onSavingChange} items={items} sops={sops} courseId={courseId} onPass={props.onPass} onFinished={props.onFinished} onClose={props.onClose} onAsk={props.onAsk} />;
+    return <SavedQuizBody onSavingChange={props.onSavingChange} items={items} sops={sops} courseId={courseId} onPass={props.onPass} onFinished={props.onFinished} onClose={props.onClose} onAsk={props.onAsk} quizProgress={props.quizProgress} />;
   }
   return ALLOW_AI_FALLBACK ? <LegacyQuizBody {...props} /> : <NotReadyBody onClose={props.onClose} />;
 }
@@ -186,7 +200,9 @@ function SavedQuizBody({
   onClose,
   onAsk,
   onSavingChange,
+  quizProgress,
 }: {
+  quizProgress?: QuizItemProgress | null;
   items: QuizItem[];
   courseId?: string | null;
   sops: QuizInput['sops'];
@@ -330,7 +346,7 @@ function SavedQuizBody({
           <View style={[s.resultBox, passed ? s.resultPass : s.resultFail]}>
             <Ionicons name={passed ? 'ribbon' : 'refresh-circle'} size={22} color={passed ? BrandColors.good : BrandColors.warn} />
             <Text style={s.resultText}>
-              {passed ? '이해 확인이 끝났어요.' : `${items.length}개 중 ${correctCount}개 맞았어요.`}
+              {roundResultText(items.length, correctCount, quizProgress)}
             </Text>
           </View>
           {/* 제출 저장이 서버에서 끝난 뒤에만 말한다 — 맞힘 여부·발송 완료 판정(0275)과 무관하다. */}
@@ -379,7 +395,7 @@ function SavedQuizBody({
     <>
       <ScrollView style={s.scroll} contentContainerStyle={{ paddingBottom: Space.gutter }} showsVerticalScrollIndicator={false}>
         {/* 완료가 아니라 잔여를 센다(레퍼런스 leveltest_05) — 0이 되는 순간 화면이 끝나므로 0 전시가 없다. */}
-        <Text style={s.step}>{items.length - at}문제 남았어요</Text>
+        <Text style={s.step}>{roundStepText(items.length - at, quizProgress)}</Text>
         {ask ? <Text style={s.ask}>{ask}</Text> : null}
 
         <Renderer
