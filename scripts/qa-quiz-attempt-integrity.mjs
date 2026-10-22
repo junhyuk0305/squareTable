@@ -84,7 +84,7 @@ async function main() {
 
     for (const iid of itemIds) {
       await owner.from('quiz_items').insert({
-        id: iid, unit_id: UNIT, entry_ids: [entryId], kind: 't3', format: 'mc4',
+        id: iid, unit_id: UNIT, course_id: courseId, entry_ids: [entryId], kind: 't3', format: 'mc4',
         payload: { ask: '마감 때 무엇을 잠그나요?', choices: ['가스 밸브', '창문', '냉장고'], answer_index: 0, explain: '가스 밸브를 잠가요.' },
         status: 'active', source: 'owner', created_by: uid, created_at: now, source_updated_at: now,
       });

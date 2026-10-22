@@ -72,7 +72,7 @@ async function main() {
     cleanup.push(() => owner.from('course_entries').delete().eq('course_id', courseId));
 
     const { error: iErr } = await owner.from('quiz_items').insert({
-      id: itemId, unit_id: UNIT, entry_ids: [entryId], kind: 't3', format: 'mc4',
+      id: itemId, unit_id: UNIT, course_id: courseId, entry_ids: [entryId], kind: 't3', format: 'mc4',
       // ★format 은 서버의 quiz_known_formats() 에 있는 이름이어야 한다 — 없으면 fail-closed 로
       //   손님에게 **한 건도 안 나간다**(0107 §3). 'choices' 는 그 목록에 없다.
       payload: { ask: '마감 때 무엇을 잠그나요?', choices: ['가스 밸브', '창문', '냉장고'], answer_index: 0, explain: '가스 밸브를 잠가요.' },

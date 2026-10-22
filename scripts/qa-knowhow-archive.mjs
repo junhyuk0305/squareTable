@@ -174,8 +174,9 @@ try {
       { course_id: `kha_c1_${s}`, entry_id: E.e1, unit_id: UNIT },
       { course_id: `kha_c4_${s}`, entry_id: E.e4, unit_id: UNIT },
     ])],
-    ['quiz_items', admin.from('quiz_items').insert([E.e0, E.e1, E.e4].map((id) => ({
-      id: `kha_q_${id}`, unit_id: UNIT, entry_ids: [id], kind: 't3', format: 'mc4', status: 'active', source: 'owner',
+    // 0330: 문항은 그 노하우가 담긴 퀴즈 하나에 속한다(e0→c0 · e1→c1 · e4→c4).
+    ['quiz_items', admin.from('quiz_items').insert([[E.e0, 'c0'], [E.e1, 'c1'], [E.e4, 'c4']].map(([id, c]) => ({
+      id: `kha_q_${id}`, unit_id: UNIT, course_id: `kha_${c}_${s}`, entry_ids: [id], kind: 't3', format: 'mc4', status: 'active', source: 'owner',
       payload: { ask: '마감 때 무엇을 잠그나요?', choices: ['가스 밸브', '창문', '냉장고'], answer_index: 0, explain: '가스 밸브' },
       created_by: oId, created_at: now, source_updated_at: now,
     })))],

@@ -474,7 +474,7 @@ async function main() {
 
   // 문항을 만든다 — 트리거(0114)가 지금 노하우 판을 스냅샷한다.
   const { error: qiErr } = await owner.from('quiz_items').insert(ENTRIES3.map((e, i) => ({
-    id: `qi_qs${i}_${s}`, unit_id: UNIT, entry_ids: [e], kind: 't0', format: 'mc4',
+    id: `qi_qs${i}_${s}`, unit_id: UNIT, course_id: CJ, entry_ids: [e], kind: 't0', format: 'mc4',   // 0330: 세 노하우가 담긴 신입 퀴즈
     payload: { ask: '오픈 때 가장 먼저 할 일은?', choices: ['바닥 청소', '포스 켜기'], answer_index: 1, explain: '포스부터' },
   })));
   check('근거 문항 3건 준비', !qiErr, qiErr?.message ?? '');

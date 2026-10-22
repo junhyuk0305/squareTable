@@ -111,7 +111,7 @@ async function main() {
 
   const ITEM = `qz_qj_${s}`;
   const { error: qiErr } = await owner.from('quiz_items').insert({
-    id: ITEM, unit_id: UNIT, entry_ids: [ENTRY], kind: 't0', format: 'mc4',
+    id: ITEM, unit_id: UNIT, course_id: QUIZ, entry_ids: [ENTRY], kind: 't0', format: 'mc4',
     payload: { ask: '마감할 때 먼저 하는 것은?', options: ['홀 정리', '기계 청소', '퇴근', '주문'], answer: 0 },
     source: 'owner', status: 'active', created_by: ownerId,
   });
@@ -246,10 +246,13 @@ async function main() {
     check('⑨-3 퀴즈 B 응시 = B 문항만', ids(data) === ITEM_B, `ids=${ids(data)}`); }
   { const { data, error } = await jA.rpc('quiz_items_for', { p_entry_ids: [ENTRY], p_limit: 3 });
     check('⑨-4 옛 앱(2인자 호출)은 전처럼 노하우 겹침 전부', !error && (data ?? []).length === 2, error?.message ?? `n=${data?.length}`); }
-  await admin.from('quiz_items').update({ course_id: null }).eq('id', ITEM_B);
-  { const { data } = await jA.rpc('quiz_items_for', { p_entry_ids: [ENTRY], p_limit: 3, p_course_id: QUIZ });
-    check('⑨-5 옛 문항(course_id 없음)은 겹침으로 그대로 나간다', (data ?? []).length === 2, `n=${data?.length}`); }
-  await admin.from('quiz_items').update({ course_id: QUIZ_B }).eq('id', ITEM_B);
+  // 0330: 공유 문항(course_id 없음)은 이제 만들 수 없다. 풀어 두려는 시도 자체가 거부돼야 한다.
+  { const { error } = await admin.from('quiz_items').update({ course_id: null }).eq('id', ITEM_B);
+    check('⑨-5 문항의 course_id 를 비우는 것은 거부된다(0330 NOT NULL)', !!error, error?.code ?? '거부 안 됨');
+    const { error: insNullErr } = await admin.from('quiz_items').insert({
+      id: `qz_qjnull_${s}`, unit_id: UNIT, entry_ids: [ENTRY], kind: 't0', format: 'mc4',
+      payload: { ask: '공유 문항', options: ['가', '나', '다', '라'], answer: 0 }, source: 'owner', status: 'active' });
+    check('⑨-5b course_id 없는 문항 insert 는 거부된다(0330)', !!insNullErr, insNullErr?.code ?? '거부 안 됨'); }
   const TOKEN = `qjtok_${s}_abcdefghijklmnopqrstuvwxyz`;
   { const { error: lkErr } = await owner.from('quiz_links').insert({
       id: `ql_qj_${s}`, unit_id: UNIT, course_id: QUIZ, token: TOKEN, expires_at: new Date(Date.now() + 864e5).toISOString() });

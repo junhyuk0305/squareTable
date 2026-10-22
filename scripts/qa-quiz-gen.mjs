@@ -259,6 +259,7 @@ function answerTextOf(format, p) {
 
 let first = true;
 const PREFIX = `qi_gen_${String(Date.now()).slice(-9)}`;
+const COURSE = `tc_gen_${PREFIX.slice(7)}`;   // 0330: 생성 문항이 속할 퀴즈(꺼 둠 · 정리 때 cascade 로 문항째 지운다)
 const rowsOut = [];
 
 (async () => {
@@ -269,6 +270,8 @@ const rowsOut = [];
   const pool = await r.json();
   if (!Array.isArray(pool) || pool.length === 0) { console.error('노하우가 없다 — npm run qa:seed 먼저'); process.exit(2); }
   console.log(`재료 노하우 ${pool.length}건`);
+  const insC = await srvRest('POST', 'training_courses', [{ id: COURSE, unit_id: UNIT, key: COURSE, name: 'QA 생성 실측', min_items: 1, max_items: 50, position: 99, active: false }]);
+  if (!insC.ok) { console.error('고정물 퀴즈 생성 실패', insC.raw.slice(0, 200)); process.exit(2); }
 
   // ★캡은 **그 사용자 토큰으로** 물어야 한다 — service_role 로 부르면 매장이 안 잡혀
   //   used 0 / exceeded true 라는 엉뚱한 값이 나온다(엣지는 사용자 클라이언트로 부른다).
@@ -320,7 +323,7 @@ const rowsOut = [];
     // (c) 채점이 맞는가 — DB에 넣고 서버로 왕복
     const id = `${PREFIX}_${key}_${ci}`;
     const ins = await srvRest('POST', 'quiz_items', [{
-      id, unit_id: UNIT, entry_ids: it.entry_ids, kind: it.kind, format: key,
+      id, unit_id: UNIT, course_id: COURSE, entry_ids: it.entry_ids, kind: it.kind, format: key,
       payload: it.payload, source: 'ai', status: 'active',
     }]);
     if (!ins.ok) { row.graded = '저장실패'; check(`(c) ${key} 저장`, false, ins.raw.slice(0, 160)); continue; }
@@ -360,6 +363,7 @@ const rowsOut = [];
 
   const del = await srvRest('DELETE', `quiz_items?id=like.${PREFIX}*`);
   check('정리: 생성 문항 회수', del.ok, del.ok ? '' : del.raw.slice(0, 160));
+  await srvRest('DELETE', `training_courses?id=eq.${COURSE}`);
 
   console.log('\n━━ AI 생성 판정표 ━━');
   console.log('형태'.padEnd(16), '케이스', '(a)생성', '(b)풀림', '(c)채점', '(d)근거');
@@ -385,5 +389,6 @@ const rowsOut = [];
 })().catch(async (e) => {
   console.error('하니스 자체가 죽었다:', e);
   await srvRest('DELETE', `quiz_items?id=like.${PREFIX}*`);
+  await srvRest('DELETE', `training_courses?id=eq.${COURSE}`);
   process.exit(2);
 });

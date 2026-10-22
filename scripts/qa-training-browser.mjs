@@ -283,7 +283,7 @@ async function main() {
       const { data: ceRows } = await owner.from('course_entries').select('entry_id').eq('course_id', FD);
       const { error } = await owner.from('quiz_items').insert(
         (ceRows ?? []).map((r, i) => ({
-          id: `qi_trb${i}_${s}`, unit_id: UNIT, entry_ids: [r.entry_id], kind: 't0', format: 'mc4',
+          id: `qi_trb${i}_${s}`, unit_id: UNIT, course_id: FD, entry_ids: [r.entry_id], kind: 't0', format: 'mc4',
           payload: { ask: '가장 먼저 할 일은 무엇인가요?', choices: ['확인하고 알리기', '그냥 넘어가기'], answer_index: 0, explain: '먼저 확인해요' },
         })),
       );

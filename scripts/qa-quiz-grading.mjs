@@ -188,6 +188,7 @@ const FIXTURES = {
 const KIND = Object.fromEntries(FORMAT_KEYS.map((k) => [k, FORMATS[k].kind]));
 const PREFIX = `qi_gq_${String(Date.now()).slice(-9)}`;
 const UNIT = 'store_001';   // 고정 QA 매장(seed-demo.mjs). 문항은 접두어로 전량 회수한다.
+const COURSE = `tc_gq_${PREFIX.slice(6)}`;
 const made = [];
 
 // ── 실행 ──────────────────────────────────────────────────────────────────
@@ -206,6 +207,9 @@ const made = [];
 
   const { ok: unitOk } = await rest('GET', `units?select=id&id=eq.${UNIT}`);
   if (!unitOk) { console.error(`FAIL: ${UNIT} 조회 실패 — npm run qa:seed 먼저`); process.exit(2); }
+  // 0330: 문항은 한 퀴즈에 속해야 한다. 고정물 문항이 속할 퀴즈를 만든다(꺼 둔 퀴즈 · 정리 때 cascade 로 문항째 지운다).
+  const insC = await rest('POST', 'training_courses', [{ id: COURSE, unit_id: UNIT, key: COURSE, name: 'QA 채점 고정물', min_items: 1, max_items: 50, position: 99, active: false }]);
+  if (!insC.ok) { console.error('FAIL: 고정물 퀴즈 생성 실패', insC.raw.slice(0, 200)); process.exit(2); }
 
   for (const key of FORMAT_KEYS) {
     const spec = FORMATS[key];
@@ -230,7 +234,7 @@ const made = [];
     // 문항 저장 — 서버 채점은 저장된 행에만 걸 수 있다
     const id = `${PREFIX}_${key}`;
     const ins = await rest('POST', 'quiz_items', [{
-      id, unit_id: UNIT, entry_ids: ['qa_grading_fixture'], kind: KIND[key], format: key,
+      id, unit_id: UNIT, course_id: COURSE, entry_ids: ['qa_grading_fixture'], kind: KIND[key], format: key,
       payload: fx.payload, source: 'owner', status: 'active',
     }]);
     if (!ins.ok) { check(`(–) ${key} 문항 저장`, false, ins.raw.slice(0, 200)); row.server = '저장실패'; continue; }
@@ -330,6 +334,7 @@ const made = [];
     const del = await rest('DELETE', `quiz_items?id=like.${PREFIX}*`);
     check('정리: 고정물 문항 회수', del.ok, del.ok ? `${made.length}건` : del.raw.slice(0, 200));
   }
+  await rest('DELETE', `training_courses?id=eq.${COURSE}`);
 
   // ── 표 ──────────────────────────────────────────────────────────────────
   console.log('\n━━ 형태별 판정표 ━━');
@@ -342,5 +347,6 @@ const made = [];
 })().catch(async (e) => {
   console.error('하니스 자체가 죽었다:', e);
   await rest('DELETE', `quiz_items?id=like.${PREFIX}*`);
+  await rest('DELETE', `training_courses?id=eq.${COURSE}`);
   process.exit(2);
 });

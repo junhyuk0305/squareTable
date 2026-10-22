@@ -6,8 +6,7 @@
 //   전부 0건이라 퀴즈 화면이 사장·직원 양쪽에서 콜드스타트로 뜬다. 그 구멍만 메운다.
 //
 // ⛔ 노하우·업무·채팅·출퇴근은 손대지 않는다. 이 시드가 쓰는 테이블은 아래 5개뿐이다.
-// ★ 문항은 course_id 가 아니라 **entry_ids(노하우)** 로 붙는다(0107) — 그래서 이 시드가 노하우에
-//   문항을 달면 그 노하우를 담고 있는 **기존 코스 4개도 같이** 채워진다.
+// ★ 문항은 정확히 한 퀴즈(course_id)에 속한다(0330). 이 시드의 문항은 이 시드의 퀴즈 3개에만 붙는다.
 //
 // 실행:  node scripts/seed-quiz-demo.mjs          (.env.seed + .env 자동 로드)
 //        node scripts/seed-quiz-demo.mjs --purge  (이 시드가 만든 것만 지우고 끝)
@@ -321,14 +320,8 @@ async function main() {
   const missing = entryIds.filter((e) => !alive.has(e));
   if (missing.length) console.log(`  ⚠️ 매장에 없는 노하우 ${missing.length}건은 건너뛴다: ${missing.join(', ')}`);
 
-  // ── 3) 문항 ────────────────────────────────────────────────
-  const items = ITEMS.filter(([e]) => alive.has(e)).map(([entryId, kind, format, payload], i) => ({
-    id: `${P}i${pad(i + 1)}`, unit_id: UNIT, entry_ids: [entryId], kind, format, payload,
-    source: 'owner', status: 'active', created_by: OWNER,
-  }));
-  await step(`문항 ${items.length}건`, db.from('quiz_items').insert(items));
-
-  // ── 4) 퀴즈(코스) + 담긴 노하우 ─────────────────────────────
+  // ── 3) 퀴즈(코스) + 담긴 노하우 ─────────────────────────────
+  // ★0330: 문항은 course_id 가 필수다. 그래서 퀴즈를 먼저 만들고 문항을 그 노하우가 담긴 퀴즈에 단다.
   await step(`퀴즈 ${COURSES.length}건`, db.from('training_courses').insert(COURSES.map((c) => ({
     id: c.id, unit_id: UNIT, key: c.key, name: c.name, description: c.description,
     min_items: 3, max_items: 10, due_days: null, start_at: c.start_at, answer_days: c.answer_days,
@@ -338,6 +331,16 @@ async function main() {
     course_id: c.id, entry_id: entryId, unit_id: UNIT, position: i,
   })));
   await step(`퀴즈에 담긴 노하우 ${ce.length}건`, db.from('course_entries').insert(ce));
+
+  // ── 4) 문항 — 노하우가 담긴 퀴즈 하나에 속한다(0330) ─────────
+  const courseOf = new Map(ce.map((r) => [r.entry_id, r.course_id]));
+  const orphan = ITEMS.filter(([e]) => alive.has(e) && !courseOf.has(e)).map(([e]) => e);
+  if (orphan.length) console.log(`  ⚠️ 어느 퀴즈에도 안 담긴 노하우의 문항 ${orphan.length}건은 건너뛴다: ${orphan.join(', ')}`);
+  const items = ITEMS.filter(([e]) => alive.has(e) && courseOf.has(e)).map(([entryId, kind, format, payload], i) => ({
+    id: `${P}i${pad(i + 1)}`, unit_id: UNIT, course_id: courseOf.get(entryId), entry_ids: [entryId], kind, format, payload,
+    source: 'owner', status: 'active', created_by: OWNER,
+  }));
+  await step(`문항 ${items.length}건`, db.from('quiz_items').insert(items));
 
   // ── 5) 발송 원장 ───────────────────────────────────────────
   // ★sent_at·due_on 은 평소엔 크론(claim_quiz_send)만 채운다. 시드는 "이미 나간 뒤"를 재현하려고

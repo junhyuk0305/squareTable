@@ -75,12 +75,14 @@ const SQ = (n) => ({
 const SRC_PREFIX = 'pb_qadeploy_';
 const SRC_C = 'tc_qadeploy_c';                 // 작업실 원본 퀴즈(J)
 const QI_PREFIX = 'qi_qadeploy_';              // 작업실 원본 문항(J)
+const HID_C = 'tc_qadeploy_hid';               // 매장 숨김 확인 문항이 속할 퀴즈(F7q · 0330)
 async function cleanup(wsUnit) {
   // J 퀴즈 — 사본 코스(cascade: course_entries·quiz_assignments) → 사본 문항 → 원본 문항 → 원본 코스 → 배포 원장.
   await svc.from('training_courses').delete().eq('brand_course_id', SRC_C);
   await svc.from('quiz_items').delete().like('brand_item_id', `${QI_PREFIX}%`);
   await svc.from('quiz_items').delete().like('id', `${QI_PREFIX}%`);
   await svc.from('training_courses').delete().eq('id', SRC_C);
+  await svc.from('training_courses').delete().eq('id', HID_C);
   await svc.from('brand_deployments').delete().eq('source_id', SRC_C);
   const { data: srcs } = await svc.from('playbook_entries').select('id').like('id', `${SRC_PREFIX}%`);
   const srcIds = (srcs ?? []).map((r) => r.id);
@@ -278,7 +280,9 @@ try {
   // ★0231 S8: 숨긴 사본을 근거로 한 문항(정답 포함)도 소유주만. 매장 문항 하나를 숨긴 사본에 걸어 잰다
   //   (id 접두사 qi_qadeploy_ 라 시작·끝 정리가 지운다).
   const QI_HID = `${QI_PREFIX}hidcheck`;
-  const insHidQi = await svc.from('quiz_items').insert({ id: QI_HID, unit_id: UNIT, entry_ids: [cA.id], kind: 't0', format: 'mc4', payload: { q: '숨김 확인' } });
+  // 0330: 문항은 한 퀴즈에 속한다. 매장에 이 확인용 퀴즈를 만들고 끝에 지운다(cascade 로 문항도 지워진다).
+  await svc.from('training_courses').insert({ id: HID_C, unit_id: UNIT, key: HID_C, name: 'QA 숨김 확인 퀴즈', min_items: 1, max_items: 10, position: 0, active: true });
+  const insHidQi = await svc.from('quiz_items').insert({ id: QI_HID, unit_id: UNIT, course_id: HID_C, entry_ids: [cA.id], kind: 't0', format: 'mc4', payload: { q: '숨김 확인' } });
   const oSeeQi = await O.from('quiz_items').select('id').eq('id', QI_HID);
   check('F7q 사장은 숨긴 사본 근거 문항을 읽는다(1행)', !insHidQi.error && !oSeeQi.error && (oSeeQi.data ?? []).length === 1, insHidQi.error?.message ?? oSeeQi.error?.message ?? `${(oSeeQi.data ?? []).length}행`);
   if (M) {
@@ -286,6 +290,7 @@ try {
     check('F7qm ★매니저는 숨긴 사본 근거 문항을 읽지 못한다(0행)', !mSeeQi.error && (mSeeQi.data ?? []).length === 0, mSeeQi.error?.message ?? `${(mSeeQi.data ?? []).length}행`);
   } else skipped('F7qm 매니저 숨긴 문항 0행', `미검증 — ${MGR_WHY}`);
   await svc.from('quiz_items').delete().eq('id', QI_HID);
+  await svc.from('training_courses').delete().eq('id', HID_C);
   const back = await O.rpc('hide_brand_copy', { p_entry_id: cA.id, p_hidden: false });
   const { data: cA9 } = await svc.from('playbook_entries').select('brand_hidden_at').eq('id', cA.id).maybeSingle();
   check('F8 되살리기', !back.error && cA9?.brand_hidden_at === null, back.error?.message);
@@ -356,8 +361,8 @@ try {
     { course_id: SRC_C, entry_id: SRC_B, unit_id: ws, position: 1 },
   ]);
   const insQi = await svc.from('quiz_items').insert([
-    { id: QI_A, unit_id: ws, entry_ids: [SRC_A], kind: 't0', format: 'mc4', payload: mc4('A 문항'), source: 'ai', status: 'active', created_by: hqId },
-    { id: QI_B, unit_id: ws, entry_ids: [SRC_B], kind: 't0', format: 'mc4', payload: mc4('B 문항'), source: 'ai', status: 'active', created_by: hqId },
+    { id: QI_A, unit_id: ws, entry_ids: [SRC_A], kind: 't0', format: 'mc4', payload: mc4('A 문항'), source: 'ai', status: 'active', created_by: hqId, course_id: SRC_C },
+    { id: QI_B, unit_id: ws, course_id: SRC_C, entry_ids: [SRC_B], kind: 't0', format: 'mc4', payload: mc4('B 문항'), source: 'ai', status: 'active', created_by: hqId },
   ]);
   check('J1 작업실에 원본 퀴즈(코스 1 · 항목 2 · 문항 2) 준비', !insC.error && !insCe.error && !insQi.error, insC.error?.message ?? insCe.error?.message ?? insQi.error?.message);
   const ql0 = await H.rpc('brand_quiz_list');

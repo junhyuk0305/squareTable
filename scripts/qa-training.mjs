@@ -408,9 +408,9 @@ async function main() {
   // 서버(0107 quiz_items_for · grade_quiz)의 match_line 분기는 남아 있지만 만들 경로가 없어 도달 불가다.
   const QMC = `qi_mc_${s}`, QMN = `qi_mn_${s}`, QBAD = `qi_bad_${s}`;
   { const { error } = await owner.from('quiz_items').insert([
-      { id: QMC, unit_id: UNIT, entry_ids: [E[0]], kind: 't0', format: 'mc4',
+      { id: QMC, unit_id: UNIT, course_id: CF, entry_ids: [E[0]], kind: 't0', format: 'mc4',
         payload: { ask: '오픈 때 가장 먼저 할 일은?', choices: ['바닥 청소', '포스 켜기', '퇴근'], answer_index: 1, explain: '포스부터 켜요' } },
-      { id: QMN, unit_id: UNIT, entry_ids: [E[0]], kind: 't3', format: 'mine_tap',
+      { id: QMN, unit_id: UNIT, course_id: CF, entry_ids: [E[0]], kind: 't3', format: 'mine_tap',
         payload: { ask: '하면 안 되는 것을 모두 누르세요', explain: '시재는 만지지 않아요',
           cards: [{ text: '시재 임의 사용', is_mine: true }, { text: '머신 예열', is_mine: false },
                   { text: '금고 열어두기', is_mine: true }, { text: '문 열기', is_mine: false }] } },
@@ -452,7 +452,7 @@ async function main() {
   { const { row } = await grade(QMN, [0, 1, 2, 3]);
     check('⑦-12 mine_tap 전부 찍기도 오답', row?.correct === false, JSON.stringify(row)); }
   // ⑦-13·⑦-14(match_line 좌표계 채점)는 t4 폐기와 함께 삭제.
-  { await owner.from('quiz_items').insert({ id: QBAD, unit_id: UNIT, entry_ids: [E[0]], kind: 't0', format: 'bogus_format', payload: { ask: 'x' } });
+  { await owner.from('quiz_items').insert({ id: QBAD, unit_id: UNIT, course_id: CF, entry_ids: [E[0]], kind: 't0', format: 'bogus_format', payload: { ask: 'x' } });
     const { error } = await jA.rpc('grade_quiz', { p_item_id: QBAD, p_response: 0 });
     check('⑦-15 모르는 형태는 조용한 오답이 아니라 예외', !!error && /unknown_quiz_format/.test(error?.message ?? ''), error?.message ?? '(예외 없음!)'); }
   { const { error } = await jA.from('quiz_items').update({ payload: { ask: 'hacked' } }).eq('id', QMC);
@@ -470,11 +470,11 @@ async function main() {
   const QOB = `qi_ob_${s}`, QSP = `qi_sp_${s}`, QBP = `qi_bp_${s}`;
   { const { error } = await owner.from('quiz_items').insert([
       // items 는 섞인 채로 저장되고 answer_seq 가 맞는 순서를 가리킨다(맞는 순서 = A → B → C).
-      { id: QOB, unit_id: UNIT, entry_ids: [E[2]], kind: 't1', format: 'order_build',
+      { id: QOB, unit_id: UNIT, course_id: CF, entry_ids: [E[2]], kind: 't1', format: 'order_build',
         payload: { ask: '순서대로 눌러 주세요', items: ['B', 'C', 'A'], answer_seq: [2, 0, 1], explain: 'A 부터예요' } },
-      { id: QSP, unit_id: UNIT, entry_ids: [E[2]], kind: 't2', format: 'scale_pick',
+      { id: QSP, unit_id: UNIT, course_id: CF, entry_ids: [E[2]], kind: 't2', format: 'scale_pick',
         payload: { ask: '시럽이 더 많이 들어가는 쪽은?', choices: ['레귤러', '라지'], unit: '펌프', answer_index: 1, explain: '라지가 한 펌프 더예요' } },
-      { id: QBP, unit_id: UNIT, entry_ids: [E[2]], kind: 't5', format: 'branch_path',
+      { id: QBP, unit_id: UNIT, course_id: CF, entry_ids: [E[2]], kind: 't5', format: 'branch_path',
         payload: { ask: '포장 주문으로 음료 3잔이 나왔어요', explain: '3잔부터는 캐리어예요',
           steps: [{ ask: '포장인가요?', yes: 's1', no: 'r0' }, { ask: '3잔 이상인가요?', yes: 'r1', no: 'r0' }],
           results: ['그냥 드리면 돼요', '캐리어를 드려요'], answer_path: [0, 0] } },
@@ -525,9 +525,9 @@ async function main() {
     { left: '우유', right: '냉장고 2단' },
   ];
   { const { error } = await owner.from('quiz_items').insert([
-      { id: QFM, unit_id: UNIT, entry_ids: [E[3]], kind: 't4', format: 'flip_match',
+      { id: QFM, unit_id: UNIT, course_id: CR, entry_ids: [E[3]], kind: 't4', format: 'flip_match',
         payload: { ask: '물건과 두는 자리를 맞춰 주세요', pairs: PAIRS, explain: '자리는 정해져 있어요' } },
-      { id: QLM, unit_id: UNIT, entry_ids: [E[3]], kind: 't4', format: 'link_match',
+      { id: QLM, unit_id: UNIT, course_id: CR, entry_ids: [E[3]], kind: 't4', format: 'link_match',
         payload: { ask: '물건과 두는 자리를 이어 주세요', pairs: PAIRS, explain: '자리는 정해져 있어요' } },
     ]);
     check('⑦C-1 t4 형태 2건 저장', !error, error?.message ?? ''); }
@@ -601,9 +601,9 @@ async function main() {
     { text: '원두는 그대로 뒀고요', tap: true, is_wrong: true },
   ];
   { const { error } = await owner.from('quiz_items').insert([
-      { id: QNE, unit_id: UNIT, entry_ids: [E[3]], kind: 't2', format: 'numeric_entry',
+      { id: QNE, unit_id: UNIT, course_id: CR, entry_ids: [E[3]], kind: 't2', format: 'numeric_entry',
         payload: { ask: '우유 스팀은 몇 도까지 올리나요?', answer_value: 62, unit: '도', explain: '62도예요' } },
-      { id: QMP, unit_id: UNIT, entry_ids: [E[3]], kind: 't3', format: 'mark_paragraph',
+      { id: QMP, unit_id: UNIT, course_id: CR, entry_ids: [E[3]], kind: 't3', format: 'mark_paragraph',
         payload: { ask: '규정과 다른 곳을 짚어 주세요', parts: MP_PARTS, explain: '바닥은 마지막이에요' } },
     ]);
     check('⑦D-1 문항 2건 저장(numeric_entry · 뺀 형태)', !error, error?.message ?? ''); }
@@ -724,7 +724,7 @@ async function main() {
   {
     // ★코스 밖 문항을 토큰으로 찍어보는 것 차단 — 열려 있으면 오답 응답으로 정답을 뽑아낼 수 있다.
     const OUT = `qi_out_${s}`;
-    await owner.from('quiz_items').insert({ id: OUT, unit_id: UNIT, entry_ids: [E[3]], kind: 't0', format: 'mc4',
+    await owner.from('quiz_items').insert({ id: OUT, unit_id: UNIT, course_id: CR, entry_ids: [E[3]], kind: 't0', format: 'mc4',
       payload: { ask: '정기 점검 문항', choices: ['a', 'b'], answer_index: 0, explain: 'x' } });
     const { error } = await g.rpc('quiz_link_grade', { p_token: TOK, p_item_id: OUT, p_response: 0 });
     check('⑩-12 ★그 코스에 없는 문항은 토큰으로 채점 불가', !!error && /item_not_found/.test(error?.message ?? ''), error?.message ?? '(뚫림!)');

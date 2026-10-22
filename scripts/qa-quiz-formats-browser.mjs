@@ -116,15 +116,15 @@ async function main() {
   {
     const { error } = await owner.from('quiz_items').insert([
       {
-        id: QOB, unit_id: UNIT, entry_ids: [E1], kind: 't1', format: 'order_build',
+        id: QOB, unit_id: UNIT, course_id: CID, entry_ids: [E1], kind: 't1', format: 'order_build',
         payload: { ask: ASK_ORDER, items: ORDER_ITEMS, answer_seq: [1, 0, 2], explain: '포스 정산부터예요' },
       },
       {
-        id: QSP, unit_id: UNIT, entry_ids: [E1], kind: 't2', format: 'scale_pick',
+        id: QSP, unit_id: UNIT, course_id: CID, entry_ids: [E1], kind: 't2', format: 'scale_pick',
         payload: { ask: ASK_SCALE, choices: ['레귤러', '라지'], unit: '펌프', answer_index: 1, explain: '라지가 한 펌프 더예요' },
       },
       {
-        id: QBP, unit_id: UNIT, entry_ids: [E1], kind: 't5', format: 'branch_path',
+        id: QBP, unit_id: UNIT, course_id: CID, entry_ids: [E1], kind: 't5', format: 'branch_path',
         payload: {
           ask: ASK_BRANCH, explain: '3잔부터는 캐리어예요',
           steps: [{ ask: '포장인가요?', yes: 's1', no: 'r0' }, { ask: '3잔 이상인가요?', yes: 'r1', no: 'r0' }],
