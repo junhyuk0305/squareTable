@@ -28,18 +28,31 @@
 // ⚠️ 크론(task-reminders) 등록 자체는 여기서 못 본다 — 0139 는 새 크론을 만들지 않고 그 잡에 갈래만 얹는다.
 //
 // 사용: node scripts/qa-quiz-schedule.mjs   (.env + .env.seed 자동 로드)
+//       node scripts/qa-quiz-schedule.mjs --local   (로컬 도커 · `npx supabase status` 키 · .env 를 읽지 않는다)
+//       --local 은 아직 원격에 없는 마이그레이션을 먼저 검증할 때 쓴다. 주소가 127.0.0.1 이 아니면 멈춘다.
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 
 const here = (r) => fileURLToPath(new URL(r, import.meta.url));
 function pe(f){const o={};try{for(const l of readFileSync(f,'utf8').split(/\r?\n/)){const m=l.match(/^([A-Z_]+)=(.*)$/);if(m)o[m[1]]=m[2].trim();}}catch{}return o;}
-const env = { ...pe(here('../.env')), ...pe(here('../.env.seed')) };
-const URL_ = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
-const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-const SRV = env.SUPABASE_SERVICE_ROLE_KEY;
-if (!URL_ || !ANON || !SRV) { console.error('FAIL: URL/ANON/SERVICE_ROLE 필요(.env + .env.seed)'); process.exit(2); }
+const LOCAL = process.argv.includes('--local');
+let URL_, ANON, SRV;
+if (LOCAL) {
+  const st = Object.fromEntries(execFileSync('npx', ['supabase', 'status', '-o', 'env'], { encoding: 'utf8', shell: true, stdio: ['ignore', 'pipe', 'ignore'] })
+    .split('\n').map((l) => l.match(/^([A-Z_]+)="?(.*?)"?$/)).filter(Boolean).map((m) => [m[1], m[2]]));
+  URL_ = st.API_URL; ANON = st.ANON_KEY; SRV = st.SERVICE_ROLE_KEY;
+  if (!URL_ || !/^http:\/\/127\.0\.0\.1:/.test(URL_)) { console.error('중단: 로컬 도커 주소가 아니다 —', URL_); process.exit(2); }
+} else {
+  const env = { ...pe(here('../.env')), ...pe(here('../.env.seed')) };
+  URL_ = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
+  ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  SRV = env.SUPABASE_SERVICE_ROLE_KEY;
+}
+if (!URL_ || !ANON || !SRV) { console.error('FAIL: URL/ANON/SERVICE_ROLE 필요(.env + .env.seed 또는 --local)'); process.exit(2); }
+console.log(`— 대상 ${LOCAL ? '로컬' : '원격(.env)'} ${URL_} —`);
 
 const mk = () => createClient(URL_, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
 const admin = createClient(URL_, SRV, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -68,6 +81,7 @@ const INTERVALS = JSON.parse(
 async function signUpSession(client, email, meta) {
   const { data, error } = await client.auth.signUp({ email, password: PW, options: { data: { birth_date: '1994-03-03', ...meta } } });
   if (error || !data.session) throw new Error(`signUp failed (${email}): ${error?.message ?? 'no session'}`);
+  made.users.push(data.user.id);
   await client.auth.setSession({ access_token: data.session.access_token, refresh_token: data.session.refresh_token });
   return data.user.id;
 }
@@ -94,7 +108,7 @@ const qaPhones = [`0106${s.slice(0,7)}`, `0108${s.slice(0,7)}`, `0109${s.slice(0
                   `0102${s.slice(0,7)}`, `0105${s.slice(0,7)}`];
 
 let UNIT = null, UNIT2 = null;
-const made = { entries: [] };
+const made = { entries: [], users: [] };
 
 // 이 매장에서 지금 나갈 것들.
 const due = async () => {
@@ -164,7 +178,8 @@ async function main() {
     is_template: false, pack_id: null, needs_review: false, correction_points: [], section: null, order_index: 0,
   });
   if (peErr) throw new Error('playbook_entries: ' + peErr.message);
-  const { error: kuErr } = await jA.from('knowhow_understanding').insert({ unit_id: UNIT, entry_id: ENTRY, staff_id: aId, staff_name: 'QA직원A' });
+  // 0321: 직원 세션의 직접 insert 는 최근 정답 채점이 없으면 verified_at 을 비운다(NOT NULL 위반). 준비는 service_role 로 한다.
+  const { error: kuErr } = await admin.from('knowhow_understanding').insert({ unit_id: UNIT, entry_id: ENTRY, staff_id: aId, staff_name: 'QA직원A' });
   check('통과 기록 insert', !kuErr, kuErr?.message ?? '');
   const { data: kuBack } = await admin.from('knowhow_understanding').select('interval_step').eq('entry_id', ENTRY).eq('staff_id', aId).maybeSingle();
   check('interval_step 기본값 0', kuBack?.interval_step === 0, `got=${kuBack?.interval_step}`);
@@ -392,6 +407,8 @@ async function main() {
     { course_id: CD,  entry_id: ENTRY, unit_id: UNIT, position: 0 },
   ]);
   check('코스 2개 + 담긴 노하우 준비', !ceErr, ceErr?.message ?? '');
+  // 0327: 문항 0개 코스의 입사 배정은 조용히 건너뛴다. 네 코스 모두 문항을 줘서 "고르는 규칙"만 보게 한다.
+  for (const [c, t] of [[CJ, 'j'], [CJ2, 'j2'], [CG, 'jg'], [CD, 'jd']]) await giveItem(UNIT, c, t);
 
   // 신청만 한 사람(pending)에게는 배정되지 않는다 — 승인 안 된 사람에게 매장 문항이 나가면 안 된다.
   const jE = mk();
@@ -518,6 +535,16 @@ async function cleanup() {
     await admin.from('training_courses').delete().eq('unit_id', unit);
   }
   for (const id of made.entries) await admin.from('playbook_entries').delete().eq('id', id);
+  // 이 실행이 만든 qa_qs_* 매장·계정을 지운다.
+  for (const unit of [UNIT, UNIT2].filter(Boolean)) {
+    const r = await admin.from('units').delete().eq('id', unit);
+    if (r.error) console.error('  ! 정리 units:', r.error.message);
+  }
+  for (const id of made.users) {
+    const r = await admin.auth.admin.deleteUser(id);
+    if (r.error) console.error('  ! 정리 user:', r.error.message);
+  }
+  console.log(`  · 정리: 매장 ${[UNIT, UNIT2].filter(Boolean).length} · 계정 ${made.users.length}`);
 }
 
 try {

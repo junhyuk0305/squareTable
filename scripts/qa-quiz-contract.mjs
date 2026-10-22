@@ -6,7 +6,8 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createRequire} from 'node:module';
 import {createClient} from '@supabase/supabase-js';
-import {FIXED,UNIT,login,rolePrecondition} from './lib/qa-fixed-accounts.mjs';
+import {FIXED,UNIT as FIXED_UNIT,login,rolePrecondition} from './lib/qa-fixed-accounts.mjs';
+import {seedVerifiedPhones,cleanupSeededPhones} from './qa-otp-seed.mjs';
 // P0(0327) 문구 표 순수 함수 — 서버 코드가 사람 말로 바뀌는지. 백엔드 전에 돌린다.
 {const dir=mkdtempSync(join(tmpdir(),'quiz-errors-'));
  execFileSync(process.execPath,['node_modules/typescript/bin/tsc','src/lib/quiz/errors.ts','--outDir',dir,'--module','commonjs','--target','es2020','--skipLibCheck','--ignoreConfig'],{stdio:'pipe'});
@@ -17,13 +18,34 @@ import {FIXED,UNIT,login,rolePrecondition} from './lib/qa-fixed-accounts.mjs';
  if(quizErrorMessage({message:'unknown_code'},'x')!=='x'||quizErrorMessage(null,'x')!=='x')throw Error('unknown code must fall back');
  if(/[a-z_]{4,}/.test(last))throw Error('copy leaks a code: '+last);
  console.log('PASS quiz error copy (pure)');}
-const env={...process.env};
-for(const f of ['.env','.env.seed']) for(const line of readFileSync(new URL('../'+f,import.meta.url),'utf8').split(/\r?\n/)){const m=line.match(/^([A-Z0-9_]+)=(.*)$/);if(m&&!env[m[1]])env[m[1]]=m[2].trim();}
-const url=env.EXPO_PUBLIC_SUPABASE_URL,key=env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+// --local: 로컬 도커(`npx supabase status` 키)만 친다. .env 를 읽지 않고, 주소가 127.0.0.1 이 아니면 멈춘다.
+//          고정 계정 대신 이 실행 전용 사장·직원·매장을 만들고 끝에 지운다. 원격 적용 전 마이그레이션 검증용.
+const LOCAL=process.argv.includes('--local');
+let url,key,srvKey;
+if(LOCAL){const st=Object.fromEntries(execFileSync('npx',['supabase','status','-o','env'],{encoding:'utf8',shell:true,stdio:['ignore','pipe','ignore']}).split('\n').map(l=>l.match(/^([A-Z_]+)="?(.*?)"?$/)).filter(Boolean).map(m=>[m[1],m[2]]));
+ url=st.API_URL;key=st.ANON_KEY;srvKey=st.SERVICE_ROLE_KEY;
+ if(!url||!/^http:\/\/127\.0\.0\.1:/.test(url)){console.error('중단: 로컬 도커 주소가 아니다 —',url);process.exit(2);}
+}else{const env={...process.env};
+ for(const f of ['.env','.env.seed']) for(const line of readFileSync(new URL('../'+f,import.meta.url),'utf8').split(/\r?\n/)){const m=line.match(/^([A-Z0-9_]+)=(.*)$/);if(m&&!env[m[1]])env[m[1]]=m[2].trim();}
+ url=env.EXPO_PUBLIC_SUPABASE_URL;key=env.EXPO_PUBLIC_SUPABASE_ANON_KEY;srvKey=env.SUPABASE_SERVICE_ROLE_KEY;}
+console.log('TARGET',LOCAL?'local':'remote(.env)',url);
 const opt={auth:{persistSession:false,autoRefreshToken:false}};
-const admin=createClient(url,env.SUPABASE_SERVICE_ROLE_KEY,opt),anon=createClient(url,key,opt);
-const owner=await login(url,key,FIXED.owner),junior=await login(url,key,FIXED.junior);
-const pre=await rolePrecondition({owner,junior});if(pre)throw Error(pre);
+const admin=createClient(url,srvKey,opt),anon=createClient(url,key,opt);
+const stamp=String(Date.now()).slice(-8),localUsers=[],localPhones=['0106','0107'].map(x=>x+stamp.slice(0,7));
+let UNIT=FIXED_UNIT,owner,junior;
+if(LOCAL){
+ const signUp=async(email,meta,phone)=>{const c=createClient(url,key,opt);const {data,error}=await c.auth.signUp({email,password:'Test1234!qa',options:{data:{birth_date:'1990-01-15',phone,...meta}}});if(error||!data.session)throw Error('signUp '+email+': '+(error?.message??'no session'));localUsers.push(data.user.id);c.uid=data.user.id;return c;};
+ await seedVerifiedPhones(url,srvKey,localPhones);
+ owner=await signUp(`qa_contract_o_${stamp}@example.com`,{name:'QA사장',role:'owner'},localPhones[0]);
+ const cs=await owner.rpc('create_store',{p_store_name:'계약 '+stamp,p_industry:'카페·디저트',p_biz_no:null});if(cs.error)throw Error('create_store: '+cs.error.message);
+ UNIT=cs.data[0].unit_id;
+ await admin.rpc('admin_activate_store',{p_unit_id:UNIT,p_days:1,p_plan:'multi'});
+ junior=await signUp(`qa_contract_j_${stamp}@example.com`,{name:'QA직원',role:'junior'},localPhones[1]);
+ for(const [c,fn,a] of [[junior,'join_by_invite',{p_code:cs.data[0].invite_code}],[owner,'approve_member',{p_uid:junior.uid}]]){const r=await c.rpc(fn,a);if(r.error)throw Error(fn+': '+r.error.message);}
+}else{
+ owner=await login(url,key,FIXED.owner);junior=await login(url,key,FIXED.junior);
+ const pre=await rolePrecondition({owner,junior});if(pre)throw Error(pre);
+}
 for(const c of [owner,junior]){const r=await c.rpc('my_units');if(!r.data?.some(x=>x.unit_id===UNIT&&x.is_active))throw Error('Active unit differs; no mutation');}
 const p='qa_contract_'+Date.now(),entries=[p+'_e1',p+'_e2'],courses=[p+'_a',p+'_b'],items=[p+'_i1',p+'_i2',p+'_ib'],link=p+'_l',token=crypto.randomUUID().replaceAll('-',''),assignment=p+'_assignment';
 const legacyAssignment=p+'_legacy_assignment';
@@ -116,25 +138,38 @@ try{
  await must(owner.from('quiz_links').update({revoked_at:new Date().toISOString()}).eq('id',link));
  const revoked=await anon.rpc('quiz_link_submit_v2',guestArgs);
  check('revoked link rejects replay',revoked.error?.message==='link_unavailable',revoked);
- // Released apps only send p_rows. Shared legacy items have no recoverable course intent.
+ // 0329: 공유 문항(course_id null)은 만들 수 없다. 0329 전(0327)에는 이 장면만 RED 가 정상이다.
+ const sharedItem=p+'_shared_item';items.push(sharedItem);
+ const shared=await owner.from('quiz_items').insert({id:sharedItem,unit_id:UNIT,course_id:null,entry_ids:[entries[1]],kind:'t0',format:'mc4',payload:{ask:'Shared',choices:['A','B','C','D'],answer_index:0,explain:'QA'},source:'owner',status:'active',created_by:owner.uid}).select('id');
+ check('shared item (course_id null) insert is rejected',!!shared.error,shared.error??shared.data);
+ // 거부되지 않았으면 바로 지운다. 아래 장면이 공유 문항에 끌려가지 않게 한다.
+ if(!shared.error)await must(admin.from('quiz_items').delete().eq('id',sharedItem));
+ // Released apps only send p_rows. 옛 클라 흐름은 B 에 속한 문항으로 본다.
  const legacyItem=p+'_legacy_item';items.push(legacyItem);
- await must(owner.from('quiz_items').insert({id:legacyItem,unit_id:UNIT,course_id:null,entry_ids:[entries[1]],kind:'t0',format:'mc4',payload:{ask:'Legacy',choices:['A','B','C','D'],answer_index:0,explain:'QA'},source:'owner',status:'active',created_by:owner.uid}));
- // 0327: B의 유일 문항(ib)은 다른 문항이 생긴 뒤에야 뺄 수 있다. 그래서 공유 문항을 먼저 넣는다.
+ await must(owner.from('quiz_items').insert({id:legacyItem,unit_id:UNIT,course_id:courses[1],entry_ids:[entries[1]],kind:'t0',format:'mc4',payload:{ask:'Legacy',choices:['A','B','C','D'],answer_index:0,explain:'QA'},source:'owner',status:'active',created_by:owner.uid}));
+ // 0327: B의 유일 문항(ib)은 다른 문항이 생긴 뒤에야 뺄 수 있다. 그래서 B 문항을 먼저 넣는다.
  await must(owner.from('quiz_items').update({status:'archived'}).eq('id',items[2]));
  await must(admin.from('quiz_assignments').insert({id:legacyAssignment,unit_id:UNIT,course_id:courses[1],user_id:junior.uid,scheduled_on:new Date().toISOString().slice(0,10),sent_at:await serverAfterLastAnswer()}));
- const newShared=await junior.rpc('quiz_staff_record_v2',{p_course_id:courses[0],p_request_id:p+'_new_shared',p_rows:[{item_id:legacyItem,response:0}]});
- check('new v2 accepts shared item in explicit course',!newShared.error&&!!newShared.data,newShared);
+ const statsBefore=(await owner.rpc('quiz_course_stats')).data?.find(r=>r.course_id===courses[0]);
+ const newOther=await junior.rpc('quiz_staff_record_v2',{p_course_id:courses[0],p_request_id:p+'_new_other',p_rows:[{item_id:legacyItem,response:0}]});
+ check('new v2 drops item of another course',!newOther.error&&newOther.data===null,newOther);
  const notOther=await junior.rpc('mark_quiz_completed',{p_id:legacyAssignment});
- check('new explicit response does not satisfy other course',!notOther.error&&notOther.data===false,notOther);
- const oldShared=await junior.rpc('quiz_staff_record',{p_rows:[{item_id:legacyItem,response:0}]});
- check('old signature accepts ambiguous shared item',!oldShared.error&&!!oldShared.data,oldShared);
+ check('dropped response does not satisfy other course',!notOther.error&&notOther.data===false,notOther);
+ const oldRec=await junior.rpc('quiz_staff_record',{p_rows:[{item_id:legacyItem,response:0}]});
+ check('old signature accepts course item',!oldRec.error&&!!oldRec.data,oldRec);
  const legacyDone=await junior.rpc('mark_quiz_completed',{p_id:legacyAssignment});
- check('old shared item can complete matching assignment',!legacyDone.error&&legacyDone.data===true,legacyDone);
+ check('old client flow completes matching assignment',!legacyDone.error&&legacyDone.data===true,legacyDone);
  const legacyStats=await owner.rpc('quiz_course_stats');
- check('ambiguous old response not duplicated into other course stats',!legacyStats.error&&!legacyStats.data?.some(r=>r.course_id===courses[1]),legacyStats.error);
+ const aAfter=legacyStats.data?.find(r=>r.course_id===courses[0]);
+ check('B response not counted into A stats',!legacyStats.error&&aAfter?.asked===statsBefore?.asked&&aAfter?.correct===statsBefore?.correct,{before:statsBefore,after:aAfter});
 }finally{
  const zItems=[...items,zItem],zEntries=[...entries,zEntry],zCourses=[...courses,zCourse];
  for(const [table,col,ids] of [['quiz_attempt_items','item_id',zItems],['quiz_attempts','entry_id',zEntries],['quiz_grade_log','item_id',zItems],['quiz_assignments','id',[assignment,legacyAssignment,zAssignment,zAssignment+'_2']],['knowhow_understanding','entry_id',zEntries],['quiz_links','id',[link,zLink]],['quiz_items','id',zItems],['course_entries','course_id',zCourses],['training_courses','id',zCourses],['knowhow_quiz_stats','entry_id',zEntries],['playbook_entries','id',zEntries]]){const r=await admin.from(table).delete().in(col,ids);check('cleanup '+table,!r.error,r.error);}
+ if(LOCAL){
+  if(UNIT!==FIXED_UNIT){const r=await admin.from('units').delete().eq('id',UNIT);check('cleanup units',!r.error,r.error);}
+  for(const id of localUsers){const r=await admin.auth.admin.deleteUser(id);check('cleanup user',!r.error,r.error);}
+  await cleanupSeededPhones(url,srvKey,localPhones).catch(()=>{});
+ }
 }
 
 console.log('RESULT',failures?'RED':'GREEN','failures='+failures); process.exitCode=failures?1:0;
