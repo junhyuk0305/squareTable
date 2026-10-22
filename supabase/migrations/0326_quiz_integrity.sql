@@ -1,7 +1,7 @@
 -- 0326 퀴즈 응시의 코스·문항 단위 계약 (2026-10-22 실측 감사)
 -- 옛 앱 호환: 안전 | 기존 직원/게스트 제출·집계·완료 RPC의 인자와 반환형 유지.
 -- 새 앱은 v2에 코스/요청 id를 보낸다. 옛 앱은 기존 wrapper로 같은 저장 본문을 탄다.
--- 완료 판정은 0314 노하우 단위 판정도 함께 인정한다. 옛 앱은 문항을 3개만 받으므로 문항 전부를 요구하면 못 끝낸다.
+-- 완료 판정은 문항 단위만 센다. 옛 앱(문항 3개만 받음)은 4문항 이상 퀴즈를 못 끝낸다. 옛 앱 사용자가 사실상 없어 감수한다(2026-10-22 사용자 결정).
 -- v2 제출도 0203처럼 지워진·다른 코스 문항만 버리고 나머지를 저장한다(재시도 영구 실패 방지).
 -- 노하우별 quiz_attempts는 유지하되 점수는 문항별 quiz_attempt_items만 센다.
 -- 스냅샷은 문항/코스 삭제 후에도 남아야 하므로 새 열에는 수명 연동 FK를 걸지 않는다.
@@ -235,7 +235,7 @@ grant execute on function public.quiz_assignment_items(text,int,text[]) to authe
 
 create or replace function public.mark_quiz_completed(p_id text)
 returns boolean language plpgsql security definer set search_path = public as $$
-declare a public.quiz_assignments; v_total int; v_answered int; v_due int;
+declare a public.quiz_assignments; v_total int; v_answered int;
 begin
   select * into a from public.quiz_assignments x where x.id=p_id and x.user_id=auth.uid()
     and x.unit_id=public.auth_unit_id() and x.sent_at is not null for update;
@@ -246,42 +246,11 @@ begin
   if not exists(select 1 from public.training_courses c where c.id=a.course_id and c.active and c.brand_hidden_at is null) then
     return false;
   end if;
-  select c.due_days into v_due from public.training_courses c where c.id=a.course_id;
   select count(*)::int,count(*) filter(where p.answered)::int into v_total,v_answered
     from public.quiz_assignment_pending(a.id) p;
-  -- 구형 앱은 같은 3문항만 받고(md5 고정 정렬) 이 함수를 같은 인자로 부른다.
-  -- 문항 전부만 요구하면 4문항 이상 코스를 영영 못 끝낸다. 0314 노하우 단위 판정도 완료로 인정한다.
-  if (v_total=0 or v_answered<v_total) and exists (
-    select 1
-      from public.course_entries ce
-      join public.playbook_entries pe on pe.id = ce.entry_id
-     where ce.course_id = a.course_id
-       and pe.archived_at is null and pe.brand_hidden_at is null
-       and exists (select 1 from public.quiz_items q
-                    where q.unit_id = a.unit_id and q.status = 'active'
-                      and q.format = any(public.quiz_known_formats())
-                      and ce.entry_id = any(q.entry_ids)
-                      and (q.course_id is null or q.course_id = a.course_id)
-                      and not exists (select 1 from public.playbook_entries h
-                                       where h.id = any(q.entry_ids) and h.unit_id = q.unit_id
-                                         and (h.brand_hidden_at is not null or h.archived_at is not null)))
-       and not exists (select 1 from public.quiz_attempts t
-                        where t.unit_id = a.unit_id and t.staff_id = a.user_id and t.entry_id = ce.entry_id
-                          and t.taken_at >= a.sent_at
-                          -- 새 앱이 다른 코스로 명시한 답은 세지 않는다. 코스 미상(구형)이나 같은 코스만.
-                          and (t.course_id is null or t.course_id = a.course_id)
-                          and not exists (select 1 from public.quiz_attempt_items ai
-                                            join public.quiz_items qi on qi.id = ai.item_id
-                                           where ai.submission_id = t.submission_id
-                                             and ce.entry_id = any(qi.entry_ids)
-                                             and not (qi.course_id is null or qi.course_id = a.course_id)))
-       and not exists (select 1 from public.knowhow_understanding ku
-                        where ku.unit_id = a.unit_id and ku.staff_id = a.user_id and ku.entry_id = ce.entry_id
-                          and (v_due is null or ku.verified_at > now() - make_interval(days => v_due))
-                          and (a.origin <> 'recheck' or ku.verified_at >= pe.updated_at))
-  ) then
-    return false;
-  end if;
+  -- 문항 단위만 센다. 같은 노하우의 다른 문항을 풀었다고 이 퀴즈를 끝낸 것으로 보지 않는다(2026-10-22 사용자 결정).
+  -- 낸 퀴즈의 마지막 문항은 빼지 못하게 막았다(아래 트리거). 0문항은 비정상이라 완료로 닫지 않는다.
+  if v_total=0 or v_answered<v_total then return false; end if;
   update public.quiz_assignments set completed_at=now() where id=a.id;
   return true;
 end $$;
@@ -477,3 +446,90 @@ begin
       miss_count=k.miss_count+excluded.miss_count,last_missed_at=coalesce(excluded.last_missed_at,k.last_missed_at);
   end loop;
 end $$;
+
+-- 출제·채점·제출·진행이 같은 문항 집합을 보게 한다. 출제만 다른 조건을 쓰면 낸 문항이 제출에서 조용히 버려진다.
+-- 서명은 0307 그대로다. 코스를 안 보내는 옛 호출(p_course_id null)은 옛 동작을 유지한다.
+create or replace function public.quiz_items_for(p_entry_ids text[], p_limit int default 3, p_course_id text default null)
+returns table (id text, kind text, format text, payload jsonb, entry_ids text[])
+language plpgsql stable security definer set search_path = public as $$
+declare
+  v_unit text := public.auth_unit_id();
+  v_uid  text := coalesce(auth.uid()::text, '');
+begin
+  if v_unit is null or p_entry_ids is null or array_length(p_entry_ids, 1) is null then
+    return;
+  end if;
+  if p_course_id is not null then
+    return query
+      select q.id, q.kind, q.format,
+             public.quiz_strip_payload(public.quiz_shuffle_seed(q.id, q.created_at), q.format, q.payload),
+             q.entry_ids
+        from public.quiz_course_servable(v_unit, p_course_id) q
+       where q.entry_ids && p_entry_ids
+       order by md5(q.id || v_uid)
+       limit least(greatest(coalesce(p_limit, 3), 1), 20);
+    return;
+  end if;
+  return query
+    select q.id, q.kind, q.format,
+           public.quiz_strip_payload(public.quiz_shuffle_seed(q.id, q.created_at), q.format, q.payload),
+           q.entry_ids
+      from public.quiz_items q
+     where q.unit_id = v_unit and q.status = 'active'
+       and q.format = any(public.quiz_known_formats())
+       and q.entry_ids && p_entry_ids
+       and not exists (select 1 from public.playbook_entries h
+                        where h.id = any(q.entry_ids) and h.unit_id = q.unit_id
+                          and (h.brand_hidden_at is not null or h.archived_at is not null))
+     order by md5(q.id || v_uid)
+     limit least(greatest(coalesce(p_limit, 3), 1), 20);
+end $$;
+revoke all on function public.quiz_items_for(text[], int, text) from public, anon, authenticated;
+grant execute on function public.quiz_items_for(text[], int, text) to authenticated;
+
+create or replace function public.quiz_link_items(p_token text, p_limit int default null)
+returns table (id text, kind text, format text, payload jsonb, entry_ids text[])
+language plpgsql stable security definer set search_path = public as $$
+declare l public.quiz_links;
+begin
+  l := public.quiz_link_resolve(p_token);
+  if l.id is null then return; end if;
+  return query
+    select q.id, q.kind, q.format,
+           public.quiz_strip_payload(public.quiz_shuffle_seed(q.id, q.created_at), q.format, q.payload),
+           q.entry_ids
+      from public.quiz_link_servable(l) q
+     order by md5(q.id || p_token)
+     limit case when coalesce(p_limit, 0) > 0 then p_limit else null end;
+end $$;
+revoke all on function public.quiz_link_items(text, int) from public;
+grant execute on function public.quiz_link_items(text, int) to anon, authenticated;
+
+-- 낸 퀴즈(발송했거나 살아 있는 링크가 있는 퀴즈)의 마지막 문항은 빼지 못한다. 0문항 퀴즈는 아무도 끝낼 수 없다.
+-- 퀴즈를 그만 내려면 퀴즈를 보관·삭제한다. 노하우 보관(0314 트리거)과 본사 배포·회수가 문항을 정리하는 경로는 막지 않는다.
+create or replace function public.tg_quiz_items_keep_last()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if old.status <> 'active' then return coalesce(new, old); end if;
+  if tg_op = 'UPDATE' and new.status = 'active' then return new; end if;
+  if pg_trigger_depth() > 1 or coalesce(current_setting('brand.deploying', true), '') = '1' then
+    return coalesce(new, old);
+  end if;
+  if exists (
+    select 1 from public.training_courses c
+     where c.unit_id = old.unit_id and c.active and c.brand_hidden_at is null
+       and (old.course_id is null or c.id = old.course_id)
+       and exists (select 1 from public.quiz_course_servable(c.unit_id, c.id) s where s.id = old.id)
+       and not exists (select 1 from public.quiz_course_servable(c.unit_id, c.id) s where s.id <> old.id)
+       and (exists (select 1 from public.quiz_assignments a where a.course_id = c.id and a.sent_at is not null)
+            or exists (select 1 from public.quiz_links l where l.course_id = c.id and l.revoked_at is null))
+  ) then
+    raise exception 'last_quiz_item' using hint = '마지막 문항은 뺄 수 없어요. 퀴즈를 그만 내려면 퀴즈를 보관하세요.';
+  end if;
+  return coalesce(new, old);
+end $$;
+revoke all on function public.tg_quiz_items_keep_last() from public, anon, authenticated;
+drop trigger if exists trg_quiz_items_keep_last on public.quiz_items;
+create trigger trg_quiz_items_keep_last
+  before delete or update of status on public.quiz_items
+  for each row execute function public.tg_quiz_items_keep_last();

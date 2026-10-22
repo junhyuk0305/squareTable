@@ -127,10 +127,13 @@ export default function LandingScreen() {
   const brandId = useSessionStore((s) => s.brandId);
   const stores = useSessionStore((s) => s.stores);
   const sessionCheck = useSessionStore((s) => s.sessionCheck);
+  // 렌더 중에는 모듈 값을 바꾸지 않는다(react-hooks/globals). 로그인되면 effect 에서 지운다.
+  useEffect(() => {
+    if (status === 'signed_in') bootOAuthLost = false;
+  }, [status]);
 
   // 이미 로그인된 재방문자는 마케팅을 건너뛰고 각자 홈으로. (데모 빌드는 항상 랜딩을 보여준다)
   if (HAS_SUPABASE && status === 'signed_in') {
-    bootOAuthLost = false;
     // 소셜 로그인으로 들어와 프로필이 결손(phone/생년월일 없음)이면 역할 홈 대신 완성화면으로 — 이 관문이
     // OAuth 복귀(redirectTo=오리진→여기)를 가장 먼저 받는다. 완성 후엔 phone 이 채워져 이 분기를 안 탄다.
     if (needsProfileSetup({ status, phone, unitId, pendingUnitId, brandId })) {

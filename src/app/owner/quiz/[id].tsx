@@ -645,6 +645,11 @@ export default function QuizDetailScreen() {
                 const q = itemMenu;
                 setItemMenu(null);
                 if (!q) return;
+                // 0문항 퀴즈는 아무도 끝낼 수 없다. 서버(0326 트리거)도 낸 퀴즈의 마지막 문항을 막는다.
+                if (items.length <= 1) {
+                  showToast('마지막 문항은 뺄 수 없어요. 퀴즈를 그만 내려면 더보기에서 보관해 주세요');
+                  return;
+                }
                 const ok = await guardWrite(
                   updateQuizItem(q.id, { status: 'archived' }),
                   () => {},

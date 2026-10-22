@@ -30,8 +30,10 @@ try{
  const crossGrade=await anon.rpc('quiz_link_grade',{p_token:token,p_item_id:items[2],p_response:0});check('cross-course grade denied',!!crossGrade.error,crossGrade);
  const crossSubmit=await anon.rpc('quiz_link_submit',{p_token:token,p_guest_name:p,p_guest_phone:null,p_phone_verified:false,p_answers:[{item_id:items[2],response:0}]});check('cross-course submit rejected',!!crossSubmit.error||crossSubmit.data===0,crossSubmit);
  out('owner_cross_course_record',await must(owner.from('quiz_attempts').select('course_id,total,correct,guest_name').eq('course_id',courses[0])));
+ // 발송 시각은 서버 시계로 잡는다. PC 시계가 앞서면 발송 뒤 답이 발송 전으로 보여 RED가 난다.
+ const serverAfterLastAnswer=async()=>{const r=await must(owner.from('quiz_attempt_items').select('created_at').in('item_id',items).order('created_at',{ascending:false}).limit(1));return new Date(Date.parse(r[0].created_at)+1).toISOString();};
  // A fresh assignment cannot use the earlier attempt or global understanding as completion.
- await must(admin.from('quiz_assignments').insert({id:assignment,unit_id:UNIT,course_id:courses[0],user_id:junior.uid,scheduled_on:new Date().toISOString().slice(0,10),sent_at:new Date().toISOString()}));
+ await must(admin.from('quiz_assignments').insert({id:assignment,unit_id:UNIT,course_id:courses[0],user_id:junior.uid,scheduled_on:new Date().toISOString().slice(0,10),sent_at:await serverAfterLastAnswer()}));
  await must(admin.from('knowhow_understanding').upsert(entries.map(entry_id=>({unit_id:UNIT,entry_id,staff_id:junior.uid,staff_name:'QA',verified_at:new Date().toISOString()})),{onConflict:'entry_id,staff_id'}));
  const premature=await junior.rpc('mark_quiz_completed',{p_id:assignment});check('global understanding does not complete assignment',!premature.error&&premature.data===false,premature);
  const progress=await junior.rpc('quiz_assignment_progress',{p_course_id:courses[0]});
@@ -79,7 +81,7 @@ try{
  await must(owner.from('quiz_items').update({status:'archived'}).eq('id',items[2]));
  const legacyItem=p+'_legacy_item';items.push(legacyItem);
  await must(owner.from('quiz_items').insert({id:legacyItem,unit_id:UNIT,course_id:null,entry_ids:[entries[1]],kind:'t0',format:'mc4',payload:{ask:'Legacy',choices:['A','B','C','D'],answer_index:0,explain:'QA'},source:'owner',status:'active',created_by:owner.uid}));
- await must(admin.from('quiz_assignments').insert({id:legacyAssignment,unit_id:UNIT,course_id:courses[1],user_id:junior.uid,scheduled_on:new Date().toISOString().slice(0,10),sent_at:new Date().toISOString()}));
+ await must(admin.from('quiz_assignments').insert({id:legacyAssignment,unit_id:UNIT,course_id:courses[1],user_id:junior.uid,scheduled_on:new Date().toISOString().slice(0,10),sent_at:await serverAfterLastAnswer()}));
  const newShared=await junior.rpc('quiz_staff_record_v2',{p_course_id:courses[0],p_request_id:p+'_new_shared',p_rows:[{item_id:legacyItem,response:0}]});
  check('new v2 accepts shared item in explicit course',!newShared.error&&!!newShared.data,newShared);
  const notOther=await junior.rpc('mark_quiz_completed',{p_id:legacyAssignment});
