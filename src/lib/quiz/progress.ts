@@ -98,7 +98,8 @@ export function isNextQuizRequest(value: string): boolean {
 
 /**
  * 발송 원장 없는 옛 퀴즈가 아직 할 일인가(P4). 낼 노하우 중 내 제출이 없는 것이 있으면 할 일이다.
- * submitted 가 없으면(조회 전·실패) 할 일로 남긴다. 퀴즈가 사라지지 않게.
+ * submitted 가 없으면(조회 실패) 할 일로 남긴다. 퀴즈가 사라지지 않게.
+ * 조회 중에는 부르는 쪽이 숫자를 그리지 않는다(useJuniorHomeData.quizCountReady).
  */
 export function legacyQuizOpen(entryIds: string[], submitted: Set<string> | null | undefined): boolean {
   if (!submitted) return entryIds.length > 0;

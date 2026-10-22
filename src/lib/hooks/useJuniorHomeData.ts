@@ -36,6 +36,9 @@ export type JuniorHomeData = {
   today: string;
   /** 아직 통과 못 한 퀴즈(노하우) 수 — 홈 경고행(AlertRow)용. 0이면 행이 안 그려진다. */
   openQuizCount: number;
+  /** openQuizCount 가 확정됐나. 옛 퀴즈 제출 조회 중이면 false — 홈은 숫자를 안 그린다(ready 게이트). */
+  quizCountReady: boolean;
+  /** 퀴즈 진행 또는 옛 퀴즈 제출 조회 실패. 홈은 같은 오류 안내를 띄운다. */
   quizProgressError: boolean;
 };
 
@@ -130,13 +133,21 @@ export function useJuniorHomeData(): JuniorHomeData {
   );
   // 스토어가 응시 목록을 다시 받으면(제출 뒤 등) 같이 다시 읽는다. 값은 쓰지 않고 신호로만 본다.
   const attemptsTick = useWorkStore((s) => s.quizAttempts);
-  const [legacySubmitted, setLegacySubmitted] = useState<Record<string, Set<string>> | null>(null);
+  // 결과는 요청 키(사람·퀴즈 목록·응시 신호)와 같이 둔다. 키가 다르면 아직 첫 조회 중이다(ready 게이트). 제출 뒤 다시 읽는 동안은 앞 값을 보인다.
+  const legacyKey = userId && legacyIds ? `${userId}|${legacyIds}` : '';
+  const [legacyResult, setLegacyResult] = useState<{ key: string; data: Record<string, Set<string>> | null } | null>(null);
   useEffect(() => {
-    if (!userId || !legacyIds) return; // 옛 퀴즈가 없으면 아래 반복이 아무것도 세지 않는다.
+    if (!legacyKey || !userId) return; // 옛 퀴즈가 없으면 아래 반복이 아무것도 세지 않는다.
     let alive = true;
-    void fetchMySubmittedEntries(userId, legacyIds.split(',')).then((r) => { if (alive) setLegacySubmitted(r); });
+    void fetchMySubmittedEntries(userId, legacyIds.split(',')).then((r) => {
+      if (alive) setLegacyResult({ key: legacyKey, data: r });
+    });
     return () => { alive = false; };
-  }, [userId, legacyIds, attemptsTick]);
+  }, [legacyKey, userId, legacyIds, attemptsTick]);
+  const legacyLoading = !!legacyKey && legacyResult?.key !== legacyKey;
+  /** 조회 실패(null) — 할 일로 남기는 폴백은 그대로 두고, 홈은 기존 오류 안내(quizProgressError)로 말한다. */
+  const legacyError = !!legacyKey && !legacyLoading && legacyResult?.data == null;
+  const legacySubmitted = legacyKey && !legacyLoading ? legacyResult?.data ?? null : null;
   const openQuizCount = useMemo(() => {
     const views = trainingCourseViews(courses);
     // ★0332 · P3: 발송된 퀴즈는 quizTodo 하나로 센다(카드·벨과 같은 함수 · 재발송은 최신 하나 · 1회성은 앞선 하나).
@@ -179,6 +190,7 @@ export function useJuniorHomeData(): JuniorHomeData {
     todayTasks,
     today,
     openQuizCount,
-    quizProgressError,
+    quizCountReady: !legacyLoading,
+    quizProgressError: quizProgressError || legacyError,
   };
 }

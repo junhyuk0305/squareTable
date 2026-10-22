@@ -61,6 +61,7 @@ export default function JuniorHomeScreen() {
     today,
     openQuizCount,
     quizProgressError,
+    quizCountReady,
   } = useJuniorHomeData();
 
   // 첫 진입 사용 안내 — 본문이 다 선 뒤에만(loaded 전엔 빈 화면 위에 뜬다).
@@ -188,9 +189,9 @@ export default function JuniorHomeScreen() {
             카드의 다음 노하우로 응시 시트를 연다. 값은 누를 때마다 달라야 같은 탭을 두 번 눌러도 다시 열린다. */}
         {quizProgressError ? (
           <LoadErrorState title="퀴즈 진행 상태를 불러오지 못했어요" onRetry={() => void useWorkStore.getState().hydrate()} />
-        ) : (
+        ) : quizCountReady ? (
         <AlertRow label="안 푼 퀴즈" count={openQuizCount} onPress={() => goToTab(`/junior/work?quiz=${Date.now()}`)} />
-        )}
+        ) : null}
           </>
         )}
       </ScrollView>

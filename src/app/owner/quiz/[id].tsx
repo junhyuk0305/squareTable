@@ -117,6 +117,7 @@ export default function QuizDetailScreen() {
   const [rawItems, setRawItems] = useState<QuizItem[]>([]);
   const entriesLoaded = usePlaybookStore((s) => s.loaded);
   const items = useMemo(() => itemsOfCourse(rawItems, id ?? '', entryIds, entries), [rawItems, id, entryIds, entries]);
+  const itemIdSet = useMemo(() => new Set(items.map((q) => q.id)), [items]);
   const [itemsLoaded, setItemsLoaded] = useState(false);
   const [itemsReload, setItemsReload] = useState(0);
   const [itemsError, setItemsError] = useState(false);
@@ -514,7 +515,8 @@ export default function QuizDetailScreen() {
                         <Text style={st.rowTitle} numberOfLines={1}>{p.name}</Text>
                         <Text style={st.rowSub} numberOfLines={1}>
                           {/* N17: 분모는 이 퀴즈의 문항 수다(낸 답 수가 아니다). */}
-                          {done ? roundLabel(mine, items.length) : rowStateText(p)}
+                          {/* 분자도 지금 문항에 대한 답만 센다. 빼거나 보관한 문항의 답이 "2문제 중 3개"를 만들지 않게. */}
+                          {done ? roundLabel(mine.filter((r) => itemIdSet.has(r.itemId)), items.length) : rowStateText(p)}
                         </Text>
                       </View>
                       <ProgressPill text={PERSON_STATE_LABEL[p.state]} tone={p.state === 'done' ? 'done' : p.state === 'in_progress' ? 'progress' : 'neutral'} />
