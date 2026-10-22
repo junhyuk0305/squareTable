@@ -22,7 +22,7 @@ import {
   upsertTrainingCourse,
   insertQuizAssignments,
   insertQuizItem,
-  updateQuizItem,
+  archiveQuizItem,
   type CourseAttemptItemRow,
   type QuizSendBlock,
   type RecipientReadinessRow,
@@ -30,6 +30,7 @@ import {
 import { readinessText } from '@/lib/recipientReadiness';
 import { genId } from '@/lib/utils/id';
 import { FORMATS } from '@/lib/quiz/formats';
+import { quizErrorMessage } from '@/lib/quiz/errors';
 import { itemsOfCourse } from '@/lib/quiz/courseItems';
 import { latestQuizAssignments, latestCourseAnswers } from '@/lib/quiz/courseStats';
 // KST 오늘은 일정 SSOT 하나만 쓴다(이 파일·만들기·설정 패널에 복붙돼 있던 것을 걷었다).
@@ -645,17 +646,16 @@ export default function QuizDetailScreen() {
                 const q = itemMenu;
                 setItemMenu(null);
                 if (!q) return;
-                // 0문항 퀴즈는 아무도 끝낼 수 없다. 서버(0326 트리거)도 낸 퀴즈의 마지막 문항을 막는다.
+                // 0문항 퀴즈는 없다(Q3). 이 가드는 화면 문항 집합(TS)이라 서버 판정과 어긋날 수 있다.
+                // 최종 안내는 서버(0327 last_quiz_item)가 막은 이유다. 두 문구는 같은 표에서 나온다.
                 if (items.length <= 1) {
-                  showToast('마지막 문항은 뺄 수 없어요. 퀴즈를 그만 내려면 더보기에서 보관해 주세요');
+                  showToast(quizErrorMessage({ message: 'last_quiz_item' }), 'warn');
                   return;
                 }
-                const ok = await guardWrite(
-                  updateQuizItem(q.id, { status: 'archived' }),
-                  () => {},
-                  '빼지 못했어요.',
-                );
-                if (ok) {
+                const dropErr = await archiveQuizItem(q.id);
+                if (dropErr) {
+                  showToast(quizErrorMessage(dropErr, '빼지 못했어요. 잠시 뒤 다시 시도해 주세요.'), 'warn');
+                } else {
                   setItemsReload((v) => v + 1);
                   showToast('문항을 뺐어요. 다음 응시부터 안 나가요', 'good');
                 }

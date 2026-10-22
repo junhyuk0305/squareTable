@@ -78,6 +78,27 @@ async function writeStrict(
   return true;
 }
 
+// writeStrict 와 같은 판정인데 서버 raise 코드를 돌려준다(null = 성공). 화면이 코드를 문구 표로 바꿀 때만 쓴다
+// (예: 0327 last_quiz_item → src/lib/quiz/errors.ts). strict=false 면 0행을 성공으로 본다(write 와 같다).
+async function writeErr(
+  label: string,
+  q: PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+  strict = true,
+): Promise<DbErr> {
+  const { data, error } = await q;
+  if (error) {
+    console.warn(`[db] ${label}:`, error.message);
+    reportError(`db.write:${label}`, error);
+    return error;
+  }
+  if (strict && Array.isArray(data) && data.length === 0) {
+    console.warn(`[db] ${label}: 0 rows affected (RLS/id/concurrency)`);
+    reportError(`db.write.zero:${label}`, { message: '0 rows affected' });
+    return { message: 'zero_rows' };
+  }
+  return null;
+}
+
 // 결정 뮤테이션의 결과 분류(P2 ⑦ · src/lib/decision.ts). writeStrict 와 같은 쓰기인데 0행을 실패가 아니라
 // 'already'(이미 그 상태 · 다른 기기가 먼저 처리)로 돌려준다. 서버 raise 코드는 분류표로 갈라진다.
 // ⚠️ 0행 = already 가 참인 경로에만 쓴다: 조건(.eq/.in/.neq)이 "아직 안 처리됨"을 정확히 가르는 쓰기.
@@ -2298,12 +2319,14 @@ export async function insertCourseEntry(courseId: string, entryId: string, posit
       ),
   );
 }
-/** 코스 하나에서 노하우 빼기(노하우·다른 코스 소속·통과 기록은 남는다). 이미 없으면 0행 = 원하는 상태(멱등). */
-export async function deleteCourseEntry(courseId: string, entryId: string): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  return write(
+/** 코스 하나에서 노하우 빼기(노하우·다른 코스 소속·통과 기록은 남는다). 이미 없으면 0행 = 원하는 상태(멱등).
+ *  null = 성공. 마지막 문항을 없애는 빼기는 서버가 last_quiz_item 으로 막는다(0327) → quizErrorMessage. */
+export async function deleteCourseEntry(courseId: string, entryId: string): Promise<DbErr> {
+  if (!HAS_SUPABASE) return null;
+  return writeErr(
     'deleteCourseEntry',
-    supabase.from('course_entries').delete().eq('course_id', courseId).eq('entry_id', entryId),
+    supabase.from('course_entries').delete().eq('course_id', courseId).eq('entry_id', entryId).select('entry_id'),
+    false,
   );
 }
 /** 순서 변경 — 한 코스 안에서 이웃과 position 스왑(관리 권한만, ce_update). 두 행을 개별 update.
@@ -2496,9 +2519,18 @@ export async function updateQuizItem(id: string, patch: Partial<QuizItem>): Prom
   );
 }
 
-export async function deleteQuizItem(id: string): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  return writeStrict('deleteQuizItem', supabase.from('quiz_items').delete().eq('id', id).select('id'));
+/** null = 성공. 살아 있는 퀴즈의 마지막 문항은 서버가 last_quiz_item 으로 막는다(0327) → quizErrorMessage. */
+export async function deleteQuizItem(id: string): Promise<DbErr> {
+  if (!HAS_SUPABASE) return null;
+  return writeErr('deleteQuizItem', supabase.from('quiz_items').delete().eq('id', id).select('id'));
+}
+/** 문항 보관(퀴즈에서 빼기). null = 성공. 마지막 문항이면 last_quiz_item(0327). */
+export async function archiveQuizItem(id: string): Promise<DbErr> {
+  if (!HAS_SUPABASE) return null;
+  return writeErr(
+    'archiveQuizItem',
+    supabase.from('quiz_items').update({ status: 'archived', updated_at: new Date().toISOString() }).eq('id', id).select('id'),
+  );
 }
 
 // ── 훈련 코스(0108) — 0099 의 'first_day'|'regular' 문자열을 대체하는 매장 소유 코스 ──────

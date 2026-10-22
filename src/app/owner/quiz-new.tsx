@@ -12,7 +12,7 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore, courseEntriesOf } from '@/lib/store/useWorkStore';
 import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
-import { guardWrite } from '@/lib/store/useSyncStore';
+import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { genId } from '@/lib/utils/id';
 import {
@@ -28,6 +28,7 @@ import {
 import { unreachableNote } from '@/lib/recipientReadiness';
 import { generateQuizItems, QuizQuotaError } from '@/lib/quiz/generate';
 import { itemsOfCourse } from '@/lib/quiz/courseItems';
+import { quizErrorMessage } from '@/lib/quiz/errors';
 import { aiCapNextStep } from '@/lib/config/tiers';
 import { showUpgradeHint } from '@/lib/config/store-policy';
 import { getSectionMeta } from '@/lib/utils/category';
@@ -490,7 +491,12 @@ export default function QuizNewScreen() {
 
   const dropItem = async (m: Made) => {
     if (!m.item) return;
-    await guardWrite(deleteQuizItem(m.item.id), () => {}, '문항을 빼지 못했어요.');
+    // 실패하면 줄을 그대로 둔다. 서버가 막은 이유(마지막 문항 last_quiz_item 등)는 문구 표로 보여 준다.
+    const dropErr = await deleteQuizItem(m.item.id);
+    if (dropErr) {
+      useSyncStore.getState().noteError(quizErrorMessage(dropErr, '문항을 빼지 못했어요.'));
+      return;
+    }
     setMade((v) => v.map((x) => (x.entryId === m.entryId ? { ...x, item: null, state: 'thin' } : x)));
   };
 
@@ -1095,11 +1101,15 @@ export default function QuizNewScreen() {
             {okItems.length === 0 ? (
               <Ghost label={courseId ? '나중에 하기 · 초안으로 저장' : '그만두기'} onPress={saveDraftAndLeave} />
             ) : null}
-            <Primary
-              label={audience === 'guest' ? '링크 기간 정하기' : '받는 사람 고르기'}
-              disabled={okItems.length === 0}
-              onPress={() => setStep(5)}
-            />
+            {/* 문항 0개 퀴즈는 보낼 수 없다(Q3 · 서버 0327 quiz_no_items). 하나도 못 만들었으면 노하우 고르기로 돌려보낸다. */}
+            {okItems.length === 0 ? (
+              <Primary label="노하우 다시 고르기" onPress={() => setStep(2)} />
+            ) : (
+              <Primary
+                label={audience === 'guest' ? '링크 기간 정하기' : '받는 사람 고르기'}
+                onPress={() => setStep(5)}
+              />
+            )}
           </>
         )}
         {step === 5 && (

@@ -34,6 +34,7 @@ import {
 import { generateQuizItems, QuizQuotaError } from '@/lib/quiz/generate';
 import { FORMATS } from '@/lib/quiz/formats';
 import { itemsOfCourse } from '@/lib/quiz/courseItems';
+import { quizErrorMessage } from '@/lib/quiz/errors';
 import type { QuizItem, QuizFormat } from '@/lib/quiz/types';
 import { genId } from '@/lib/utils/id';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -125,8 +126,9 @@ export default function HqQuizBuilderScreen() {
     setPhase('saving');
     setErr(null);
     if (picked.includes(eid)) {
-      if (courseRef.current && !(await deleteCourseEntry(courseRef.current, eid))) {
-        setPhase('idle'); setErr('노하우를 빼지 못했어요. 다시 시도해 주세요.'); return;
+      const dropErr = courseRef.current ? await deleteCourseEntry(courseRef.current, eid) : null;
+      if (dropErr) {
+        setPhase('idle'); setErr(quizErrorMessage(dropErr, '노하우를 빼지 못했어요. 다시 시도해 주세요.')); return;
       }
       setPicked((p) => p.filter((x) => x !== eid));
       setMade((m) => m.filter((x) => x.entryId !== eid));
@@ -284,7 +286,8 @@ export default function HqQuizBuilderScreen() {
     void refresh();
   };
   const dropItem = async (q: QuizItem) => {
-    if (!(await deleteQuizItem(q.id))) { setErr('문항을 빼지 못했어요.'); return; }
+    const dropErr = await deleteQuizItem(q.id);
+    if (dropErr) { setErr(quizErrorMessage(dropErr, '문항을 빼지 못했어요.')); return; }
     setItemsReload((v) => v + 1);
     void refresh();
   };

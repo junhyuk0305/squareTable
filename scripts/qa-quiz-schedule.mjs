@@ -174,6 +174,20 @@ async function main() {
 
   // ── ② quiz_assignments RLS ──────────────────────────────────────────────
   console.log('— ② quiz_assignments RLS —');
+  // ★0327: 문항이 0개인 퀴즈는 보낼 수 없다(quiz_no_items). 발송 원장을 만들기 전에 문항을 먼저 심는다.
+  //   근거 노하우는 따로 둔다. ENTRY 에 문항을 붙이면 ⑪ 재확인(낡은 문항) 판정이 흔들린다.
+  const giveItem = async (unit, course, tag) => {
+    const eid = `pb_qsq_${tag}_${s}`;
+    made.entries.push(eid);
+    const steps = [
+      admin.from('playbook_entries').insert({ id: eid, unit_id: unit, category: 'Routine', title: 'QA 퀴즈 근거', status: 'published', updated_at: daysAgo(5) }),
+      admin.from('course_entries').insert({ course_id: course, entry_id: eid, unit_id: unit, position: 0 }),
+      admin.from('quiz_items').insert({ id: `qi_qsq_${tag}_${s}`, unit_id: unit, course_id: course, entry_ids: [eid], kind: 't0', format: 'mc4', status: 'active',
+        payload: { ask: '마감 때 먼저 할 일은?', choices: ['바닥 청소', '포스 끄기'], answer_index: 1, explain: 'QA' } }),
+    ];
+    for (const q of steps) { const { error } = await q; if (error) throw new Error(`giveItem(${tag}): ${error.message}`); }
+  };
+  await giveItem(UNIT, QUIZ, 'a');
   const asg = (id, uid, on = DAY, unit = UNIT, course = QUIZ) =>
     ({ id, unit_id: unit, course_id: course, user_id: uid, scheduled_on: on });
   const A1 = `qz_a1_${s}`, A2 = `qz_a2_${s}`, A3 = `qz_a3_${s}`;
@@ -204,11 +218,14 @@ async function main() {
   await owner.rpc('switch_active_unit', { p_unit_id: UNIT2 });
   const QUIZ2 = `tc_qs2_${s}`;
   await owner.from('training_courses').insert({ id: QUIZ2, unit_id: UNIT2, key: `qs2_${s}`, name: '2호점 퀴즈' });
+  // 문항이 있어야 0327 quiz_no_items 가 아니라 RLS(qz_insert)가 거부하는지를 본다.
+  await giveItem(UNIT2, QUIZ2, 'u2');
 
+  // 거부 이유까지 본다: RLS 위반(42501). 다른 이유(예: quiz_no_items)로 막히면 이 검사는 아무것도 증명하지 않는다.
   const { error: xcErr } = await owner.from('quiz_assignments').insert(asg(`qz_xc_${s}`, ownerId, DAY, UNIT2, QUIZ));
-  check('남의 매장 코스 참조 거부', !!xcErr, xcErr?.code ?? '거부 안 됨');
+  check('남의 매장 코스 참조 거부(RLS)', xcErr?.code === '42501', xcErr ? `${xcErr.code} ${xcErr.message}` : '거부 안 됨');
   const { error: xmErr } = await owner.from('quiz_assignments').insert(asg(`qz_xm_${s}`, aId, DAY, UNIT2, QUIZ2));
-  check('그 매장 멤버가 아닌 수신자 거부', !!xmErr, xmErr?.code ?? '거부 안 됨');
+  check('그 매장 멤버가 아닌 수신자 거부(RLS)', xmErr?.code === '42501', xmErr ? `${xmErr.code} ${xmErr.message}` : '거부 안 됨');
   await owner.rpc('switch_active_unit', { p_unit_id: UNIT });
 
   // ── ③ 근무일 판정 ───────────────────────────────────────────────────────
@@ -234,6 +251,8 @@ async function main() {
   // 같은 사람에게 오늘치 2건 → 한 스윕에 1건만(아직 sent_at 이 없어 원장 조회만으로는 못 막는 자리).
   const QUIZ_B = `tc_qsb_${s}`;
   await owner.from('training_courses').insert({ id: QUIZ_B, unit_id: UNIT, key: `qsb_${s}`, name: '두 번째 퀴즈', start_at: DAY });
+  // 0327: 문항 없는 퀴즈는 스윕 후보가 아니다. 문항이 없으면 아래 "한 스윕에 1건" 검사가 공짜로 통과한다.
+  await giveItem(UNIT, QUIZ_B, 'b');
   await admin.from('quiz_assignments').insert(asg(A3, aId, DAY, UNIT, QUIZ_B));
   check(`한 스윕에 같은 사람 ${MAX_PER_DAY}건까지`, (await dueFor(aId)).length === MAX_PER_DAY, `n=${(await dueFor(aId)).length}`);
 

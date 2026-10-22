@@ -1090,7 +1090,7 @@ export const useWorkStore = create<State>((set, get) => ({
     const epoch = currentTenantEpoch(); // 매장이 바뀌었으면 되살리지 않는다(markUnderstood 주석)
     set((s) => ({ courseEntries: s.courseEntries.filter((e) => !(e.courseId === courseId && e.entryId === entryId)) }));
     await guardWrite(
-      deleteCourseEntry(courseId, entryId),
+      deleteCourseEntry(courseId, entryId).then((e) => !e),
       () => { if (!isStaleEpoch(epoch)) set((s) => ({ courseEntries: [...s.courseEntries, removed] })); },
       '퀴즈에서 빼기에 실패했어요.',
     );
