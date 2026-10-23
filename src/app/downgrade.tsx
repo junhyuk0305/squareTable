@@ -45,7 +45,7 @@ type StaffRow = { id: string; name: string };
 const CHOICE_ERROR_TEXT: Record<string, string> = {
   not_owner: '사장님 계정에서만 고를 수 있어요.',
   unit_not_free: '이미 요금제가 적용된 매장이에요. 고르지 않아도 그대로 열려 있어요.',
-  too_many_seats: '무료 요금제는 직원 3명까지예요. 3명까지만 골라주세요.',
+  too_many_seats: `무료 요금제는 직원 ${PLANS.free.maxStaff}명까지예요. ${PLANS.free.maxStaff}명까지만 골라주세요.`,
   no_seats_chosen: '함께할 직원을 한 명 이상 골라주세요.',
   not_a_member: '지금 이 매장에서 일하는 직원만 고를 수 있어요.',
   unknown: '저장하지 못했어요. 잠시 후 다시 시도해 주세요.',
@@ -180,7 +180,7 @@ function DowngradeBody() {
       if (prev.includes(id)) return prev.filter((x) => x !== id);
       // ★같은 파일 안에서 이 값만 하드코딩이었다(#50) — 아래 갈림길 카드는 PLANS.free.maxStaff 를 쓴다.
       //   값이 지금 우연히 같을 뿐, tiers.ts 를 바꾸면 여기만 드리프트한다.
-      // maxStaff=null 은 '무제한' 이라 상한이 없다(무료 플랜은 현재 3).
+      // maxStaff=null 은 '무제한' 이라 상한이 없다(무료 플랜은 현재 2 · 0336).
       const cap = PLANS.free.maxStaff;
       if (cap !== null && prev.length >= cap) { showToast(`무료 요금제는 직원 ${cap}명까지예요.`); return prev; }
       return [...prev, id];
@@ -285,7 +285,7 @@ function DowngradeBody() {
               <View style={styles.head}>
                 <Text style={styles.h1}>계속 함께할 직원을 골라주세요</Text>
                 <Text style={styles.sub}>
-                  무료 요금제는 직원 3명까지예요. 고르지 않은 직원은 앱을 잠시 못 쓰지만
+                  무료 요금제는 직원 {PLANS.free.maxStaff}명까지예요. 고르지 않은 직원은 앱을 잠시 못 쓰지만
                   기록은 그대로 남고, 요금제를 적용하면 바로 다시 열려요.
                 </Text>
               </View>

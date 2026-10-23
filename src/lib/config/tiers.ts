@@ -1,7 +1,7 @@
 // 과금 티어 SSOT — 티어·한도·가격·표시 문구는 전부 여기서만 정의한다(2곳 복제 금지).
 // billing 화면·다점포 게이팅·쿼터 안내문이 이 파일만 참조한다.
 //
-// ⚠️ 서버 카운터파트: 같은 한도가 서버 함수에 박혀 있다 — approve_member(직원 3명, 0115)·
+// ⚠️ 서버 카운터파트: 같은 한도가 서버 함수에 박혀 있다 — free_staff_cap()(직원 2명, 0336)·
 //    consume_ai_quota/ai_quota_status(무료 200 / 유료 3,000, 0193)·payment_claim_amount(가격, 0192).
 //    한도를 바꾸면 반드시 양쪽을 함께 바꾼다(클라=표시·서버=강제).
 // ⚠️ 전면 무료 모드(app_config.billing_free_mode) 동안엔 캡·게이팅이 전부 우회된다.
@@ -31,9 +31,9 @@ export const PLANS: Record<PlanId, PlanDef> = {
     monthlyKrw: 0,
     perStore: false,
     maxStores: 1,
-    maxStaff: 3,
+    maxStaff: 2,
     aiMonthly: 200,
-    features: ['매장 1개', '직원 3명까지', 'AI 사용량 월 200', '노하우 등록 무제한'],
+    features: ['매장 1개', '직원 2명까지', 'AI 사용량 월 200', '노하우 등록 무제한'],
   },
   single: {
     id: 'single',
@@ -102,7 +102,7 @@ export const SIGNUP_PROMO = {
     '직원 수 제한 없이 쓸 수 있어요',
     '매장이 여러 곳이면 다점포까지 — 가입 후 말씀만 주세요',
   ],
-  afterNote: '기간이 끝나면 무료 요금제(매장 1개·직원 3명)로 계속 쓰시면 돼요. 자동으로 결제되는 것은 없어요.',
+  afterNote: `기간이 끝나면 무료 요금제(매장 1개·직원 ${PLANS.free.maxStaff}명)로 계속 쓰시면 돼요. 자동으로 결제되는 것은 없어요.`,
 } as const;
 
 // 부가세 — 일반과세자(2026-08-03 등록)라 매출의 10%가 부가세다.

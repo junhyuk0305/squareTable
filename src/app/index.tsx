@@ -7,6 +7,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { needsProfileSetup } from '@/lib/store/profileSetup';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { SHOW_HQ_CONSOLE } from '@/lib/config/store-policy';
+import { PLANS } from '@/lib/config/tiers';
 import { landingFor } from '@/lib/nav/landing';
 import { isLostOAuthReturn, OAUTH_LOST_HREF } from '@/lib/auth/googleRedirect';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
@@ -260,7 +261,7 @@ export default function LandingScreen() {
               </View>
               <Text style={styles.offerTitle}>작은 매장은 계속 무료</Text>
               <Text style={styles.offerBody}>
-                매장 1곳·직원 3명까지는 무료로 쓸 수 있어요.{'\n'}
+                매장 {PLANS.free.maxStores}곳·직원 {PLANS.free.maxStaff}명까지는 무료로 쓸 수 있어요.{'\n'}
                 카드 없이 바로 시작해요.
               </Text>
 

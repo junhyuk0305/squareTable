@@ -10,8 +10,8 @@
 //   ① 체험 중 매장 3개 생성 OK(슬롯 면제) → 만료 강제 → need_store=true
 //   ② choose_kept_store → 고른 매장만 열림, 나머지 잠김
 //   ③ switch_active_unit(잠긴 매장) → unit_locked 거부
-//   ④ 직원 5명 → choose_kept_seats 3명 → 고른 3명 열림·나머지 2명 잠김
-//   ⑤ choose_kept_seats 4명 → too_many_seats
+//   ④ 직원 5명 → choose_kept_seats 2명 → 고른 2명 열림·나머지 3명 잠김 (무료 = 직원 2명 · 0336)
+//   ⑤ choose_kept_seats 3명 → too_many_seats
 //   ⑥ 남의 매장 선택 → not_owner
 //   ⑦ 결제 후 복구 → admin_activate_store → 전부 열림
 //   ⑧ ★선택 전에는 아무것도 잠기지 않는다(fail-open)
@@ -211,23 +211,23 @@ async function main() {
 
   // ── ④⑤ 직원 고르기 ───────────────────────────────────────────────────────
   check('★④ 남긴 매장의 직원 초과를 물어본다(need_seats)', n2?.need_seats === true, JSON.stringify(n2));
-  check('★④ 초과 인원 2명(5명 − 무료 3명)', n2?.over_seats === 2, `over_seats=${n2?.over_seats}`);
+  check('★④ 초과 인원 3명(5명 − 무료 2명 · 0336)', n2?.over_seats === 3, `over_seats=${n2?.over_seats}`);
 
-  const { error: eMany } = await O.c.rpc('choose_kept_seats', { p_uids: staff.slice(0, 4).map((j) => j.uid) });
-  check('★⑤ 4명 선택 → too_many_seats', /too_many_seats/.test(eMany?.message ?? ''), eMany?.message ?? '통과돼버림');
+  const { error: eMany } = await O.c.rpc('choose_kept_seats', { p_uids: staff.slice(0, 3).map((j) => j.uid) });
+  check('★⑤ 3명 선택 → too_many_seats', /too_many_seats/.test(eMany?.message ?? ''), eMany?.message ?? '통과돼버림');
   const { error: eZero } = await O.c.rpc('choose_kept_seats', { p_uids: [] });
   check('★⑤ 빈 명단 거부(no_seats_chosen)', /no_seats_chosen/.test(eZero?.message ?? ''), eZero?.message ?? '통과돼버림');
   const { error: eOut } = await O.c.rpc('choose_kept_seats', { p_uids: [B.uid] });
   check('★⑤ 우리 매장 직원이 아니면 거부(not_a_member)', /not_a_member/.test(eOut?.message ?? ''), eOut?.message ?? '통과돼버림');
 
-  const keptUids = staff.slice(0, 3).map((j) => j.uid);
+  const keptUids = staff.slice(0, 2).map((j) => j.uid);
   const { error: eSeats } = await O.c.rpc('choose_kept_seats', { p_uids: keptUids });
-  check('★④ 3명 선택 성공', !eSeats, eSeats?.message ?? 'ok');
+  check('★④ 2명 선택 성공', !eSeats, eSeats?.message ?? 'ok');
 
   // 좌석 잠금은 **직원 자신의 세션**에서 판정된다(auth.uid() + 활성 매장).
   for (let i = 0; i < 5; i++) {
     const { data: sl, error: se } = await staff[i].c.rpc('my_seat_locked');
-    const expect = i >= 3; // 0~2 = 고른 3명, 3~4 = 못 고른 2명
+    const expect = i >= 2; // 0~1 = 고른 2명, 2~4 = 못 고른 3명
     check(`★④ 직원${i + 1} 좌석 ${expect ? '잠김' : '열림'}(합류 순서가 아니라 사장의 선택)`, sl === expect, `locked=${sl} (${se?.message ?? ''})`);
   }
 

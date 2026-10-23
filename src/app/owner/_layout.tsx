@@ -167,7 +167,7 @@ export default function OwnerLayout() {
   if (HAS_SUPABASE && status === 'signed_in' && unitId && role === 'manager' && seatLocked) return <Redirect href="/billing" />;
   // ★2026-08-06: 만료 페이월(구독 만료 → /billing 강제) 제거.
   //   만료는 이제 앱 잠금이 아니라 **무료 요금제 강등**이다(effectivePlanOf / 0115 effective_plan).
-  //   사장은 만료돼도 앱을 그대로 쓰고, 제한은 무료 한도(직원 3명·AI 월 200)와 좌석 잠금으로만 걸린다.
+  //   사장은 만료돼도 앱을 그대로 쓰고, 제한은 무료 한도(직원 2명·AI 월 200)와 좌석 잠금으로만 걸린다.
   //   업그레이드 경로는 강제 라우팅이 아니라 /billing 자발 방문(설정·매장 추가·한도 안내)이다.
   return (
     <Stack

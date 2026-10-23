@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // qa-audit-store.mjs — 2026-10-05 논리 점검(QA_논리점검_2026-10-05.md) 매장·직원 묶음 재현 검사.
-//   [C1] 무료 매장 좌석 잠금은 한 판정을 쓴다. 직원이 3명 이하면 아무도 잠그지 않는다.
+//   [C1] 무료 매장 좌석 잠금은 한 판정을 쓴다. 직원이 상한(free_staff_cap · 0336부터 2명) 이하면 아무도 잠그지 않는다.
 //        매장이 유료가 되면 옛 "계속 함께할 직원" 명단을 비운다. 사장 화면 잠김 수도 같은 판정으로 센다.
 //   [C2·C6·C8·C9·B8] 2026-10-06 사장님 결정(논리점검_결정기록_2026-10-06.md §1).
 //        서버 동작은 로컬 도커 DB 트랜잭션(되돌림)으로도 본다. 도커가 꺼져 있으면 그 부분만 SKIP.
@@ -28,16 +28,23 @@ const lastDef = (name) => {
 };
 const fileHas = (file, text) => !!file && read(`supabase/migrations/${file}`).includes(text);
 
-console.log('[C1] 무료 매장 좌석 잠금은 한 판정 — 3명 이하면 아무도 안 잠그고, 유료가 되면 옛 명단을 비운다');
+console.log('[C1] 무료 매장 좌석 잠금은 한 판정 — 상한(free_staff_cap) 이하면 아무도 안 잠그고, 유료가 되면 옛 명단을 비운다');
 {
   const p = lastDef('seat_locked_for');
-  const idxCount = p.body.search(/<= 3 then return false/);
+  const idxCount = p.body.search(/<= public\.free_staff_cap\(\) then return false/);
   const idxList = p.body.indexOf('unit_kept_seat_uids');
-  check('★한 판정(seat_locked_for)이 있고, 직원 3명 이하 검사가 명단 검사보다 먼저다',
+  check('★한 판정(seat_locked_for)이 있고, 직원 상한 이하 검사가 명단 검사보다 먼저다',
     !!p.file && idxCount > 0 && idxList > idxCount, p.file || '없음');
   check('판정은 유료·전면 무료 모드에서 잠그지 않는다',
     /billing_free_mode\(\)/.test(p.body) && /effective_plan\(p_unit\) <> 'free'/.test(p.body));
-  check('명단이 없으면 합류 순서(seat_rank > 3)로 정한다', /seat_rank\(p_unit, p_uid\)/.test(p.body) && /> 3/.test(p.body));
+  check('명단이 없으면 합류 순서(seat_rank > 상한)로 정한다', /seat_rank\(p_unit, p_uid\)/.test(p.body) && /> public\.free_staff_cap\(\)/.test(p.body));
+  // ★0336: 무료 직원 상한은 free_staff_cap() 한 곳. 함수 6개 어디에도 숫자 3이 다시 박히면 안 된다.
+  const cap = lastDef('free_staff_cap');
+  check('★무료 직원 상한 = 2 (free_staff_cap)', /select 2\b/.test(cap.body), cap.file || '없음');
+  for (const fn of ['approve_member', 'seat_locked_for', 'unit_seat_status', 'unit_locked_seats', 'needs_downgrade_choice', 'choose_kept_seats']) {
+    const d = lastDef(fn);
+    check(`★${fn} 가 상한을 free_staff_cap() 에서 읽는다`, /free_staff_cap\(\)/.test(d.body) && !/(>=|<=|>|-|:=)\s*3\b/.test(d.body), d.file);
+  }
   check('seat_locked_for 는 내부 판정이다(클라 실행 불가)',
     fileHas(p.file, 'revoke all on function public.seat_locked_for(text, uuid) from public, anon, authenticated;'));
 

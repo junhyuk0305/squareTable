@@ -162,7 +162,7 @@ try {
   // 사장은 역할 관문을 통과해 '신청 없음'(not_pending)에서 멈춘다 = 상태 변화 없이 사장 승인 경로가 열려 있음을 잰다.
   const { error: ka } = await O.rpc('approve_member', { p_uid: xId });
   check('회귀: 사장은 합류 승인 관문 통과(신청 없음=not_pending)', /not_pending/.test(ka?.message ?? ''), ka?.message ?? '(신청이 없는데 성공?)');
-  skipped('★좌석캡: 매니저 포함 3좌석 초과 승인 거부(staff_limit)', '고정 매장 store_001 을 체험 종료로 내려야 잴 수 있다');
+  skipped('★좌석캡: 매니저 포함 2좌석 초과 승인 거부(staff_limit)', '고정 매장 store_001 을 체험 종료로 내려야 잴 수 있다');
   skipped('회귀: 사장 합류 승인 성공', '신청(pending) 상태의 새 계정이 필요하다');
 
   // ── ④ 매니저 잠금 3영역(사장 전용) ───────────────────────────────────────

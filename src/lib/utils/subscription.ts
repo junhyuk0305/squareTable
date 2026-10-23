@@ -40,7 +40,7 @@ const ceilDays = (ms: number) => Math.max(0, Math.ceil(ms / DAY));
  *
  * 2026-08-06 결정: 유료 기간이 끝나면 **앱을 잠그지 않고 무료 요금제로 강등**한다.
  *   (7일 체험이 끝난 매장이 8일째에 앱을 아예 못 열던 동작을 폐기. 라이브 검증으로 확인된 결함.)
- *   미납 압박은 잠금이 아니라 무료 한도(직원 3명·AI 월 200)와 좌석 잠금으로 건다.
+ *   미납 압박은 잠금이 아니라 무료 한도(직원 2명·AI 월 200)와 좌석 잠금으로 건다.
  */
 export function effectivePlanOf(
   s: { plan?: PlanId; subStatus: SubStatusRaw; paidUntil: string; trialEndsAt: string },
@@ -73,7 +73,7 @@ export function isPlanLapsed(
 //   이 순수 함수에 전역 스위치를 다시 끌어들이지 않는다(무료 모드는 캡·게이팅에만 작용한다).
 export function deriveSubscription(s: SubscriptionFields, now: number = Date.now()): SubscriptionView {
   // ★무료 티어 = 영구 무료(3티어 freemium, 0062). 무료 매장은 체험 만료·admin_expire 와 무관하게
-  // 항상 이용 가능하고, 제한은 캡(직원 3·AI 300/월·1매장)으로만 건다. 만료 페이월은 유료 플랜
+  // 항상 이용 가능하고, 제한은 캡(직원 2·AI 200/월·1매장)으로만 건다. 만료 페이월은 유료 플랜
   // (single/multi)의 paid_until 에만 적용된다. (악성 무료 매장 차단은 구독이 아니라 별도 수단으로.)
   if (s.plan === 'free') return { state: 'active', entitled: true, daysLeft: -1 };
 
