@@ -103,7 +103,7 @@ console.log('\n[A8] 지난달 출퇴근 기록은 그 달 기간으로 따로 �
   const st = strip(read('src/lib/store/useAttendanceStore.ts'));
   check('★스토어: loadMonth 가 그 달을 읽어 넣고, hydrate 는 읽어 둔 달을 남긴다', /loadMonth:/.test(st) && /fetchAttendanceMonth\(/.test(st) && /replaceMonthRecords\(/.test(st) && /keepLoadedMonths\(/.test(st));
   const tv = strip(read('src/components/TimesheetView.tsx'));
-  check('★출근 기록 화면: 지난달은 loadMonth 로 읽고, 다 읽기 전·실패면 대조 문구를 띄우지 않는다', /loadMonth\(staffId, ym\)/.test(tv) && /monthReady/.test(tv) && /이 달 기록을 불러오지 못했어요/.test(tv) && /monthReady \?[^;]*reconcileSchedule/.test(tv));
+  check('★출근 기록 화면: 지난달은 loadMonth 로 읽고, 다 읽기 전·실패면 대조 문구를 띄우지 않는다', /loadMonth\(staffId, (ym|m)\)/.test(tv) && /monthReady/.test(tv) && /이 달 기록을 불러오지 못했어요/.test(tv) && /monthReady \?[^;]*reconcileSchedule/.test(tv));
 }
 
 console.log('\n[A10] 이미 승인·반려·취소된 교대는 다시 바뀌지 않는다');

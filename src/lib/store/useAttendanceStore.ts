@@ -51,6 +51,41 @@ const seed: AttendanceRecord[] = [
   rec('u_staff_002', '2026-06-06', '07:00', '13:05'),
 ];
 
+// 같은 기록의 쓰기가 모두 끝난 뒤 실패를 재조회한다. 앞 요청의 실패 조회가
+// 아직 저장 중인 다음 요청을 과거 값으로 덮지 않게 한다.
+const pendingWrites = new Map<string, { count: number; failed: boolean; version: number }>();
+function saveRecord(record: AttendanceRecord, result: Promise<boolean>, rollback: () => void, message: string): void {
+  const epoch = currentTenantEpoch();
+  const key = `${epoch}:${record.id}`;
+  const pending = pendingWrites.get(key) ?? { count: 0, failed: false, version: 0 };
+  pending.count += 1;
+  pending.version += 1;
+  pendingWrites.set(key, pending);
+  void guardWrite(result, () => { if (!isStaleEpoch(epoch)) rollback(); }, message).then((ok) => {
+    pending.failed ||= !ok;
+    pending.count -= 1;
+    if (pending.count !== 0) return;
+    if (!pending.failed || isStaleEpoch(epoch)) { pendingWrites.delete(key); return; }
+    const version = pending.version;
+    const observed = useAttendanceStore.getState().records.find((r) => r.id === record.id);
+    // 월 조회는 오래된 기록도 찾기 위한 범위다. 복구는 실패한 한 행에만 적용한다.
+    void fetchAttendanceMonth(record.staff_id, record.date.slice(0, 7)).then(({ data, error }) => {
+      if (error || isStaleEpoch(epoch) || pendingWrites.get(key) !== pending || pending.version !== version) return;
+      useAttendanceStore.setState((s) => {
+        if (s.records.find((r) => r.id === record.id) !== observed) return s;
+        const restored = data.find((r) => r.id === record.id);
+        return { records: restored
+          ? observed ? s.records.map((r) => r.id === record.id ? restored : r) : [restored, ...s.records]
+          : s.records.filter((r) => r.id !== record.id) };
+      });
+    }).catch(() => {
+      if (!isStaleEpoch(epoch)) useSyncStore.getState().noteReadFail();
+    }).finally(() => {
+      if (pendingWrites.get(key) === pending && pending.version === version) pendingWrites.delete(key);
+    });
+  });
+}
+
 type State = {
   records: AttendanceRecord[];
   /** true = 조회 **시도가 끝남**(성공·실패 무관). 실패 여부는 loadError 로 본다. */
@@ -144,9 +179,10 @@ export const useAttendanceStore = create<State>((set, get) => ({
     const now = new Date().toISOString();
     const rec: AttendanceRecord = { id: genId(`att_${staffId}`), staff_id: staffId, date, check_in: now, check_out: null, work_minutes: 0 };
     set((s) => ({ records: [rec, ...s.records] }));
-    void guardWrite(
+    saveRecord(
+      rec,
       upsertAttendance(rec),
-      () => set((s) => ({ records: s.records.filter((r) => r.id !== rec.id) })),
+      () => set((s) => ({ records: s.records.filter((r) => r !== rec) })),
       '출근 기록 저장에 실패했어요. 다시 시도해 주세요.',
     );
   },
@@ -166,9 +202,10 @@ export const useAttendanceStore = create<State>((set, get) => ({
     // 퇴근 깜빡으로 24h 초과 시 절상(남용 #12) — 자동 펀치가 비현실적 급여를 만들지 않게.
     const updated: AttendanceRecord = { ...open, check_out: out, work_minutes: Math.min(MAX_SHIFT_MIN, minutesBetween(open.check_in!, out)) };
     set((s) => ({ records: s.records.map((r) => (r.id === open.id ? updated : r)) }));
-    void guardWrite(
+    saveRecord(
+      updated,
       upsertAttendance(updated),
-      () => set((s) => ({ records: s.records.map((r) => (r.id === open.id ? open : r)) })),
+      () => set((s) => ({ records: s.records.map((r) => (r === updated ? open : r)) })),
       '퇴근 기록 저장에 실패했어요. 다시 시도해 주세요.',
     );
   },
@@ -198,13 +235,14 @@ export const useAttendanceStore = create<State>((set, get) => ({
     });
     // edited_by 포함해 영속(0006 마이그레이션 컬럼). 자동 펀치는 edited_by 없음 → null.
     if (saved)
-      void guardWrite(
+      saveRecord(
+        saved,
         upsertAttendance(saved),
         () =>
           set((s) =>
             wasNew
-              ? { records: s.records.filter((r) => r.id !== saved!.id) }
-              : { records: s.records.map((r) => (r.id === before!.id ? before! : r)) },
+              ? { records: s.records.filter((r) => r !== saved) }
+              : { records: s.records.map((r) => (r === saved ? before! : r)) },
           ),
         '근무 시간 수정 저장에 실패했어요.',
       );
@@ -212,15 +250,18 @@ export const useAttendanceStore = create<State>((set, get) => ({
   removeRecord: (id) => {
     const idx = get().records.findIndex((r) => r.id === id);
     const removed = idx >= 0 ? get().records[idx] : undefined;
+    if (!removed) return;
     // 쓰기 중 매장이 바뀌면 지운 기록(이전 매장 것)을 되살리지 않는다 — 새 매장 hydrate 가 채운다.
     const epoch = currentTenantEpoch();
     set((s) => ({ records: s.records.filter((r) => r.id !== id) }));
-    void guardWrite(
+    saveRecord(
+      removed,
       deleteAttendance(id),
       () =>
         removed &&
         !isStaleEpoch(epoch) &&
         set((s) => {
+          if (s.records.some((r) => r.id === id)) return s;
           const next = s.records.slice();
           next.splice(Math.min(idx, next.length), 0, removed);
           return { records: next };

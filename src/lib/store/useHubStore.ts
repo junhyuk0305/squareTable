@@ -2,6 +2,7 @@
 // 원시 행만 보관하고 판정·정렬은 화면이 파생한다(useCrossNotifStore 와 동일 설계).
 // RLS 가 활성 매장만 노출하므로 realtime 불가 — 탭 진입 시점 fetch(포커스 폴링, TTL 로 이중 fetch 방지).
 import { create } from 'zustand';
+import { currentAccountEpoch, isStaleAccountEpoch } from '@/lib/store/tenantEpoch';
 import {
   fetchOwnerOverview,
   fetchOwnerToday,
@@ -19,6 +20,7 @@ import {
 } from '@/lib/db';
 import type { PlaybookEntry } from '@/types';
 import { computePay, shiftsToPayRecords, payWindow } from '@/lib/utils/payroll';
+import { payLabelOf } from '@/lib/utils/payPeriod';
 import { scheduledShiftsFor } from '@/lib/store/useScheduleStore';
 import { DEFAULT_SETTINGS } from '@/lib/store/usePayrollStore';
 import { todayStr } from '@/lib/utils/attendance';
@@ -33,11 +35,14 @@ import { departedPayRows } from '@/lib/utils/tenure';
  *   급여 입력(날짜·시작·끝)에는 영향이 없다.
  */
 function laborByUnit(rows: OwnerLaborInputRow[]): Record<string, number> {
-  // 주휴는 그 주 일요일이 속한 달에 붙인다(Q9) — 급여 입력은 첫 주 월요일부터 편다.
-  const payWin = payWindow(todayStr().slice(0, 7));
   const out: Record<string, number> = {};
   for (const r of rows) {
     const rules = { ...DEFAULT_SETTINGS, ...(r.payroll_settings ?? {}) };
+    // PAY-02: 매장마다 정산 시작일이 다르다 — 오늘이 든 그 매장의 정산 기간으로 센다.
+    // 주휴는 그 주 일요일이 속한 기간에 붙인다(Q9) — 급여 입력은 첫 주 월요일부터 편다.
+    const startDay = rules.periodStartDay;
+    const ym = payLabelOf(todayStr(), startDay);
+    const payWin = payWindow(ym, startDay);
     let sum = 0;
     for (const sid of r.staff_ids) {
       if (!Object.prototype.hasOwnProperty.call(r.wages, sid)) continue;
@@ -45,9 +50,8 @@ function laborByUnit(rows: OwnerLaborInputRow[]): Record<string, number> {
       sum += computePay(recs, r.wages[sid], rules, undefined, payWin).total;
     }
     // 이번 달 퇴사자 몫도 더한다 — 직원 관리 히어로와 같은 판정·금액(departedPayRows). 시급이 없으면(pay=null) 뺀다.
-    const ym = todayStr().slice(0, 7);
     for (const d of departedPayRows({
-      ym, records: [], templates: r.shifts, swaps: [], exceptions: r.exceptions,
+      ym, startDay, records: [], templates: r.shifts, swaps: [], exceptions: r.exceptions,
       tenures: r.departed ?? [], memberIds: r.staff_ids, wages: r.wages, settings: rules,
     })) sum += d.pay ?? 0;
     out[r.unit_id] = sum;
@@ -134,10 +138,12 @@ export const useHubStore = create<State>((set, get) => ({
   knowhowStatsLoadError: false,
 
   hydrateKnowhowStats: async () => {
+    const epoch = currentAccountEpoch();
     const now = Date.now();
     if (now - _knowhowStatsAt < HYDRATE_TTL_MS) return;
     _knowhowStatsAt = now;
     const { data, error } = await fetchOwnerKnowhowStats();
+    if (isStaleAccountEpoch(epoch)) return;
     if (error || !data) {
       _knowhowStatsAt = 0; // 실패 = TTL 미적용(다음 진입 즉시 재시도). 표면화는 db.ts readFail.
       // 시도는 끝났다 → loaded 는 올리고 실패는 LoadError 로 말한다(영구 스피너 금지).
@@ -148,10 +154,12 @@ export const useHubStore = create<State>((set, get) => ({
   },
 
   hydrateOwner: async () => {
+    const epoch = currentAccountEpoch();
     const now = Date.now();
     if (now - _ownerAt < HYDRATE_TTL_MS) return;
     _ownerAt = now;
     const [ov, td, lb] = await Promise.all([fetchOwnerOverview(), fetchOwnerToday(), fetchOwnerLaborInputs()]);
+    if (isStaleAccountEpoch(epoch)) return;
     const okOv = !ov.error && !!ov.data;
     const okTd = !td.error && !!td.data;
     const okLb = !lb.error && !!lb.data;
@@ -181,10 +189,12 @@ export const useHubStore = create<State>((set, get) => ({
   },
 
   hydrateJunior: async () => {
+    const epoch = currentAccountEpoch();
     const now = Date.now();
     if (now - _juniorAt < HYDRATE_TTL_MS) return;
     _juniorAt = now;
     const { data, error } = await fetchMyCrossSummary();
+    if (isStaleAccountEpoch(epoch)) return;
     if (error || !data) {
       _juniorAt = 0;
       set({ juniorLoaded: true, juniorLoadError: true });
@@ -194,10 +204,12 @@ export const useHubStore = create<State>((set, get) => ({
   },
 
   hydrateGrowth: async () => {
+    const epoch = currentAccountEpoch();
     const now = Date.now();
     if (now - _growthAt < HYDRATE_TTL_MS) return;
     _growthAt = now;
     const { data, error } = await fetchMyGrowth();
+    if (isStaleAccountEpoch(epoch)) return;
     if (error || !data) {
       _growthAt = 0; // 실패 = TTL 미적용(다음 진입 즉시 재시도). 표면화는 db.ts readFail.
       set({ growthLoaded: true, growthLoadError: true });
@@ -207,10 +219,12 @@ export const useHubStore = create<State>((set, get) => ({
   },
 
   hydrateMyEntries: async () => {
+    const epoch = currentAccountEpoch();
     const now = Date.now();
     if (now - _myEntriesAt < HYDRATE_TTL_MS) return;
     _myEntriesAt = now;
     const { data, error } = await fetchMyKnowhowEntries();
+    if (isStaleAccountEpoch(epoch)) return;
     if (error || !data) {
       _myEntriesAt = 0;
       set({ myEntriesLoaded: true, myEntriesLoadError: true });

@@ -23,6 +23,7 @@ import { EmptyStyles } from '@/lib/theme/empty';
 import { fmtDuration, won, hhmm, todayStr, liveMinutes, findOpenRecord, isForgotCheckout, openSinceText } from '@/lib/utils/attendance';
 import { ForgotCheckoutCard } from '@/components/junior/ForgotCheckoutCard';
 import { computePay, shiftsToPayRecords, payWindow } from '@/lib/utils/payroll';
+import { payLabelOf, fmtPeriodRange } from '@/lib/utils/payPeriod';
 import { useScheduleStore, scheduledShiftsFor } from '@/lib/store/useScheduleStore';
 import { monthDates, mondayOf, weekDates as weekDatesOf } from '@/lib/utils/schedule';
 
@@ -54,6 +55,9 @@ export function AttendancePanel() {
   const wageSet = Object.prototype.hasOwnProperty.call(wages, userId);
   // 시급이 없으면 0으로 계산만 한다. 금액은 위 wageSet 으로 숨긴다(대체 시급을 지웠다 · Q12).
   const wage = wages[userId] ?? 0;
+  // PAY-01: 급여 설정을 못 읽었으면 기본값(시작일 1·기본 수당)으로 지은 금액을 보이지 않는다.
+  const settingsFail = usePayrollStore((s) => s.settingsLoadError);
+  const payShown = wageSet && !settingsFail;
   const router = useRouter();
 
   const shiftTemplates = useScheduleStore((s) => s.templates);
@@ -104,7 +108,8 @@ export function AttendancePanel() {
   );
   const weekMin = weekMinutes.reduce((a, b) => a + b, 0);
   // 주휴는 그 주 일요일이 속한 달에 붙인다(Q9) — 급여 입력만 첫 주 월요일부터 편다.
-  const payWin = payWindow(ym);
+  // PAY-02: 예상 급여는 오늘이 든 정산 기간(정산 시작일 적용)으로 센다. 시작일 1이면 이번 달 그대로다.
+  const payWin = payWindow(payLabelOf(today, settings.periodStartDay), settings.periodStartDay);
   const payShifts = scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, userId, payWin.inputDates);
   const monthBreakdown = computePay(shiftsToPayRecords(payShifts), wage, settings, undefined, payWin);
   const monthPay = monthBreakdown.total;
@@ -152,9 +157,9 @@ export function AttendancePanel() {
           {carriedOpen
             ? `${openSinceText(carriedOpen.check_in!)} · 근무 중`
             : working
-            ? `${hhmm(openRec!.check_in!)} 출근${wageSet ? ` · 오늘 ${won(todayPay)}` : ''}`
+            ? `${hhmm(openRec!.check_in!)} 출근${payShown ? ` · 오늘 ${won(todayPay)}` : ''}`
             : todayRecs.length > 0
-              ? `오늘 ${todayRecs.length}회 근무${wageSet ? ` · ${won(todayPay)}` : ''}`
+              ? `오늘 ${todayRecs.length}회 근무${payShown ? ` · ${won(todayPay)}` : ''}`
               : '아직 출근 전이에요'}
         </Text>
 
@@ -209,9 +214,9 @@ export function AttendancePanel() {
             {
               key: 'pay',
               label: '예상 급여',
-              value: wageSet ? won(monthPay) : '—',
-              sub: wageSet ? '근무표 기준 · 세전' : undefined,
-              visual: wageSet ? (
+              value: payShown ? won(monthPay) : '—',
+              sub: payShown ? `${fmtPeriodRange(payWin)} · 근무표 기준 · 세전` : settingsFail && wageSet ? '급여 설정을 불러오지 못했어요' : undefined,
+              visual: payShown ? (
                 <StackBar
                   parts={[
                     { n: monthBreakdown.base, label: '기본', color: InkColors.ink },

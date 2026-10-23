@@ -27,6 +27,7 @@ const fixRel = (f) => {
   writeFileSync(fp, readFileSync(fp, 'utf8')
     .split("'./attendance'").join("'./attendance.js'")
     .split("'./schedule'").join("'./schedule.js'")
+    .split("'./payPeriod'").join("'./payPeriod.js'")
     .split("'@/lib/utils/attendance'").join("'./attendance.js'"), 'utf8');
 };
 fixRel('payroll.js');

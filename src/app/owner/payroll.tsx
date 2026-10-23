@@ -7,6 +7,9 @@ import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useGuideOnce } from '@/lib/store/useGuideStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { LoadErrorState } from '@/components/LoadErrorState';
+import { payPeriodFor, payLabelOf, paydayAfter, fmtPeriodRange, PAY_PERIOD_FROM } from '@/lib/utils/payPeriod';
+import { todayStr } from '@/lib/utils/attendance';
 import { ChachakSwitch } from '@/components/ChachakSwitch';
 import { SectionLabel } from '@/components/SectionLabel';
 import { InkColors } from '@/lib/theme/colors';
@@ -27,6 +30,8 @@ export default function OwnerPayrollScreen() {
   //   DB 값 도착 후 스스로 뒤집힌다(그 사이 누른 값은 반대로 저장된다).
   //   설정 성격 화면이라 등장 애니메이션은 의도적으로 넣지 않는다 — 게이트만 둔다.
   const ready = usePayrollStore((s) => s.settingsLoaded);
+  const loadError = usePayrollStore((s) => s.settingsLoadError);
+  const period = payPeriodFor(payLabelOf(todayStr(), settings.periodStartDay), settings.periodStartDay);
 
   // 급여 설정 사용 안내.
   useGuideOnce('owner_payroll_v1', ready);
@@ -37,6 +42,9 @@ export default function OwnerPayrollScreen() {
       <Stack.Screen options={{ title: '급여 설정' }} />
       {!ready ? (
         <ScreenLoading label="급여 설정을 불러오고 있어요…" />
+      ) : loadError ? (
+        // PAY-01: 못 읽은 채로 값을 보이면 그 값(캐시·기본값)이 저장돼 DB를 덮는다.
+        <LoadErrorState title="급여 설정을 불러오지 못했어요" onRetry={() => void usePayrollStore.getState().hydrate()} />
       ) : (
       <KeyboardShift>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -75,7 +83,11 @@ export default function OwnerPayrollScreen() {
             <NumberRow label="정산 시작일" suffix="일" value={settings.periodStartDay} onChange={(n) => setSetting('periodStartDay', clampDay(n))} />
             <NumberRow label="급여 지급일" suffix="일" value={settings.payday} onChange={(n) => setSetting('payday', clampDay(n))} last />
           </View>
-          <Text style={styles.note}>예: 정산 시작일 1 · 급여일 10 → 매월 1~말일 근무분을 다음 달 10일 지급</Text>
+          {/* PAY-02: 지금 값으로 나뉜 이번 정산 기간과 지급 예정일을 그대로 보여 준다. */}
+          <Text style={styles.note}>
+            이번 정산 기간 {fmtPeriodRange(period)}{period.kind === 'transition' ? '(전환 기간)' : ''} · {fmtDay(paydayAfter(period.to, settings.payday))} 지급 예정
+          </Text>
+          <Text style={styles.note}>* 정산 시작일을 바꾸면 지난 기간 금액도 새 시작일로 다시 계산돼요. {fmtDay(PAY_PERIOD_FROM)} 전 기간은 바뀌지 않아요.</Text>
         </View>
         <View style={{ height: 12 }} />
       </ScrollView>
@@ -84,6 +96,10 @@ export default function OwnerPayrollScreen() {
       <RoleTabBar role="owner" />
     </SafeAreaView>
   );
+}
+
+function fmtDay(d: string) {
+  return `${Number(d.slice(5, 7))}월 ${Number(d.slice(8, 10))}일`;
 }
 
 function clampDay(n: number) {

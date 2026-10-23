@@ -16,7 +16,8 @@
  *  - 가산(야간/연장)은 정밀분으로 계산(절삭 안 함). 5인 미만 의무 아님 → 토글로 사장이 결정.
  */
 import { minutesBetween, payableMinutes, nowISO, MAX_SHIFT_MIN } from './attendance';
-import { addDays, fmtDateKo, fmtMinutes, isOvernight, mondayOf, monthDates, shiftMinutes, toMinutes } from './schedule';
+import { addDays, fmtDateKo, fmtMinutes, isOvernight, mondayOf, shiftMinutes, toMinutes } from './schedule';
+import { payPeriodFor, PAY_PERIOD_FROM } from './payPeriod';
 
 export type PayrollRules = {
   breakDeduction: boolean;
@@ -264,10 +265,11 @@ export const PAYROLL_V2_FROM = '2026-10-01';
 /** 한 달 급여 창. from~to = 그 달. inputDates = 근무표를 펼칠 날(첫 주 월요일부터 · 주휴를 일요일 달에 붙이려면 앞 달 며칠이 필요하다). */
 export type PayWindow = { from: string; to: string; inputDates: string[] };
 
-export function payWindow(ym: string): PayWindow {
-  const days = monthDates(ym);
-  const from = days[0];
-  const to = days[days.length - 1];
+export function payWindow(ym: string, startDay = 1, cutover: string = PAY_PERIOD_FROM): PayWindow {
+  // PAY-02: ym월분 정산 기간(payPeriod.ts). 시작일 1이면 예전과 같은 달력 월이다.
+  const { from, to } = payPeriodFor(ym, startDay, cutover);
+  const days: string[] = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) days.push(d);
   const lead: string[] = [];
   for (let d = mondayOf(from); d < from; d = addDays(d, 1)) lead.push(d);
   return { from, to, inputDates: [...lead, ...days] };

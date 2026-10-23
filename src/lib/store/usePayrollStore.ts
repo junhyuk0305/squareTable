@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { HOURLY_WAGE } from '@/lib/store/useAttendanceStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchWages, fetchWageRates, setWageDb, fetchPayrollSettings, fetchPayrollSettingsHistory, savePayrollSettings } from '@/lib/db';
+import { fetchWages, fetchWageRates, setWageDb, fetchPayrollSettingsResult, fetchPayrollSettingsHistory, savePayrollSettings } from '@/lib/db';
 import { withTodayWage, withTodaySettings, type WageRate, type SettingsRate } from '@/lib/utils/payroll';
 import { todayStr } from '@/lib/utils/attendance';
 import { guardWrite } from '@/lib/store/useSyncStore';
@@ -63,6 +63,12 @@ type State = {
    * DB 값이 오면 스스로 뒤집혔다(사장이 그 사이 누르면 반대로 저장된다).
    */
   settingsLoaded: boolean;
+  /**
+   * PAY-01: 마지막 급여 설정 읽기가 실패했나. true면 지금 `settings` 는 DB 값이 아니다.
+   * 이 상태에서 저장하면 캐시·기본값이 DB를 덮으므로 setSetting 이 막는다. hydrate 를 다시 부르면 풀린다.
+   * settingsLoaded 는 "조회가 끝났다"(성공·실패 무관)로 둔다 — 출퇴근 화면 게이트가 이걸 기다린다.
+   */
+  settingsLoadError: boolean;
   /** 마지막 시급 읽기가 실패했나. true면 화면은 금액을 만들면 안 된다([P7-#5]). */
   wagesLoadError: boolean;
   /** 마지막 시급 이력 읽기가 실패했나. true면 지난달 금액을 만들면 안 된다(지금 시급으로 계산된다). */
@@ -85,6 +91,7 @@ export const usePayrollStore = create<State>((set, get) => ({
   // mock 은 시급이 상수로 주어지므로 처음부터 '읽어온 상태'다.
   wagesLoaded: !HAS_SUPABASE,
   settingsLoaded: !HAS_SUPABASE,
+  settingsLoadError: false,
   wagesLoadError: false,
   wageRatesLoadError: false,
   settingsHistory: [],
@@ -92,13 +99,16 @@ export const usePayrollStore = create<State>((set, get) => ({
   hydrate: async () => {
     if (!HAS_SUPABASE) return;
     const epoch = currentTenantEpoch();
-    const [wageRes, dbSettings, ratesRes, histRes] = await Promise.all([fetchWages(), fetchPayrollSettings(), fetchWageRates(), fetchPayrollSettingsHistory()]);
+    const [wageRes, settingsRes, ratesRes, histRes] = await Promise.all([fetchWages(), fetchPayrollSettingsResult(), fetchWageRates(), fetchPayrollSettingsHistory()]);
     // 그 사이 매장이 바뀌었다 — 이전 매장 시급·규칙을 쓰지 않는다(로컬 캐시에도 남기지 않는다).
     if (isStaleEpoch(epoch)) return;
     // DB에 저장된 규칙이 있으면 그것이 진실원천(기본값 위에 병합). 없으면(초기 매장) 로컬 캐시 유지.
     set((s) => {
-      const settings = dbSettings ? { ...DEFAULT_SETTINGS, ...(dbSettings as Partial<PayrollSettings>) } : s.settings;
-      persistSettings(settings);
+      // 읽기 실패면 지금 값을 그대로 두고 캐시도 건드리지 않는다(실패 ≠ 설정 없음 · PAY-01).
+      const dbSettings = settingsRes.data;
+      const settings = !settingsRes.error && dbSettings ? { ...DEFAULT_SETTINGS, ...(dbSettings as Partial<PayrollSettings>) } : s.settings;
+      if (!settingsRes.error) persistSettings(settings);
+      const settingsLoadError = settingsRes.error;
       // 급여 설정 이력도 같다 — 못 읽었으면 이전 이력을 두고 실패만 알린다. 각 줄은 기본값 위에 병합한다.
       const hist = histRes.error
         ? { settingsHistoryLoadError: true }
@@ -111,12 +121,13 @@ export const usePayrollStore = create<State>((set, get) => ({
       // settingsLoaded 는 시급 읽기 성패와 무관하다 — 여기 왔다는 건 급여 설정 조회가 끝났다는 뜻이다.
       // 시급 이력도 같다 — 못 읽었으면 이전 이력을 두고 실패만 알린다.
       return wageRes.error
-        ? { settings, settingsLoaded: true, wagesLoadError: true, wageRatesLoadError: ratesRes.error, ...hist }
+        ? { settings, settingsLoaded: true, settingsLoadError, wagesLoadError: true, wageRatesLoadError: ratesRes.error, ...hist }
         : {
             wages: wageRes.data,
             ...(ratesRes.error ? {} : { wageRates: ratesRes.data }),
             settings,
             settingsLoaded: true,
+            settingsLoadError,
             wagesLoaded: true,
             wagesLoadError: false,
             wageRatesLoadError: ratesRes.error,
@@ -125,6 +136,8 @@ export const usePayrollStore = create<State>((set, get) => ({
     });
   },
   setSetting: (k, v) => {
+    // DB 값을 모르는 채로 저장하면 캐시·기본값이 DB를 덮는다(PAY-01). 화면은 이때 재시도 안내를 보인다.
+    if (HAS_SUPABASE && (!get().settingsLoaded || get().settingsLoadError)) return;
     const before = get().settings;
     const prevHistory = get().settingsHistory;
     const settings = { ...before, [k]: v };

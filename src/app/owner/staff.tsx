@@ -27,6 +27,7 @@ import { Space } from '@/lib/theme/layout';
 import { EmptyStyles } from '@/lib/theme/empty';
 import { fmtDuration, won, todayStr, liveMinutes, staffWorkStatus, minWageWarning } from '@/lib/utils/attendance';
 import { computePay, shiftsToPayRecords, payWindow } from '@/lib/utils/payroll';
+import { payLabelOf, fmtPeriodRange } from '@/lib/utils/payPeriod';
 import { showToast } from '@/lib/store/useToastStore';
 import { rotateInviteCode } from '@/lib/db';
 import { departedPayRows, rejoinNotice, workedInPeriod } from '@/lib/utils/tenure';
@@ -38,6 +39,7 @@ export default function OwnerStaffScreen() {
   const { member: focusMemberId } = useLocalSearchParams<{ member?: string }>();
   const wages = usePayrollStore((s) => s.wages);
   const settings = usePayrollStore((s) => s.settings);
+  const settingsFail = usePayrollStore((s) => s.settingsLoadError);
   const setWage = usePayrollStore((s) => s.setWage);
   const records = useAttendanceStore((s) => s.records);
   const staff = useStaffStore((s) => s.staff);
@@ -92,14 +94,17 @@ export default function OwnerStaffScreen() {
 
   // 직원별 이번 달 시간·급여·근무상태 — 구 attendance 화면의 집계를 직원 목록에 합친다.
   const today = todayStr();
-  const ym = today.slice(0, 7);
+  // PAY-02: 오늘이 든 정산 기간(정산 시작일 적용 · payPeriod.ts). 시작일 1이면 달력 월 그대로다.
+  const startDay = settings.periodStartDay;
+  const ym = payLabelOf(today, startDay);
+  const periodRange = fmtPeriodRange(payWindow(ym, startDay));
   const perStaff = useMemo(() => {
     // pay=null = 시급 미설정(계산 불가). 0원과 구별해야 한다 — 0원은 '무급'이라는 사실 주장이다.
     const map: Record<string, { min: number; schedMin: number; pay: number | null; status: 'out' | 'working' | 'done' | 'forgot' }> = {};
     // 주휴는 그 주 일요일이 속한 달에 붙인다(Q9) — 급여 입력은 첫 주 월요일부터 편다.
-    const payWin = payWindow(ym);
+    const payWin = payWindow(ym, startDay);
     for (const s of staff) {
-      const monthRecs = records.filter((r) => r.staff_id === s.id && r.date.startsWith(ym));
+      const monthRecs = records.filter((r) => r.staff_id === s.id && r.date >= payWin.from && r.date <= payWin.to);
       // 근무시간 표시는 실제 출퇴근 그대로(확인용). 금액만 근무표 기준이다.
       const min = monthRecs.reduce((sum, r) => sum + liveMinutes(r), 0);
       // ★급여의 기준은 **근무표**다(2026-08-26 확정). 출퇴근 기록은 확인용이라 금액에 직접 안 들어간다.
@@ -122,12 +127,12 @@ export default function OwnerStaffScreen() {
       map[s.id] = { min, schedMin, pay: wageSet ? computePay(shiftRecs, wages[s.id], settings, undefined, payWin).total : null, status };
     }
     return map;
-  }, [records, wages, settings, staff, ym, today, shiftTemplates, swaps, shiftExceptions]);
+  }, [records, wages, settings, staff, ym, startDay, today, shiftTemplates, swaps, shiftExceptions]);
 
   // 이번 정산 기간(이 화면의 달력 월) 입력. 퇴사자 줄·재입사 경고가 같은 판정(tenure.ts)을 쓴다.
   const period = useMemo(
-    () => ({ ym, records, templates: shiftTemplates, swaps, exceptions: shiftExceptions }),
-    [ym, records, shiftTemplates, swaps, shiftExceptions],
+    () => ({ ym, startDay, records, templates: shiftTemplates, swaps, exceptions: shiftExceptions }),
+    [ym, startDay, records, shiftTemplates, swaps, shiftExceptions],
   );
 
   // 이번 정산 기간 퇴사자 — 이번 달에 일하고 나간 직원. 근무 여부 · 시급 대체 · 금액은 departedPayRows 하나가 정한다.
@@ -164,7 +169,6 @@ export default function OwnerStaffScreen() {
           ? '근무표'
           : null;
   const workingCount = staff.filter((s) => perStaff[s.id]?.status === 'working').length;
-  const month = Number(ym.slice(5));
 
   const confirmRemove = () => {
     if (!removeTarget) return;
@@ -211,7 +215,17 @@ export default function OwnerStaffScreen() {
         <Pane side="main">
         <Appear delay={stagger(0)}>
         <View style={styles.payCard}>
-          <Text style={styles.payLabel}>이번 달 예상 인건비</Text>
+          <Text style={styles.payLabel}>이번 정산 기간 예상 인건비</Text>
+          {/* PAY-01: 급여 설정을 못 읽었으면 기본값(시작일 1·기본 수당)으로 지은 금액을 보이지 않는다. */}
+          {settingsFail ? (
+            <>
+              <Text style={styles.payValue}>불러오지 못했어요</Text>
+              <Pressable onPress={() => void usePayrollStore.getState().hydrate()} accessibilityRole="button" accessibilityLabel="급여 설정 다시 불러오기">
+                <Text style={styles.payNote}>급여 설정을 불러오지 못했어요. 눌러서 다시 시도해 주세요.</Text>
+              </Pressable>
+            </>
+          ) : (
+          <>
           <Text style={styles.payValue}>{payBlocked ? '아직 계산 전' : won(totalPay)}</Text>
           {/* ★금액이 무엇으로 계산됐는지 말한다 — 출퇴근이 아니라 **근무표**다(2026-08-26).
               안 적으면 사장이 출퇴근 시간과 안 맞는 금액을 보고 계산이 틀렸다고 읽는다.
@@ -221,8 +235,10 @@ export default function OwnerStaffScreen() {
               ? '직원 시급을 정하면 금액이 나와요 — 아래 목록에서 바로 넣을 수 있어요'
               : payBlocked === '근무표'
                 ? '근무표가 비어 있어요 — 근무 시간을 넣으면 금액이 나와요'
-                : `${month}월 · 세전 · 근무표 기준 · 직원 ${staff.length}명${departed.length > 0 ? ` · 퇴사자 ${departed.length}명 포함` : ''}${workingCount > 0 ? ` · 근무 중 ${workingCount}명` : ''}`}
+                : `${periodRange} · 세전 · 근무표 기준 · 직원 ${staff.length}명${departed.length > 0 ? ` · 퇴사자 ${departed.length}명 포함` : ''}${workingCount > 0 ? ` · 근무 중 ${workingCount}명` : ''}`}
           </Text>
+          </>
+          )}
           <Pressable
             onPress={() => router.push('/owner/payroll')}
             style={({ pressed }) => [styles.payrollBtn, pressed && { opacity: 0.85 }]}
@@ -360,8 +376,10 @@ export default function OwnerStaffScreen() {
                     )}
                     <Text style={styles.staffMeta} numberOfLines={1}>
                       {/* 시급 미설정과 근무표 미입력은 다른 결손이다 — 둘 다 ₩0 으로 뭉개면 사장이 할 일을 못 고른다. */}
-                      이번 달 {fmtDuration(agg?.min ?? 0)} ·{' '}
-                      {agg?.pay === null || agg?.pay === undefined
+                      이번 기간 {fmtDuration(agg?.min ?? 0)} ·{' '}
+                      {settingsFail
+                        ? '금액 확인 불가'
+                        : agg?.pay === null || agg?.pay === undefined
                         ? '시급 미설정'
                         : (agg?.schedMin ?? 0) === 0
                           ? '근무표 없음'
@@ -425,8 +443,8 @@ export default function OwnerStaffScreen() {
                   <View style={styles.nameCol}>
                     <Text style={styles.staffName} numberOfLines={1}>{d.name}</Text>
                     <Text style={styles.staffMeta} numberOfLines={1}>
-                      이번 달 {fmtDuration(d.min)} ·{' '}
-                      {d.pay === null ? '시급 미설정' : d.schedMin === 0 ? '근무표 없음' : won(d.pay)}
+                      이번 기간 {fmtDuration(d.min)} ·{' '}
+                      {settingsFail ? '금액 확인 불가' : d.pay === null ? '시급 미설정' : d.schedMin === 0 ? '근무표 없음' : won(d.pay)}
                     </Text>
                   </View>
                 </View>
