@@ -1,12 +1,14 @@
 {
-  "updated": "2026-10-07",
+  "updated": "2026-10-23",
   "entries": [
     "src/app/billing.tsx::void navigator.clipboard.writeText(value);",
+    "src/app/index.tsx::isLostOAuthReturn(window.location.search, window.location.hash);",
     "src/app/inquiry.tsx::void navigator.clipboard.writeText(BUSINESS_INFO.email);",
     "src/components/ErrorBoundary.tsx::window.location.reload();",
     "src/components/SyncBanner.tsx::return () => window.removeEventListener('online', onOnline);",
     "src/components/SyncBanner.tsx::window.addEventListener('online', onOnline);",
     "src/components/junior/JuniorWelcomeCoach.tsx::let _memSeen = false; // localStorage 불가 환경의 세션 폴백",
+    "src/lib/analytics/track.ts::return window.location.pathname?.replace(/^\\/q\\/[^/]+/, '/q/[token]') || null;",
     "src/lib/analytics/track.ts::window.addEventListener('error', (e: any) => {",
     "src/lib/analytics/track.ts::window.addEventListener('unhandledrejection', (e: any) => {",
     "src/lib/db.ts::const c = document.createElement('canvas');",

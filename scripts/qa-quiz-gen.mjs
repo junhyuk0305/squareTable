@@ -27,6 +27,7 @@ import Module from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { IS_LOCAL, localEnv, assertLocalUrl } from './qa-local-target.mjs';
 
 const DRY = process.argv.includes('--dry');
 // 형태당 케이스 수. ★케이스 1회당 엣지 1회 = 캡 1 차감. 기본 1, --cases N 으로 올린다.
@@ -40,7 +41,9 @@ function pe(f) {
   return o;
 }
 const env = { ...pe(join(root, '.env')), ...pe(join(root, '.env.seed')) };
+if (IS_LOCAL) Object.assign(env, localEnv());
 const URL_ = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
+if (IS_LOCAL) assertLocalUrl(URL_);
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const SRV = env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL_ || !ANON || !SRV) { console.error('FAIL: URL/ANON/SERVICE_ROLE 필요(.env + .env.seed)'); process.exit(2); }

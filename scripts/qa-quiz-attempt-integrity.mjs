@@ -22,11 +22,14 @@
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { IS_LOCAL, localEnv, assertLocalUrl } from './qa-local-target.mjs';
 
 const here = (r) => fileURLToPath(new URL(r, import.meta.url));
 function pe(f) { const o = {}; try { for (const l of readFileSync(f, 'utf8').split(/\r?\n/)) { const m = l.match(/^([A-Z0-9_]+)=(.*)$/); if (m) o[m[1]] = m[2].trim(); } } catch {} return o; }
 const env = { ...pe(here('../.env')), ...pe(here('../.env.seed')), ...process.env };
+if (IS_LOCAL) Object.assign(env, localEnv());
 const URL_ = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
+if (IS_LOCAL) assertLocalUrl(URL_);
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const SRV = env.SUPABASE_SERVICE_ROLE_KEY;
 const EMAIL = env.QA_EMAIL ?? 'qa.owner@example.com';

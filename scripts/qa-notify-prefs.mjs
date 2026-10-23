@@ -26,6 +26,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
+import { IS_LOCAL, localEnv, assertLocalUrl } from './qa-local-target.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -42,7 +43,9 @@ function loadEnv() {
   return env;
 }
 const env = loadEnv();
+if (IS_LOCAL) Object.assign(env, localEnv());
 const URL = env.EXPO_PUBLIC_SUPABASE_URL;
+if (IS_LOCAL) assertLocalUrl(URL);
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY; // 있으면 phone_otps 시드(게이트 0088 대비)
 if (!URL || !ANON) { console.error('FAIL: EXPO_PUBLIC_SUPABASE_URL/ANON_KEY 필요'); process.exit(2); }

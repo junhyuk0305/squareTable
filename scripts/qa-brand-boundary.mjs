@@ -8,6 +8,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { IS_LOCAL, localEnv, assertLocalUrl } from './qa-local-target.mjs';
 
 function loadEnv() {
   const e = { ...process.env };
@@ -23,8 +24,10 @@ function loadEnv() {
   return e;
 }
 const env = loadEnv();
-// ★대상 DB = .env 의 EXPO_PUBLIC_SUPABASE_URL(라이브). 읽기 전용 하니스라 위험 없음.
+if (IS_LOCAL) Object.assign(env, localEnv());
+// ★대상 DB = .env 의 EXPO_PUBLIC_SUPABASE_URL(라이브). 읽기 전용 하니스라 위험 없음. --local 이면 로컬 도커.
 const URL_ = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
+if (IS_LOCAL) assertLocalUrl(URL_);
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 if (!URL_ || !ANON) { console.error('FAIL: URL/ANON 필요(.env)'); process.exit(2); }
 

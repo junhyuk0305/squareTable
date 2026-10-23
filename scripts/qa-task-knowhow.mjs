@@ -6,11 +6,14 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
+import { IS_LOCAL, localEnv, assertLocalUrl } from './qa-local-target.mjs';
 
 const here = (r) => fileURLToPath(new URL(r, import.meta.url));
 function pe(f){const o={};try{for(const l of readFileSync(f,'utf8').split(/\r?\n/)){const m=l.match(/^([A-Z_]+)=(.*)$/);if(m)o[m[1]]=m[2].trim();}}catch{}return o;}
 const env = { ...pe(here('../.env')), ...pe(here('../.env.seed')) };
+if (IS_LOCAL) Object.assign(env, localEnv());
 const URL_ = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
+if (IS_LOCAL) assertLocalUrl(URL_);
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const SRV = env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL_ || !ANON || !SRV) { console.error('FAIL: URL/ANON/SERVICE_ROLE 필요(.env + .env.seed)'); process.exit(2); }
@@ -253,8 +256,10 @@ async function flow4({ owner, ownerId, jA, jAId, UNIT, TMPL, entryRow }) {
   const knows2 = new Set((mine2 ?? []).map((x) => x.entry_id));
   check('④-6c 나머지까지 통과 → 업무 통과(파생)', need.length > 0 && need.every((id) => knows2.has(id)), `need=${need.length} knows=${knows2.size}`);
   // 위조 방어: 알바A가 남의 staff_id(사장)로 이해 기록 시도 → RLS WITH CHECK 차단
-  const { error: forge } = await jA.from('knowhow_understanding').insert({ unit_id: UNIT, entry_id: ENTRY_ID, staff_id: ownerId, staff_name: '위조' }).select('entry_id');
-  check('④-7 staff_id 위조 삽입 차단(RLS)', !!forge, forge ? `거부 ${forge.code ?? ''}` : '(차단 안됨!)');
+  // 0333: 앱의 직접 쓰기는 오류 없이 무시된다. 위조 행이 안 생기는지가 핵심이다.
+  const { data: forgeData, error: forge } = await jA.from('knowhow_understanding').insert({ unit_id: UNIT, entry_id: ENTRY_ID, staff_id: ownerId, staff_name: '위조' }).select('entry_id');
+  const { data: forged } = await admin.from('knowhow_understanding').select('entry_id').eq('entry_id', ENTRY_ID).eq('staff_id', ownerId);
+  check('④-7 staff_id 위조 기록 안 생김(오류 없음 · 행 0)', !forge && (forgeData ?? []).length === 0 && (forged ?? []).length === 0, forge?.message ?? `n=${forged?.length}`);
 
   // ── 0103 오답 집계(record_quiz_stats) — 문항 귀속·개인 비저장·사장만 열람 ──
   const { error: rqe } = await jA.rpc('record_quiz_stats', { p_stats: [{ entry_id: ENTRY_OF(entryRow), attempts: 2, misses: 1 }] });

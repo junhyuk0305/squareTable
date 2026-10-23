@@ -19,11 +19,14 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
+import { IS_LOCAL, localEnv, assertLocalUrl } from './qa-local-target.mjs';
 
 const here = (r) => fileURLToPath(new URL(r, import.meta.url));
 function pe(f){const o={};try{for(const l of readFileSync(f,'utf8').split(/\r?\n/)){const m=l.match(/^([A-Z_]+)=(.*)$/);if(m)o[m[1]]=m[2].trim();}}catch{}return o;}
 const env = { ...pe(here('../.env')), ...pe(here('../.env.seed')) };
+if (IS_LOCAL) Object.assign(env, localEnv());
 const URL_ = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
+if (IS_LOCAL) assertLocalUrl(URL_);
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const SRV = env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL_ || !ANON || !SRV) { console.error('FAIL: URL/ANON/SERVICE_ROLE 필요(.env + .env.seed)'); process.exit(2); }
@@ -181,7 +184,9 @@ async function main() {
   const { error: kuErr } = await jA.from('knowhow_understanding').insert({ unit_id: UNIT, entry_id: ENTRY, staff_id: aId, staff_name: 'QA받은직원' });
   check('본인 통과 기록 insert', !kuErr, kuErr?.message ?? '');
   const { error: kuHack } = await jB.from('knowhow_understanding').insert({ unit_id: UNIT, entry_id: ENTRY, staff_id: aId, staff_name: '위조' });
-  check('남의 통과 기록 위조 거부', !!kuHack, kuHack?.code ?? '거부 안 됨');
+  // 0333: 앱의 직접 쓰기는 오류 없이 무시된다(출시 앱에 실패 문구를 띄우지 않으려고). 위조 행이 안 생기는지가 핵심이다.
+  const { data: kuForged } = await admin.from('knowhow_understanding').select('staff_name').eq('entry_id', ENTRY).eq('staff_id', aId).eq('staff_name', '위조');
+  check('남의 통과 기록 위조 안 생김(오류 없음 · 행 0)', !kuHack && (kuForged ?? []).length === 0, kuHack?.message ?? `n=${kuForged?.length}`);
   const { data: done } = await jA.rpc('mark_quiz_completed', { p_id: AS_A });
   check('완료 기록 true', done === true, `got=${done}`);
   const { data: fin } = await admin.from('quiz_assignments').select('opened_at, completed_at').eq('id', AS_A).maybeSingle();

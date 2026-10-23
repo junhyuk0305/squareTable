@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { assertSeedTarget } from './lib/seed-target.mjs';
+import { IS_LOCAL, localEnv, assertLocalUrl } from './qa-local-target.mjs';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const readEnv = (file) => {
@@ -33,8 +34,10 @@ const readEnv = (file) => {
 };
 const envSeed = readEnv('.env.seed');
 const envApp = readEnv('.env');
-const URL_ = process.env.SUPABASE_URL || envSeed.SUPABASE_URL || envApp.EXPO_PUBLIC_SUPABASE_URL;
-const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || envSeed.SUPABASE_SERVICE_ROLE_KEY;
+const LOC = IS_LOCAL ? localEnv() : null;
+const URL_ = LOC ? LOC.SUPABASE_URL : (process.env.SUPABASE_URL || envSeed.SUPABASE_URL || envApp.EXPO_PUBLIC_SUPABASE_URL);
+const SERVICE = LOC ? LOC.SUPABASE_SERVICE_ROLE_KEY : (process.env.SUPABASE_SERVICE_ROLE_KEY || envSeed.SUPABASE_SERVICE_ROLE_KEY);
+if (IS_LOCAL) assertLocalUrl(URL_);
 if (!URL_ || !SERVICE) { console.error('✗ SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 필요(.env.seed)'); process.exit(1); }
 
 assertSeedTarget(URL_, 'seed-quiz-demo.mjs');

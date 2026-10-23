@@ -18,11 +18,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
+import { IS_LOCAL, localEnv, assertLocalUrl } from './qa-local-target.mjs';
 
 const here = (r) => fileURLToPath(new URL(r, import.meta.url));
 function pe(f){const o={};try{for(const l of readFileSync(f,'utf8').split(/\r?\n/)){const m=l.match(/^([A-Z_]+)=(.*)$/);if(m)o[m[1]]=m[2].trim();}}catch{}return o;}
 const env = { ...pe(here('../.env')), ...pe(here('../.env.seed')) };
+if (IS_LOCAL) Object.assign(env, localEnv());
 const URL_ = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
+if (IS_LOCAL) assertLocalUrl(URL_);
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const SRV = env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL_ || !ANON || !SRV) { console.error('FAIL: URL/ANON/SERVICE_ROLE 필요(.env + .env.seed)'); process.exit(2); }
@@ -325,8 +328,10 @@ async function main() {
   await admin.from('knowhow_understanding').upsert({ unit_id: UNIT, entry_id: E[0], staff_id: ownerId, staff_name: '사장', verified_at: firstPassAt }, { onConflict: 'entry_id,staff_id' });
   { const { data } = await jA.from('knowhow_understanding').update({ verified_at: new Date().toISOString() }).eq('entry_id', E[0]).eq('staff_id', ownerId).select('entry_id');
     check('④-6 남의 통과 시각 갱신 차단(0행)', (data?.length ?? 0) === 0, `n=${data?.length}`); }
+  // 0333: 앱의 직접 쓰기는 오류 없이 무시된다. 위조 행이 안 생기는지가 핵심이다.
   { const { error } = await jA.from('knowhow_understanding').insert({ unit_id: UNIT, entry_id: E[1], staff_id: ownerId, staff_name: '위조' }).select('entry_id');
-    check('④-7 남의 명의 통과 삽입 차단(WITH CHECK)', !!error, error ? `거부 ${error.code ?? ''}` : '(차단 안됨!)'); }
+    const { data: forged } = await admin.from('knowhow_understanding').select('entry_id').eq('entry_id', E[1]).eq('staff_id', ownerId);
+    check('④-7 남의 명의 통과 기록 안 생김(오류 없음 · 행 0)', !error && (forged ?? []).length === 0, error?.message ?? `n=${forged?.length}`); }
   // ★파생 실증: 노하우 2건짜리 업무는 **둘 다** 통과해야 "할 줄 안다"가 된다(부분 통과는 아니다).
   {
     const TWO = `t_two_${s}`;
@@ -864,7 +869,8 @@ async function main() {
   { const { error } = await owner.from('course_entries').insert({ unit_id: UNIT, course_id: CB, entry_id: E[0], position: 9 });
     check('⑬-2 남의 매장 코스에 내 노하우 담기 차단', !!error, error ? `거부 ${error.code ?? ''}` : '(뚫림!)'); }
   { const { error } = await jA.from('knowhow_understanding').insert({ unit_id: UNIT, entry_id: E_B, staff_name: 'QA직원' }).select('entry_id');
-    check('⑬-3 ★남의 매장 노하우로 통과 기록 만들기 차단(제목 유출 경로)', !!error, error ? `거부 ${error.code ?? ''}` : '(뚫림!)'); }
+    const { data: forged } = await admin.from('knowhow_understanding').select('entry_id').eq('entry_id', E_B).eq('staff_id', jAId);
+    check('⑬-3 ★남의 매장 노하우로 통과 기록 안 생김(오류 없음 · 행 0 · 0333)', !error && (forged ?? []).length === 0, error?.message ?? `n=${forged?.length}`); }
   { const { error } = await jA.from('quiz_attempts').insert({ unit_id: UNIT, entry_id: E_B, staff_id: jAId, total: 1, correct: 1 });
     check('⑬-4 남의 매장 노하우에 응시 점수 심기 차단', !!error, error ? `거부 ${error.code ?? ''}` : '(뚫림!)'); }
   { const { error } = await owner.from('quiz_links').insert({ id: `qlx_${s}`, unit_id: UNIT, course_id: CB, token: `qa_x_${s}_padpadpad`, expires_at: plus(3600_000) });

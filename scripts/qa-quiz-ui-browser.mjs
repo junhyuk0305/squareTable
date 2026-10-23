@@ -19,6 +19,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { IS_LOCAL, localEnv, assertLocalUrl, assertAppTargetsLocal } from './qa-local-target.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -35,8 +36,10 @@ function loadEnv() {
 }
 
 const env = loadEnv();
+if (IS_LOCAL) Object.assign(env, localEnv());
 const URL_ = env.EXPO_PUBLIC_SUPABASE_URL, ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const ORIGIN = process.env.QA_ORIGIN ?? 'http://localhost:8081';
+if (IS_LOCAL) { assertLocalUrl(URL_); await assertAppTargetsLocal(ORIGIN, URL_); }
 const EMAIL = process.env.QA_EMAIL ?? 'qa.owner@example.com';
 const PW = process.env.QA_PASSWORD ?? 'QaTest1234!';
 const SHOTS = './qa-shots/quiz-ui';

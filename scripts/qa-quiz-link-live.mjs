@@ -13,11 +13,14 @@
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { IS_LOCAL, localEnv, assertLocalUrl } from './qa-local-target.mjs';
 
 const here = (r) => fileURLToPath(new URL(r, import.meta.url));
 function pe(f) { const o = {}; try { for (const l of readFileSync(f, 'utf8').split(/\r?\n/)) { const m = l.match(/^([A-Z0-9_]+)=(.*)$/); if (m) o[m[1]] = m[2].trim(); } } catch {} return o; }
 const env = { ...pe(here('../.env')), ...pe(here('../.env.seed')), ...process.env };
+if (IS_LOCAL) Object.assign(env, localEnv()); // 로컬 검사에서 배포 주소(K6)는 치지 않는다(아래 SKIP)
 const URL_ = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
+if (IS_LOCAL) assertLocalUrl(URL_);
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const EMAIL = env.QA_EMAIL ?? 'qa.owner@example.com';
 const PW = env.QA_PASSWORD ?? 'QaTest1234!';
@@ -133,7 +136,8 @@ async function main() {
 
     // ── K6 배포 주소가 /q/ 를 앱으로 돌려주는가 ──────────────────────────
     const prod = env.QA_PROD_ORIGIN ?? 'https://dochackchack.com';
-    try {
+    if (IS_LOCAL) console.log('  SKIP K6 --local 은 배포 주소를 치지 않는다(미검증 · 통과로 세지 않음)');
+    else try {
       const res = await fetch(`${prod}/q/${tk}`, { redirect: 'follow' });
       const html = await res.text();
       check(`K6 ${prod}/q/<token> 가 앱을 돌려줌`, res.ok && /<div id="root"|react|expo/i.test(html),

@@ -1,6 +1,7 @@
 // 로컬 수동 QA용 계정 세트 생성 — 사장(매장 2개) + 직원 2명 + 시드 데이터.
 // 격리 매장(@example.com owner)이라 파일럿/실데이터 무접촉. 커밋 안 함(로컬 헬퍼).
-// 실행: node scripts/qa-local-accounts.mjs   (.env=ANON, .env.seed=SERVICE_ROLE 자동 로드)
+// 실행: node scripts/qa-local-accounts.mjs   (.env=ANON, .env.seed=SERVICE_ROLE 자동 로드, 셸 env 우선)
+//   접속 URL 이 127.0.0.1/localhost 가 아니면 멈춘다. 라이브는 --allow-remote 를 붙일 때만.
 // 재실행 안전: 계정이 이미 있으면 로그인해서 매장/시드만 보장(멱등 지향).
 // 정리(다 끝나면): node --env-file=.env.seed scripts/cleanup-orphan-stores.mjs --execute
 import { createClient } from '@supabase/supabase-js';
@@ -9,9 +10,16 @@ import { fileURLToPath } from 'node:url';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 const here = (r) => fileURLToPath(new URL(r, import.meta.url));
 function pe(f){const o={};try{for(const l of readFileSync(f,'utf8').split(/\r?\n/)){const m=l.match(/^([A-Z_]+)=(.*)$/);if(m)o[m[1]]=m[2].trim();}}catch{}return o;}
-const env = { ...pe(here('../.env')), ...pe(here('../.env.seed')) };
+// 셸 env 가 파일값보다 우선한다(로컬 도커 키를 넘길 수 있게).
+const ENV_KEYS = ['EXPO_PUBLIC_SUPABASE_URL', 'SUPABASE_URL', 'EXPO_PUBLIC_SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY'];
+const env = { ...pe(here('../.env')), ...pe(here('../.env.seed')), ...Object.fromEntries(ENV_KEYS.filter((k) => process.env[k]).map((k) => [k, process.env[k]])) };
 const URL_ = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL, ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY, SRV = env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL_ || !ANON || !SRV) { console.error('FAIL: .env(ANON) + .env.seed(SERVICE_ROLE) 필요'); process.exit(2); }
+// 접속 대상 가드(2026-10-23 Q-0): 라이브에 QA 계정이 생긴 사고 재발 방지. 네트워크 호출 전에 멈춘다.
+let host = ''; try { host = new URL(URL_).hostname; } catch {}
+if (!['127.0.0.1', 'localhost'].includes(host) && !process.argv.includes('--allow-remote')) {
+  console.error(`중단: 접속 대상이 로컬이 아니다 — ${URL_}\n라이브에 만들려면 --allow-remote 를 명시한다.`); process.exit(2);
+}
 const mk = () => createClient(URL_, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
 const admin = createClient(URL_, SRV, { auth: { persistSession: false, autoRefreshToken: false } });
 

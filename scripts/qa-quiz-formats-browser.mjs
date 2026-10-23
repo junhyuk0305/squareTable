@@ -15,6 +15,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { IS_LOCAL, localEnv, assertLocalUrl, assertAppTargetsLocal } from './qa-local-target.mjs';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 
 function loadEnv() {
@@ -31,8 +32,10 @@ function loadEnv() {
   return env;
 }
 const env = loadEnv();
+if (IS_LOCAL) Object.assign(env, localEnv());
 const URL_ = env.EXPO_PUBLIC_SUPABASE_URL, ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY, SRV = env.SUPABASE_SERVICE_ROLE_KEY;
 const ORIGIN = process.env.QA_ORIGIN ?? 'http://localhost:8081';
+if (IS_LOCAL) { assertLocalUrl(URL_); await assertAppTargetsLocal(ORIGIN, URL_); }
 const SHOTS = './qa-shots/quiz-formats';
 mkdirSync(SHOTS, { recursive: true });
 if (!URL_ || !ANON || !SRV) { console.error('FAIL: URL/ANON/SERVICE_ROLE 필요(.env + .env.seed)'); process.exit(2); }
