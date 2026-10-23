@@ -162,9 +162,46 @@ try{
  const legacyStats=await owner.rpc('quiz_course_stats');
  const aAfter=legacyStats.data?.find(r=>r.course_id===courses[0]);
  check('B response not counted into A stats',!legacyStats.error&&aAfter?.asked===statsBefore?.asked&&aAfter?.correct===statsBefore?.correct,{before:statsBefore,after:aAfter});
+ // ── 0334 "혼자 할 수 있어요" 출제 범위(10-23 사용자): 새 앱(quiz_self_items_for)만 발송된 퀴즈 문항도 낸다.
+ //   출시 앱 경로(코스 없는 quiz_items_for)는 0332 그대로 발송 퀴즈 문항 0개 — 출시 앱 자청 답은 옛 서명이라 퀴즈와 구분이 안 된다(Q1).
+ const sentCourseIds=new Set((await must(admin.from('quiz_assignments').select('course_id').eq('unit_id',UNIT).not('sent_at','is',null))).map(r=>r.course_id));
+ const itemCourse=new Map((await must(admin.from('quiz_items').select('id,course_id').eq('unit_id',UNIT))).map(r=>[r.id,r.course_id]));
+ const oldPick=await junior.rpc('quiz_items_for',{p_entry_ids:entries,p_limit:20,p_course_id:null});
+ check('released-app self path offers 0 items of sent quizzes',!oldPick.error&&!(oldPick.data??[]).some(r=>sentCourseIds.has(itemCourse.get(r.id))),oldPick.error??oldPick.data?.map(r=>r.id));
+ //   새 앱 자청(v2 · 코스 없음) = self_check · source 'self'. 출시 앱 옛 서명(quiz_staff_record)은 문항의 퀴즈로 귀속(0332 그대로).
+ const selfPick=await junior.rpc('quiz_self_items_for',{p_entry_ids:[entries[1]],p_limit:20});
+ check('new-app self path offers items of a sent quiz',!selfPick.error&&selfPick.data?.some(r=>r.id===legacyItem),selfPick.error??selfPick.data?.map(r=>r.id));
+ await must(admin.from('quiz_assignments').insert({id:legacyAssignment+'_2',unit_id:UNIT,course_id:courses[1],user_id:junior.uid,scheduled_on:new Date(Date.now()+86400000).toISOString().slice(0,10),sent_at:await serverAfterLastAnswer()}));
+ const bStatsBefore=(await owner.rpc('quiz_course_stats')).data?.find(r=>r.course_id===courses[1]);
+ const selfRec=await junior.rpc('quiz_staff_record_v2',{p_course_id:null,p_request_id:p+'_self',p_rows:[{item_id:legacyItem,response:0,ord:0}]});
+ const selfRows=selfRec.data?await must(owner.from('quiz_attempt_items').select('self_check,source,course_id').eq('submission_id',selfRec.data)):[];
+ check('new-app self answer on a sent-quiz item is saved as self',!selfRec.error&&!!selfRec.data&&selfRows.length===1&&selfRows[0].self_check===true&&selfRows[0].source==='self',{selfRec,selfRows});
+ const selfProg=(await junior.rpc('quiz_assignment_progress',{p_course_id:courses[1]})).data?.find(r=>r.assignment_id===legacyAssignment+'_2');
+ check('self answer does not move quiz progress',selfProg?.answered_items===0&&selfProg?.state==='todo',selfProg);
+ const selfDone=await junior.rpc('mark_quiz_completed',{p_id:legacyAssignment+'_2'});
+ check('self answer does not complete the quiz',!selfDone.error&&selfDone.data===false,selfDone);
+ const bStatsSelf=(await owner.rpc('quiz_course_stats')).data?.find(r=>r.course_id===courses[1]);
+ check('self answer not in quiz rate (first_asked)',bStatsSelf?.first_asked===bStatsBefore?.first_asked&&bStatsSelf?.first_correct===bStatsBefore?.first_correct,{before:bStatsBefore,after:bStatsSelf});
+ const oldRec2=await junior.rpc('quiz_staff_record',{p_rows:[{item_id:legacyItem,response:0}]});
+ const oldRows2=oldRec2.data?await must(owner.from('quiz_attempt_items').select('self_check,source,course_id').eq('submission_id',oldRec2.data)):[];
+ check('released-app old signature on a sent-quiz item stays quiz-attributed',!oldRec2.error&&oldRows2.length===1&&oldRows2[0].self_check===false&&oldRows2[0].source==='assignment'&&oldRows2[0].course_id===courses[1],{oldRec2,oldRows2});
+ const oldProg2=(await junior.rpc('quiz_assignment_progress',{p_course_id:courses[1]})).data?.find(r=>r.assignment_id===legacyAssignment+'_2');
+ check('old signature answer moves quiz progress',oldProg2?.answered_items===1,oldProg2);
+ // 0334 ③ 카드 "지난번 퀴즈": 내 마지막 퀴즈 제출(자청 제외)의 문항별 맞힘만. 사장 세션은 자기 제출이 없어 0행.
+ await junior.rpc('quiz_staff_record_v2',{p_course_id:null,p_request_id:p+'_self2',p_rows:[{item_id:legacyItem,response:1,ord:0}]});
+ const lastSub=await junior.rpc('quiz_my_last_submissions',{p_course_ids:[courses[1]]});
+ check('last submission = latest quiz submission, self excluded, no answer payload',!lastSub.error&&lastSub.data?.length===1&&lastSub.data[0].submission_id===oldRec2.data&&lastSub.data[0].correct===true&&!('payload' in lastSub.data[0]),lastSub.error??lastSub.data);
+ const lastSubOwner=await owner.rpc('quiz_my_last_submissions',{p_course_ids:[courses[1]]});
+ check('last submission is mine only',!lastSubOwner.error&&lastSubOwner.data?.length===0,lastSubOwner.error??lastSubOwner.data);
+ // 0334 검증 후속: 새 앱 자청도 보관(비활성) 퀴즈의 문항은 내지 않고 받지 않는다(quiz_course_live).
+ await must(owner.from('training_courses').update({active:false}).eq('id',courses[1]));
+ const archPick=await junior.rpc('quiz_self_items_for',{p_entry_ids:entries,p_limit:20});
+ check('new-app self path skips items of an archived quiz',!archPick.error&&!(archPick.data??[]).some(r=>itemCourse.get(r.id)===courses[1]),archPick.error??archPick.data?.map(r=>r.id));
+ const archRec=await junior.rpc('quiz_staff_record_v2',{p_course_id:null,p_request_id:p+'_self_arch',p_rows:[{item_id:legacyItem,response:0,ord:0}]});
+ check('new-app self submit of an archived-quiz item saves nothing',!archRec.error&&archRec.data===null,archRec);
 }finally{
  const zItems=[...items,zItem],zEntries=[...entries,zEntry],zCourses=[...courses,zCourse];
- for(const [table,col,ids] of [['quiz_attempt_items','item_id',zItems],['quiz_attempts','entry_id',zEntries],['quiz_grade_log','item_id',zItems],['quiz_assignments','id',[assignment,legacyAssignment,zAssignment,zAssignment+'_2']],['knowhow_understanding','entry_id',zEntries],['quiz_links','id',[link,zLink]],['quiz_items','id',zItems],['course_entries','course_id',zCourses],['training_courses','id',zCourses],['knowhow_quiz_stats','entry_id',zEntries],['playbook_entries','id',zEntries]]){const r=await admin.from(table).delete().in(col,ids);check('cleanup '+table,!r.error,r.error);}
+ for(const [table,col,ids] of [['quiz_attempt_items','item_id',zItems],['quiz_attempts','entry_id',zEntries],['quiz_grade_log','item_id',zItems],['quiz_assignments','id',[assignment,legacyAssignment,legacyAssignment+'_2',zAssignment,zAssignment+'_2']],['knowhow_understanding','entry_id',zEntries],['quiz_links','id',[link,zLink]],['quiz_items','id',zItems],['course_entries','course_id',zCourses],['training_courses','id',zCourses],['knowhow_quiz_stats','entry_id',zEntries],['playbook_entries','id',zEntries]]){const r=await admin.from(table).delete().in(col,ids);check('cleanup '+table,!r.error,r.error);}
  if(LOCAL){
   if(UNIT!==FIXED_UNIT){const r=await admin.from('units').delete().eq('id',UNIT);check('cleanup units',!r.error,r.error);}
   for(const id of localUsers){const r=await admin.auth.admin.deleteUser(id);check('cleanup user',!r.error,r.error);}

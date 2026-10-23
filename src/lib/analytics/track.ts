@@ -75,7 +75,10 @@ function messageOf(raw: unknown): string {
   return String(raw);
 }
 function routeOf(): string | null {
-  if (typeof window !== 'undefined' && window.location) return window.location.pathname || null;
+  if (typeof window !== 'undefined' && window.location) {
+    // 공유 퀴즈 토큰은 접근 수단이므로 오류·이벤트 기록에는 경로 템플릿만 남긴다.
+    return window.location.pathname?.replace(/^\/q\/[^/]+/, '/q/[token]') || null;
+  }
   return null;
 }
 

@@ -48,53 +48,92 @@ export function pushSupported(): boolean {
 let listenerBound = false;
 // 마지막으로 처리한 알림 id. 콜드 스타트 응답과 리스너가 같은 탭을 두 번 처리하지 않게 한다.
 let lastHandledId: string | null = null;
+let pendingTap: Notifications.NotificationResponse | null = null;
+let tapEpoch = 0;
+let tapReady = false;
+let tapBlocked = false;
+let settleTimer: ReturnType<typeof setTimeout> | null = null;
 // 콜드 스타트: 첫 화면(index.tsx)이 로그인 뒤 /hub 로 보내는 Redirect 가 끝난 다음에 연다.
 //   먼저 열면 그 Redirect 가 연 화면을 덮는다.
 const COLD_START_SETTLE_MS = 500;
+
+function cancelPendingTap(): void {
+  tapEpoch += 1;
+  pendingTap = null;
+  tapReady = false;
+  if (settleTimer) clearTimeout(settleTimer);
+  settleTimer = null;
+  void Notifications.clearLastNotificationResponseAsync().catch(() => {});
+}
 
 /** 알림 탭 → 앱 내 라우팅. 부팅 1회만 건다. 앱이 꺼진 채 알림으로 열렸으면 로그인 뒤 한 번 처리한다. */
 export function bindNotificationTapRouting(): void {
   if (listenerBound || !pushSupported()) return;
   listenerBound = true;
-  Notifications.addNotificationResponseReceivedListener(handleTap);
-  const runColdStart = () => {
-    setTimeout(() => {
-      void Notifications.getLastNotificationResponseAsync()
-        .then((res) => {
-          if (!res) return;
-          // 다음에 앱을 아이콘으로 열 때 같은 응답을 다시 처리하지 않게 지운다.
-          void Notifications.clearLastNotificationResponseAsync().catch(() => {});
-          handleTap(res);
-        })
-        .catch(() => {});
+  let lastUserId: string | null = null;
+  // 초기 OS 조회보다 나중에 누른 알림을 우선한다.
+  let receivedTap = false;
+  Notifications.addNotificationResponseReceivedListener((res) => {
+    receivedTap = true;
+    handleTap(res);
+  });
+  const epoch = tapEpoch;
+  void Notifications.getLastNotificationResponseAsync().then((res) => {
+    if (res && epoch === tapEpoch && !receivedTap) handleTap(res);
+  }).catch(() => {});
+  const onSession = (s: ReturnType<typeof useSessionStore.getState>) => {
+    if (s.status !== 'signed_in' || !s.userId) {
+      tapReady = false;
+      if (settleTimer) clearTimeout(settleTimer);
+      settleTimer = null;
+      return; // 일시적 signed_out(연결 실패)과 재로그인 동안 목적지를 보관한다.
+    }
+    if (lastUserId && lastUserId !== s.userId) cancelPendingTap();
+    lastUserId = s.userId;
+    tapBlocked = false;
+    if (tapReady || settleTimer) return;
+    settleTimer = setTimeout(() => {
+      settleTimer = null;
+      tapReady = true;
+      const res = pendingTap;
+      pendingTap = null;
+      if (res) handleTap(res);
     }, COLD_START_SETTLE_MS);
   };
-  if (useSessionStore.getState().status === 'signed_in') {
-    runColdStart();
-    return;
-  }
-  const unsub = useSessionStore.subscribe((s) => {
-    if (s.status === 'loading') return;
-    unsub();
-    if (s.status === 'signed_in') runColdStart();
-  });
+  useSessionStore.subscribe(onSession);
+  onSession(useSessionStore.getState());
 }
 
 function handleTap(res: Notifications.NotificationResponse): void {
+  if (tapBlocked) return;
   const id = res.notification.request.identifier;
   if (id && id === lastHandledId) return;
+  const session = useSessionStore.getState();
+  if (!tapReady || session.status !== 'signed_in') {
+    pendingTap = res;
+    return;
+  }
   lastHandledId = id;
+  void Notifications.clearLastNotificationResponseAsync().catch(() => {});
+  const epoch = tapEpoch;
+  const userId = session.userId;
   const content = res.notification.request.content;
   const data = (content.data ?? {}) as { url?: unknown; route?: unknown; unitId?: unknown };
   // 옛 엣지(route 없음)의 사장 알림은 지금처럼 종류별 화면을 고른다.
   if (data.route === undefined && typeof data.url === 'string') {
-    void resolveTapUrl(data.url, content.categoryIdentifier).then((url) => followTap({ ...data, url }));
+    void resolveTapUrl(data.url, content.categoryIdentifier).then((url) => followTap({ ...data, url }, epoch, userId));
     return;
   }
-  followTap(data);
+  followTap(data, epoch, userId);
 }
 
-function followTap(data: unknown): void {
+function isCurrentTap(epoch: number, userId: string): boolean {
+  const s = useSessionStore.getState();
+  return epoch === tapEpoch && s.status === 'signed_in' && s.userId === userId;
+}
+
+function followTap(data: unknown, epoch: number, userId: string): void {
+  if (!isCurrentTap(epoch, userId)) return;
   const s = useSessionStore.getState();
   const plan = pushTapPlan(data, { unitId: s.unitId, role: s.role });
   if (plan.kind === 'ignore') return;
@@ -102,8 +141,9 @@ function followTap(data: unknown): void {
     // 다른 매장 알림 — 매장 목록과 같은 진입(switchUnit → tenantReset 이 이전 매장 데이터를 비운다)으로 들어간 뒤 연다.
     // 동적 import — 진입 스토어는 매장 데이터 스토어를 끌고 와서 부팅 경로에 두지 않는다.
     const name = s.stores.find((u) => u.unit_id === plan.unitId)?.store_name || '내 매장';
-    void import('@/lib/store/useStoreEntryStore').then(({ useStoreEntryStore }) =>
-      useStoreEntryStore.getState().enter({ uid: plan.unitId, name, then: plan.then }));
+    void import('@/lib/store/useStoreEntryStore').then(({ useStoreEntryStore }) => {
+      if (isCurrentTap(epoch, userId)) void useStoreEntryStore.getState().enter({ uid: plan.unitId, name, then: plan.then });
+    });
     return;
   }
   try {
@@ -216,6 +256,9 @@ export function releasePendingPushToken(token?: string): Promise<unknown> {
 /** 로그아웃 때 이전 계정의 알림 미리보기와 앱 아이콘 배지를 지운다. */
 export async function clearDeviceNotifications(): Promise<void> {
   if (!pushSupported()) return;
+  // 명시적 로그아웃은 연결 복구와 다르다. 이전 알림과 늦은 OS/메타데이터 응답을 버린다.
+  tapBlocked = true;
+  cancelPendingTap();
   await Notifications.dismissAllNotificationsAsync().catch(() => {});
   await Notifications.setBadgeCountAsync(0).catch(() => {});
 }

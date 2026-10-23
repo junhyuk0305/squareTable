@@ -5,6 +5,7 @@ import { todayStr, nowISO } from '@/lib/utils/attendance';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import {
   fetchTemplates,
+  fetchTemplateById,
   insertTemplate,
   updateTemplate,
   deleteTemplate,
@@ -25,11 +26,11 @@ import {
   fetchTemplateKnowhow,
   insertTemplateKnowhow,
   deleteTemplateKnowhow,
-  fetchKnowhowUnderstanding,
+  fetchKnowhowUnderstandingResult,
   insertKnowhowUnderstanding,
   type UnderstandingRow,
   fetchTrainingItems,
-  fetchCourseEntries,
+  fetchCourseEntriesResult,
   insertCourseEntry,
   deleteCourseEntry,
   updateCourseEntryPositions,
@@ -56,7 +57,7 @@ import type { QuizAssignment, TrainingCourse as TrainingCourseRow } from '@/lib/
 import { isBrandHidden } from '@/lib/brand/copy';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { coalesce, subscribeDebounced, settleWithin, HYDRATE_TIMEOUT_MS } from '@/lib/store/realtimeSync';
-import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
+import { currentTenantEpoch, isStaleEpoch, currentAccountEpoch } from '@/lib/store/tenantEpoch';
 import { genId } from '@/lib/utils/id';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
@@ -66,6 +67,21 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 
 /** 방마다 동시에 둘 수 있는 활성 반복(주간) 할일 상한(남용 #26) — 캘린더/피드 폭주 방지. */
 const MAX_ACTIVE_RECURRING = 40;
+/** 최초 저장 응답을 못 받아 아직 배정 푸시가 안 나간 업무 id. 화면 상태가 아니라 이 기기의 발송 기록이다.
+ *  값 = 표시한 때의 매장·계정 세대. 세대가 바뀌면(매장·계정 전환) 표시는 없는 것으로 보고 비운다. */
+const unnotifiedAssignTasks = new Map<string, string>();
+const assignMarkGen = () => `${currentTenantEpoch()}:${currentAccountEpoch()}`;
+function markUnnotifiedAssign(id: string): void {
+  const gen = assignMarkGen();
+  for (const [k, g] of unnotifiedAssignTasks) if (g !== gen) unnotifiedAssignTasks.delete(k);
+  unnotifiedAssignTasks.set(id, gen);
+}
+/** 표시가 지금 세대 것이면 true. 어느 쪽이든 표시는 지운다(한 번만 알린다). */
+function takeUnnotifiedAssign(id: string): boolean {
+  const g = unnotifiedAssignTasks.get(id);
+  unnotifiedAssignTasks.delete(id);
+  return g === assignMarkGen();
+}
 
 /**
  * 개수 상한·재확인 주기의 SSOT 는 **코스 행(0108 training_courses)** 하나다 — 사장 화면과
@@ -732,13 +748,13 @@ type State = {
   retry: () => Promise<void>;
   subscribe: () => () => void;
   // 저장 성공 여부를 반환(false=상한초과/미존재/쓰기실패) — 호출부가 성공 토스트·배정 푸시를 게이팅.
-  addTask: (input: NewTask) => Promise<boolean>;
+  addTask: (input: NewTask, retryId?: string) => Promise<boolean>;
   editTask: (id: string, patch: NewTask) => Promise<boolean>;
   removeTemplate: (id: string) => void;
   /** 업무에 노하우 첨부(멱등) — 이미 붙은 건 건너뛴다. ②(완료 캡처)도 이 원자 액션을 재사용한다. */
-  attachKnowhow: (templateId: string, entryIds: string[]) => Promise<void>;
+  attachKnowhow: (templateId: string, entryIds: string[]) => Promise<boolean>;
   /** 업무에서 노하우 첨부 해제. */
-  detachKnowhow: (templateId: string, entryIds: string[]) => Promise<void>;
+  detachKnowhow: (templateId: string, entryIds: string[]) => Promise<boolean>;
   /** 완료 캡처(②) 넛지 결과 기록 — 남기면 skips 리셋, 건너뛰면 +1. 둘 다 오늘 다시 안 띄우게 date 갱신. */
   noteCaptureNudge: (kind: 'submit' | 'skip') => void;
   /** 이해 확인(④) 통과 기록 — 푼 문항의 근거 노하우 전부. 낙관적 추가 + 실패 롤백(멱등). */
@@ -821,8 +837,8 @@ export const useWorkStore = create<State>((set, get) => ({
       fetchDone(),
       fetchFeed(),
       fetchTemplateKnowhow(),
-      fetchKnowhowUnderstanding(),
-      fetchCourseEntries(),
+      fetchKnowhowUnderstandingResult(),
+      fetchCourseEntriesResult(),
       fetchTrainingItems(),
       fetchTrainingCourses(),
       fetchTrainingRequests(),
@@ -841,7 +857,7 @@ export const useWorkStore = create<State>((set, get) => ({
     set({
       // 서버에 아직 없는 실패·저장 중 내 메시지는 다시 얹는다(D4 · J15 ① 재전송이 새로고침에 지워지지 않게).
       templates: templates.data, done: live.done, feed: carryUnsent(live.feed, get().feed, sendingIds),
-      knowhowLinks, understanding, courseEntries, training, trainingRequests, assignments, quizAttempts,
+      knowhowLinks, understanding: understanding.data, courseEntries: courseEntries.data, training, trainingRequests, assignments, quizAttempts,
       quizProgress: quizProgress.data ?? [], quizProgressError: !!quizProgress.error,
       // 직원에게 보일 코스만(비활성 제외) 사장 화면과 같은 순서로 — 카드 순서 = 사장이 정한 순서.
       // 숨긴 본사 퀴즈도 뺀다. 직원은 RLS(0231 tc_select)가 1선이고 이건 2선이다(사장 계정·0231 전 DB).
@@ -852,7 +868,8 @@ export const useWorkStore = create<State>((set, get) => ({
       loaded: true,
       // ★업무보드의 뼈대 3축(할일·완료·피드) 중 하나라도 실패하면 화면은 "없음"을 말하면 안 된다.
       //   나머지 축(노하우 링크·훈련 등)은 이 화면의 본문이 아니라 부가 정보라 게이트에 넣지 않는다.
-      loadError: templates.error || done.error || feed.error,
+      // N08: 이해 기록·코스 노하우 조회 실패도 "없음"으로 말하지 않는다(퀴즈 카드·옛 퀴즈 판정이 이 둘을 본다).
+      loadError: templates.error || done.error || feed.error || understanding.error || courseEntries.error,
     });
     } catch (e) {
       console.warn('[work] hydrate threw:', e);
@@ -868,7 +885,15 @@ export const useWorkStore = create<State>((set, get) => ({
   // 리렌더가 된다 → 트레일링 디바운스로 이벤트 버스트를 1회 재조회에 합친다.
   subscribe: () => subscribeDebounced(subscribeWork, () => get().hydrate()),
 
-  addTask: async (input) => {
+  addTask: async (input, retryId) => {
+    const epoch = currentTenantEpoch();
+    const authorId = useSessionStore.getState().userId;
+    // 본문만 저장되고 첨부가 실패한 재시도는 같은 행을 이어서 저장한다.
+    const existing = retryId ? get().templates.find((t) => t.id === retryId) : undefined;
+    if (existing) {
+      if (HAS_SUPABASE && (!authorId || existing.createdBy !== authorId)) return false;
+      return get().editTask(existing.id, input);
+    }
     const room = curRoom();
     // 반복(주간) 할일 상한(남용 #26): 활성 반복 템플릿이 과도하면 occursOn 전개로 캘린더·피드가 폭주.
     // 'once'(일회성)는 그 날만 떠 폭주 위험이 없으므로 제외 — 반복만 센다(방 단위).
@@ -884,7 +909,7 @@ export const useWorkStore = create<State>((set, get) => ({
       }
     }
     const t: TaskTemplate = {
-      id: genId('t'),
+      id: retryId ?? genId('t'),
       section: input.section,
       text: input.text,
       ...(input.description?.trim() ? { description: input.description.trim() } : null),
@@ -892,7 +917,7 @@ export const useWorkStore = create<State>((set, get) => ({
       scope: input.scope,
       ...(room ? { roomId: room } : null),
       ...(assigneesOf(input).length ? { ownerId: assigneesOf(input)[0], ownerIds: assigneesOf(input) } : null),
-      ...(input.createdBy ? { createdBy: input.createdBy } : null),
+      ...((input.createdBy || authorId) ? { createdBy: input.createdBy || authorId } : null),
       ...(input.sectionNote ? { sectionNote: input.sectionNote } : null),
       ...(input.recurrence ? { recurrence: input.recurrence } : null),
       ...(input.date ? { date: input.date } : null),
@@ -900,25 +925,53 @@ export const useWorkStore = create<State>((set, get) => ({
       createdAt: new Date().toISOString(), // 재조회 전에도 배정 알림 정렬 정확(DB default now()와 일치).
     };
     set((s) => ({ templates: [...s.templates, t] }));
+    let inserted = false;
+    try { inserted = await insertTemplate(t); } catch { /* 응답 유실도 같은 ID를 조회해 확인한다. */ }
+    if (isStaleEpoch(epoch)) return false;
+    if (!inserted) {
+      // ★배정 푸시는 저장 성공 뒤에만 나가므로 이 업무의 담당자는 아직 알림을 받지 않았다. 확인 조회가 실패해
+      //   실시간 재조회가 행을 먼저 들여온 뒤 재시도(existing 분기)해도 editTask 가 이 표시로 한 번 알린다.
+      markUnnotifiedAssign(t.id);
+      let recovered: TaskTemplate | undefined;
+      try {
+        // ID 로 직접 읽는다. 목록은 서버 응답 상한(max_rows)에서 잘려 상한 밖 업무를 못 찾는다.
+        const row = await fetchTemplateById(t.id);
+        if (!row.error && authorId && row.data?.createdBy === authorId) recovered = row.data;
+      } catch { /* 조회 실패는 저장 성공으로 취급하지 않는다. */ }
+      if (isStaleEpoch(epoch)) return false;
+      if (recovered) {
+        // 서버에 확인된 자기 업무만 복원한다. 현재 초안은 수정 경로로 저장한다. 생성 시각·작성자는 서버 값을 유지한다.
+        //   행은 서버 원본(담당자 포함) 그대로 둔다. editTask 가 저장 성공 때 위 표시로 현재 담당자에게
+        //   한 번 알리고 표시를 지운다. 실패하면 표시가 남아 다음 재시도가 알린다
+        //   (서버도 10분 안 같은 배정은 한 번만 보낸다 · 0324).
+        set((s) => ({ templates: [...s.templates.filter((row) => row.id !== t.id), recovered] }));
+        return get().editTask(t.id, input);
+      }
+    }
     const ok = await guardWrite(
-      insertTemplate(t),
-      () => set((s) => ({ templates: s.templates.filter((x) => x.id !== t.id) })),
+      Promise.resolve(inserted),
+      // 재조회·실시간 갱신으로 도착한 새 행은 이전 낙관적 쓰기의 롤백 대상이 아니다.
+      () => { if (!isStaleEpoch(epoch)) set((s) => ({ templates: s.templates.filter((x) => x !== t) })); },
       '할일 추가 저장에 실패했어요.',
     );
+    if (isStaleEpoch(epoch)) return false;
     // 노하우 첨부 — 업무 행이 저장된 뒤에만(FK 무결성: 링크는 template_id 존재를 요구). 실패·롤백 시 첨부 안 함.
-    if (ok && input.knowhowIds && input.knowhowIds.length) {
-      await get().attachKnowhow(t.id, input.knowhowIds);
-    }
+    const linksOk = ok && input.knowhowIds?.length
+      ? await get().attachKnowhow(t.id, input.knowhowIds)
+      : true;
+    if (isStaleEpoch(epoch)) return false;
     // 배정 알림 — 저장 성공 후에만(실패·롤백 시 유령 배정 푸시 방지 — F2). 남에게 배정한 경우만, OS 푸시만.
     if (ok) {
+      takeUnnotifiedAssign(t.id); // 새로 저장돼 아래에서 전원에게 알린다 → 남은 표시는 지운다.
       for (const uid of assigneesOf(t)) {
         if (uid !== t.createdBy) notifyUserAssign(uid, useSessionStore.getState().userName || '담당자', t.text, t.id);
       }
     }
-    return ok;
+    return ok && linksOk;
   },
   // 할일 수정 — 회의 반영(X 즉시삭제 → 연필 수정). 본문·시간대·담당·스케줄을 통째로 갱신.
   editTask: async (id, patch) => {
+    const epoch = currentTenantEpoch();
     const before = get().templates.find((t) => t.id === id);
     if (!before) return false;
     const updated: TaskTemplate = {
@@ -940,29 +993,35 @@ export const useWorkStore = create<State>((set, get) => ({
     set((s) => ({ templates: s.templates.map((t) => (t.id === id ? updated : t)) }));
     const ok = await guardWrite(
       updateTemplate(updated),
-      () => set((s) => ({ templates: s.templates.map((t) => (t.id === id ? before : t)) })),
+      () => { if (!isStaleEpoch(epoch)) set((s) => ({ templates: s.templates.map((t) => (t.id === id ? before : t)) })); },
       '할일 수정 저장에 실패했어요.',
     );
+    if (isStaleEpoch(epoch)) return false;
     // 노하우 재조정 — patch.knowhowIds 가 곧 원하는 전체 집합. 저장 성공 후 diff 로 추가/해제만 반영.
     // (undefined면 컴포저가 노하우 필드를 안 보낸 것 → 링크 무접촉.)
+    let linksOk = true;
     if (ok && patch.knowhowIds) {
       const cur = knowhowIdsForTask(get().knowhowLinks, id);
       const next = patch.knowhowIds;
       const toAdd = next.filter((e) => !cur.includes(e));
       const toRemove = cur.filter((e) => !next.includes(e));
-      if (toAdd.length) await get().attachKnowhow(id, toAdd);
-      if (toRemove.length) await get().detachKnowhow(id, toRemove);
+      if (toAdd.length) linksOk = await get().attachKnowhow(id, toAdd);
+      if (isStaleEpoch(epoch)) return false;
+      if (toRemove.length) linksOk = (await get().detachKnowhow(id, toRemove)) && linksOk;
     }
+    if (isStaleEpoch(epoch)) return false;
     // 재배정 알림 — 저장 성공 후에만(F2). 새로 들어온 담당자에게만, 작성자 본인 배정 제외.
     if (ok) {
       const prev = assigneesOf(before);
+      // 응답 유실로 복구한 업무는 기존 담당자도 아직 알림을 못 받았다(addTask 참고). 이번 성공에서 한 번 알린다.
+      const unnotified = takeUnnotifiedAssign(id);
       for (const uid of assigneesOf(updated)) {
-        if (!prev.includes(uid) && uid !== updated.createdBy) {
+        if ((unnotified || !prev.includes(uid)) && uid !== updated.createdBy) {
           notifyUserAssign(uid, useSessionStore.getState().userName || '담당자', updated.text, updated.id);
         }
       }
     }
-    return ok;
+    return ok && linksOk;
   },
   removeTemplate: (id) => {
     const idx = get().templates.findIndex((t) => t.id === id);
@@ -994,19 +1053,22 @@ export const useWorkStore = create<State>((set, get) => ({
 
   // 낙관적 첨부 — 이미 붙은 건 제외(멱등)하고 새로 추가만. 실패 시 추가분만 롤백.
   attachKnowhow: async (templateId, entryIds) => {
+    const epoch = currentTenantEpoch();
     const existing = new Set(knowhowIdsForTask(get().knowhowLinks, templateId));
     const toAdd = entryIds.filter((e) => !existing.has(e));
-    if (toAdd.length === 0) return;
+    if (toAdd.length === 0) return true;
     const added: KnowhowLink[] = toAdd.map((entryId) => ({ templateId, entryId }));
     set((s) => ({ knowhowLinks: [...s.knowhowLinks, ...added] }));
-    await guardWrite(
+    const ok = await guardWrite(
       insertTemplateKnowhow(templateId, toAdd),
-      () =>
-        set((s) => ({
+      () => {
+        if (!isStaleEpoch(epoch)) set((s) => ({
           knowhowLinks: s.knowhowLinks.filter((l) => !(l.templateId === templateId && toAdd.includes(l.entryId))),
-        })),
+        }));
+      },
       '노하우 첨부에 실패했어요.',
     );
+    return !isStaleEpoch(epoch) && ok;
   },
   noteCaptureNudge: (kind) => {
     const today = todayStr();
@@ -1179,12 +1241,12 @@ export const useWorkStore = create<State>((set, get) => ({
   // 낙관적 해제 — 지운 링크만 잡아 실패 시 그대로 복원(사이에 도착한 realtime 변경은 안 덮음).
   detachKnowhow: async (templateId, entryIds) => {
     const removed = get().knowhowLinks.filter((l) => l.templateId === templateId && entryIds.includes(l.entryId));
-    if (removed.length === 0) return;
+    if (removed.length === 0) return true;
     const epoch = currentTenantEpoch(); // 매장이 바뀌었으면 되살리지 않는다(markUnderstood 주석)
     set((s) => ({
       knowhowLinks: s.knowhowLinks.filter((l) => !(l.templateId === templateId && entryIds.includes(l.entryId))),
     }));
-    await guardWrite(
+    return guardWrite(
       deleteTemplateKnowhow(templateId, entryIds),
       () => { if (!isStaleEpoch(epoch)) set((s) => ({ knowhowLinks: [...s.knowhowLinks, ...removed] })); },
       '노하우 첨부 해제에 실패했어요.',

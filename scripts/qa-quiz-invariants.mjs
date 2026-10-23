@@ -21,7 +21,7 @@ const out = mkdtempSync(join(tmpdir(), 'quiz-inv-'));
 execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', 'src/lib/quiz/courseItems.ts', 'src/lib/quiz/progress.ts', '--outDir', out, '--module', 'commonjs', '--target', 'es2020', '--skipLibCheck', '--ignoreConfig'], { stdio: 'pipe' });
 const req = createRequire(import.meta.url);
 const { itemsOfCourse } = req(join(out, 'courseItems.js'));
-const { quizTodo } = req(join(out, 'progress.js'));
+const { staffQuizTodo, openQuizzes, legacyOpenQuizIds } = req(join(out, 'progress.js'));
 
 const opt = { auth: { persistSession: false, autoRefreshToken: false } };
 const mk = () => createClient(URL, ANON, opt);
@@ -65,6 +65,10 @@ try {
     await must(O.from('training_courses').insert({ id, unit_id: UNIT, key: id, name: `${p} ${k}`, min_items: 1, max_items: 10, position: 0, active: true, audience: k === 'L' ? 'guest' : 'staff', start_at: null, due_days: null }), 'course');
     for (const entry_id of courseEntries[k]) await must(O.from('course_entries').insert({ course_id: id, entry_id, unit_id: UNIT }), 'course_entries');
   }
+  // 발송 원장 없는 옛 퀴즈 LG(0139 이전에 만든 것 · I7). 만든 시각은 서버 권한으로 옛날로 둔다.
+  C.LG = `${p}_LG`;
+  await must(srv.from('training_courses').insert({ id: C.LG, unit_id: UNIT, key: C.LG, name: `${p} LG`, min_items: 1, max_items: 10, position: 1, active: true, audience: 'staff', start_at: null, due_days: null, created_at: '2026-08-01T00:00:00+09:00' }), 'legacy course');
+  await must(srv.from('course_entries').insert({ course_id: C.LG, entry_id: E[0], unit_id: UNIT }), 'legacy ce');
   const mc = (ask) => ({ ask, choices: ['정답', '오답', '다른 답', '모름'], answer_index: 0, explain: 'QA' });
   const item = (id, course_id, entry_ids) => ({ id, unit_id: UNIT, course_id, entry_ids, kind: 't0', format: 'mc4', payload: mc(id), source: 'owner', status: 'active', created_by: O.uid });
   const I = { a1: `${p}_ia1`, a2: `${p}_ia2`, a3: `${p}_ia3`, b1: `${p}_ib1`, c1: `${p}_ic1`, l1: `${p}_il1`, sh: `${p}_ish` };
@@ -75,6 +79,7 @@ try {
     item(I.b1, C.B, [E[2]]),
     item(I.c1, C.C, [E[0]]),
     item(I.l1, C.L, [E[2]]),
+    item(`${p}_ilg`, C.LG, [E[0]]),
   ]), 'items');
 
   // I3: 공유(course_id null) 문항. 옛 앱처럼 사장 세션으로 넣어 본다. 거부되면 GREEN(P2 NOT NULL 뒤).
@@ -113,24 +118,42 @@ try {
     check('I1 문항 수 4경로 일치', ok, detail);
   });
 
-  // I7: 같은 입력(직원 1의 발송·진행)으로 홈 개수 = 카드 수 = 벨 수.
-  //   P3 뒤 세 곳은 quizTodo 하나를 부른다(useJuniorHomeData · notifications myQuizTodo · WorkBoard 변경안).
-  //   그래서 여기서는 그 함수가 서버 진행으로 계약대로 고르는지를 같이 본다:
-  //   재발송(A 두 번)은 최신 발송 하나 · 1회성은 앞선 하나 · state 는 서버(0332)가 준다.
-  await run('I7 홈 = 카드 = 벨', async () => {
+  // I7(10-23 재정의 · 검증 후속): 홈 개수 = 벨 개수 = 할 퀴즈 수 = 발송 퀴즈(퀴즈별 최신 하나) + 열린 옛 퀴즈.
+  //   카드는 발송 퀴즈의 부분집합(1회성은 앞선 하나). 정의 함수 = progress.ts openQuizzes 하나.
+  //   화면이 조립하는 입력 경로를 따로 밟는다:
+  //     매장 앱(홈 훅 · 벨 · 앱 배지 · 알림 목록) = useWorkStore.hydrate 가 읽는 표들 + useLegacyQuizOpen 의 옛 퀴즈 판정 입력
+  //       (course_entries · quiz_item_counts · 퀴즈별 내 제출). 네 호출부가 이 경로를 쓰는지는 qa-quiz-wiring 이 고정한다.
+  //     허브 벨 = my_units_notif_data 묶음(db.ts fetchMyUnitsNotifData 와 같은 매핑). 옛 퀴즈 판정 입력이 없다(한계 · 발송 퀴즈만).
+  //   fixture: S1 ← A 두 번(다시 알리기) · B 한 번(1회성) · 옛 퀴즈 LG(발송 없음 · 미제출) → 매장 앱 3 · 허브 2 · 카드 1.
+  await run('I7 홈 = 벨 = 할 퀴즈 수 · 카드 ⊆', async () => {
     const asg = (await must(S1.from('quiz_assignments').select('*').eq('unit_id', UNIT), 'my assignments'))
-      .map((a) => ({ id: a.id, courseId: a.course_id, userId: a.user_id, sentAt: a.sent_at, completedAt: a.completed_at }));
+      .map((a) => ({ id: a.id, courseId: a.course_id, userId: a.user_id, sentAt: a.sent_at, completedAt: a.completed_at, dueOn: a.due_on ?? null }));
     const prog = (await must(S1.rpc('quiz_assignment_progress', { p_course_id: null }), 'progress'))
       .map((r) => ({ assignmentId: r.assignment_id, pendingEntryIds: r.pending_entry_ids ?? [], totalItems: r.total_items, answeredItems: r.answered_items, state: r.state }));
-    const courses = [C.A, C.B, C.C].map((id) => ({ id, dueDays: null })); // 1회성 퀴즈 · 카드 순서
-    const sentCourses = courses.filter((c) => asg.some((a) => a.courseId === c.id));
-    const home = quizTodo(asg, prog, { userId: S1.uid, courses: sentCourses });
-    const cards = quizTodo(asg, prog, { userId: S1.uid, courses: sentCourses });
-    const bell = quizTodo(asg, prog, { userId: S1.uid, courses: courses.filter((c) => asg.some((a) => a.userId === S1.uid && a.sentAt && a.courseId === c.id)) });
-    const states = Object.fromEntries(prog.map((p) => [p.assignmentId, p.state]));
-    const ok = home.length === cards.length && cards.length === bell.length
-      && home.length === 1 && home[0].assignment.id === AS.s1a2 && states[AS.s1a2] === 'todo';
-    check('I7 홈 = 카드 = 벨', ok, { home: home.length, cards: cards.length, bell: bell.length, picked: home.map((t) => t.assignment.id), states });
+    // useWorkStore.hydrate 와 같은 courses: 활성 · 본사 숨김 아님 · position 순.
+    const courses = (await must(S1.from('training_courses').select('*').eq('unit_id', UNIT).order('position'), 'courses'))
+      .filter((c) => c.active && !c.brand_hidden_at);
+    const ce = (await must(S1.from('course_entries').select('course_id,entry_id,position').eq('unit_id', UNIT), 'ce'))
+      .map((r) => ({ courseId: r.course_id, entryId: r.entry_id, position: r.position ?? 0 }));
+    const counts = Object.fromEntries((await must(S1.rpc('quiz_item_counts'), 'counts')).map((r) => [r.entry_id, r.n ?? 0]));
+    const legacyCandidates = courses.filter((c) => !asg.some((a) => a.courseId === c.id)).map((c) => c.id);
+    const submitted = {};
+    for (const r of await must(S1.from('quiz_attempts').select('entry_id,course_id').eq('staff_id', S1.uid).in('course_id', legacyCandidates.length ? legacyCandidates : ['-']), 'submitted')) (submitted[r.course_id] ??= new Set()).add(r.entry_id);
+    const legacy = legacyOpenQuizIds(courses, asg, ce, counts, submitted);
+    const app = openQuizzes(asg, prog, courses, S1.uid, legacy);
+    const cards = staffQuizTodo(asg, prog, courses, { userId: S1.uid, cardRule: true });
+    // 허브 경로
+    const hubRows = (await must(S1.rpc('my_units_notif_data'), 'hub')).filter((r) => r.unit_id === UNIT);
+    const hubAsg = hubRows.filter((r) => r.source === 'quiz').map((r) => ({ id: r.payload.id, courseId: r.payload.course_id, userId: r.payload.user_id, sentAt: r.payload.sent_at ?? null, completedAt: r.payload.completed_at ?? null }));
+    const hubProg = hubRows.filter((r) => r.source === 'quiz' && r.payload.state).map((r) => ({ assignmentId: r.payload.id, pendingEntryIds: [], totalItems: Number(r.payload.total_items ?? 0), answeredItems: Number(r.payload.answered_items ?? 0), state: r.payload.state }));
+    const hubCourses = hubRows.filter((r) => r.source === 'course').map((r) => r.payload).sort((x, y) => (x.position ?? 0) - (y.position ?? 0));
+    const hub = openQuizzes(hubAsg, hubProg.length ? hubProg : undefined, hubCourses, S1.uid, undefined);
+    const ids = (xs) => xs.map((x) => (x.kind === 'legacy' ? x.courseId : x.todo.assignment.id)).sort();
+    const appIds = ids(app);
+    const ok = app.length === 3 && JSON.stringify(appIds) === JSON.stringify([AS.s1a2, AS.s1b, C.LG].sort())
+      && hub.length === app.length - legacy.length && ids(hub).every((id) => appIds.includes(id))
+      && cards.length === 1 && cards.every((t) => appIds.includes(t.assignment.id));
+    check('I7 홈 = 벨 = 할 퀴즈 수 · 카드 ⊆', ok, { app: appIds, legacy, hub: ids(hub), hubLimit: '허브는 옛 퀴즈 입력 없음', cards: cards.map((t) => t.assignment.id) });
   });
 
   // I4: 발송마다 progress.total = servable 수. answered=total>0 일 때만 완료 true.
@@ -157,11 +180,12 @@ try {
     // S1 재응시(오답) → 첫 응시만 세야 한다. 손님 제출 2건(정답 1·오답 1).
     await must(S1.rpc('quiz_staff_record_v2', { p_course_id: C.A, p_request_id: p + '_s1a_retry', p_rows: svA.map((id, i) => ({ item_id: id, response: 1, ord: i })) }), 's1 retry');
     for (const [n, r] of [['g1', 0], ['g2', 1]]) await must(anon.rpc('quiz_link_submit_v2', { p_token: T.A, p_guest_name: `${p}_${n}`, p_guest_phone: null, p_phone_verified: false, p_request_id: `${p}_${n}`, p_answers: [{ item_id: svA[0], response: r }] }), 'guest submit');
-    // Q1: 업무 자청(코스 없는 v2)은 발송된 퀴즈 A 의 문항을 받지 않는다. 안 보낸 퀴즈 C 문항은 source=self 로 남는다.
-    const selfA = await S2.rpc('quiz_staff_record_v2', { p_course_id: null, p_request_id: p + '_selfA', p_rows: [{ item_id: svA[0], response: 0, ord: 0 }] });
+    // Q1(0334 · 10-23 사용자): 업무 자청(코스 없는 v2)은 발송된 퀴즈 A 의 문항도 받는다. 받은 답은 source=self 로 남아
+    //   아래 정답률(first_*)에 들어가지 않는다. 안 보낸 퀴즈 C 문항도 source=self 다.
+    const selfA = await must(S2.rpc('quiz_staff_record_v2', { p_course_id: null, p_request_id: p + '_selfA', p_rows: [{ item_id: svA[0], response: 0, ord: 0 }] }), 'self A');
     const selfC = await must(S2.rpc('quiz_staff_record_v2', { p_course_id: null, p_request_id: p + '_selfC', p_rows: [{ item_id: I.c1, response: 0, ord: 0 }] }), 'self C');
-    const selfRows = await must(srv.from('quiz_attempt_items').select('source,course_id').eq('submission_id', selfC ?? '-'), 'self rows');
-    if (selfA.error || selfA.data !== null || selfRows.length !== 1 || selfRows[0].source !== 'self') throw new Error('Q1 자청 분리 실패 ' + JSON.stringify({ selfA: selfA.error?.message ?? selfA.data, selfRows }));
+    const selfRows = await must(srv.from('quiz_attempt_items').select('source,course_id').in('submission_id', [selfA ?? '-', selfC ?? '-']), 'self rows');
+    if (selfRows.length !== 2 || selfRows.some((r) => r.source !== 'self')) throw new Error('Q1 자청 분리 실패 ' + JSON.stringify({ selfA, selfRows }));
     // 정의(metrics.ts quizRate): 직원은 사람·문항마다 가장 이른 답 하나(자청 제외) · 손님은 답 전부.
     //   옛 열 asked/correct 는 누적 그대로 두고, 새 열 first_asked/first_correct/guest_submissions 를 본다(0332).
     const rows = await must(srv.from('quiz_attempt_items').select('id,submission_id,staff_id,item_id,correct,created_at,source').eq('unit_id', UNIT).eq('course_id', C.A), 'attempt items');

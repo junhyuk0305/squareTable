@@ -496,7 +496,8 @@ grant execute on function public.quiz_course_stats() to authenticated;
 -- ★0332: 내 퀴즈 발송 행에 서버 상태(state·total_items·answered_items = quiz_assignment_state)를 싣는다.
 --   허브 벨은 매장 벨과 같은 quizTodo 로 센다. void(멈춘 퀴즈)는 안 푼 퀴즈가 아니다(N03).
 --   상태는 50행을 자른 뒤에만 구한다. 옛 앱은 모르는 키를 무시한다.
---   퀴즈 이름 행에 due_days 를 싣는다(카드의 1회성 하나 규칙을 허브 벨도 쓴다).
+--   퀴즈 이름 행에 due_days 를 싣는다. 벨은 1회성 규칙을 쓰지 않는다(10-23 사용자: 다른 퀴즈면 각각, 같은 퀴즈 재발송이면 1개).
+--   1회성 하나 규칙은 업무 카드에만 있다(progress.ts quizTodo cardRule).
 create or replace function public.my_units_notif_data()
 returns table(unit_id text, source text, payload jsonb)
 language sql stable security definer set search_path = public as $$
@@ -636,7 +637,7 @@ language sql stable security definer set search_path = public as $$
 
   union all
   -- ★0313 퀴즈 이름(벨 본문). 이름만 — 코스 본문은 허브가 안 쓴다.
-  -- ★0332: due_days(1회성 = null) — 허브 벨이 카드와 같은 "1회성 하나" 규칙을 쓴다.
+  -- ★0332: due_days(1회성 = null)도 싣는다. 허브 벨은 1회성 규칙 없이 퀴즈마다 하나로 센다(10-23 · 카드만 1회성 하나).
   --   position(카드 순서 = 매장 앱 fetchTrainingCourses 의 order by position) · audience(외부 사람용은 직원 카드가 없다)도 싣는다.
   select c.unit_id, 'course'::text,
          jsonb_build_object('id', c.id, 'name', c.name, 'due_days', c.due_days, 'position', c.position, 'audience', c.audience)

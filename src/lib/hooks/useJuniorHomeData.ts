@@ -1,13 +1,12 @@
-import { legacyQuizOpen, quizTodo } from '@/lib/quiz/progress';
-import { fetchMySubmittedEntries } from '@/lib/db';
-import { useEffect, useMemo, useState } from 'react';
+import { openQuizzes } from '@/lib/quiz/progress';
+import { useLegacyQuizOpen } from '@/lib/hooks/useLegacyQuizOpen';
+import { useMemo } from 'react';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
-import { useWorkStore, useDayparts, daypartRoutineTemplates, occursOn, taskVisibleTo, trainingCourseViews, courseEntriesOf } from '@/lib/store/useWorkStore';
+import { useWorkStore, useDayparts, daypartRoutineTemplates, occursOn, taskVisibleTo } from '@/lib/store/useWorkStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { todayStr, findOpenRecord, isForgotCheckout } from '@/lib/utils/attendance';
-import { staffCanSeeCourse } from '@/lib/quiz/schedule';
 
 export type JuniorHomeData = {
   /**
@@ -117,59 +116,20 @@ export function useJuniorHomeData(): JuniorHomeData {
   //  ★세는 단위는 **퀴즈**다(2026-10-15 안드로이드 QA #4). 예전엔 노하우를 세서 퀴즈 1개를 보냈는데 '안 푼 퀴즈 4개'가 떴다.
   //  ★나에게 **실제로 나간** 퀴즈만 센다 — WorkBoard 카드와 같은 조건(발송 원장이 있으면 내 sent 행이 있어야 한다).
   const courses = useWorkStore((s) => s.courses);
-  const courseEntries = useWorkStore((s) => s.courseEntries);
-  const quizCounts = useWorkStore((s) => s.quizCounts);
   const assignments = useWorkStore((s) => s.assignments);
   const quizProgress = useWorkStore((s) => s.quizProgress);
   const quizProgressError = useWorkStore((s) => s.quizProgressError);
-  // 발송 원장 없는 옛 퀴즈만 골라 내 제출을 읽는다(최근 200행 목록에 기대지 않는다).
-  const legacyIds = useMemo(
-    () => trainingCourseViews(courses)
-      .filter((c) => !assignments.some((a) => a.courseId === c.id) && staffCanSeeCourse(c, 0))
-      .map((c) => c.id)
-      .sort()
-      .join(','),
-    [courses, assignments],
+  // ★할 퀴즈 수 = openQuizzes 하나(발송 퀴즈 + 열린 옛 퀴즈). 벨·앱 배지·알림 목록과 같은 함수·같은 입력(I7).
+  //   옛 퀴즈 판정은 useLegacyQuizOpen 이 한다(퀴즈별 내 제출 조회 · 조회 중이면 ids=null → 숫자를 안 그린다).
+  //   진행 조회가 실패하면 벨처럼 undefined 를 넘겨 완료 여부만 본다.
+  const legacy = useLegacyQuizOpen();
+  const legacyLoading = legacy.ids === null;
+  /** 조회 실패 — 할 일로 남기는 폴백은 그대로 두고, 홈은 기존 오류 안내(quizProgressError)로 말한다. */
+  const legacyError = legacy.error;
+  const openQuizCount = useMemo(
+    () => openQuizzes(assignments, quizProgressError ? undefined : quizProgress, courses, userId, legacy.ids ?? []).length,
+    [assignments, quizProgress, quizProgressError, courses, userId, legacy.ids],
   );
-  // 스토어가 응시 목록을 다시 받으면(제출 뒤 등) 같이 다시 읽는다. 값은 쓰지 않고 신호로만 본다.
-  const attemptsTick = useWorkStore((s) => s.quizAttempts);
-  // 결과는 요청 키(사람·퀴즈 목록·응시 신호)와 같이 둔다. 키가 다르면 아직 첫 조회 중이다(ready 게이트). 제출 뒤 다시 읽는 동안은 앞 값을 보인다.
-  const legacyKey = userId && legacyIds ? `${userId}|${legacyIds}` : '';
-  const [legacyResult, setLegacyResult] = useState<{ key: string; data: Record<string, Set<string>> | null } | null>(null);
-  useEffect(() => {
-    if (!legacyKey || !userId) return; // 옛 퀴즈가 없으면 아래 반복이 아무것도 세지 않는다.
-    let alive = true;
-    void fetchMySubmittedEntries(userId, legacyIds.split(',')).then((r) => {
-      if (alive) setLegacyResult({ key: legacyKey, data: r });
-    });
-    return () => { alive = false; };
-  }, [legacyKey, userId, legacyIds, attemptsTick]);
-  const legacyLoading = !!legacyKey && legacyResult?.key !== legacyKey;
-  /** 조회 실패(null) — 할 일로 남기는 폴백은 그대로 두고, 홈은 기존 오류 안내(quizProgressError)로 말한다. */
-  const legacyError = !!legacyKey && !legacyLoading && legacyResult?.data == null;
-  const legacySubmitted = legacyKey && !legacyLoading ? legacyResult?.data ?? null : null;
-  const openQuizCount = useMemo(() => {
-    const views = trainingCourseViews(courses);
-    // ★0332 · P3: 발송된 퀴즈는 quizTodo 하나로 센다(카드·벨과 같은 함수 · 재발송은 최신 하나 · 1회성은 앞선 하나).
-    //   만들던 퀴즈·외부 사람용은 카드가 안 뜨니 넘기지 않는다(E1 · staffCanSeeCourse).
-    const sentCourses = views.filter((c) => {
-      const n = assignments.filter((a) => a.courseId === c.id).length;
-      return n > 0 && staffCanSeeCourse(c, n);
-    });
-    let open = quizTodo(assignments, quizProgress, { userId, courses: sentCourses }).length;
-    // 발송 원장이 없는 옛 퀴즈(0139 이전)만 아래 규칙으로 센다.
-    for (const c of views) {
-      const sends = assignments.filter((a) => a.courseId === c.id);
-      if (sends.length > 0 || !staffCanSeeCourse(c, sends.length)) continue;
-      const list = courseEntriesOf(courseEntries, c.id)
-        .map((e) => e.entryId)
-        .filter((id) => (quizCounts[id] ?? 0) > 0);
-      if (list.length < c.minItems) continue;
-      const submitted = legacySubmitted ? legacySubmitted[c.id] ?? new Set<string>() : null;
-      if (legacyQuizOpen(list, submitted)) open += 1;
-    }
-    return open;
-  }, [courses, courseEntries, legacySubmitted, quizCounts, assignments, quizProgress, userId]);
 
   // 2026-08-07: '많이 물어본 노하우'(popularKnowhow)와 물어보기 전송(submitChat)은 제거했다 —
   // 홈 섹션이 3개로 줄며(정본 §12) 둘 다 읽는 곳이 없어졌다. 노하우 발견성은 노하우 탭이,

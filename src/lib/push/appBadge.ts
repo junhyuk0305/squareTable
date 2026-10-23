@@ -9,6 +9,7 @@
 import { useEffect } from 'react';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
+import { useLegacyQuizOpen } from '@/lib/hooks/useLegacyQuizOpen';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
@@ -18,6 +19,8 @@ import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { todayStr } from '@/lib/utils/attendance';
 import { accountAckAt, juniorUnreadCount, manageUnreadCount } from '@/lib/utils/notifications';
 import { canManage } from '@/lib/utils/roles';
+
+const EMPTY_IDS: string[] = [];
 
 type BadgeNav = Navigator & {
   setAppBadge?: (count?: number) => Promise<void>;
@@ -97,6 +100,8 @@ export function useAppBadgeSync(): void {
   const quizProgressError = useWorkStore((s) => s.quizProgressError);
   const quizProgress = quizProgressError ? undefined : quizProgressRaw;
   const courses = useWorkStore((s) => s.courses);
+  // 열린 옛 퀴즈(발송 원장 없음) — 벨·홈과 같은 판정(I7). 조회 중이면 빈 목록.
+  const legacyQuizIds = useLegacyQuizOpen().ids ?? EMPTY_IDS;
   const swaps = useScheduleStore((s) => s.swaps);
   const scheduleNotices = useScheduleStore((s) => s.notices);
   const joinNotices = useStaffStore((s) => s.joinNotices);
@@ -125,7 +130,7 @@ export function useAppBadgeSync(): void {
             { feed, taskTemplates: templates, done, today, suggestions, userId: me, nameOf: () => '', ackAt, scheduleNotices },
           )
         // 레지스트리 badgeUnit 과 같은 축 — 벨(NotificationBell)과 같은 인자(assignments · joinNotices 포함).
-        : juniorUnreadCount(feed, swaps, me, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, joinAckAt, quizProgress, courses);
+        : juniorUnreadCount(feed, swaps, me, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, joinAckAt, quizProgress, courses, legacyQuizIds);
     setAppBadge(count);
-  }, [role, me, signedIn, feed, templates, done, swaps, queue, suggestions, pending, today, ackAt, joinAckAt, claims, scheduleNotices, assignments, joinNotices, timeRequests, quizProgress, courses]);
+  }, [role, me, signedIn, feed, templates, done, swaps, queue, suggestions, pending, today, ackAt, joinAckAt, claims, scheduleNotices, assignments, joinNotices, timeRequests, quizProgress, courses, legacyQuizIds]);
 }

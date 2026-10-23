@@ -31,8 +31,10 @@ const sendsT = [q('a1', 'A', '2026-10-20'), q('a2', 'A', '2026-10-21'), q('b1', 
 const rowsT = [row('a1', 'todo'), row('a2', 'todo'), row('b1', 'todo'), row('v1', 'void', 0), row('p1', 'todo')];
 const coursesT = [{ id: 'A', dueDays: null }, { id: 'B', dueDays: null }, { id: 'V', dueDays: null }, { id: 'P', dueDays: 7 }];
 assert.deepEqual(quizTodo(sendsT, rowsT, { userId: 'me' }).map((t) => t.assignment.id).sort(), ['a2', 'b1', 'p1'], 'resend counts once (latest) and void is not a todo');
-assert.deepEqual(quizTodo(sendsT, rowsT, { userId: 'me', courses: coursesT }).map((t) => t.assignment.id), ['a2'], 'card rule: first one-time quiz only, periodic hidden');
-assert.deepEqual(quizTodo(sendsT, rowsT, { userId: 'me', courses: coursesT, preferredId: 'b1' }).map((t) => t.assignment.id), ['a2', 'b1'], 'notified quiz beats the card rule');
+// 10-23 사용자: 벨·홈은 다른 퀴즈면 각각(1회성 규칙 없음). 카드만 cardRule 을 켠다.
+assert.deepEqual(quizTodo(sendsT, rowsT, { userId: 'me', courses: coursesT }).map((t) => t.assignment.id), ['a2', 'b1', 'p1'], 'bell/home: each quiz once, no one-time rule');
+assert.deepEqual(quizTodo(sendsT, rowsT, { userId: 'me', courses: coursesT, cardRule: true }).map((t) => t.assignment.id), ['a2'], 'card rule: first one-time quiz only, periodic hidden');
+assert.deepEqual(quizTodo(sendsT, rowsT, { userId: 'me', courses: coursesT, cardRule: true, preferredId: 'b1' }).map((t) => t.assignment.id), ['a2', 'b1'], 'notified quiz beats the card rule');
 assert.deepEqual(quizTodo(sendsT, [], { userId: 'me' }), [], 'no progress row is not a fabricated todo');
 assert.deepEqual(quizTodo([q('d', 'A', '2026-10-21', { completedAt: 'x' })], [row('d', 'todo')], { userId: 'me' }), [], 'locally completed is done');
 assert.equal(quizTodo([q('n', 'A', '2026-10-21')], [row('n', undefined, 2, 2)], { userId: 'me' })[0]?.state, 'answered', 'old server rows derive state from numbers');
@@ -54,4 +56,4 @@ assert.equal(copy.cardProgressText({ answered: 3, total: 6 }), '3/6문제', 'N12
 assert.equal(legacyQuizOpen(['e1', 'e2'], new Set(['e1', 'e2'])), false, 'legacy quiz fully submitted is done');
 assert.equal(legacyQuizOpen(['e1', 'e2'], new Set(['e1'])), true, 'legacy quiz with unsubmitted entry stays open');
 assert.equal(legacyQuizOpen(['e1'], null), true, 'legacy read failure keeps the quiz (no vanish)');
-console.log('quiz progress: 30 regression checks passed');
+console.log('quiz progress: 31 regression checks passed');

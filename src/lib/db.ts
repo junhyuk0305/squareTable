@@ -1388,17 +1388,36 @@ export async function rotateInviteCode(): Promise<{ inviteCode: string; expiresA
 }
 
 // ── 플레이북 ───────────────────────────────────────────────
+// 노하우 전체 목록은 서버 응답 상한(PostgREST max_rows=1000)을 넘을 수 있다 → 끝까지 페이지로 읽는다.
+// 정렬은 created_at 에 id 를 더해 페이지 경계의 동점을 고정한다. 읽는 사이 새 행이 끼면 같은 행이
+// 다음 페이지에 또 올 수 있어 id 로 한 번만 담는다. 한 페이지라도 실패하면 일부 목록을 성공으로 주지 않는다.
+// ★서버 max_rows 가 1000 보다 작으면 첫 페이지에서 멈춘다(로컬·운영 기본값 1000).
+async function readAllPages(
+  page: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: any }>,
+): Promise<{ data: PlaybookEntry[]; error: any }> {
+  const PAGE = 1000;
+  const byId = new Map<string, PlaybookEntry>();
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await page(offset, offset + PAGE - 1);
+    if (error) return { data: [], error };
+    for (const r of (data ?? []) as PlaybookEntry[]) if (!byId.has(r.id)) byId.set(r.id, r);
+    if ((data ?? []).length < PAGE) break;
+  }
+  return { data: [...byId.values()], error: null };
+}
+
 export async function fetchEntries(): Promise<ReadResult<PlaybookEntry[]>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
   // 보관한 노하우(0248 archived_at)는 뺀다. 서버 RLS 도 막지만 앱이 먼저 기대지 않게 여기서도 거른다.
   // 0248 전 서버(웹이 먼저 나간 경우)에는 열이 없어 42703 이 온다 → 거르지 않고 한 번 더 읽는다.
-  let { data, error } = await supabase
+  let { data, error } = await readAllPages((from, to) => supabase
     .from('playbook_entries')
     .select('*')
     .is('archived_at', null)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false }).order('id').range(from, to));
   if (error?.code === '42703') {
-    ({ data, error } = await supabase.from('playbook_entries').select('*').order('created_at', { ascending: false }));
+    ({ data, error } = await readAllPages((from, to) => supabase.from('playbook_entries').select('*')
+      .order('created_at', { ascending: false }).order('id').range(from, to)));
   }
   if (error) {
     readFail('fetchEntries', error);
@@ -1424,9 +1443,11 @@ function stripNonColumns<T extends Record<string, unknown>>(obj: T): Omit<T, 'so
 /** 소유 매장 전체의 발행 노하우. 매장별 묶음은 화면이 한다(행이 unit_id 를 들고 온다). */
 export async function fetchOwnerKnowhowEntries(): Promise<DbResult<PlaybookEntry[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
-  const { data, error } = await supabase.rpc('owner_knowhow_entries');
+  // setof RPC 결과에도 max_rows 가 걸린다 → 같은 페이지 읽기(서버 계약 그대로 · 정렬·범위만 요청에 싣는다).
+  const { data, error } = await readAllPages((from, to) => supabase.rpc('owner_knowhow_entries')
+    .order('created_at', { ascending: false }).order('id').range(from, to));
   if (error) readFail('fetchOwnerKnowhowEntries', error);
-  return { data: (data as PlaybookEntry[]) ?? null, error: error as DbErr };
+  return { data: error ? null : data, error: error as DbErr };
 }
 
 /**
@@ -2101,6 +2122,16 @@ export async function fetchTemplates(): Promise<ReadResult<TaskTemplate[]>> {
   }
   return { data: (data ?? []).map(mapTemplateRow), error: false };
 }
+/** 업무 한 건을 ID 로 읽는다(저장 응답 유실 확인용). 목록 상한(max_rows)과 무관하다. 없으면 data=null. */
+export async function fetchTemplateById(id: string): Promise<ReadResult<TaskTemplate | null>> {
+  if (!HAS_SUPABASE) return { data: null, error: false };
+  const { data, error } = await supabase.from('work_templates').select('*').eq('id', id).maybeSingle();
+  if (error) {
+    readFail('fetchTemplateById', error);
+    return { data: null, error: true };
+  }
+  return { data: data ? mapTemplateRow(data) : null, error: false };
+}
 // useWorkStore.assigneesOf 와 같은 규칙. 그쪽을 import 하면 순환 참조라 여기 따로 둔다.
 const ownerIdsOf = (t: TaskTemplate): string[] => (t.ownerIds?.length ? t.ownerIds : t.ownerId ? [t.ownerId] : []);
 export async function insertTemplate(t: TaskTemplate): Promise<boolean> {
@@ -2459,6 +2490,14 @@ export async function fetchQuizItemsForAttempt(
   assignmentId?: string | null,
 ): Promise<DbResult<QuizItem[]>> {
   if (!HAS_SUPABASE || entryIds.length === 0) return { data: [], error: null };
+  // 0334: 새 앱 "혼자 할 수 있어요"는 발송 퀴즈 문항까지 넓힌 자청 출제를 쓴다(답은 v2 · self 로 적힌다).
+  //   옛 서버(함수 없음)면 예전 quiz_items_for 로 돌아간다. 출시 앱은 계속 quiz_items_for(0332 범위)를 부른다.
+  if (!assignmentId && !courseId) {
+    const self = await supabase.rpc('quiz_self_items_for', { p_entry_ids: entryIds, p_limit: limit });
+    if (!self.error) {
+      return { data: ((self.data as any[]) ?? []).map((r) => ({ id: r.id, unit_id: _unitId ?? '', entry_ids: (r.entry_ids as string[]) ?? [], kind: r.kind, format: r.format, payload: (r.payload as Record<string, any>) ?? {}, source: 'ai' as const, status: 'active' as const })), error: null };
+    }
+  }
   const { data, error } = await supabase.rpc(assignmentId ? 'quiz_assignment_items' : 'quiz_items_for', assignmentId ? {
     p_assignment_id: assignmentId, p_limit: limit, p_entry_ids: entryIds,
   } : {
@@ -2674,6 +2713,22 @@ export async function fetchMySubmittedEntries(staffId: string, courseIds: string
     return null;
   }
   for (const r of (data as any[]) ?? []) (out[r.course_id] ??= new Set()).add(r.entry_id);
+  return out;
+}
+/**
+ * 퀴즈 카드의 "지난번 퀴즈" 줄(N14) — 퀴즈마다 내 마지막 제출의 문항별 맞힘(ord 순). 자청 답은 빼고 서버가 고른다(0334).
+ * 문항 내용·정답은 오지 않는다(직원은 점수만). 실패하거나 옛 서버면 null → 화면은 줄을 숨긴다.
+ * @returns course_id → [{ correct }]
+ */
+export async function fetchMyLastQuizSubmissions(courseIds: string[]): Promise<Record<string, { correct: boolean }[]> | null> {
+  const out: Record<string, { correct: boolean }[]> = {};
+  if (!HAS_SUPABASE || courseIds.length === 0) return out;
+  const { data, error } = await supabase.rpc('quiz_my_last_submissions', { p_course_ids: courseIds });
+  if (error) {
+    readFail('fetchMyLastQuizSubmissions', error);
+    return null;
+  }
+  for (const r of (data as any[]) ?? []) (out[r.course_id] ??= []).push({ correct: r.correct === true });
   return out;
 }
 /**
@@ -3752,13 +3807,17 @@ export async function setWageDb(staffId: string, wage: number): Promise<boolean>
 // ── 급여 규칙(매장 단위, units.payroll_settings jsonb) ──────
 // 직원은 읽기(급여계산), 사장만 쓰기 — units RLS(units_read/units_write)가 그대로 강제.
 export async function fetchPayrollSettings(): Promise<Record<string, unknown> | null> {
-  if (!HAS_SUPABASE) return null;
+  return (await fetchPayrollSettingsResult()).data;
+}
+/** PAY-01: 실패와 "설정 없음"을 가르는 판. 옛 함수는 실패도 null 이라 기본값 저장으로 DB를 덮을 수 있었다. */
+export async function fetchPayrollSettingsResult(): Promise<ReadResult<Record<string, unknown> | null>> {
+  if (!HAS_SUPABASE) return { data: null, error: false };
   const { data, error } = await supabase.from('units').select('payroll_settings').eq('id', _unitId).maybeSingle();
   if (error) {
     readFail('fetchPayrollSettings', error);
-    return null;
+    return { data: null, error: true };
   }
-  return (data?.payroll_settings as Record<string, unknown> | null) ?? null;
+  return { data: (data?.payroll_settings as Record<string, unknown> | null) ?? null, error: false };
 }
 /**
  * 급여 설정 이력(0280 payroll_settings_history) — 지난달 급여를 그 달 설정으로 세는 데 쓴다(A3 · 2026-10-06).

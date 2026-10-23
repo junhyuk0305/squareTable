@@ -16,9 +16,12 @@ import { useOwnerAlertStore } from '@/lib/store/useOwnerAlertStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { todayStr } from '@/lib/utils/attendance';
 import { accountAckAt, juniorUnreadCount, manageUnreadCount } from '@/lib/utils/notifications';
+import { useLegacyQuizOpen } from '@/lib/hooks/useLegacyQuizOpen';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
+
+const EMPTY_IDS: string[] = [];
 
 /** 알림 벨(프레젠테이셔널) — 헤더 우측 공용. 배지 카운트·탭 동작은 호출부가 주입(사장·직원 공유).
  *  edge=true(기본): 네이티브 헤더용 우측 끝 여백(HEADER_EDGE_GUTTER). false: 자체 패딩 가진 커스텀 헤더용. */
@@ -65,13 +68,15 @@ export function NotificationBell({ edge = true }: { edge?: boolean } = {}) {
   const quizProgressError = useWorkStore((s) => s.quizProgressError);
   const quizProgress = quizProgressError ? undefined : quizProgressRaw;
   const courses = useWorkStore((s) => s.courses);
+  // 열린 옛 퀴즈(발송 원장 없음) — 홈과 같은 판정(I7). 조회 중이면 빈 목록.
+  const legacyQuizIds = useLegacyQuizOpen().ids ?? EMPTY_IDS;
   const joinNotices = useStaffStore((s) => s.joinNotices);
   // 합류 결과는 계정 단위 — 읽음 기준은 내 매장 ack 중 가장 늦은 시각(accountAckAt · 목록·허브와 같은 판정).
   const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
   const joinAckAt = accountAckAt(ackByUnit);
   const count = useMemo(
-    () => juniorUnreadCount(feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, joinAckAt, quizProgress, courses),
-    [feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, joinAckAt, quizProgress, courses],
+    () => juniorUnreadCount(feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, joinAckAt, quizProgress, courses, legacyQuizIds),
+    [feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, joinAckAt, quizProgress, courses, legacyQuizIds],
   );
 
   return <BellButton count={count} edge={edge} onPress={() => router.push('/junior/notifications')} />;

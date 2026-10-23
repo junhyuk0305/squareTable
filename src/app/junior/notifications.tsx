@@ -23,7 +23,10 @@ import { SegmentTabs } from '@/components/SegmentTabs';
 import { todayStr } from '@/lib/utils/attendance';
 import { accountAckAt, buildJuniorNotifications } from '@/lib/utils/notifications';
 import { InkColors } from '@/lib/theme/colors';
+import { useLegacyQuizOpen } from '@/lib/hooks/useLegacyQuizOpen';
 import { Elevation, Radius } from '@/lib/theme/elevation';
+
+const EMPTY_IDS: string[] = [];
 
 // kind → 아이콘·틴트 매핑은 NotificationList 의 JUNIOR_KIND_UI 공유(허브 통합 알림과 재정의 금지).
 const KIND_UI = JUNIOR_KIND_UI;
@@ -50,6 +53,8 @@ export default function JuniorNotificationsScreen() {
   const quizProgressRaw = useWorkStore((s) => s.quizProgress);
   const quizProgressError = useWorkStore((s) => s.quizProgressError);
   const quizProgress = quizProgressError ? undefined : quizProgressRaw;
+  // 열린 옛 퀴즈(발송 원장 없음) — 벨 배지·홈과 같은 판정(I7). 조회 중이면 빈 목록.
+  const legacyQuizIds = useLegacyQuizOpen().ids ?? EMPTY_IDS;
   const workLoaded = useWorkStore((s) => s.loaded);
   const done = useWorkStore((s) => s.done);
   const markNoticeRead = useWorkStore((s) => s.markNoticeRead);
@@ -111,10 +116,11 @@ export default function JuniorNotificationsScreen() {
         assignments,
         courses,
         quizProgress,
+        legacyQuizIds,
         joinNotices,
         joinAckAt,
       }),
-    [feed, swaps, templates, owner, staff, me, today, taskTemplates, done, ackAt, suggestions, queue, scheduleNotices, assignments, courses, quizProgress, joinNotices, joinAckAt],
+    [feed, swaps, templates, owner, staff, me, today, taskTemplates, done, ackAt, suggestions, queue, scheduleNotices, assignments, courses, quizProgress, legacyQuizIds, joinNotices, joinAckAt],
   );
 
   const initial = (userName ?? '나').trim().slice(0, 1) || '나';

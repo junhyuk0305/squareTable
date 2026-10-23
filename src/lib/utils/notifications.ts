@@ -16,7 +16,7 @@ import { SHOW_BILLING } from '@/lib/config/store-policy';
 import { NOTIF, taskRoute as registryTaskRoute } from '@/lib/notif/registry';
 import { routeForRole } from '@/lib/utils/roles';
 import type { QuizAssignment, TrainingCourse as TrainingCourseRow } from '@/lib/quiz/types';
-import { assignmentState, quizTodo, type QuizAssignmentState } from '@/lib/quiz/progress';
+import { assignmentState, openQuizzes, type QuizAssignmentState } from '@/lib/quiz/progress';
 
 /** 알림 목록 최대 개수 — 무한 누적 방지(최신 우선). */
 export const MAX_NOTIFS = 50;
@@ -68,7 +68,7 @@ export const accountAckAt = (ackByUnit: Record<string, string | null | undefined
 };
 
 /** 코스 이름 찾기용 최소 열 — 허브(my_units_notif_data 'course')는 id·name 만 준다. */
-export type CourseName = Pick<TrainingCourseRow, 'id' | 'name'> & Partial<Pick<TrainingCourseRow, 'due_days' | 'audience'>>;
+export type CourseName = Pick<TrainingCourseRow, 'id' | 'name'> & Partial<Pick<TrainingCourseRow, 'due_days' | 'audience' | 'created_at'>>;
 
 /** 벨이 읽는 발송 진행(db.ts QuizAssignmentProgress 와 같은 모양 · 0332 state). */
 export type QuizProgressRow = {
@@ -76,16 +76,17 @@ export type QuizProgressRow = {
 };
 
 /**
- * 벨의 안 푼 퀴즈 = 홈·카드와 같은 quizTodo(P3 · N15).
- * progress 를 못 받는 자리(undefined)는 완료 여부만 본다. 그때는 카드 규칙도 적용하지 않는다(진행을 모르면 카드도 모른다).
- * 외부 사람용 퀴즈(audience guest)는 카드가 안 뜨니 넘기지 않는다(staffCanSeeCourse 와 같은 뜻).
+ * 벨의 안 푼 퀴즈 = 홈과 같은 정의 openQuizzes(발송 퀴즈 + 열린 옛 퀴즈 · 같은 입력 · I7).
+ * 다른 퀴즈면 각각, 같은 퀴즈 재발송이면 1개(10-23 사용자). 카드의 1회성 규칙(cardRule)은 벨에 쓰지 않는다.
+ * progress 를 못 받는 자리(undefined)는 완료 여부만 본다. 외부 사람용 퀴즈는 staffQuizTodo 가 뺀다.
+ * legacy(옛 퀴즈 판정 · useLegacyQuizOpen)를 모르는 자리(허브)는 발송 퀴즈만 센다.
+ * 읽음 기준 시각 = 발송 시각, 옛 퀴즈는 퀴즈를 만든 시각.
  */
-function myQuizTodo(assignments: QuizAssignment[], me: string, progress?: QuizProgressRow[], courses?: CourseName[]) {
-  const sent = new Set(assignments.filter((a) => a.userId === me && !!a.sentAt).map((a) => a.courseId));
-  const visible = progress && courses
-    ? courses.filter((c) => sent.has(c.id) && c.audience !== 'guest').map((c) => ({ id: c.id, dueDays: c.due_days ?? null }))
-    : undefined;
-  return quizTodo(assignments, progress, { userId: me, courses: visible });
+function myOpenQuizzes(assignments: QuizAssignment[], me: string, progress?: QuizProgressRow[], courses?: CourseName[], legacy?: readonly string[]) {
+  return openQuizzes(assignments, progress, courses, me, legacy).map((q) =>
+    q.kind === 'sent'
+      ? { ...q, at: q.todo.assignment.sentAt ?? undefined }
+      : { ...q, at: courses?.find((c) => c.id === q.courseId)?.created_at ?? undefined });
 }
 
 /** 나를 @언급한 글/댓글(내 글 제외). read_by로 읽음추적 → 안 읽으면 강조·카운트. */
@@ -160,13 +161,15 @@ export function juniorUnreadCount(
   joinAckAt: string | null = ackAt ?? null,
   /** 발송 진행(0332 state). 없으면 완료 여부만 본다. 목록(buildJuniorNotifications)과 같은 값을 넘긴다. */
   quizProgress?: QuizProgressRow[],
-  /** 카드 순서·1회성 규칙용 퀴즈 목록. quizProgress 와 같이 넘긴다. */
+  /** 퀴즈 목록(순서·손님용 제외). 스토어 courses 그대로 넘긴다. */
   quizCourses?: CourseName[],
+  /** 열린 옛 퀴즈 id(useLegacyQuizOpen). 홈과 같은 값을 넘긴다. 없으면(허브) 발송 퀴즈만 센다. */
+  legacyQuizIds?: readonly string[],
 ): number {
   return (
     queue.filter((u) => isMyAnsweredQuestion(u, me) && isAfterAck(u.asked_at, ackAt)).length +
-    // 안 푼 퀴즈 = 홈·카드와 같은 quizTodo(재발송은 최신 하나 · 1회성은 앞선 하나 · 멈춘 퀴즈 제외).
-    myQuizTodo(assignments, me, quizProgress, quizCourses).filter((t) => isAfterAck(t.assignment.sentAt ?? undefined, ackAt)).length +
+    // 안 푼 퀴즈 = 홈과 같은 openQuizzes(다른 퀴즈는 각각 · 재발송은 최신 하나 · 멈춘 퀴즈 제외 · 옛 퀴즈 포함).
+    myOpenQuizzes(assignments, me, quizProgress, quizCourses, legacyQuizIds).filter((q) => isAfterAck(q.at, ackAt)).length +
     // 내 근무 알림(D9) — 대타 확정 · 시간 수정 결과 · 근무표 변경. read 개념이 없어 '모두 읽기'(ack) 전까지 센다.
     scheduleNotices.filter((n) => isAfterAck(n.created_at, ackAt)).length +
     // 합류 결과 — 같은 표(member_notices)의 승인·반려 행. 계정 단위 읽음 축(accountAckAt). 목록(buildJoinNotifRows)과 같은 판정.
@@ -204,16 +207,18 @@ export function buildJuniorNotifications(args: {
   scheduleNotices?: ScheduleNotice[];
   /** 퀴즈 발송 원장(0139 · 안 푼 퀴즈 알림용). 없으면 해당 알림 없음. */
   assignments?: QuizAssignment[];
-  /** 퀴즈 이름을 찾을 코스 목록. quizProgress 와 같이 오면 카드 순서·1회성 규칙에도 쓴다. */
+  /** 퀴즈 이름을 찾을 코스 목록. 순서·손님용 제외에도 쓴다(1회성 규칙은 카드에만). */
   courses?: CourseName[];
   /** 발송 진행(0332 state). 없으면 완료 여부만 본다. 배지(juniorUnreadCount)와 같은 값을 넘긴다. */
   quizProgress?: QuizProgressRow[];
+  /** 열린 옛 퀴즈 id(useLegacyQuizOpen). 배지와 같은 값을 넘긴다. */
+  legacyQuizIds?: readonly string[];
   /** 합류 결과(0247 member_notices approved·rejected). 없으면 해당 알림 없음. */
   joinNotices?: JoinNotice[];
   /** 합류 결과의 읽음 기준 = accountAckAt(ackByUnit)(결정 3). 없으면 매장 ackAt. */
   joinAckAt?: string | null;
 }): JuniorNotif[] {
-  const { feed, swaps, templates, nameOf, userId: me, today, taskTemplates = [], done = {}, ackAt, suggestions = [], queue = [], scheduleNotices = [], assignments = [], courses = [], quizProgress, joinNotices = [], joinAckAt = ackAt ?? null } = args;
+  const { feed, swaps, templates, nameOf, userId: me, today, taskTemplates = [], done = {}, ackAt, suggestions = [], queue = [], scheduleNotices = [], assignments = [], courses = [], quizProgress, legacyQuizIds, joinNotices = [], joinAckAt = ackAt ?? null } = args;
   const tplById = (id: string) => templates.find((t) => t.id === id);
   const out: JuniorNotif[] = [];
 
@@ -247,8 +252,22 @@ export function buildJuniorNotifications(args: {
   }
 
   // 안 푼 퀴즈(P1 역 ④ · 엣지 푸시 '퀴즈가 왔어요'의 인앱 짝). 탭하면 그 발송의 퀴즈 시트(?quiz=<발송 id>).
-  //   ★0332: 배지와 같은 quizTodo 결과만 그린다(같은 퀴즈 재발송은 최신 하나 · 멈춘 퀴즈 제외).
-  for (const { assignment: a } of myQuizTodo(assignments, me, quizProgress, courses)) {
+  //   ★배지와 같은 openQuizzes 결과만 그린다(같은 퀴즈 재발송은 최신 하나 · 멈춘 퀴즈 제외 · 옛 퀴즈 포함).
+  for (const q of myOpenQuizzes(assignments, me, quizProgress, courses, legacyQuizIds)) {
+    if (q.kind === 'legacy') {
+      // 발송 원장 없는 옛 퀴즈 — 발송 id 가 없어 업무 화면(카드)으로 보낸다.
+      out.push({
+        id: `quiz_legacy_${q.courseId}`,
+        kind: 'training',
+        title: '퀴즈가 남아 있어요',
+        body: courses.find((c) => c.id === q.courseId)?.name,
+        at: q.at ?? '',
+        unread: isAfterAck(q.at, ackAt),
+        route: NOTIF.training.route('junior', ''),
+      });
+      continue;
+    }
+    const a = q.todo.assignment;
     out.push({
       id: `quiz_${a.id}`,
       kind: 'training',

@@ -1,10 +1,10 @@
-import { pendingCourseAssignment, isNextQuizRequest } from '@/lib/quiz/progress';
+import { staffQuizTodo, isNextQuizRequest } from '@/lib/quiz/progress';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 
-import { uploadPhoto, uploadPhotoNative, fetchRecipientReadiness } from '@/lib/db';
+import { uploadPhoto, uploadPhotoNative, fetchRecipientReadiness, fetchMyLastQuizSubmissions } from '@/lib/db';
 import { unreachableNote } from '@/lib/recipientReadiness';
 import { pickImagesNative } from '@/lib/media/pickImage';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -54,11 +54,14 @@ import { unreadMentionIds } from '@/lib/utils/notifications';
 
 type ViewKey = 'chat' | 'drawer' | 'notice' | 'todo' | 'settings';
 
-/** 직원 퀴즈 카드 한 장에 필요한 것 전부 — 코스·항목·지난번 결과(0112). */
+/** 직원 퀴즈 카드 한 장에 필요한 것 전부 — 코스·항목·발송 진행. "지난번 퀴즈" 줄은 lastSubmissions 조회가 채운다. */
 type TrainingCardView = {
   course: TrainingCardCourse;
   items: TrainingCardItem[];
-  lastResult: { total: number; correct: number } | null;
+  /** 발송 퀴즈의 서버 진행(문항 수). 옛 퀴즈는 없다. */
+  progress?: { answered: number; total: number };
+  /** quizTodo 가 순서·1회성 규칙을 이미 적용한 발송 카드. */
+  fromTodo?: boolean;
   /** 나에게 나간 이 퀴즈의 발송 id 전부(quiz_assignments.id). 푸시·벨의 `?quiz=<발송 id>` 가 이 카드를 고른다(P1 역 ⑤). */
   sentIds?: string[];
   assignmentId?: string;
@@ -155,7 +158,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // 완료 직후 1턴 캡처(②) — 대상 업무(있으면 시트 노출).
   const [capture, setCapture] = useState<{ templateId: string; text: string } | null>(null);
   // 이해 확인(④) — 제목 + 퀴즈 소스(노하우들). 통과 처리는 시트가 실제로 푼 노하우 id 를 돌려준다(0111).
-  const [selfCheck, setSelfCheck] = useState<{ title: string; sops: QuizInput['sops']; courseId?: string | null; assignmentId?: string } | null>(null);
+  const [selfCheck, setSelfCheck] = useState<{ title: string; sops: QuizInput['sops']; courseId?: string | null; assignmentId?: string; quizProgress?: { answered: number; total: number } | null } | null>(null);
   // 정기 훈련 due 판정 기준 시각 — 렌더 중 Date.now() 금지(컴파일러 순수성), 마운트 시 1회로 충분(주기=30일).
   const [trainingNow] = useState(() => Date.now());
   const toggleTask = useWorkStore((s) => s.toggleTask);
@@ -480,47 +483,42 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
         .filter((id) => hasEntryQuiz(id) && !!titleOf(id)),
     );
 
-    const cards: { course: TrainingCardCourse; items: TrainingCardItem[]; sentIds?: string[]; assignmentId?: string; completionRecovery?: boolean }[] = [];
+    const cards: TrainingCardView[] = [];
     const placedAsked = new Set<string>();
-    for (const c of trainingCourseViews(courses)) {
-      // ★발송 원장(0139)이 있는 퀴즈는 **나에게 실제로 나간 것만** 뜬다.
-      //   원장을 안 보면 사장이 2명만 골라 보낸 퀴즈가 3번째 직원에게도 보이고,
-      //   "8월 15일에 보내요"라고 예약해 둔 것이 오늘 바로 떠 버린다(발송 화면과 직원 화면의 불일치).
-      //   원장 행이 아예 없는 코스는 0139 이전에 만든 것만 예전 규칙 그대로 보인다(하위 호환).
-      //   ★E1: 그 뒤에 만든 원장 0건 코스는 만들던 퀴즈·본사 사본이고, 외부 사람용은 링크로만 푼다.
-      const sends = assignments.filter((a) => a.courseId === c.id);
-      if (!staffCanSeeCourse(c, sends.length)) continue;
-      const mySends = sends
-        .filter((a) => a.userId === userId && !!a.sentAt)
-        .sort((x, y) => (x.sentAt ?? '').localeCompare(y.sentAt ?? ''));
-      const mySent = mySends.at(-1);
-      if (sends.length > 0 && !mySent) continue;
-      if (sends.length > 0) {
-        const pending = pendingCourseAssignment(c.id, userId, sends, quizProgress, quizParam);
-        if (!pending) continue;
-        if (pending.progress.answeredItems >= pending.progress.totalItems) {
-          cards.push({
-            course: { id: c.id, key: c.key, name: c.name, dueDays: c.dueDays, dueOn: pending.assignment.dueOn },
-            items: [{ id: pending.assignment.id, text: c.name, state: 'next' }],
-            assignmentId: pending.assignment.id,
-            sentIds: [pending.assignment.id],
-            completionRecovery: true,
-          });
-          continue;
-        }
-        const ids = new Set(pending.progress.pendingEntryIds);
-        const items = courseEntriesOf(courseEntries, c.id)
-          .filter((e) => ids.has(e.entryId) && !!titleOf(e.entryId))
-          .map((e, i): TrainingCardItem => ({ id: e.entryId, text: titleOf(e.entryId)!, state: i === 0 ? 'next' : 'todo' }));
-        if (items.length === 0) continue;
-        cards.push({
-          course: { id: c.id, key: c.key, name: c.name, dueDays: c.dueDays, dueOn: pending.assignment.dueOn },
-          items,
-          assignmentId: pending.assignment.id,
-          sentIds: mySends.filter((a) => !a.completedAt).map((a) => a.id),
-        });
+    const views = trainingCourseViews(courses);
+    const viewById = new Map(views.map((c) => [c.id, c]));
+    // ★발송된 퀴즈는 staffQuizTodo 하나로 고른다(P3 · 홈·벨과 같은 입구 · 카드는 벨의 부분집합).
+    //   나에게 실제로 나간 것만 · 같은 퀴즈 재발송은 최신 하나. 카드에만 1회성 규칙을 켠다
+    //   (1회성은 앞선 하나 · 1회성이 남아 있으면 주기는 숨김 · 알림이 가리킨 발송 ?quiz= 은 예외).
+    for (const todo of staffQuizTodo(assignments, quizProgress, courses, { userId, preferredId: quizParam, cardRule: true })) {
+      const c = viewById.get(todo.assignment.courseId);
+      const pending = todo.progress;
+      if (!c || !pending) continue;
+      const course = { id: c.id, key: c.key, name: c.name, dueDays: c.dueDays, dueOn: todo.assignment.dueOn };
+      if (todo.state === 'answered') {
+        cards.push({ course, items: [{ id: todo.assignment.id, text: c.name, state: 'next' }], assignmentId: todo.assignment.id, sentIds: [todo.assignment.id], completionRecovery: true, fromTodo: true });
         continue;
       }
+      const ids = new Set(pending.pendingEntryIds);
+      const items = courseEntriesOf(courseEntries, c.id)
+        .filter((e) => ids.has(e.entryId) && !!titleOf(e.entryId))
+        .map((e, i): TrainingCardItem => ({ id: e.entryId, text: titleOf(e.entryId)!, state: i === 0 ? 'next' : 'todo' }));
+      if (items.length === 0) continue;
+      cards.push({
+        course,
+        items,
+        assignmentId: todo.assignment.id,
+        // 같은 퀴즈가 나에게 여러 번 나갔으면(다시 알리기·재확인) 어느 열린 발송 id 로 와도 이 카드다.
+        sentIds: assignments.filter((a) => a.courseId === c.id && a.userId === userId && !!a.sentAt && !a.completedAt).map((a) => a.id),
+        progress: { answered: pending.answeredItems, total: pending.totalItems },
+        fromTodo: true,
+      });
+    }
+
+    for (const c of views) {
+      // 발송 원장(0139)이 있는 퀴즈는 위에서 끝났다. 원장 행이 아예 없는 코스는 0139 이전에 만든 것만 예전 규칙으로 보인다.
+      //   ★E1: 그 뒤에 만든 원장 0건 코스는 만들던 퀴즈·본사 사본이고, 외부 사람용은 링크로만 푼다.
+      if (assignments.some((a) => a.courseId === c.id) || !staffCanSeeCourse(c, 0)) continue;
 
       const list = courseEntriesOf(courseEntries, c.id)
         .map((e) => ({ id: e.entryId, text: titleOf(e.entryId) }))
@@ -531,23 +529,24 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       // 1회성 코스(dueDays 없음)는 통과 여부만 본다(첫 통과가 목적, 순서상 첫 미통과 = '다음').
       // 주기 코스는 마지막 통과가 주기보다 오래됐거나 기록이 없으면 '다시 확인'.
       const dueDays = c.dueDays;
-      const nextIdx = dueDays === null ? list.findIndex((x) => !myRow(x.id)) : -1;
-      // ★E2: 노하우가 바뀌어 서버가 재확인을 보냈으면(내 미완료 recheck 발송) 통과한 뒤 바뀐 노하우를 다시 띄운다.
-      //   안 띄우면 알림만 가고 열 카드가 없어, 두 번 쌓이면 자동 정지(연속 무시 2회)에 걸린다.
-      const recheck = sends.some((a) => a.userId === userId && !!a.sentAt && a.origin === 'recheck' && !a.completedAt);
+      // ★P4: 노하우 이해 기록이 아니라 이 퀴즈의 내 제출 행을 본다(다른 퀴즈·혼자 할 수 있어요로 푼 것은 이 퀴즈 진행이 아니다).
+      const lastOf = (id: string) => lastQuizAttemptOf(quizAttempts, [id], userId, c.id);
+      const nextIdx = dueDays === null ? list.findIndex((x) => !lastOf(x.id)) : -1;
+      // ★E2 재확인 발송(recheck)은 발송 원장 행이라 이 루프(원장 0건)에는 오지 않는다. 그래서 false 다.
+      const recheck = false;
       const stateOf = (id: string, i: number): TrainingCardItem['state'] => {
         if (askedIds.has(id)) return 'asked'; // 요청이 최우선 — 사람이 기다리는 것
-        if (recheckEntryDue(myRow(id)?.verifiedAt, entryById.get(id)?.updated_at, recheck)) return 'due';
-        if (dueDays === null) return myRow(id) ? 'passed' : i === nextIdx ? 'next' : 'todo';
-        return isRegularDue(myRow(id)?.verifiedAt, trainingNow, dueDays) ? 'due' : 'passed';
+        const at = lastOf(id)?.takenAt;
+        if (recheckEntryDue(at, entryById.get(id)?.updated_at, recheck)) return 'due';
+        if (dueDays === null) return at ? 'passed' : i === nextIdx ? 'next' : 'todo';
+        return isRegularDue(at, trainingNow, dueDays) ? 'due' : 'passed';
       };
       const items: TrainingCardItem[] = list.map((x, i) => ({ id: x.id, text: x.text, state: stateOf(x.id, i) }));
       // 할 게 없으면 조용히 사라진다(1회성=전부 통과 · 주기=다시 확인할 것 없음).
       if (!items.some((it) => it.state === 'next' || it.state === 'due' || it.state === 'asked')) continue;
       items.forEach((it) => { if (it.state === 'asked') placedAsked.add(it.id); });
-      // dueOn = **내가 마지막으로 받은 발송**의 마감. 다시 알리기로 새 발송이 오면 그쪽이 이긴다.
-      // 같은 퀴즈가 나에게 여러 번 나갔으면(다시 알리기·재확인) 어느 발송 id 로 와도 이 카드다.
-      cards.push({ course: { id: c.id, key: c.key, name: c.name, dueDays, dueOn: mySent?.dueOn ?? null }, items, sentIds: mySends.map((a) => a.id) });
+      // 원장 없는 옛 퀴즈라 마감·발송 id 가 없다.
+      cards.push({ course: { id: c.id, key: c.key, name: c.name, dueDays, dueOn: null }, items, sentIds: [] });
     }
 
     // 어느 카드에도 못 실린 요청(코스에서 빠졌거나 그 코스 카드가 안 뜨는 경우) — 사람이 기다리는
@@ -562,24 +561,31 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     }
 
     // 카드가 여러 장 쌓이지 않게 — 1회성 코스는 앞선 하나만(먼저 배울 것이 먼저).
+    // 발송 카드(fromTodo)는 staffQuizTodo 가 이미 이 규칙을 적용했다. 발송 카드가 먼저 오므로 옛 퀴즈 카드보다 앞선다.
     // 주기 카드는 1회성이 진행 중이면 숨기되, 명시적 요청(asked)은 사람이 기다리는 것이라 예외.
-    // 1회성 카드의 'due' 는 재확인 발송(E2)이다 — 알림이 이미 갔으니 앞선 카드에 가리지 않는다.
     const firstOnce = cards.find((c) => c.course.dueDays === null);
-    return cards
-      .filter((c) =>
-        // 푸시·벨이 가리킨 발송(?quiz=<발송 id>)의 카드는 순서 규칙보다 앞선다 — 그 퀴즈를 열러 왔다(P1 역 ⑤).
-        // ★괄호 필수: `A || B ? X : Y` 는 `(A || B) ? X : Y` 로 묶여 딥링크 카드가 다시 순서 규칙에 걸린다.
-        (!!quizParam && !!c.sentIds?.includes(quizParam)) ||
-        (c.course.dueDays === null
-          ? c === firstOnce || c.items.some((it) => it.state === 'due')
-          : !firstOnce || c.items.some((it) => it.state === 'asked')),
-      )
-      // 지난번 결과(0112) — 집계는 스토어 셀렉터가 한다(판정을 화면에 복제하지 않는다).
-      .map((c) => {
-        const last = lastQuizAttemptOf(quizAttempts, c.items.map((it) => it.id), userId, c.course.id);
-        return { ...c, lastResult: last ? { total: last.total, correct: last.correct } : null };
-      });
+    return cards.filter((c) =>
+      c.fromTodo ||
+      (c.course.dueDays === null
+        ? c === firstOnce || c.items.some((it) => it.state === 'due')
+        : !firstOnce || c.items.some((it) => it.state === 'asked')),
+    );
   }, [isOwner, courses, courseEntries, understanding, entryById, quizCounts, quizAttempts, userId, trainingNow, trainingRequests, assignments, quizProgress, quizParam]);
+
+  // "지난번 퀴즈" 줄(N14) — 카드에 뜬 퀴즈마다 내 마지막 제출의 문항별 맞힘. 서버가 고른다(0334).
+  //   조회 실패·옛 서버면 줄을 숨긴다. 시트를 닫으면 hydrate 가 quizAttempts 를 바꾸므로 그때 다시 읽는다.
+  const lastCourseKey = trainingCards.map((c) => c.course.id).filter((id): id is string => !!id).join(',');
+  const [lastSubmissions, setLastSubmissions] = useState<{ key: string; data: Record<string, { correct: boolean }[]> | null } | null>(null);
+  useEffect(() => {
+    if (!lastCourseKey) return;
+    let alive = true;
+    void fetchMyLastQuizSubmissions(lastCourseKey.split(',')).then((data) => {
+      if (alive) setLastSubmissions({ key: lastCourseKey, data });
+    });
+    return () => { alive = false; };
+  }, [lastCourseKey, quizAttempts]);
+  const lastSubmissionOf = (courseId: string | null) =>
+    courseId && lastSubmissions?.key === lastCourseKey ? lastSubmissions.data?.[courseId] ?? null : null;
 
   // 카드의 퀴즈 시작 — 항목이 노하우 하나라 그 노하우만 소스로 넣는다(푼 만큼만 통과 처리).
   // ★열었다는 신호를 여기서 찍는다(0140). 이게 빠지면 사장이 보낸 퀴즈가 "무시됐다"로 세어져
@@ -596,7 +602,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       const title = entryById.get(entryId)?.title;
       if (!title) return;
       useWorkStore.getState().noteQuizOpened([entryId], assignmentId);
-      setSelfCheck({ title, sops: sopsOf([entryId]), courseId, assignmentId });
+      setSelfCheck({ title, sops: sopsOf([entryId]), courseId, assignmentId, quizProgress: progress ? { answered: progress.answeredItems, total: progress.totalItems } : null });
     },
     [entryById, sopsOf, quizProgress],
   );
@@ -978,7 +984,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
             <TrainingCard
               course={c.course}
               items={c.items}
-              lastResult={c.lastResult}
+              progress={c.progress}
+              lastSubmission={lastSubmissionOf(c.course.id)}
               onOpenKnowhow={openKnowhow}
               onStartCheck={(entryId, courseId) => startTrainingCheck(entryId, courseId, c.assignmentId)}
             />
@@ -1136,43 +1143,48 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       {composer.open && (
         <TaskComposerModal
           onClose={() => setComposer({ open: false })}
-          onSubmit={async (inputs: NewTask[]) => {
+          onSubmit={async (inputs: NewTask[], taskIds: string[]) => {
             // 성공 토스트를 실제 저장 성공에 게이팅(F3) — 상한초과·저장실패면 토스트 억제(배너/noteError가 알림).
-            const results = await Promise.all(inputs.map((input) => addTask(input)));
+            const results = await Promise.all(inputs.map((input, index) => addTask(input, taskIds[index])));
             const okCount = results.filter(Boolean).length;
             if (okCount > 0) showToast(okCount > 1 ? `할일 ${okCount}개를 추가했어요` : '할일에 추가했어요', 'good');
             // 역 ⑨ 전제 안내 — 담당자 중 알림을 받을 수 없는 사람(기기 없음·알림 끔)을 보내는 쪽이 말한다(P5).
             const assignees = [...new Set(inputs.flatMap((i) => assigneesOf(i)))].filter((u) => u !== userId);
             if (okCount > 0 && assignees.length) {
-              const note = unreachableNote(await fetchRecipientReadiness(activeUnit ?? '', assignees));
-              if (note) showToast(note);
+              void fetchRecipientReadiness(activeUnit ?? '', assignees).then((readiness) => {
+                const note = unreachableNote(readiness);
+                if (note) showToast(note);
+              }).catch(() => { /* 배정 안내 조회 실패가 저장 성공을 바꾸지 않는다. */ });
             }
+            return results.every(Boolean);
           }}
-          onEdit={async (id, patch) => {
+          onEdit={async (id, patch, retryId) => {
             // 루틴의 '그 날짜만 수정' — 루틴 자체는 그대로 두고, 그날을 대신할 할일 1건을 만든다.
             // (editTask 로는 못 고친다: dpr_ 은 store.templates 에 없는 합성 항목이라 즉시 false 로 떨어진다.)
             if (composer.routineScope === 'single' && composer.editTemplate) {
               const routineId = composer.editTemplate.id.replace(ROUTINE_ID_PREFIX, '');
               const date = composer.routineDate ?? today;
-              const ok = await addTask({ ...patch, date, recurrence: 'once', replacesRoutineId: routineId });
+              const ok = await addTask({ ...patch, date, recurrence: 'once', replacesRoutineId: routineId }, retryId);
               if (ok) showToast(`${fmtDateKo(date)} 루틴만 바꿨어요`, 'good');
-              return;
+              return ok;
             }
             const ok = await editTask(id, patch);
             if (ok) showToast('할일을 수정했어요', 'good');
+            return ok;
           }}
           onSubmitRoutine={async (next) => {
             // '이후 모든 루틴 수정' — 매장 설정을 고친다. 업무 설정 화면에도 같은 값이 뜬다.
-            if (!composer.editTemplate) return;
+            if (!composer.editTemplate) return false;
             const routineId = composer.editTemplate.id.replace(ROUTINE_ID_PREFIX, '');
             const ok = await updateRoutineMaster(routineId, next);
             if (ok !== false) showToast('루틴 업무를 바꿨어요 · 업무 설정에도 반영됐어요', 'good');
+            return ok !== false;
           }}
           routineMode={composer.routineScope === 'global'}
           routineSectionLabel={composer.editTemplate ? DL[composer.editTemplate.section] : undefined}
           onDelete={removeTemplate}
           editTemplate={composer.editTemplate}
-          isDuplicate={(input: NewTask) => !!findDuplicateTask(storeTemplates, input)}
+          isDuplicate={(input: NewTask, retryId) => !!findDuplicateTask(storeTemplates.filter((t) => t.id !== retryId), input)}
           isOwner={isOwner}
           me={userId}
           today={today}
@@ -1233,6 +1245,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           sops={selfCheck.sops}
           courseId={selfCheck.courseId}
           assignmentId={selfCheck.assignmentId}
+          quizProgress={selfCheck.quizProgress}
           onPass={(entryIds) => markUnderstood(entryIds, userId, userName)}
           onFinished={(entryIds) => useWorkStore.getState().noteQuizFinished(entryIds, selfCheck.assignmentId)}
           // ★닫을 때 다시 읽는다 — 응시 기록(0112)은 realtime publication 멤버가 아니라서

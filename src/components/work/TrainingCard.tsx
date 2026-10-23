@@ -82,11 +82,6 @@ export function TrainingCard({
 }: {
   course: TrainingCardCourse;
   items: TrainingCardItem[];
-  /**
-   * @deprecated 그리지 않는다(N14). 노하우 행 하나라 같은 제출의 다른 문항을 틀려도 "통과"로 보였다.
-   * WorkBoard 가 lastSubmission 으로 옮기면 지운다.
-   */
-  lastResult?: { total: number; correct: number } | null;
   /** 발송 퀴즈의 서버 진행(answeredItems/totalItems). 없으면 예전처럼 통과 노하우 수로 센다. */
   progress?: QuizItemProgress | null;
   /** 이 퀴즈의 내 마지막 제출의 문항별 맞힘(N14). 없으면 "지난번" 줄이 없다. */
