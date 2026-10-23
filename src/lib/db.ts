@@ -2738,13 +2738,14 @@ export async function fetchMyLastQuizSubmissions(courseIds: string[]): Promise<R
  * 겸사겸사 채점이 서버로 갔다: 게스트 경로와 같은 `quiz_grade_item` 이 정오답을 정한다.
  *
  * 저장 성공을 확인한 뒤 완료를 표시한다. 재시도는 같은 requestId를 보낸다.
- * @returns submission_id — 한 번의 응시를 묶는 열쇠. 못 적었으면 null.
+ * @returns submission_id — 한 번의 응시를 묶는 열쇠. 못 적었으면 null. 서버가 이 답안을 영구 거부하면 false(다시 보내도 같다).
  */
+const QUIZ_RECORD_REJECTED = ['no_unit', 'item_not_found', 'bad_answers', 'invalid_argument', 'too_many_rows'];
 export async function recordStaffQuizAttempt(
   rows: { itemId: string; response: unknown; ord: number }[],
   courseId?: string | null,
   requestId?: string | null,
-): Promise<string | null> {
+): Promise<string | null | false> {
   if (!HAS_SUPABASE) return null;
   if (rows.length === 0) return null;
   const { data, error } = await supabase.rpc(requestId ? 'quiz_staff_record_v2' : 'quiz_staff_record', {
@@ -2753,7 +2754,7 @@ export async function recordStaffQuizAttempt(
   });
   if (error) {
     reportError('db.write:recordStaffQuizAttempt', error);
-    return null;
+    return QUIZ_RECORD_REJECTED.includes(error.message) ? false : null;
   }
   return (data as string | null) ?? null;
 }

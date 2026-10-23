@@ -252,6 +252,7 @@ function SavedQuizBody({
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(!!draft);
   const [followupFailed, setFollowupFailed] = useState(false);
+  const [rejected, setRejected] = useState(false);
   const [requestId] = useState(() => draft?.requestId ?? genId('quiz_submit'));
   const sending = useRef(false);
   const savingRef = useRef(false);
@@ -327,6 +328,7 @@ function SavedQuizBody({
       // 같은 키로 재전송한다. 응답만 유실돼도 응시가 중복 저장되지 않는다.
       const submissionId = await recordStaffQuizAttempt(given.current, courseId, requestId);
       if (isStaleEpoch(epoch)) return;
+      if (submissionId === false) { await clearPendingDraft(draftKey); setRejected(true); return; }
       if (!submissionId) { setSaveFailed(true); return; }
       stored = true;
       setSubmitted(true);
@@ -343,7 +345,8 @@ function SavedQuizBody({
       await clearPendingDraft(draftKey);
       setDone(true);
     } catch {
-      if (stored) { setDone(true); setFollowupFailed(true); }
+      // 서버 저장은 끝났다. 남은 초안이 다음에 열 때 재제출 화면을 띄우지 않게 지운다.
+      if (stored) { await clearPendingDraft(draftKey).catch(() => {}); setDone(true); setFollowupFailed(true); }
       else setSaveFailed(true);
     } finally {
       savingRef.current = false;
@@ -363,12 +366,27 @@ function SavedQuizBody({
     void finish(results);
   };
 
+  if (rejected) {
+    return (
+      <View style={s.center}>
+        <Text style={s.noticeText}>이 답안은 제출할 수 없어요. 퀴즈가 바뀌었을 수 있어요.</Text>
+        <Pressable onPress={onClose} style={s.softBtn} accessibilityRole="button"><Text style={s.softBtnText}>닫기</Text></Pressable>
+      </View>
+    );
+  }
+
+  const discard = async () => {
+    await clearPendingDraft(draftKey).catch(() => {});
+    onClose();
+  };
+
   if (saving || saveFailed) {
     return (
       <View style={s.center}>
         {saving ? <ActivityIndicator color={InkColors.ink3} /> : null}
         <Text style={s.noticeText}>{saving ? '답안을 제출하는 중...' : '답안을 제출하지 못했어요. 답은 그대로 있어요.'}</Text>
         {!saving && <Pressable onPress={() => void finish(results)} style={s.softBtn} accessibilityRole="button"><Text style={s.softBtnText}>다시 제출</Text></Pressable>}
+        {!saving && <Pressable onPress={() => void discard()} style={s.softBtn} accessibilityRole="button"><Text style={s.softBtnText}>답안 버리기</Text></Pressable>}
       </View>
     );
   }
