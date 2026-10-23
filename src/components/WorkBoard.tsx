@@ -1254,7 +1254,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           courseId={selfCheck.courseId}
           assignmentId={selfCheck.assignmentId}
           quizProgress={selfCheck.quizProgress}
-          onPass={(entryIds) => markUnderstood(entryIds, userId, userName)}
+          onPass={(entryIds) => markUnderstood(entryIds, userId)}
           onFinished={(entryIds) => useWorkStore.getState().noteQuizFinished(entryIds, selfCheck.assignmentId)}
           // ★닫을 때 다시 읽는다 — 응시 기록(0112)은 realtime publication 멤버가 아니라서
           //   틀리고 닫으면 카드의 "지난번 …" 한 줄이 방금 푼 것 이전 값을 계속 말한다.

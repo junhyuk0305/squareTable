@@ -14,6 +14,14 @@ import type { QuizInput, QuizQuestion } from '@/lib/ai/types';
 import { genId } from '@/lib/utils/id';
 import type { QuizGrade, QuizItem, QuizResponse } from '@/lib/quiz/types';
 import { roundResultText, roundStepText, type QuizItemProgress } from '@/lib/quiz/checkCopy';
+import { useSessionStore } from '@/lib/store/useSessionStore';
+import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
+import { pendingDraftKey, loadPendingDraft, savePendingDraft, clearPendingDraft } from '@/lib/storage/pendingDraft';
+
+type QuizDraft = {
+  requestId: string; items: QuizItem[]; marks: boolean[];
+  responses: { itemId: string; response: QuizResponse; ord: number }[];
+};
 
 type Phase = 'loading' | 'quiz' | 'result' | 'empty' | 'quota';
 
@@ -62,6 +70,9 @@ export function UnderstandingCheckSheet({
   /** 틀린 뒤 "물어보기"로 나가는 길. 라우팅은 화면(WorkBoard)이 정한다 — 이 시트는 경로를 모른다. */
   onAsk?: (seed: string) => void;
 }) {
+  const userId = useSessionStore((s) => s.userId);
+  const unitId = useSessionStore((s) => s.unitId);
+  const draftKey = pendingDraftKey('quiz', userId, unitId, JSON.stringify([courseId ?? null, assignmentId ?? null, sops.map((sop) => sop.id).sort()]));
   const savingRef = useRef(false);
   const close = () => { if (!savingRef.current) onClose(); };
   const onSavingChange = (value: boolean) => { savingRef.current = value; };
@@ -72,7 +83,7 @@ export function UnderstandingCheckSheet({
         <Text style={s.kicker}>이해 확인 · {title}</Text>
         <Pressable onPress={close} hitSlop={8}><Ionicons name="close" size={20} color={InkColors.ink2} /></Pressable>
       </View>
-      <QuizBody taskText={title} sops={sops} courseId={courseId} assignmentId={assignmentId} onSavingChange={onSavingChange} onPass={onPass} onFinished={onFinished} onClose={onClose} onAsk={onAsk} quizProgress={quizProgress} />
+      <QuizBody key={draftKey} draftKey={draftKey} taskText={title} sops={sops} courseId={courseId} assignmentId={assignmentId} onSavingChange={onSavingChange} onPass={onPass} onFinished={onFinished} onClose={onClose} onAsk={onAsk} quizProgress={quizProgress} />
     </BottomSheet>
   );
 }
@@ -85,6 +96,7 @@ function minutesFor(n: number): number {
 
 /** 어느 경로로 갈지 한 번만 정한다 — 저장된 문항이 있으면 ①, 없으면 ②(AI 즉석 생성). */
 function QuizBody(props: {
+  draftKey: string;
   taskText: string;
   sops: QuizInput['sops'];
   courseId?: string | null;
@@ -105,13 +117,25 @@ function QuizBody(props: {
   // 시작 고지를 본 뒤에만 문제로 넘어간다 — 분량·시간을 모른 채 시작하게 두지 않는다.
   const [started, setStarted] = useState(false);
   const [retry, setRetry] = useState(0);
+  const [draft, setDraft] = useState<QuizDraft | null>(null);
 
   useEffect(() => {
     let alive = true;
     if (entryIds.length === 0) return;
-    fetchQuizItemsForAttempt(entryIds, 3, courseId, assignmentId)
-      .then(({ data, error }) => {
-        if (!alive) return;
+    loadPendingDraft<QuizDraft>(props.draftKey).then(async (pending) => {
+      if (!alive) return null;
+      if (pending) {
+        setDraft(pending);
+        setItems(pending.items);
+        setStarted(true);
+        setRoute('saved');
+        return null;
+      }
+      return fetchQuizItemsForAttempt(entryIds, 3, courseId, assignmentId);
+    })
+      .then((result) => {
+        if (!alive || !result) return;
+        const { data, error } = result;
         if (error) { setRoute('failed'); return; }
         // 표시할 수 없는 문항을 조용히 빼면 전체 응시를 끝낼 수 없다.
         const usable = (data ?? []).filter((it) => !!QUIZ_RENDERERS[it.format]);
@@ -129,7 +153,7 @@ function QuizBody(props: {
     return () => {
       alive = false;
     };
-  }, [entryIds, courseId, assignmentId, retry]);
+  }, [entryIds, courseId, assignmentId, retry, props.draftKey]);
 
   if (route === 'failed') {
     return (
@@ -171,7 +195,7 @@ function QuizBody(props: {
         </>
       );
     }
-    return <SavedQuizBody onSavingChange={props.onSavingChange} items={items} sops={sops} courseId={courseId} onPass={props.onPass} onFinished={props.onFinished} onClose={props.onClose} onAsk={props.onAsk} quizProgress={props.quizProgress} />;
+    return <SavedQuizBody draftKey={props.draftKey} draft={draft} onSavingChange={props.onSavingChange} items={items} sops={sops} courseId={courseId} onPass={props.onPass} onFinished={props.onFinished} onClose={props.onClose} onAsk={props.onAsk} quizProgress={props.quizProgress} />;
   }
   return ALLOW_AI_FALLBACK ? <LegacyQuizBody {...props} /> : <NotReadyBody onClose={props.onClose} />;
 }
@@ -192,6 +216,8 @@ function NotReadyBody({ onClose }: { onClose: () => void }) {
  * 채점이 실패하면 오답으로 치지 않는다 — 답을 들고 있다가 다시 보낸다(규칙 6: 막지 않는다).
  */
 function SavedQuizBody({
+  draftKey,
+  draft,
   items,
   sops,
   courseId,
@@ -202,6 +228,8 @@ function SavedQuizBody({
   onSavingChange,
   quizProgress,
 }: {
+  draftKey: string;
+  draft: QuizDraft | null;
   quizProgress?: QuizItemProgress | null;
   items: QuizItem[];
   courseId?: string | null;
@@ -217,21 +245,21 @@ function SavedQuizBody({
   const [grade, setGrade] = useState<QuizGrade | null>(null);
   const [grading, setGrading] = useState(false);
   const [failed, setFailed] = useState(false);
-  const [results, setResults] = useState<boolean[]>([]);
+  const [results, setResults] = useState<boolean[]>(draft?.marks ?? []);
   const [done, setDone] = useState(false);
   /** 응시 기록이 서버에 저장됐다(quiz_staff_record 가 제출 id 를 돌려준 뒤). 결과 화면의 "제출됐어요" 한 줄은 이것만 본다. */
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveFailed, setSaveFailed] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(!!draft);
   const [followupFailed, setFollowupFailed] = useState(false);
-  const [requestId] = useState(() => genId('quiz_submit'));
+  const [requestId] = useState(() => draft?.requestId ?? genId('quiz_submit'));
   const sending = useRef(false);
   const savingRef = useRef(false);
   /**
    * 낸 답 원문 — 문항별 기록(0190)을 서버가 **다시 채점**해서 적는다.
    * ★렌더에 안 쓰이므로 ref 다. state 로 두면 답 하나마다 시트 전체가 다시 그려진다.
    */
-  const given = useRef<{ itemId: string; response: QuizResponse; ord: number }[]>([]);
+  const given = useRef<{ itemId: string; response: QuizResponse; ord: number }[]>(draft?.responses ?? []);
   /** 틀린 문항이 근거한 노하우 제목들 — 결과 화면의 "무엇을 다시 볼까" + 물어보기 문구의 재료. */
   const [missedTitles, setMissedTitles] = useState<string[]>([]);
 
@@ -270,6 +298,7 @@ function SavedQuizBody({
     setSaving(true);
     setSaveFailed(false);
     setFollowupFailed(false);
+    const epoch = currentTenantEpoch();
     // 문항이 근거한 노하우별로 집계한다(entry_ids 가 배열이라 한 문항이 여러 건에 걸린다).
     // 같은 집계가 두 곳으로 간다:
     //  ① 매장 오답 통계(0103) — 누가 틀렸는지는 안 남긴다. "노하우 글이 헷갈리나"의 신호.
@@ -293,18 +322,25 @@ function SavedQuizBody({
     );
     let stored = submitted;
     try {
+      await savePendingDraft(draftKey, { requestId, items, marks, responses: given.current } satisfies QuizDraft);
+      if (isStaleEpoch(epoch)) return;
       // 같은 키로 재전송한다. 응답만 유실돼도 응시가 중복 저장되지 않는다.
       const submissionId = await recordStaffQuizAttempt(given.current, courseId, requestId);
+      if (isStaleEpoch(epoch)) return;
       if (!submissionId) { setSaveFailed(true); return; }
       stored = true;
       setSubmitted(true);
       // 저장 성공 후 이해·완료를 갱신한다. 통계 로그는 서버가 한 번만 소비한다.
       await recordQuizStats(perEntry);
+      if (isStaleEpoch(epoch)) return;
       if (marks.length === items.length && marks.every(Boolean)) {
         const ok = await onPass(perEntry.map((e) => e.entryId));
         if (ok === false) setFollowupFailed(true);
       }
+      if (isStaleEpoch(epoch)) return;
       await onFinished?.(perEntry.map((e) => e.entryId));
+      if (isStaleEpoch(epoch)) return;
+      await clearPendingDraft(draftKey);
       setDone(true);
     } catch {
       if (stored) { setDone(true); setFollowupFailed(true); }

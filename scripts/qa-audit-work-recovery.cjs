@@ -165,8 +165,12 @@ async function main() {
         setSaveIds: ids => { saveIds.splice(0, saveIds.length, ...ids); },
         setSaving: () => {}, setSaveError: v => { error = v; },
         text: 'QA', description: '', remindOn: false, remindValid: true, remindAt: '', picked: [],
+        currentTenantEpoch: () => 1, isStaleEpoch: () => false,
+        savePendingDraft: async () => {}, clearPendingDraft: async () => {}, draftKey: 'work-test',
+        when: 'today', today: '2026-10-23', pickedDate: '2026-10-23', dows: [], section: 'open', taskScope: 'shared', knowhowIds: [],
       });
       const first = submit(); const second = submit();
+      await new Promise((resolve) => setImmediate(resolve));
       assert.equal(closed, 0, 'closed before response');
       assert.equal(calls, 1, 'duplicate request');
       finish(false); await Promise.all([first, second]);
@@ -176,6 +180,50 @@ async function main() {
       assert.equal(closed, 1);
     });
   }
+
+  await test('C1 lost acknowledgement survives restart with one task and assignment event', async () => {
+    const disk = new Map(), rows = new Map(); let lost = true, events = 0, closed = 0;
+    const storage = { getItem: async k => disk.get(k) ?? null, setItem: async (k,v) => disk.set(k,v), removeItem: async k => disk.delete(k) };
+    const boot = async () => {
+      const pending = load('src/lib/storage/pendingDraft.ts', { '@react-native-async-storage/async-storage': storage });
+      const draft = await pending.loadPendingDraft('work:restart');
+      const c = tenantCase({
+        insertTemplate: async row => { if (!rows.has(row.id)) { rows.set(row.id,row); events++; } return !lost; },
+        fetchTemplateById: async id => lost ? { data: null, error: true } : { data: rows.get(id) ?? null, error: false },
+        updateTemplate: async (id, patch) => { rows.set(id,{...rows.get(id),...patch}); return true; },
+      });
+      const ids = draft?.ids ?? [];
+      const submit = extractedFunction('src/components/work/TaskComposerModal.tsx','submit',{
+        canSubmit:true,routineMode:false,isEdit:false,isDup:false,buildInputs:()=>[{...input,knowhowIds:[]}],
+        onSubmit:async (inputs,taskIds)=>(await Promise.all(inputs.map((v,i)=>c.store.getState().addTask(v,taskIds[i])))).every(Boolean),
+        onClose:()=>closed++,submittingRef:{current:false},saveIds:ids,genId:()=>{assert.equal(draft,null);return 'restart-id'},setSaveIds:()=>{},
+        setSaving:()=>{},setSaveError:()=>{},text:'QA',description:'',remindOn:false,remindValid:true,remindAt:'',picked:[],
+        currentTenantEpoch:()=>1,isStaleEpoch:()=>false,...pending,draftKey:'work:restart',
+        when:'today',today:'2026-10-23',pickedDate:'2026-10-23',dows:[],section:'open',taskScope:'shared',knowhowIds:[],
+      });
+      return submit;
+    };
+    await (await boot())(); assert.equal(closed,0); assert.equal(rows.size,1); assert.equal(disk.size,1);
+    lost=false; await (await boot())();
+    assert.equal(rows.size,1); assert.equal(events,1); assert.equal(closed,1); assert.equal(disk.size,0);
+  });
+
+  await test('C8 understanding comes only from server and ignores stale tenant response', async () => {
+    let result={data:[],error:false};
+    const c=tenantCase({fetchKnowhowUnderstandingResult:async()=>result});
+    assert.equal(await c.store.getState().markUnderstood(['entry'],'staff'),false);
+    assert.equal(c.store.getState().understanding.length,0);
+    result={data:[{entryId:'entry',staffId:'staff',staffName:'server',verifiedAt:'2026-10-23'}],error:false};
+    assert.equal(await c.store.getState().markUnderstood(['entry'],'staff'),true);
+    assert.equal(c.store.getState().understanding[0].staffName,'server');
+    result={data:[],error:true};
+    assert.equal(await c.store.getState().markUnderstood(['entry'],'staff'),false);
+    assert.equal(c.store.getState().understanding.length,1);
+    let resolve;const other=tenantCase({fetchKnowhowUnderstandingResult:()=>new Promise(r=>resolve=r)});
+    const pending=other.store.getState().markUnderstood(['entry'],'staff');other.reset();
+    resolve({data:[{entryId:'entry',staffId:'staff'}],error:false});
+    assert.equal(await pending,false);assert.equal(other.store.getState().understanding.length,0);
+  });
 
   await test('WORK-02 multi-assignee draft remains one task', async () => {
     const build = extractedFunction('src/components/work/TaskComposerModal.tsx', 'buildInputs', {

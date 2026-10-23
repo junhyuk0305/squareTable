@@ -27,7 +27,6 @@ import {
   insertTemplateKnowhow,
   deleteTemplateKnowhow,
   fetchKnowhowUnderstandingResult,
-  insertKnowhowUnderstanding,
   type UnderstandingRow,
   fetchTrainingItems,
   fetchCourseEntriesResult,
@@ -741,8 +740,8 @@ type State = {
   detachKnowhow: (templateId: string, entryIds: string[]) => Promise<boolean>;
   /** 완료 캡처(②) 넛지 결과 기록 — 남기면 skips 리셋, 건너뛰면 +1. 둘 다 오늘 다시 안 띄우게 date 갱신. */
   noteCaptureNudge: (kind: 'submit' | 'skip') => void;
-  /** 이해 확인(④) 통과 기록 — 푼 문항의 근거 노하우 전부. 낙관적 추가 + 실패 롤백(멱등). */
-  markUnderstood: (entryIds: string[], staffId: string, staffName: string) => Promise<boolean>;
+  /** 제출 후 서버가 만든 이해 기록을 다시 읽고 통과 여부를 확인한다. */
+  markUnderstood: (entryIds: string[], staffId: string) => Promise<boolean>;
   /** 사장이 보낸 퀴즈를 열었다(0140). 자동 정지를 푸는 유일한 신호 — 응시 시작 시점에 부른다. */
   noteQuizOpened: (entryIds: string[], assignmentId?: string) => void;
   /** 응시를 마쳤다(맞힘과 무관 · E4). 직접 연 발송의 완료 여부는 서버가 판정한다. */
@@ -1076,22 +1075,15 @@ export const useWorkStore = create<State>((set, get) => ({
     }
   },
 
-  markUnderstood: async (entryIds, staffId, staffName) => {
+  markUnderstood: async (entryIds, staffId) => {
     if (entryIds.length === 0) return true;
-    const mine = (u: UnderstandingRow) => u.staffId === staffId && entryIds.includes(u.entryId);
-    const prev = get().understanding.filter(mine);
-    const at = new Date().toISOString();
-    const rows: UnderstandingRow[] = entryIds.map((entryId) => ({ entryId, staffId, staffName, verifiedAt: at }));
-    // 쓰기 중 매장이 바뀌면 prev(이전 매장 행)를 되살리지 않는다 — 새 매장 hydrate 가 채운다(아래 롤백들도 같다).
+    // 0333: 제출 트랜잭션이 만든 이해 기록만 읽는다. 앱에서 성공 행을 만들어 넣지 않는다.
+    // 조회 중 매장이 바뀌면 이전 매장 행을 되살리지 않는다.
     const epoch = currentTenantEpoch();
-    set((s) => ({ understanding: [...s.understanding.filter((u) => !mine(u)), ...rows] }));
-    return guardWrite(
-      insertKnowhowUnderstanding(entryIds, staffName),
-      // ★실패 시 **내가 건드린 행만** 되돌린다. 전체 배열을 스냅샷으로 덮으면 그 사이 도착한
-      //   realtime 변경(다른 직원의 통과)까지 조용히 사라진다(detachKnowhow 와 같은 규칙).
-      () => { if (!isStaleEpoch(epoch)) set((s) => ({ understanding: [...s.understanding.filter((u) => !mine(u)), ...prev] })); },
-      '이해 확인 저장에 실패했어요.',
-    );
+    const result = await fetchKnowhowUnderstandingResult();
+    if (isStaleEpoch(epoch) || result.error) return false;
+    set({ understanding: result.data });
+    return entryIds.every((entryId) => result.data.some((u) => u.entryId === entryId && u.staffId === staffId));
   },
 
   // 코스에 노하우 담기(0111) — 껍데기 업무를 만들지 않는다. 이전 구현은 여기서 work_templates 행을

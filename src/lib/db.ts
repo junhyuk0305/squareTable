@@ -2264,22 +2264,6 @@ export async function fetchKnowhowUnderstandingResult(): Promise<ReadResult<Unde
     error: false,
   };
 }
-/** 통과 기록 저장(푼 문항의 근거 노하우 전부). staff_id 는 DB default auth.uid()(본인만·위조 차단).
- *  재통과는 verified_at 갱신(0111 ku_update) — 재확인 주기 판정의 근거라 멱등 무시가 아니라 갱신이다. */
-export async function insertKnowhowUnderstanding(entryIds: string[], staffName: string): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  if (entryIds.length === 0) return true;
-  const at = new Date().toISOString();
-  return write(
-    'insertKnowhowUnderstanding',
-    supabase
-      .from('knowhow_understanding')
-      .upsert(
-        entryIds.map((entry_id) => ({ unit_id: _unitId, entry_id, staff_name: staffName, verified_at: at })),
-        { onConflict: 'entry_id,staff_id' },
-      ),
-  );
-}
 
 // ── 퀴즈 오답 집계(0103) — 문항이 근거한 노하우에 귀속(개인 저장 없음), 사장 결함 검출용 ──────────
 export type QuizStatRow = { entryId: string; attempts: number; misses: number };
