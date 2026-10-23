@@ -15,7 +15,7 @@
 //
 // 도메인은 아래 SITE_URL 단일 상수(Vercel 환경변수 SEO_SITE_URL 로 override 가능).
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { LEGAL_PAGES, EFFECTIVE_DATE, OPERATOR, businessLine } from './legal-content.mjs';
@@ -29,10 +29,10 @@ const SITE_URL = (process.env.SEO_SITE_URL || 'https://dochackchack.com').replac
 //   올려도 미리보기엔 옛 '착착' 로고가 계속 떴다. 로고를 또 바꾸면 파일명도 같이 바꾼다.
 const OG_IMAGE = `${SITE_URL}/og-image.png`; // TODO: 1200×630 전용 OG 이미지로 교체 권장(현재 정사각 아이콘 임시)
 const BRAND = '매장의 정석';
-const TITLE = '매장의 정석 — 직원 질문, 이제 AI가 답합니다';
+const TITLE = '매장의 정석 | 알바·직원 교육 AI';
 const DESC =
-  '한 번 알려준 답을 AI가 기억해요. 직원이 물으면 우리 가게 방식대로 답해요. 카페, 음식점, 헬스장, 학원 사장님을 위한 매장 운영 AI, 매장의 정석.';
-const OG_DESC = '한 번 알려준 답을 AI가 기억해요. 직원이 물으면 우리 가게 방식대로 답해요.';
+  '알바·직원 교육, 이제 AI가 합니다. 우리 가게 방식대로 가르치고 퀴즈로 확인해요.';
+const OG_DESC = DESC;
 // 검색엔진 소유확인(선택) — Vercel 환경변수로 넣으면 자동 주입. 없으면 생략.
 const NAVER_VERIFY = process.env.SEO_NAVER_VERIFY || '';
 const GOOGLE_VERIFY = process.env.SEO_GOOGLE_VERIFY || '';
@@ -174,6 +174,24 @@ function patchIndex() {
   console.log('[seo] dist/index.html 패치 완료 (lang=ko·description·og·twitter·canonical·JSON-LD·noscript)');
 }
 
+// 세션 키 규칙은 inject-landing-redirect.mjs 와 같다(sb-*-auth-token).
+const APP_HANDOFF =
+  `<script id="sqt-app-handoff">(function(){try{` +
+  `if(location.pathname!=='/')return;` +
+  `var h=/[#&](access_token|error|code)=/.test(location.hash),s=0;` +
+  `for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);` +
+  `if(k&&k.indexOf('sb-')===0&&k.indexOf('-auth-token')!==-1){s=1;break;}}` +
+  `if(s||h){location.replace('/?app=1'+location.hash);}}catch(e){}})();</script>`;
+
+// ── 1-b) dist/index.html → dist/app.html ─────────────────────────────────
+// Vercel 은 실제 파일을 rewrite 보다 먼저 서빙한다. index.html 이 남아 있으면 '/'가 늘 앱 껍데기가 되고,
+// 앱 껍데기는 JS 로 소개 페이지로 넘겨서 네이버가 "JavaScript 리다이렉트"로 판정했다(2026-10-23).
+// 그래서 앱 껍데기를 app.html 로 옮기고 '/'는 vercel.json 이 welcome.html 로 보낸다.
+function moveAppShell() {
+  renameSync(resolve(DIST, 'index.html'), resolve(DIST, 'app.html'));
+  console.log('[seo] dist/index.html → dist/app.html');
+}
+
 // ── 2) dist/welcome.html — 소셜 공유 카드 완성 ────────────────────────────
 function patchWelcome() {
   const p = resolve(DIST, 'welcome.html');
@@ -185,6 +203,9 @@ function patchWelcome() {
   // welcome.html 은 이미 og:title/description 을 갖고 있으므로 그 둘은 다시 넣지 않는다.
   html = stripMarker(html, '<!-- seo:start \\(scripts/seo-postbuild\\.mjs\\) -->', '<!-- seo:end -->');
   html = injectBeforeHeadClose(html, metaBlock({ withDescription: false }));
+  // 루트 '/'가 이 파일을 직접 서빙한다(vercel.json). 로그인 세션이 있거나 해시로 로그인 결과가 돌아왔으면
+  // 앱(/?app=1 → app.html)으로 보낸다. 로봇·첫 방문자는 세션이 없어 넘기기가 일어나지 않는다.
+  html = html.replace(/<head>/i, '<head>' + APP_HANDOFF);
   writeFileSync(p, html, 'utf8');
   console.log('[seo] dist/welcome.html 패치 완료 (og:image·og:url·canonical·twitter·JSON-LD)');
 }
@@ -207,6 +228,7 @@ function writeRobots() {
     // 법적 고지 정적 페이지 — Apple 5.1.1(i)·Google Play 계정삭제 요건상 로그인 없이 크롤·열람이 돼야 한다.
     // 확장자 없는 주소(rewrite 경유)와 실제 파일 주소를 둘 다 열어 둔다.
     ...LEGAL_PAGES.flatMap((p) => [`Allow: /${p.slug}`, `Allow: /${p.slug}.html`]),
+    'Disallow: /app.html',
     'Disallow: /login',
     'Disallow: /signup',
     'Disallow: /stores',
@@ -359,6 +381,7 @@ ${LEGAL_PAGES.map(
 // ── 실행 ────────────────────────────────────────────────────────────────
 console.log(`[seo] SITE_URL=${SITE_URL}`);
 patchIndex();
+moveAppShell();
 patchWelcome();
 writeRobots();
 writeLegalPages();

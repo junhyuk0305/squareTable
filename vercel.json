@@ -25,7 +25,11 @@
     { "source": "/gym", "destination": "/gym.html" },
     { "source": "/academy", "destination": "/academy.html" },
     { "source": "/welcome", "destination": "/welcome.html" },
-    { "source": "/(.*)", "destination": "/" }
+    { "source": "/", "has": [{ "type": "query", "key": "code" }], "destination": "/app.html" },
+    { "source": "/", "has": [{ "type": "query", "key": "error" }], "destination": "/app.html" },
+    { "source": "/", "has": [{ "type": "query", "key": "app" }], "destination": "/app.html" },
+    { "source": "/", "destination": "/welcome.html" },
+    { "source": "/(.*)", "destination": "/app.html" }
   ],
   "headers": [
     {
