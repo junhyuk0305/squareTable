@@ -184,6 +184,8 @@ declare
  v_event record;
 begin
  if tg_op='UPDATE' then v_previous:=coalesce(old.owner_ids,'{}'); end if;
+ -- 알림 적재가 실패해도 업무 저장은 롤백하지 않는다(0247 방식).
+ begin
  -- 담당 해제 때 이전 미발송 사건을 닫는다. 재배정은 새 사건 한 건만 남긴다.
  update public.member_notices n set claimed_at=now(),delivered=0
   where n.assign_template_id=new.id and n.unit_id=new.unit_id and n.kind='assign'
@@ -203,6 +205,9 @@ begin
        values(v_target,new.unit_id,'assign',v_event.title,v_event.body,'/junior/work?task='||new.id,new.id);
    end if;
  end loop;
+ exception when others then
+   raise warning 'work assignment notify skipped for %: %', new.id, sqlerrm;
+ end;
  return new;
 end $$;
 revoke all on function public.work_assignment_notify() from public,anon,authenticated;
