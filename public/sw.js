@@ -41,7 +41,7 @@ self.addEventListener('push', (event) => {
     tag: data.tag || undefined,
     renotify: Boolean(data.tag),
     // 클릭 시 열 앱 내부 경로. notificationclick 에서 사용.
-    data: { url: data.url || '/' },
+    data: { url: data.url || '/?app=1' },
   };
 
   event.waitUntil(
@@ -142,7 +142,7 @@ async function syncAppBadge() {
 // 알림 클릭: 이미 열린 앱 탭이 있으면 포커스 + 해당 경로로 이동, 없으면 새로 연다.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = (event.notification.data && event.notification.data.url) || '/';
+  const target = (event.notification.data && event.notification.data.url) || '/?app=1';
 
   event.waitUntil(
     (async () => {
