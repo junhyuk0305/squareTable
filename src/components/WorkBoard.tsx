@@ -573,19 +573,23 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   }, [isOwner, courses, courseEntries, understanding, entryById, quizCounts, quizAttempts, userId, trainingNow, trainingRequests, assignments, quizProgress, quizParam]);
 
   // "지난번 퀴즈" 줄(N14) — 카드에 뜬 퀴즈마다 내 마지막 제출의 문항별 맞힘. 서버가 고른다(0334).
-  //   조회 실패·옛 서버면 줄을 숨긴다. 시트를 닫으면 hydrate 가 quizAttempts 를 바꾸므로 그때 다시 읽는다.
+  //   조회 실패는 빈 결과와 구분한다. 시트를 닫으면 hydrate 가 quizAttempts 를 바꾸므로 다시 읽는다.
   const lastCourseKey = trainingCards.map((c) => c.course.id).filter((id): id is string => !!id).join(',');
+  const lastScopeKey = `${userId}:${activeUnit}:${lastCourseKey}`;
+  const [lastRetry, setLastRetry] = useState(0);
   const [lastSubmissions, setLastSubmissions] = useState<{ key: string; data: Record<string, { correct: boolean }[]> | null } | null>(null);
   useEffect(() => {
     if (!lastCourseKey) return;
     let alive = true;
     void fetchMyLastQuizSubmissions(lastCourseKey.split(',')).then((data) => {
-      if (alive) setLastSubmissions({ key: lastCourseKey, data });
+      if (alive) setLastSubmissions({ key: lastScopeKey, data });
+    }).catch(() => {
+      if (alive) setLastSubmissions({ key: lastScopeKey, data: null });
     });
     return () => { alive = false; };
-  }, [lastCourseKey, quizAttempts]);
+  }, [lastCourseKey, lastScopeKey, quizAttempts, lastRetry]);
   const lastSubmissionOf = (courseId: string | null) =>
-    courseId && lastSubmissions?.key === lastCourseKey ? lastSubmissions.data?.[courseId] ?? null : null;
+    courseId && lastSubmissions?.key === lastScopeKey ? lastSubmissions.data?.[courseId] ?? null : null;
 
   // 카드의 퀴즈 시작 — 항목이 노하우 하나라 그 노하우만 소스로 넣는다(푼 만큼만 통과 처리).
   // ★열었다는 신호를 여기서 찍는다(0140). 이게 빠지면 사장이 보낸 퀴즈가 "무시됐다"로 세어져
@@ -974,6 +978,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           ★대화방 **위쪽 흐름**에 둔다 — 떠 있는 헤더·칩바는 WorkChat 안에서 뜨므로 카드를 덮지 않는다. */}
       {view === 'chat' && quizProgressError && !isOwner && (
         <LoadErrorState title="퀴즈 진행 상태를 불러오지 못했어요" onRetry={() => void useWorkStore.getState().hydrate()} />
+      )}
+      {view === 'chat' && !isOwner && lastSubmissions?.key === lastScopeKey && lastSubmissions.data === null && (
+        <LoadErrorState title="지난번 퀴즈를 불러오지 못했어요" onRetry={() => setLastRetry((n) => n + 1)} />
       )}
       {view === 'chat' &&
         trainingCards.map((c, i) => (
