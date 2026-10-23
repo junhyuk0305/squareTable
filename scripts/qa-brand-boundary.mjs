@@ -4,6 +4,7 @@
 // 전부 0행(또는 42501)이어야 한다. 하나라도 행이 나오면 방어선이 뚫린 것이다. 정의자 RPC 를 바꾸면 반드시 다시 돌린다.
 //
 // 전제: seed-brand-demo.mjs 상태(store_001 ↔ brand_pilot 연결, 요약 공개). 읽기만 하고 아무것도 바꾸지 않는다.
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

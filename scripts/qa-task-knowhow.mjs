@@ -2,6 +2,7 @@
 // 실 백엔드 대상·자가정리. 격리 임시 매장(@example.com owner)에 사장1+알바2 세션으로 해피패스를 재현하고 DB로 검증한다.
 // 사용: node --env-file=... 아님 — .env(ANON) + .env.seed(SERVICE_ROLE) 자동 로드. 그냥 `node scripts/qa-task-knowhow.mjs`.
 // 정리: 종료 시 생성 계정/매장은 cleanup-orphan-stores.mjs가 @example.com 규칙으로 수거(QA 도메인).
+import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

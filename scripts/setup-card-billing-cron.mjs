@@ -6,9 +6,10 @@
 //   이 스크립트는 .env/.env.seed 에서 URL·키를 읽어 그 RPC 를 한 번 호출할 뿐이다(멱등 — 다시 돌려도 안전).
 //
 // 선행: 0208 적용 · 엣지 card-billing 배포 · TOSS_SECRET_KEY 시크릿 · pg_cron/pg_net 활성화(0118 때 이미 켬)
-// 실행: node scripts/setup-card-billing-cron.mjs
+// 실행: node scripts/setup-card-billing-cron.mjs --allow-remote
 // 확인: select jobname, schedule from cron.job where jobname = 'card-billing-renew';
 
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';

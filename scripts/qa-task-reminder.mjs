@@ -20,6 +20,7 @@
 //
 // ⚠️ 크론(task-reminders) 자체의 등록 여부는 여기서 못 본다(cron 스키마는 PostgREST 밖).
 //    등록은 node scripts/setup-task-reminder-cron.mjs 가 'ok' 를 반환하는 것으로 확인한다.
+import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

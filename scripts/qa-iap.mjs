@@ -22,6 +22,7 @@
 //       초안은 single 이 흔적을 안 남겨 업그레이드가 **돈만 받고 아무것도 안 여는** 상태였다.
 //
 // 0187 미적용이면 A 만 돌고 B 는 SKIP(실패가 아니다).
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

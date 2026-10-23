@@ -10,6 +10,7 @@
 //  ③ 방 격리    : 비공개 방 — **비멤버는 매니저도 0건**(0126 으로 매니저 특권 제거) / 멤버면 목록·메시지 둘 다 보임
 //
 // 실행: node scripts/qa-role-read-boundary.mjs (.env + .env.seed 필요). 전제 = 0122 + **0126** push.
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

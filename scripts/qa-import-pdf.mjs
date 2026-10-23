@@ -11,6 +11,7 @@
 //
 // 픽스처 재생성: node scripts/fixtures/make-doc-fixtures.mjs (Windows — 스캔 JPEG 은 System.Drawing)
 // 사용: QA_EMAIL=... QA_PASSWORD=... node scripts/qa-import-pdf.mjs
+import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 

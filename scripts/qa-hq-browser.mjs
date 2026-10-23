@@ -13,6 +13,7 @@
 // 계정: 고정 계정만 쓴다 — 사장 owner@pilot… · 직원 staff2@pilot… · 본사 hq@pilot…
 //       (본사 계정·브랜드는 `node scripts/seed-brand-demo.mjs` 가 만든다. ⛔여기서 계정을 만들지 않는다.)
 // 스크린샷 → ./qa-shots/hq/
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync, mkdirSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 import { fileURLToPath } from 'node:url';

@@ -16,6 +16,7 @@
 //   그래서 슬롯 강제 구간은 끄고 돌리고, 체험 구간은 ⑨ 에서 **켜서 따로** 검증한다.
 //   ⚠️ 통째로 끄면 안 된다 — 0136 이 잡은 매출 구멍(슬롯 3개=매장 4개)은 프로모션이 켜져야
 //      재현되므로 ⑨-b 가 그 자리를 대신 지킨다.
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

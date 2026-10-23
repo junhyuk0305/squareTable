@@ -2,6 +2,7 @@
 // (추가/다중입력 square는 qa-knowhow-accuracy.mjs / qa-knowhow-multi.mjs 가 커버)
 // square/patch/answer/intent 모두 DB에 안 씀(embed만) → 오염 없음.
 // 사용: QA_EMAIL=owner@pilot.squaretable.app QA_PASSWORD=pilot1234 node scripts/qa-ai-core.mjs
+import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 

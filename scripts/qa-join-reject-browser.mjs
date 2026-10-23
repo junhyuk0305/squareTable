@@ -11,6 +11,7 @@
 //
 // 실행: node scripts/qa-join-reject-browser.mjs  (.env + .env.seed + playwright, 앱은 QA_ORIGIN)
 //   기본 QA_ORIGIN=http://localhost:8081 (expo web dev 서버가 떠 있어야 한다)
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

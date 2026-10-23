@@ -26,6 +26,7 @@
 //   · 쓰레기 행을 남기지 않는다(id 접두어 하나로 전량 삭제).
 //
 // 사용: node scripts/qa-quiz-grading.mjs   (LLM 호출 0건 — 비용 없음)
+import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';

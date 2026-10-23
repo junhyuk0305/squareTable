@@ -10,6 +10,7 @@
 //   ⑦ realtime(0047 회귀): profiles 변경 이벤트가 여전히 오고, payload 에 birth_date 가 없다(컬럼 권한 필터)
 //
 // 실행: node scripts/qa-gen-exchange.mjs  (.env + .env.seed 필요 — 계정 생성/검증/정리에 service_role 사용)
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

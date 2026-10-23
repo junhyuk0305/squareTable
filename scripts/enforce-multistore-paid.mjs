@@ -11,8 +11,9 @@
 //   유료 매장(single/multi active)은 건드리지 않는다.
 //
 // 제외: PROTECT_UNITS(데모·심사) 포함 사장, QA 이메일 사장(purge cron 이 정리).
-// 실행: node scripts/enforce-multistore-paid.mjs          ← dry-run (변경 없음)
-//       node scripts/enforce-multistore-paid.mjs --apply  ← 실제 적용
+// 실행: node scripts/enforce-multistore-paid.mjs --allow-remote          ← dry-run (변경 없음)
+//       node scripts/enforce-multistore-paid.mjs --allow-remote --apply  ← 실제 적용
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';

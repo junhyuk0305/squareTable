@@ -1,5 +1,6 @@
 // qa-photo-probe.mjs — 실 백엔드에서 '사장이 사진 업로드' 경로를 그대로 재현.
 // 임시 사장 계정+매장 생성 → 인증 세션으로 playbook-photos 업로드 시도 → 실제 에러 출력 → 계정 삭제.
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

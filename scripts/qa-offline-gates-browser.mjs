@@ -14,6 +14,7 @@
  * ★"없어요"가 안 보이는 것만으로는 통과가 아니다 — 재시도 문구가 **실제로 보여야** 통과다.
  *   (빈 화면은 만점이 나온다 — 2026-08-26 교훈.)
  */
+import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';

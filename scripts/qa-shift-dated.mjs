@@ -8,6 +8,7 @@
 //   ② CHECK 가 모순 행(둘 다 있음 / 둘 다 없음)을 거부하는가
 //   ③ shiftsOn(클라 SSOT) 판정이 "그 날짜에만" 잡고 다음 주 같은 요일엔 안 잡는가
 //   ④ workers_at(SQL 판)이 같은 판정을 하는가 — 업무 리마인더 수신자가 어긋나면 조용히 틀린다
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

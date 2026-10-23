@@ -10,6 +10,7 @@
 //   ④ 무음/잡음뿐이면 empty=true (없는 말을 지어내지 않는다).
 //
 // 사용: QA_EMAIL=owner@pilot.squaretable.app QA_PASSWORD=pilot1234 node scripts/qa-transcribe.mjs
+import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 

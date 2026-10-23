@@ -19,6 +19,7 @@
 //
 // 계정: 고정 QA 계정(QA_EMAIL, 기본 qa.owner@example.com). 계정을 새로 만들지 않는다.
 // 자가정리: 만든 매장 자료·응시 기록을 끝에 지운다. 사용: npm run qa:quiz-integrity
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

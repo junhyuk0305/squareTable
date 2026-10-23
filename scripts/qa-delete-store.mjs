@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // qa-delete-store.mjs — delete_store(0061) 라이브 증명: 소유검증(크로스테넌트)·마지막매장·직원존재·cascade.
 // 실행: node --env-file=.env.seed scripts/qa-delete-store.mjs
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

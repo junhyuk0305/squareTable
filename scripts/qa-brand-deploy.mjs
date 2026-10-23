@@ -19,6 +19,7 @@
 //     ★0231: 숨긴 퀴즈는 사장만 읽는다(직원·매니저 0행) · 사장 직접 발송은 course_hidden · 재확인 발송은 0행
 //     (매니저 단정은 고정 매니저 계정이 store_001 활성 매니저일 때만 잰다. 아니면 SKIP '미검증' — fail 로 세지 않는다)
 //   I 해제 후 잔존 — 연결을 끊어도 사본(노하우·퀴즈)은 매장에 남는다(정본 §4-B)
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

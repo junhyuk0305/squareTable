@@ -6,6 +6,7 @@
 // 실행: node scripts/qa-junior-blocks-shot.mjs   (dev 서버가 8081 에 떠 있어야 한다)
 // 계정: 고정 QA 직원 계정(박지원). 새로 만들지 않는다.
 // ★dev 번들 파싱이 오래 걸린다 — 스플래시가 걷힌 뒤에 찍는다(아래 waitForBody).
+import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createRequire } from 'node:module';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';

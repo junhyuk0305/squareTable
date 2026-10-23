@@ -16,6 +16,7 @@
 // ★K5 '같은 질문 두 번 보내기'는 제출이 1번 더 든다 → 기본 꺼짐. QA_JR_AI_DUP=1 로 켠다.
 // ★건너뛴 것을 통과로 세지 않는다. 마지막 줄 = GREEN n/0 또는 RED n/m. 실패면 exit 1.
 // 자동화 불가: 푸시 도달(q-answered → /junior/chat) · 실기기 알림 탭 착지.
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

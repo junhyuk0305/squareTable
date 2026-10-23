@@ -15,6 +15,7 @@
 //
 // 에스컬레이션(직원 질문 → 사장 1탭)은 엣지를 부르지 않는다(useChatStore 가 질문 행만 쓴다) — 코드 판정, 여기서 안 본다.
 // ⚠️ LLM 을 실제로 부른다(답변·퀴즈·PDF·정리 각 1~2회). 실행: node scripts/qa-ai-units.mjs
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

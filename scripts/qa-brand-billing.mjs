@@ -14,6 +14,7 @@
 //   F 미납 정지 — 브랜드 status='suspended' 면 보기·배포 RPC 가 전부 닫힌다(사본 잔존은 qa:brand-deploy I1)
 //   G 경계 — 청구 원장 직접 조회 0행 · 내부 함수 실행 거부 · 점주·직원에게 안 열린다 · 다른 브랜드 안 보임
 //   H IAP — 살아 있으면 매장→본사 전환을 제안·수락 **둘 다** 거부한다
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

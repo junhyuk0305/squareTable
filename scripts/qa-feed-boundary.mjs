@@ -12,6 +12,7 @@
 //   아무도 안 봤고, 그래서 "방 멤버 누구나 남의 공지를 고칠 수 있다"가 오래 열려 있었다.
 //
 // 실행: node scripts/qa-feed-boundary.mjs   자가정리(계정·OTP 시드 정리).
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

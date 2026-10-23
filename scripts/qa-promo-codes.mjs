@@ -13,6 +13,7 @@
 // 실행: node scripts/qa-promo-codes.mjs
 //   env: .env(EXPO_PUBLIC_SUPABASE_URL/ANON) + .env.seed(SUPABASE_SERVICE_ROLE_KEY) 자동 로드.
 // 자가정리: 코드 행 delete(cascade 로 리딤 기록 제거) + delete_my_account + 시드 전화번호 정리.
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

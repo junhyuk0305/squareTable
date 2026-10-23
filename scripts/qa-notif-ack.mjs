@@ -14,6 +14,7 @@
 //   T5  직원 제안 → 사장 owner_note 반려 → 직원이 자기 제안에서 사유 조회(RLS 왕복)
 //
 // 실행: node scripts/qa-notif-ack.mjs
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

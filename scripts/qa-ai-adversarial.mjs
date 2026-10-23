@@ -2,6 +2,7 @@
 // (기본 플로우는 qa-knowhow-accuracy / qa-ai-core 가 커버 — 여기는 "또 다른 상황")
 // square/answer 모두 DB에 안 씀 → 오염 없음.
 // 사용: QA_EMAIL=owner@pilot.squaretable.app QA_PASSWORD=pilot1234 node scripts/qa-ai-adversarial.mjs
+import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 

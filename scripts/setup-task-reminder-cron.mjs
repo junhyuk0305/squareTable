@@ -7,9 +7,10 @@
 //   이 스크립트는 .env/.env.seed 에서 URL·키를 읽어 그 RPC 를 한 번 호출할 뿐이다(멱등 — 다시 돌려도 안전).
 //
 // 선행: Supabase Database→Extensions 에서 **pg_cron 과 pg_net 활성화**(안 켜져 있으면 그 사실을 알려준다).
-// 실행: node scripts/setup-task-reminder-cron.mjs
-// 확인: node scripts/qa-task-reminder.mjs (크론 등록 여부까지 검사한다)
+// 실행: node scripts/setup-task-reminder-cron.mjs --allow-remote
+// 확인: node scripts/qa-task-reminder.mjs --allow-remote (크론 등록 여부까지 검사한다)
 
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';

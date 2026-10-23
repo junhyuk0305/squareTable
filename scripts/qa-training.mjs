@@ -9,6 +9,7 @@
 //       0112 응시 점수 / 0113 외부 링크(토큰 4종 RPC) / 0114 문항 낡음 스냅샷 /
 //       델타 출제(src/lib/quiz/delta.ts — ⓪절, 백엔드 없이 도는 순수 함수)
 // 실 백엔드 대상·자가정리(@example.com → cleanup-orphan-stores.mjs 수거). 사용: node scripts/qa-training.mjs
+import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync } from 'node:fs';

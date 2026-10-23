@@ -18,6 +18,7 @@
 //
 // 자가정리: 만든 모든 테스트 계정은 끝에 delete_my_account 로 삭제한다.
 // 실행: node scripts/qa-onboarding.mjs   (EXPO_PUBLIC_SUPABASE_URL/ANON_KEY 또는 .env 사용)
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

@@ -15,6 +15,7 @@
 // ⚠️ 못 재는 것: 카드가 실제로 그려지는지 · 겹침 · 문구. 그건 브라우저 QA 몫이다.
 //
 // 사용: node scripts/qa-quiz-junior.mjs   (.env + .env.seed 자동 로드)
+import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

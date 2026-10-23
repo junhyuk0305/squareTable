@@ -9,6 +9,7 @@
 //
 // 판정은 전부 **로그인 JWT로 PostgREST 직접 호출**. service_role 은 셋업·덤프 전용.
 // 실행: node scripts/qa-room-matrix.mjs
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

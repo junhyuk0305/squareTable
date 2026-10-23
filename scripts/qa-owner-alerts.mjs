@@ -18,6 +18,7 @@
 // ⚠️ 스윕은 **전역**이다 — 다른 매장의 미발송 알림도 같이 나간다(크론이 5분 안에 보낼 것을 앞당길 뿐).
 // 실행: node scripts/qa-owner-alerts.mjs   (.env + .env.seed)
 // 자가정리: delete_my_account + app_config 원복(finally).
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

@@ -10,6 +10,7 @@
 //
 // 배포된 Edge(실 Gemini)를 그대로 호출 → 프롬프트 드리프트 없음. 토큰은 Edge가 반환하는 usage 사용.
 
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';

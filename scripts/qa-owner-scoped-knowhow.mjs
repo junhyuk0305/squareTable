@@ -16,6 +16,7 @@
 //
 // 실 백엔드 대상·자가정리(@example.com → cleanup-orphan-stores.mjs 수거).
 // 사용: node scripts/qa-owner-scoped-knowhow.mjs
+import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

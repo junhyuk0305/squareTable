@@ -8,6 +8,7 @@
 // 이 하니스가 만든 데이터 = 할일 text 접두사 'qa_jr_task_'. 시작·끝에 그것만 지운다(work_templates·work_done·work_feed·사진).
 // 포트: S 9343 · J 9344 · 매니저 9345(K5 비담당 완료 한 번만 열고 닫는다). 다른 하니스가 9333/9334 를 쓴다.
 // ★건너뛴 단언은 ✗ 로 센다. 마지막 줄 GREEN n/0 또는 RED n/m.
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';

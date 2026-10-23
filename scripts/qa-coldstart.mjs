@@ -7,6 +7,7 @@
 //  ④ 각 행위 후 플래그·카운트 전이(knowhow→1, asked_ever→true, done_ever→true, staff→1)
 //  ⑤ 크로스테넌트: 타 매장 사장에게 플래그·설정이 새지 않음
 // 사용: node scripts/qa-coldstart.mjs
+import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

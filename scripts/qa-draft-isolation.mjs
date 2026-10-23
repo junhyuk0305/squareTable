@@ -13,6 +13,7 @@
 //  [0064] 매니저는 draft 도 읽는가(검토 대기함 — auth_can_manage)
 //  [0019] 직원의 draft 변조(update)가 여전히 거부되는가(쓰기 정책 회귀 없음)
 //  [0231] 숨긴 본사 사본(brand_hidden_at)은 직원·매니저 0행 · 사장 1행
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';

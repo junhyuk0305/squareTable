@@ -13,6 +13,7 @@
 //   두 번 바뀐다. workers_at(서버 판정)이 **정확히 한 명**을 돌려주는지로 잰다.
 //
 // 실행: node scripts/qa-swap-transfer.mjs   자가정리(계정·OTP 시드 정리).
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

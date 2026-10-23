@@ -11,6 +11,7 @@
 //   E 본사 상향 요청 → 점주 화면에 표시 / payer 제안 → 상대 수락 → 반영
 //   F 해제 → brand_overview 0행 · 이력 행은 ended 로 남음
 //   G 미연결·다른 브랜드 매장은 어디에도 없음 · 담당자 my_units 0(작업실 안 섞임)
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

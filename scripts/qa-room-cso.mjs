@@ -9,6 +9,7 @@
 //     (엣지 deliver() 는 수신자가 그 매장 소속인지 검사하지 않는다 — push/index.ts:102 확인)
 //
 // 실행: node scripts/qa-room-cso.mjs
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

@@ -22,6 +22,7 @@
 //    지운다(0132). 되살릴 길이 qa:seed 뿐이다.
 //  · 사장 합류 승인 성공 — 신청(pending) 계정이 새로 있어야 한다. 대신 '사장은 역할 관문을 통과한다'를 잰다.
 // 실행: node scripts/qa-roles.mjs (.env 필요). 적용 전제 = 0093 + 0201 push.
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';

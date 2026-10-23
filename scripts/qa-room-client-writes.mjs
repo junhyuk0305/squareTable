@@ -12,6 +12,7 @@
 //   그래서 여기서는 "썼다"가 아니라 **"다시 읽었다"**까지 확인한다.
 //
 // 실행: node scripts/qa-room-client-writes.mjs   자가정리(계정·OTP 시드 정리).
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

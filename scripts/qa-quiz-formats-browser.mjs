@@ -11,6 +11,7 @@
 // 실행: npm run web 을 띄운 뒤  node scripts/qa-quiz-formats-browser.mjs
 //       (.env + .env.seed 필요, QA_ORIGIN 기본 localhost:8081)
 // 자가정리: delete_my_account + OTP 시드 정리. 스크린샷 → ./qa-shots/quiz-formats/
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

@@ -1,4 +1,5 @@
 // 극단/예외 입력 실통신 테스트 — 실제 고객이 칠 법한 난잡한 입력에 대해 square가 어떻게 반응하는지.
+import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 const here = (rel) => fileURLToPath(new URL(rel, import.meta.url));

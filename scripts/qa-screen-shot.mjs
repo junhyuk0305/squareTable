@@ -16,6 +16,7 @@
 // ★Git Bash 는 `--url /owner/work` 를 Windows 경로로 바꿔 넘긴다(MSYS) — 아래에서 되돌리므로 PS·Bash 둘 다 그대로 실행하면 된다.
 // ★스플래시·커버가 걷힌 뒤에 찍는다 — "뷰포트를 덮는 상자 + 커버 문구"가 사라질 때까지 기다린다.
 // ★뷰포트 높이를 3000 으로 키우면 앱이 flex 로 높이를 채우는 구조라 빈 화면이 찍힌다 — 900 고정.
+import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createRequire } from 'node:module';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';

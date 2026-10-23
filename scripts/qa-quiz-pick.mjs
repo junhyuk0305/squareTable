@@ -16,6 +16,7 @@
 //   백엔드는 **읽기만** 한다(노하우 조회). LLM 호출 0건.
 //
 // 사용: node scripts/qa-quiz-pick.mjs
+import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';

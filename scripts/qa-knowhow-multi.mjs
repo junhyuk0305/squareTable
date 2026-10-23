@@ -4,6 +4,7 @@
 // square 태스크는 DB에 쓰지 않는다(embed만 씀) → 데이터 오염 없음.
 //
 // 사용: QA_EMAIL=owner@pilot.squaretable.app QA_PASSWORD=pilot1234 node scripts/qa-knowhow-multi.mjs
+import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 

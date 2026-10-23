@@ -5,6 +5,7 @@
 // 적용 후(0052):          공개URL 403 + B가 A사진 서명 거부 + A 본인은 서명·조회 정상 → ✅
 //
 // 실행: node --env-file=.env.seed scripts/qa-photo-private.mjs   (자가정리)
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // qa-swap-guard.mjs — updateSwap 0행 유령 성공 재현(스키마 정정: template_id). 임시 QA.
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

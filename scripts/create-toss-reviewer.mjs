@@ -6,8 +6,9 @@
 //   QA 고정 계정(owner@pilot 등)과 분리한 이유 = qa:seed 가 데이터를 되돌려도 심사 화면이 흔들리지 않게(2026-09-15 사용자 결정).
 //
 // ⛔ 라이브 DB 에 쓴다. iOS 심사 중에는 실행하지 않는다. 기본은 계획만 출력(dry run), --execute 에서만 만든다.
-// 실행: node scripts/create-toss-reviewer.mjs --execute [--email toss.review@dochackchack.com]
+// 실행: node scripts/create-toss-reviewer.mjs --allow-remote --execute [--email toss.review@dochackchack.com]
 // 뒤처리: 출력된 이메일을 엣지 시크릿 TOSS_TEST_OWNER_EMAILS 에 넣는다(테스트 키 기간에 이 계정만 카드 결제가 열린다).
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';

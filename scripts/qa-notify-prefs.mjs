@@ -21,6 +21,7 @@
 //
 // 자가정리: 만든 계정은 끝에 delete_my_account 로 삭제.
 // 실행: node scripts/qa-notify-prefs.mjs   (npm run qa:notify)
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

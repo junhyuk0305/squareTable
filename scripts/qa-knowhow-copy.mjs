@@ -7,6 +7,7 @@
 //  · 복제결과: B에 새 id·needs_review=true·photos=[]·stats={}·published, 임베딩도 복제(즉시 검색가능).
 //  · 격리(핵심): 라이벌 오너 X 는 list_unit_knowhow(A)/copy_knowhow(A,…) 둘 다 소유검증에서 거부.
 //  · same_unit / too_many 가드.
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

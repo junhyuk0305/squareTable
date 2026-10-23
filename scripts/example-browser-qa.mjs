@@ -11,6 +11,7 @@
 //
 // 일회용 계정만 쓴다(자가정리). 사용자의 test.owner.0812 계정은 건드리지 않는다.
 // 실행: (개발 서버가 떠 있는 상태에서) node scripts/tmp-qa-hub-empty-browser.mjs
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

@@ -15,6 +15,7 @@
 //
 // 포트 9373(사장)·9374(직원) — 다른 하니스와 겹치지 않게(join 9333~ · task 9343~ · quiz 9353~ · ai 9363~).
 // 뷰포트 460×900(여정 하니스와 같음 · R11 의 460px 프레임).
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

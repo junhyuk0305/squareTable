@@ -13,6 +13,7 @@
 //   B. my_units_notif_data() — 배정받은 사람의 알림에 방과 무관하게 나오는가.
 //      ★service_role 로 심는다: RLS 를 우회해 방 밖 배정 행을 재현하려는 것이다.
 // 실행: node scripts/qa-room-isolation.mjs   자가정리(계정·OTP 시드 정리).
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

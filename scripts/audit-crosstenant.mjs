@@ -1,5 +1,6 @@
 // audit-crosstenant.mjs — 두 매장 실계정으로 크로스테넌트 격리 실증 + 자가정리(service_role sweep)
-// 실행: node --env-file=.env.seed scripts/audit-crosstenant.mjs
+// 실행: node --env-file=.env.seed scripts/audit-crosstenant.mjs --allow-remote
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 import { readFileSync } from 'node:fs';

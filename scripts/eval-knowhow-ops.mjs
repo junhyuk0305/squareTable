@@ -36,6 +36,7 @@
 //   융합은 src/lib/ai/searchClient.ts(RRF_K 60, TOPK 8). 아래 상수/알고리즘은 그 SSOT와 동기.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join, isAbsolute, resolve } from 'node:path';

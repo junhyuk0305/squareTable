@@ -10,6 +10,7 @@
 //
 // 전제: seed-brand-demo.mjs 상태(store_001 ↔ brand_pilot · 가맹 · 요약 공개).
 //   ⛔계정을 새로 만들지 않는다(고정 QA 계정 2축). 상태는 바꾸지만 **끝에 반드시 되돌린다**(restore).
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

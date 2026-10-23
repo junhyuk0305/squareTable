@@ -6,6 +6,7 @@
 // ★유료화(billing_free_mode=false) 이후: 2호점 생성은 multi 플랜 전용(0062 plan_limit_store).
 //   전역 스위치를 켜는(true) 방향의 토글은 테스트 동안 프로덕션 페이월이 꺼지는 창이 생기므로 금지 —
 //   대신 실제 유료 고객 경로 그대로 테스트 매장을 admin_activate_store 로 multi 승격한다(전역 상태 무접촉).
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

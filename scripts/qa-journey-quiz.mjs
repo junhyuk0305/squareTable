@@ -15,6 +15,7 @@
 //   재료 노하우는 만들지도 지우지도 않는다. 직원이 아직 통과 안 한 활성 노하우 4개를 고른다.
 //   ⚠️ knowhow_quiz_stats(노하우별 오답 집계 누계)는 되돌리지 않는다 — 누구 것인지 안 남는 합계다.
 // ★건너뛴 것은 통과로 세지 않는다. 마지막 줄 GREEN n/0 · RED n/m.
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';

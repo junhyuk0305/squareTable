@@ -3,6 +3,7 @@
 //   라이브 DB 를 service_role 로 **읽기만** 한다(select 만 · rpc 없음). 크론·스케줄 아님 — 사람이 한 번 돌린다.
 //   출력은 개수·id·날짜뿐. 질문·노하우 본문·이름·전화·이메일 열은 가져오지도 않거나(질문 본문은 중복 판정에만 메모리에서 해시) 찍지 않는다.
 //   사용: node scripts/qa-invariants-once.mjs [--json]
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';

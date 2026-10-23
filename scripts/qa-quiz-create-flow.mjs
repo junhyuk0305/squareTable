@@ -14,6 +14,7 @@
 // 계정: 고정 QA 계정만 쓴다(새로 만들지 않는다).
 // 실행: node scripts/qa-quiz-create-flow.mjs [--keep]
 //   --keep 을 주면 만든 것을 지우지 않는다(화면에서 눈으로 볼 때).
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

@@ -6,6 +6,7 @@
 // 실제 모듈(knowhowInput.ts·knowhowQuality.ts)을 import해 SSOT로 검증.
 //
 // 실행: OPS_EMAIL=eval-owner@squaretable.test OPS_PW=evaltest1234 node scripts/qa-knowhow-quality.mjs
+import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const here = (rel) => fileURLToPath(new URL(rel, import.meta.url));

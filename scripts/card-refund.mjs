@@ -5,9 +5,10 @@
 //   ★순서가 중요하다: 토스 취소가 성공한 뒤에만 DB 를 바꾼다. 반대로 하면 돈은 안 돌려줬는데 매장만 닫힌다.
 //
 // 사용:
-//   TOSS_SECRET_KEY=live_sk_... node scripts/card-refund.mjs --order FP20261001_xxxx                 # 잔액 전부(7일 내 청약철회)
-//   TOSS_SECRET_KEY=... node scripts/card-refund.mjs --order RN20261101_xxxx --prorate --execute    # 남은 기간 일할 환불(제13조 3항)
-//   TOSS_SECRET_KEY=... node scripts/card-refund.mjs --order UP..._xxxx --amount 12000 --no-revoke --execute  # 과오금 일부만
+//   TOSS_SECRET_KEY=<live_sk_...> node scripts/card-refund.mjs --allow-remote --order FP20261001_xxxx                 # 잔액 전부(7일 내 청약철회)
+//   TOSS_SECRET_KEY=... node scripts/card-refund.mjs --allow-remote --order RN20261101_xxxx --prorate --execute    # 남은 기간 일할 환불(제13조 3항)
+//   TOSS_SECRET_KEY=... node scripts/card-refund.mjs --allow-remote --order UP..._xxxx --amount 12000 --no-revoke --execute  # 과오금 일부만
+//   라이브 DB 를 치므로 --allow-remote 가 있어야 돈다(접속 대상 가드 · scripts/lib/local-target-guard.mjs).
 // 옵션:
 //   --amount N   취소할 금액(원). 없으면 잔액 전부. --prorate 와 같이 쓰지 않는다.
 //   --prorate    구독의 현재 이용 기간 중 남은 비율만큼(10원 단위 내림) — 그 기간을 결제한 주문에만 쓴다.
@@ -15,6 +16,7 @@
 //   --reason "…" 토스에 남길 취소 사유(기본: 고객 요청 환불)
 // 키: TOSS_SECRET_KEY 는 실행할 때만 환경변수로 넣는다(.env 파일에 두지 않는다).
 // 검증: 2026-09-15 로컬 Supabase + 토스 테스트 키로 갱신 주문 전액 취소 → 토스 CANCELED · 구독 refunded · 매장 회수 확인.
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';

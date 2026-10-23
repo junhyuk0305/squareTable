@@ -13,6 +13,7 @@
 // ★건너뛴 것을 통과로 세지 않는다(AGENTS) — 준비가 안 서서 못 돈 묶음은 fail 로 센다.
 // ★쪽 나누기 화면(50곳 넘는 매장)은 원격 파일럿이 2곳이라 화면으로 못 본다. 대신 A 묶음이 서버 정렬을
 //   한 줄짜리 쪽으로 받아 이어 붙여 "쪽을 넘겨도 전체 기준"을 잰다. 63곳 화면 실측은 10-01 로컬 리허설에서 했다.
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
