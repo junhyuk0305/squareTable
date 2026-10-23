@@ -202,7 +202,7 @@ begin
    select * into v_event from public.push_client_event(v_actor,new.unit_id,null,'user','assign',new.id,v_target);
    if v_event.ok then
      insert into public.member_notices(user_id,unit_id,kind,title,body,url,assign_template_id)
-       values(v_target,new.unit_id,'assign',v_event.title,v_event.body,'/junior/work?task='||new.id,new.id);
+       values(v_target,new.unit_id,'assign',v_event.title,v_event.body,'/junior/work?view=todo&task='||new.id,new.id);
    end if;
  end loop;
  exception when others then

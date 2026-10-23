@@ -20,6 +20,8 @@ insert into public.work_templates(id,unit_id,text,section,scope,created_by,owner
  values('qa-c2-task','qa-c2','C2 task','open','shared','c2000000-0000-4000-8000-000000000001','c2000000-0000-4000-8000-000000000002',array['c2000000-0000-4000-8000-000000000002','c2000000-0000-4000-8000-000000000003']::uuid[]);
 do $$ begin
  if (select count(*) from public.member_notices where unit_id='qa-c2' and kind='assign') <> 2 then raise exception 'C2 new app must queue once per recipient'; end if;
+ -- registry taskRoute 와 같은 주소여야 할일 탭이 열린다.
+ if exists(select 1 from public.member_notices where unit_id='qa-c2' and kind='assign' and url <> '/junior/work?view=todo&task=qa-c2-task') then raise exception 'C2 url differs from taskRoute'; end if;
  if (select ok from public.push_client_event('c2000000-0000-4000-8000-000000000001','qa-c2',null,'user','assign','qa-c2-task','c2000000-0000-4000-8000-000000000002')) then raise exception 'C2 old app duplicates server'; end if;
 end $$;
 update public.work_templates set text='C2 retry' where id='qa-c2-task';
