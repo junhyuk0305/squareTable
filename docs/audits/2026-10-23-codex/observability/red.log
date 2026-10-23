@@ -1,0 +1,26 @@
+FAIL shared token Expected values to be strictly equal:
++ actual - expected
+
++ '/q/SYNTHETIC_TOKEN'
+- '/q/[token]'
+      ^
+
+FAIL encoded token Expected values to be strictly equal:
++ actual - expected
+
++ '/q/SYNTHETIC%2FTOKEN'
+- '/q/[token]'
+      ^
+
+FAIL trailing slash Expected values to be strictly equal:
++ actual - expected
+
++ '/q/SYNTHETIC_TOKEN/'
+- '/q/[token]/'
+      ^
+
+PASS ordinary route
+PASS similar route
+PASS empty route
+PASS native without window
+{"failed":3,"sourceHash":"b492602f66a1246a10d72e22f63547cc877409c6c5600b088bd2b1c20514a8b0","time":"2026-10-23T06:23:37.510Z","transport":"mocked; no network","rejectedInsertDoesNotThrow":true}

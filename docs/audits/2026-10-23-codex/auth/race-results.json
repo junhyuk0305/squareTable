@@ -1,0 +1,46 @@
+{
+  "at": "2026-10-23T06:50:45.010Z",
+  "database": "audit_auth_full_1792737494969",
+  "scope": "Real functions, full schema, two SQL transactions with observed row-lock barrier. HTTP pre-request not used in these transactions.",
+  "results": [
+    {
+      "firstAction": "delete",
+      "secondAction": "approve",
+      "barrier": "second request observed Lock wait before first commit",
+      "first": {
+        "code": 0,
+        "output": "BEGIN\nSET\nSET\n{\"sub\":\"e57d0685-da2e-4839-a23a-dcff96d28e96\",\"session_id\":\"ec0a48dc-624f-4523-a8e5-b13463584cd3\"}\n\nAUDIT_READY\nCOMMIT\n"
+      },
+      "second": {
+        "code": 3,
+        "output": "BEGIN\nSET\nSET\n{\"sub\":\"e57d0685-da2e-4839-a23a-dcff96d28e96\",\"session_id\":\"ec0a48dc-624f-4523-a8e5-b13463584cd3\"}\nERROR:  invalid_unit\nCONTEXT:  PL/pgSQL function guard_member_admission_after_owner_exit() line 13 at RAISE\nSQL statement \"insert into public.unit_members (user_id, unit_id, role)\r\n    values (p_uid, v_unit, 'junior')\r\n    on conflict (user_id, unit_id) do nothing\"\nPL/pgSQL function approve_member(uuid) line 45 at SQL statement\n"
+      },
+      "state": {
+        "ownerDeleted": true,
+        "staffMember": false,
+        "pending": "audit_race_1792738242762"
+      },
+      "pass": true
+    },
+    {
+      "firstAction": "approve",
+      "secondAction": "delete",
+      "barrier": "second request observed Lock wait before first commit",
+      "first": {
+        "code": 0,
+        "output": "BEGIN\nSET\nSET\n{\"sub\":\"eef26d67-bd4e-4360-b1c8-4f4add39278f\",\"session_id\":\"57fcc8d7-31e1-466b-baee-0774bc1abff1\"}\n\nAUDIT_READY\nCOMMIT\n"
+      },
+      "second": {
+        "code": 3,
+        "output": "BEGIN\nSET\nSET\n{\"sub\":\"eef26d67-bd4e-4360-b1c8-4f4add39278f\",\"session_id\":\"57fcc8d7-31e1-466b-baee-0774bc1abff1\"}\nERROR:  owner_has_staff\nCONTEXT:  PL/pgSQL function delete_my_account() line 18 at RAISE\n"
+      },
+      "state": {
+        "ownerDeleted": false,
+        "staffMember": true,
+        "pending": null
+      },
+      "pass": true
+    }
+  ],
+  "pass": true
+}

@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-23T06:54:56.308Z",
+  "records": [
+    {
+      "database": "audit_auth_full_1792737494969",
+      "httpContainer": "audit_auth_rest_1792737551371",
+      "cleanedAt": "2026-10-23T06:54:55.982Z"
+    },
+    {
+      "database": "audit_auth_final_apply_1792738362919",
+      "cleanedAt": "2026-10-23T06:54:56.308Z"
+    }
+  ]
+}

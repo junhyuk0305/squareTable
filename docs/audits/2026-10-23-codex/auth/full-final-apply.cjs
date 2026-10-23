@@ -1,0 +1,17 @@
+const fs=require('fs'),path=require('path'),cp=require('child_process'),crypto=require('crypto');
+const env=JSON.parse(fs.readFileSync(path.join(__dirname,'../auth-environment/environment.json'),'utf8'));
+const database='audit_auth_final_apply_'+Date.now();
+const exec=(db,source)=>cp.execFileSync('docker',['exec','-i',env.container,'psql','-X','-v','ON_ERROR_STOP=1','-U','supabase_admin','-d',db,'-At'],{input:source,encoding:'utf8',maxBuffer:64*1024*1024});
+const report={database,container:env.container,at:new Date().toISOString(),ready:false};
+fs.writeFileSync(path.join(__dirname,'fresh-final-apply.json'),JSON.stringify(report,null,2));
+exec('postgres',`create database ${database};`);
+exec(database,fs.readFileSync(path.join(__dirname,'isolated-before-0335.sql'),'utf8'));
+const source=fs.readFileSync(path.resolve(__dirname,'../../../../supabase/migrations/0335_deleted_account_access.sql'),'utf8');
+fs.writeFileSync(path.join(__dirname,'fresh-final-apply.log'),exec(database,source));
+report.sha256=crypto.createHash('sha256').update(source).digest('hex');
+const query="select md5(string_agg(proname||pg_get_functiondef(oid),E'\\n' order by oid::regprocedure::text)) from pg_proc where pronamespace='public'::regnamespace and prokind='f';";
+report.freshFunctionDigest=exec(database,query).trim();report.httpDatabaseFunctionDigest=exec(env.database,query).trim();
+report.matchesTestedHTTPDatabase=report.freshFunctionDigest===report.httpDatabaseFunctionDigest;
+report.ready=true;
+fs.writeFileSync(path.join(__dirname,'fresh-final-apply.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));
+if(!report.matchesTestedHTTPDatabase)process.exitCode=1;

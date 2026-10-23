@@ -1,0 +1,9 @@
+# 재실행 과정의 로컬 DB 덤프와 환경 식별자는 커밋하지 않는다.
+auth-environment/environment.json
+auth-environment/schema-only.sql
+auth-environment/restore.log
+auth-environment/*.sql.log
+auth/isolated-before-0335.sql
+auth/0335-tested.sql
+auth/*-fixture.sql
+auth/*.log

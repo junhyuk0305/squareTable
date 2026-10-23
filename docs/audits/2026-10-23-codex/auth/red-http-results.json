@@ -1,0 +1,354 @@
+{
+  "phase": "red",
+  "database": "audit_auth_full_1792737494969",
+  "scope": "Full schema restored, real triggers/RLS, actual PostgREST and signed synthetic JWT. Auth login/refresh not executed.",
+  "start": {
+    "time": "2026-10-23T06:47:35.211Z",
+    "head": "c1548a8b94338a7e5fa613b132b9b32cfc02ca54",
+    "migrationSha": "960fa8728e870131d769e42f57672c5d41bd7129dfc8d47770838470f05dd85d"
+  },
+  "finish": {
+    "time": "2026-10-23T06:47:45.836Z",
+    "head": "c1548a8b94338a7e5fa613b132b9b32cfc02ca54",
+    "migrationSha": "960fa8728e870131d769e42f57672c5d41bd7129dfc8d47770838470f05dd85d"
+  },
+  "ids": {
+    "solo": "84a6e881-ff06-4fa5-8742-0d083311ed45",
+    "normal": "76ee9844-f018-4166-bbbd-13c93a45a11f",
+    "blocked": "bc697a27-b44c-4184-8e26-8e6f2ca1ce30",
+    "staff": "30738d5e-419b-489c-8d5d-2bcc6f1e28c1",
+    "closed": "2b97ab8a-3482-4b3f-9aab-c3b9a69e0b18",
+    "closedStaff": "9bb2d550-3369-4630-babd-8ab486027dbe",
+    "onboard": "9830f5bc-bed3-471f-a446-c4397f2841f1",
+    "profileless": "f4ee36fc-9474-4915-8e9a-f9898174a4a3"
+  },
+  "sessions": {
+    "solo": "cce66920-56b1-4f59-a44a-0bd5f7798beb",
+    "normal": "44aae9d9-3ce0-478b-9159-b938a9611908",
+    "blocked": "5d3058ae-26cc-48ca-b518-07acbb803483",
+    "staff": "441a67c7-91d3-4818-85e5-828a45a59336",
+    "closed": "3df481e3-1337-4112-92e3-531fb9a884c0",
+    "closedStaff": "327c7320-c217-445d-9218-fcac145dcbdc",
+    "onboard": "0614795a-17fa-472e-bd16-984a09e8cc2f",
+    "profileless": "29fe4207-f9a3-4f96-8584-8642c6156062"
+  },
+  "units": {
+    "solo": "audit_red_1792738054928_solo",
+    "normal": "audit_red_1792738054928_normal",
+    "blocked": "audit_red_1792738054928_blocked",
+    "closed": "audit_red_1792738054928_closed",
+    "kept": "audit_red_1792738054928_kept"
+  },
+  "results": [
+    {
+      "name": "normal own-store read",
+      "expected": 1,
+      "actual": {
+        "status": 200,
+        "data": [
+          {
+            "id": "audit_red_1792738054928_solo_entry"
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "name": "cross-store read denied",
+      "expected": 0,
+      "actual": {
+        "status": 200,
+        "data": []
+      },
+      "pass": true
+    },
+    {
+      "name": "own-user RLS baseline",
+      "expected": 1,
+      "actual": {
+        "status": 200,
+        "data": [
+          {
+            "user_id": "84a6e881-ff06-4fa5-8742-0d083311ed45"
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "name": "owner_has_staff rejects delete",
+      "expected": "owner_has_staff",
+      "actual": {
+        "status": 204,
+        "data": ""
+      },
+      "pass": false
+    },
+    {
+      "name": "rejected delete leaves profile/session/membership unchanged",
+      "expected": {
+        "deleted": false,
+        "active_unit_id": "audit_red_1792738054928_blocked",
+        "banned": null,
+        "sessions": 1,
+        "members": 1
+      },
+      "actual": {
+        "deleted": true,
+        "active_unit_id": "audit_red_1792738054928_blocked",
+        "banned": null,
+        "sessions": 0,
+        "members": 1
+      },
+      "pass": false
+    },
+    {
+      "name": "closed store fixture",
+      "expected": {
+        "closed": true,
+        "kept": false
+      },
+      "actual": {
+        "closed": true,
+        "kept": false
+      },
+      "pass": true
+    },
+    {
+      "name": "closed store staff does not trap owner",
+      "expected": 204,
+      "actual": {
+        "status": 204,
+        "data": ""
+      },
+      "pass": true
+    },
+    {
+      "name": "owner without staff can delete",
+      "expected": 204,
+      "actual": {
+        "status": 204,
+        "data": ""
+      },
+      "pass": true
+    },
+    {
+      "name": "delete clears active store",
+      "expected": null,
+      "actual": {
+        "deleted": true,
+        "active_unit_id": "audit_red_1792738054928_solo",
+        "banned": null,
+        "sessions": 0,
+        "members": 1
+      },
+      "pass": false
+    },
+    {
+      "name": "delete bans Auth user",
+      "expected": true,
+      "actual": {
+        "deleted": true,
+        "active_unit_id": "audit_red_1792738054928_solo",
+        "banned": null,
+        "sessions": 0,
+        "members": 1
+      },
+      "pass": false
+    },
+    {
+      "name": "delete removes Auth sessions",
+      "expected": 0,
+      "actual": {
+        "deleted": true,
+        "active_unit_id": "audit_red_1792738054928_solo",
+        "banned": null,
+        "sessions": 0,
+        "members": 1
+      },
+      "pass": true
+    },
+    {
+      "name": "stale JWT knowhow",
+      "expected": 401,
+      "actual": {
+        "status": 200,
+        "data": [
+          {
+            "id": "audit_red_1792738054928_solo_entry"
+          }
+        ]
+      },
+      "pass": false
+    },
+    {
+      "name": "stale JWT own-user prefs",
+      "expected": 401,
+      "actual": {
+        "status": 200,
+        "data": [
+          {
+            "user_id": "84a6e881-ff06-4fa5-8742-0d083311ed45"
+          }
+        ]
+      },
+      "pass": false
+    },
+    {
+      "name": "stale JWT own profile",
+      "expected": 401,
+      "actual": {
+        "status": 200,
+        "data": [
+          {
+            "id": "84a6e881-ff06-4fa5-8742-0d083311ed45"
+          }
+        ]
+      },
+      "pass": false
+    },
+    {
+      "name": "stale JWT definer my_units",
+      "expected": 401,
+      "actual": {
+        "status": 200,
+        "data": [
+          {
+            "unit_id": "audit_red_1792738054928_solo",
+            "store_name": "Synthetic audit store",
+            "role": "owner",
+            "industry": null,
+            "is_active": true
+          }
+        ]
+      },
+      "pass": false
+    },
+    {
+      "name": "stale JWT definer auth_brand_id",
+      "expected": 401,
+      "actual": {
+        "status": 200,
+        "data": "audit_red_1792738054928_brand"
+      },
+      "pass": false
+    },
+    {
+      "name": "direct authenticated RLS playbook_entries",
+      "expected": 0,
+      "actual": {
+        "count": 1
+      },
+      "pass": false
+    },
+    {
+      "name": "direct authenticated RLS unit_member_prefs",
+      "expected": 0,
+      "actual": {
+        "count": 1
+      },
+      "pass": false
+    },
+    {
+      "name": "direct authenticated RLS profiles",
+      "expected": 0,
+      "actual": {
+        "count": 1
+      },
+      "pass": false
+    },
+    {
+      "name": "unrelated active account stays normal",
+      "expected": 1,
+      "actual": {
+        "status": 200,
+        "data": [
+          {
+            "id": "audit_red_1792738054928_normal_entry"
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "name": "service-role maintenance remains allowed",
+      "expected": "at least 2 rows",
+      "actual": {
+        "status": 200,
+        "data": [
+          {
+            "id": "audit_red_1792738025259_solo_entry"
+          },
+          {
+            "id": "audit_red_1792738025259_normal_entry"
+          },
+          {
+            "id": "audit_red_1792738054928_solo_entry"
+          },
+          {
+            "id": "audit_red_1792738054928_normal_entry"
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "name": "anon invalid shared-link result unchanged",
+      "expected": 200,
+      "actual": {
+        "status": 200,
+        "data": [
+          {
+            "ok": false,
+            "store_name": null,
+            "course_name": null,
+            "item_count": 0
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "name": "new user complete_profile",
+      "expected": 204,
+      "actual": {
+        "status": 204,
+        "data": ""
+      },
+      "pass": true
+    },
+    {
+      "name": "new user create_store",
+      "expected": "200 and invite code",
+      "actual": {
+        "status": 200,
+        "data": [
+          {
+            "unit_id": "store_a131576374",
+            "invite_code": "993490"
+          }
+        ]
+      },
+      "pass": true
+    },
+    {
+      "name": "profileless complete_profile not blocked",
+      "expected": 204,
+      "actual": {
+        "status": 204,
+        "data": ""
+      },
+      "pass": true
+    },
+    {
+      "name": "profileless authenticated bootstrap remains empty",
+      "expected": [],
+      "actual": {
+        "status": 200,
+        "data": []
+      },
+      "pass": true
+    }
+  ],
+  "failed": 12
+}

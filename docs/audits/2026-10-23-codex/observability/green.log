@@ -1,0 +1,8 @@
+PASS shared token
+PASS encoded token
+PASS trailing slash
+PASS ordinary route
+PASS similar route
+PASS empty route
+PASS native without window
+{"failed":0,"sourceHash":"ea449897460b3764efac72e5f50f36d4d006039d18d1daa8736167bca7970fea","time":"2026-10-23T06:23:52.762Z","transport":"mocked; no network","rejectedInsertDoesNotThrow":true}

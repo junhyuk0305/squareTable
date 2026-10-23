@@ -1,0 +1,20 @@
+const fs=require('fs'),path=require('path'),crypto=require('crypto'),cp=require('child_process');
+const {sql,request}=require('../auth-environment/client.cjs');
+const env=JSON.parse(fs.readFileSync(path.join(__dirname,'../auth-environment/environment.json'),'utf8'));
+const repo=path.resolve(__dirname,'../../../..');
+const source=fs.readFileSync(path.join(repo,'supabase/migrations/0335_deleted_account_access.sql'),'utf8');
+const sha=crypto.createHash('sha256').update(source).digest('hex');
+fs.writeFileSync(path.join(__dirname,'0335-tested.sql'),source);
+// All rows in this isolated database were created by audit scripts; no production data copied.
+const dump=cp.execFileSync('docker',['exec',env.container,'pg_dump','-U','supabase_admin','-d',env.database,'--no-publications','--no-subscriptions'],{encoding:'utf8',maxBuffer:64*1024*1024});
+fs.writeFileSync(path.join(__dirname,'isolated-before-0335.sql'),dump);
+const output=sql(source);fs.writeFileSync(path.join(__dirname,'0335-apply.log'),output);
+const meta={at:new Date().toISOString(),head:cp.execFileSync('git',['-C',repo,'rev-parse','HEAD'],{encoding:'utf8'}).trim(),database:env.database,sha256:sha};
+fs.writeFileSync(path.join(__dirname,'0335-applied.json'),JSON.stringify(meta,null,2));
+const red=JSON.parse(fs.readFileSync(path.join(__dirname,'red-http-results.json'),'utf8'));
+const uid=red.ids.solo;
+const backfill=JSON.parse(sql(`select json_build_object('deleted',p.deleted_at is not null,'active_unit_id',p.active_unit_id,'banned',u.banned_until>now(),'sessions',(select count(*) from auth.sessions s where s.user_id=p.id)) from public.profiles p join auth.users u on u.id=p.id where p.id='${uid}';`).trim());
+const r=request({resource:'/playbook_entries?select=id',claims:{sub:uid,session_id:red.sessions.solo}});
+const result={meta,backfill,staleJWT:r,pass:backfill.deleted&&backfill.active_unit_id===null&&backfill.banned&&backfill.sessions===0&&r.status===401};
+fs.writeFileSync(path.join(__dirname,'backfill-results.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
+if(!result.pass)process.exitCode=1;

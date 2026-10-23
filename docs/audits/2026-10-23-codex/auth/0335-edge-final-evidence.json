@@ -1,0 +1,23 @@
+{
+  "time": "2026-10-23T15:46:44.0670208+09:00",
+  "head": "c1548a8b94338a7e5fa613b132b9b32cfc02ca54",
+  "files": [
+    {
+      "path": "supabase/migrations/0335_deleted_account_access.sql",
+      "sha256": "960FA8728E870131D769E42F57672C5D41BD7129DFC8D47770838470F05DD85D",
+      "mtime": "2026-10-23T06:41:08.6778043Z"
+    },
+    {
+      "path": "src/lib/store/useSessionStore.ts",
+      "sha256": "1B812C558CBFEA8F6106F0BD404671F09EDF3877CEDF07B73D4AB54607CC5F10",
+      "mtime": "2026-10-22T16:12:41.2468555Z"
+    },
+    {
+      "path": "src/lib/utils/userError.ts",
+      "sha256": "7DABC9142F1BBE42D8600BB0F2088FAA83C099C84E4193383214B8E33E9D609D",
+      "mtime": "2026-10-05T09:35:07.2216098Z"
+    }
+  ],
+  "httpAuth": "not executed",
+  "sharedDbWrites": 0
+}

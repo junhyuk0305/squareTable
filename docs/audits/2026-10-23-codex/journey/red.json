@@ -1,0 +1,200 @@
+{
+  "time": "2026-10-23T06:27:23.354Z",
+  "source": "<original-evidence>\\journey\\nativepush.before.ts",
+  "sha256": "cb89240b7d73c3caef2843ca241d5dc47b62940d1b95fc7d8d7a923f41835b7e",
+  "scope": "actual modules, mocked native/session/router APIs; no device or network",
+  "passed": 14,
+  "failed": 20,
+  "results": [
+    {
+      "os": "android",
+      "name": "normal cold start",
+      "pass": true
+    },
+    {
+      "os": "android",
+      "name": "offline recovery retains destination",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n0 !== 1\n"
+    },
+    {
+      "os": "android",
+      "name": "manual login retains destination",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n0 !== 1\n"
+    },
+    {
+      "os": "android",
+      "name": "listener waits for authentication",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n1 !== 0\n"
+    },
+    {
+      "os": "android",
+      "name": "cold response and listener deduplicate",
+      "pass": true
+    },
+    {
+      "os": "android",
+      "name": "explicit signout clears pending before login",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n1 !== 0\n"
+    },
+    {
+      "os": "android",
+      "name": "account switch cancels pending settle",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n1 !== 0\n"
+    },
+    {
+      "os": "android",
+      "name": "no notification is a no-op",
+      "pass": true
+    },
+    {
+      "os": "android",
+      "name": "unsafe external route ignored",
+      "pass": true
+    },
+    {
+      "os": "android",
+      "name": "new tap after logout and login works",
+      "pass": true
+    },
+    {
+      "os": "android",
+      "name": "late OS read after explicit signout ignored",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n1 !== 0\n"
+    },
+    {
+      "os": "android",
+      "name": "late legacy metadata after account switch ignored",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n1 !== 0\n"
+    },
+    {
+      "os": "android",
+      "name": "known same account offline recovery keeps new tap",
+      "pass": true
+    },
+    {
+      "os": "android",
+      "name": "known different account discards queued tap",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n1 !== 0\n"
+    },
+    {
+      "os": "android",
+      "name": "latest tap wins over delayed cold response",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n2 !== 1\n"
+    },
+    {
+      "os": "android",
+      "name": "different store enters before destination",
+      "pass": true
+    },
+    {
+      "os": "android",
+      "name": "account change during store import cancels entry",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n1 !== 0\n"
+    },
+    {
+      "os": "ios",
+      "name": "normal cold start",
+      "pass": true
+    },
+    {
+      "os": "ios",
+      "name": "offline recovery retains destination",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n0 !== 1\n"
+    },
+    {
+      "os": "ios",
+      "name": "manual login retains destination",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n0 !== 1\n"
+    },
+    {
+      "os": "ios",
+      "name": "listener waits for authentication",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n1 !== 0\n"
+    },
+    {
+      "os": "ios",
+      "name": "cold response and listener deduplicate",
+      "pass": true
+    },
+    {
+      "os": "ios",
+      "name": "explicit signout clears pending before login",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n1 !== 0\n"
+    },
+    {
+      "os": "ios",
+      "name": "account switch cancels pending settle",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n1 !== 0\n"
+    },
+    {
+      "os": "ios",
+      "name": "no notification is a no-op",
+      "pass": true
+    },
+    {
+      "os": "ios",
+      "name": "unsafe external route ignored",
+      "pass": true
+    },
+    {
+      "os": "ios",
+      "name": "new tap after logout and login works",
+      "pass": true
+    },
+    {
+      "os": "ios",
+      "name": "late OS read after explicit signout ignored",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n1 !== 0\n"
+    },
+    {
+      "os": "ios",
+      "name": "late legacy metadata after account switch ignored",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n1 !== 0\n"
+    },
+    {
+      "os": "ios",
+      "name": "known same account offline recovery keeps new tap",
+      "pass": true
+    },
+    {
+      "os": "ios",
+      "name": "known different account discards queued tap",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n1 !== 0\n"
+    },
+    {
+      "os": "ios",
+      "name": "latest tap wins over delayed cold response",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n2 !== 1\n"
+    },
+    {
+      "os": "ios",
+      "name": "different store enters before destination",
+      "pass": true
+    },
+    {
+      "os": "ios",
+      "name": "account change during store import cancels entry",
+      "pass": false,
+      "error": "Expected values to be strictly equal:\n\n1 !== 0\n"
+    }
+  ]
+}

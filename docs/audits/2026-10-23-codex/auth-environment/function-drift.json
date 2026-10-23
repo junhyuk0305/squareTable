@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-23T06:40:17.356Z",
+  "sourceFunctionCount": 386,
+  "isolatedFunctionCount": 386,
+  "differences": [
+    {
+      "function": "accept_brand_member_invite(text)",
+      "local": "45dc7f3a26bba710b03edb1767c0b037",
+      "isolatedAfter0334": "cae7c24a78d7c408774eb2fead776dda"
+    },
+    {
+      "function": "brand_revoke_invite(text)",
+      "local": "b7d1fdb6d2c74deea01f292eeadd3b58",
+      "isolatedAfter0334": "c679e475aeeb3bf348485991ff20a132"
+    },
+    {
+      "function": "my_units_notif_data()",
+      "local": "0c8c0f0b5d930388ab7e9195c2ecaa9c",
+      "isolatedAfter0334": "c340903930c3acc4b52c3a6c17dadd49"
+    },
+    {
+      "function": "respond_brand_invite(text,text[],text,boolean)",
+      "local": "0db8fb1683baa05ad11a2766677fa74e",
+      "isolatedAfter0334": "df08047e448e5ded90bf3df1cd398c33"
+    }
+  ]
+}

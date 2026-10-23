@@ -1,0 +1,44 @@
+{
+  "at": "2026-10-23T06:52:53.225Z",
+  "scope": "Direct SQL authenticated role without REST pre-request; storage metadata only, no Storage service or file bytes.",
+  "results": [
+    {
+      "case": "deleted account storage direct RLS",
+      "expected": 0,
+      "actual": {
+        "count": 0
+      },
+      "pass": true
+    },
+    {
+      "case": "active account own storage direct RLS",
+      "expected": 1,
+      "actual": {
+        "count": 1
+      },
+      "pass": true
+    },
+    {
+      "case": "active cannot read other store storage",
+      "actual": {
+        "count": 0
+      },
+      "pass": true
+    },
+    {
+      "case": "deleted own-user UPDATE RLS returns no row",
+      "actual": {
+        "changed": 0
+      },
+      "pass": true
+    },
+    {
+      "case": "all targeted RLS tables have restrictive ALL policy",
+      "actual": {
+        "gaps": []
+      },
+      "pass": true
+    }
+  ],
+  "pass": true
+}

@@ -1,0 +1,199 @@
+{
+  "scope": "Actual source modules and real Zustand; DB transport mocked. No network, SQL, UI rendering or actual second device.",
+  "sourceMode": "working tree",
+  "executedSourceHashes": {
+    "src/lib/store/useAttendanceStore.ts": "7548962ddcf9f3c86124994cf08aafa1a971aa7355822deba41262be75ba24c0",
+    "src/lib/store/useSyncStore.ts": "071aa05635f9242108f35f838e2f6250eecd7f0099f7015c63581654028092e5",
+    "src/lib/store/realtimeSync.ts": "c7815cb18dd138b6cce1914ecc6fbe7176ab6d8645c3456e1e5a8a81d285ad6c",
+    "src/lib/store/tenantEpoch.ts": "9a2890308df6d5d246be3ac3d666bcd24396e3fe53039ae4bf14cbfa9e6b7b35",
+    "src/lib/utils/attendance.ts": "4d59187477d183ab6f6129ffd237689afa605cf289ab47e8fce412f5a234bbf9",
+    "src/lib/utils/schedule.ts": "b5463bca1b459864d69154fe6bcdcd93ba5fcb57e6a7e12ae35c4a0b51e61ac8",
+    "src/lib/utils/id.ts": "d1f9f781cb385cb8cae57a650ba6e52be491a89017bc19acf7d337bc3d8b9624",
+    "src/components/TimesheetView.tsx": "e15e68f6ef715ea3037c90c8e0d3a194985df6235dea66ac4bbd5467aaabfdfb",
+    "src/lib/db.ts": "efebecb335f1491ca13a03e7e6a889f895646ec72ed867e8068ee4f4ee436304"
+  },
+  "before": {
+    "time": "2026-10-23T06:29:48.765Z",
+    "head": "060459683142bab28639ff29a998e6be88ec12a3",
+    "files": [
+      {
+        "path": "src/lib/store/useAttendanceStore.ts",
+        "sha256": "7548962ddcf9f3c86124994cf08aafa1a971aa7355822deba41262be75ba24c0",
+        "mtime": "2026-10-23T06:29:09.913Z"
+      },
+      {
+        "path": "src/lib/store/useSyncStore.ts",
+        "sha256": "071aa05635f9242108f35f838e2f6250eecd7f0099f7015c63581654028092e5",
+        "mtime": "2026-08-27T23:17:49.325Z"
+      },
+      {
+        "path": "src/lib/store/realtimeSync.ts",
+        "sha256": "c7815cb18dd138b6cce1914ecc6fbe7176ab6d8645c3456e1e5a8a81d285ad6c",
+        "mtime": "2026-08-27T23:17:49.292Z"
+      },
+      {
+        "path": "src/lib/store/tenantEpoch.ts",
+        "sha256": "9a2890308df6d5d246be3ac3d666bcd24396e3fe53039ae4bf14cbfa9e6b7b35",
+        "mtime": "2026-10-22T16:04:06.463Z"
+      },
+      {
+        "path": "src/lib/utils/attendance.ts",
+        "sha256": "4d59187477d183ab6f6129ffd237689afa605cf289ab47e8fce412f5a234bbf9",
+        "mtime": "2026-10-07T05:30:15.460Z"
+      },
+      {
+        "path": "src/lib/utils/schedule.ts",
+        "sha256": "b5463bca1b459864d69154fe6bcdcd93ba5fcb57e6a7e12ae35c4a0b51e61ac8",
+        "mtime": "2026-10-07T05:30:15.463Z"
+      },
+      {
+        "path": "src/lib/utils/id.ts",
+        "sha256": "d1f9f781cb385cb8cae57a650ba6e52be491a89017bc19acf7d337bc3d8b9624",
+        "mtime": "2026-07-09T20:13:33.635Z"
+      },
+      {
+        "path": "src/components/TimesheetView.tsx",
+        "sha256": "e15e68f6ef715ea3037c90c8e0d3a194985df6235dea66ac4bbd5467aaabfdfb",
+        "mtime": "2026-10-23T06:04:06.083Z"
+      },
+      {
+        "path": "src/lib/db.ts",
+        "sha256": "efebecb335f1491ca13a03e7e6a889f895646ec72ed867e8068ee4f4ee436304",
+        "mtime": "2026-10-23T05:58:39.579Z"
+      }
+    ]
+  },
+  "after": {
+    "time": "2026-10-23T06:29:48.995Z",
+    "head": "060459683142bab28639ff29a998e6be88ec12a3",
+    "files": [
+      {
+        "path": "src/lib/store/useAttendanceStore.ts",
+        "sha256": "7548962ddcf9f3c86124994cf08aafa1a971aa7355822deba41262be75ba24c0",
+        "mtime": "2026-10-23T06:29:09.913Z"
+      },
+      {
+        "path": "src/lib/store/useSyncStore.ts",
+        "sha256": "071aa05635f9242108f35f838e2f6250eecd7f0099f7015c63581654028092e5",
+        "mtime": "2026-08-27T23:17:49.325Z"
+      },
+      {
+        "path": "src/lib/store/realtimeSync.ts",
+        "sha256": "c7815cb18dd138b6cce1914ecc6fbe7176ab6d8645c3456e1e5a8a81d285ad6c",
+        "mtime": "2026-08-27T23:17:49.292Z"
+      },
+      {
+        "path": "src/lib/store/tenantEpoch.ts",
+        "sha256": "9a2890308df6d5d246be3ac3d666bcd24396e3fe53039ae4bf14cbfa9e6b7b35",
+        "mtime": "2026-10-22T16:04:06.463Z"
+      },
+      {
+        "path": "src/lib/utils/attendance.ts",
+        "sha256": "4d59187477d183ab6f6129ffd237689afa605cf289ab47e8fce412f5a234bbf9",
+        "mtime": "2026-10-07T05:30:15.460Z"
+      },
+      {
+        "path": "src/lib/utils/schedule.ts",
+        "sha256": "b5463bca1b459864d69154fe6bcdcd93ba5fcb57e6a7e12ae35c4a0b51e61ac8",
+        "mtime": "2026-10-07T05:30:15.463Z"
+      },
+      {
+        "path": "src/lib/utils/id.ts",
+        "sha256": "d1f9f781cb385cb8cae57a650ba6e52be491a89017bc19acf7d337bc3d8b9624",
+        "mtime": "2026-07-09T20:13:33.635Z"
+      },
+      {
+        "path": "src/components/TimesheetView.tsx",
+        "sha256": "e15e68f6ef715ea3037c90c8e0d3a194985df6235dea66ac4bbd5467aaabfdfb",
+        "mtime": "2026-10-23T06:04:06.083Z"
+      },
+      {
+        "path": "src/lib/db.ts",
+        "sha256": "efebecb335f1491ca13a03e7e6a889f895646ec72ed867e8068ee4f4ee436304",
+        "mtime": "2026-10-23T05:58:39.579Z"
+      }
+    ]
+  },
+  "sourceChanged": [],
+  "results": [
+    {
+      "case": "control single successful edit",
+      "client": 540,
+      "server": 540,
+      "status": "normal"
+    },
+    {
+      "case": "control single failed edit",
+      "client": 480,
+      "server": 480,
+      "status": "normal rollback"
+    },
+    {
+      "case": "A delayed failure after B success",
+      "client": 660,
+      "server": 660,
+      "otherClientFreshRead": 660,
+      "error": "근무 시간 수정 저장에 실패했어요.",
+      "status": "observed; correctness is determined by failures"
+    },
+    {
+      "case": "A delayed failure after latest server hydrate",
+      "client": 660,
+      "server": 660,
+      "status": "observed; correctness is determined by failures"
+    },
+    {
+      "case": "delete failure after row already restored by hydrate",
+      "clientRows": 1,
+      "serverRows": 1,
+      "clientTotalMinutes": 480,
+      "serverTotalMinutes": 480,
+      "status": "observed; correctness is determined by failures"
+    },
+    {
+      "case": "control subsequent hydrate repairs client",
+      "clientRows": 1,
+      "serverRows": 1,
+      "status": "normal recovery"
+    },
+    {
+      "case": "A and B both fail in start order",
+      "client": 480,
+      "server": 480
+    },
+    {
+      "case": "A and B both fail in reverse order",
+      "client": 480,
+      "server": 480
+    },
+    {
+      "case": "old repair read after newer successful C",
+      "client": 660,
+      "server": 660
+    },
+    {
+      "case": "repair must not replace other row",
+      "otherClient": 700
+    },
+    {
+      "case": "repair read must not overwrite newer realtime row",
+      "client": 700,
+      "server": 700
+    },
+    {
+      "case": "tenant switch prevents old rollback and repair",
+      "clientRows": 0
+    },
+    {
+      "case": "tenant switch during recovery read",
+      "clientRows": 0
+    },
+    {
+      "case": "failed recovery read preserves latest success",
+      "client": 660,
+      "server": 660
+    }
+  ],
+  "failures": [],
+  "productPass": true
+}
