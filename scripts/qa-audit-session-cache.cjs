@@ -103,7 +103,6 @@ function environment(delayedName, failure) {
   e.session.setState({ unitId: 'A-other-unit' });
   e.deliver(); await request;
   assert.ok(JSON.stringify(store.getState()).includes(e.marker)); passed++;
-  console.log('BLOCKED useBrandQuizStore (2 delayed-call scenarios): concurrent external quiz work; source unchanged');
-  console.log(`RESULT ${passed} PASS ${failed} FAIL 2 BLOCKED; offline mocks, no auth/network/UI execution`);
+  console.log(`RESULT ${passed} PASS ${failed} FAIL; offline mocks, no auth/network/UI execution`);
   process.exitCode = failed ? 1 : 0;
 })().catch(e => { console.error(e); process.exitCode = 1; });
