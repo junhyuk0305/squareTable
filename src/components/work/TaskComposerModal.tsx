@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -13,8 +13,43 @@ import { Radius } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { searchPlaybook } from '@/lib/rag';
 import type { PlaybookEntry } from '@/types';
+import { useSessionStore } from '@/lib/store/useSessionStore';
+import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
+import { pendingDraftKey, loadPendingDraft, savePendingDraft, clearPendingDraft } from '@/lib/storage/pendingDraft';
+import { LoadErrorState } from '@/components/LoadErrorState';
+import { ScreenLoading } from '@/components/ScreenLoading';
 
 type When = 'today' | 'date' | 'weekly';
+type WorkDraft = {
+  ids: string[]; text: string; description: string; when: When; pickedDate: string;
+  dows: number[]; section: TaskSection; remindOn: boolean; remindAt: string;
+  taskScope: 'shared' | 'private'; picked: string[]; knowhowIds: string[];
+};
+
+export function TaskComposerModal(props: Omit<Parameters<typeof TaskComposerBody>[0], 'draft' | 'draftKey'>) {
+  const userId = useSessionStore((s) => s.userId);
+  const unitId = useSessionStore((s) => s.unitId);
+  const key = pendingDraftKey('work', userId, unitId, JSON.stringify([props.editTemplate?.id ?? null, props.draftContext ?? null]));
+  return <TaskComposerLoader key={key} {...props} draftKey={key} />;
+}
+
+function TaskComposerLoader(props: Omit<Parameters<typeof TaskComposerBody>[0], 'draft'>) {
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const [draft, setDraft] = useState<WorkDraft | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void (props.routineMode ? Promise.resolve(null) : loadPendingDraft<WorkDraft>(props.draftKey)).then((value) => {
+      if (alive) { setDraft(value); setFailed(false); setLoaded(true); }
+    }).catch(() => { if (alive) setFailed(true); });
+    return () => { alive = false; };
+  }, [props.draftKey, props.routineMode, retry]);
+  if (failed || !loaded) return <BottomSheet visible onClose={props.onClose}>{failed
+    ? <LoadErrorState title="저장 중인 업무를 불러오지 못했어요" onRetry={() => setRetry((n) => n + 1)} />
+    : <ScreenLoading label="저장 중인 업무를 불러오고 있어요" />}</BottomSheet>;
+  return <TaskComposerBody {...props} draft={draft} />;
+}
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 
 /**
@@ -25,7 +60,9 @@ const DOW = ['일', '월', '화', '수', '목', '금', '토'];
  * 부모는 열릴 때만 마운트한다(`{open && <TaskComposerModal .../>}`) → 매번 깨끗한 초기값으로
  * 시작하므로 setState-in-effect 리셋이 필요 없다.
  */
-export function TaskComposerModal({
+function TaskComposerBody({
+  draft,
+  draftKey,
   onClose,
   onSubmit,
   onEdit,
@@ -45,6 +82,9 @@ export function TaskComposerModal({
   routineSectionLabel,
   onSubmitRoutine,
 }: {
+  draft: WorkDraft | null;
+  draftKey: string;
+  draftContext?: string;
   onClose: () => void;
   /** 신규 등록 — 다중 배정이면 담당자 수만큼 NewTask 배열로 넘어온다. */
   onSubmit: (inputs: NewTask[], taskIds: string[]) => Promise<boolean> | boolean | void;
@@ -84,7 +124,7 @@ export function TaskComposerModal({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const submittingRef = useRef(false);
-  const [saveIds, setSaveIds] = useState<string[]>([]);
+  const [saveIds, setSaveIds] = useState<string[]>(draft?.ids ?? []);
   const isEdit = !!editTemplate;
   const dayparts = useDayparts();
   const DL = useDaypartLabels();
@@ -96,8 +136,8 @@ export function TaskComposerModal({
     return map;
   }, [others, me]);
 
-  const [text, setText] = useState(initialText ?? editTemplate?.text ?? '');
-  const [description, setDescription] = useState(editTemplate?.description ?? '');
+  const [text, setText] = useState(draft?.text ?? initialText ?? editTemplate?.text ?? '');
+  const [description, setDescription] = useState(draft?.description ?? editTemplate?.description ?? '');
   const initWhen: When = editTemplate
     ? editTemplate.recurrence && editTemplate.recurrence !== 'once'
       ? 'weekly'
@@ -111,17 +151,17 @@ export function TaskComposerModal({
     : initialDate && initialDate !== today
       ? 'date'
       : 'today';
-  const [when, setWhen] = useState<When>(initWhen);
-  const [pickedDate, setPickedDate] = useState(editTemplate?.date ?? initialDate ?? today);
+  const [when, setWhen] = useState<When>(draft?.when ?? initWhen);
+  const [pickedDate, setPickedDate] = useState(draft?.pickedDate ?? editTemplate?.date ?? initialDate ?? today);
   const [dows, setDows] = useState<number[]>(
-    editTemplate?.recurrence && editTemplate.recurrence !== 'once' ? editTemplate.recurrence.weekly : [1, 2, 3, 4, 5],
+    draft?.dows ?? (editTemplate?.recurrence && editTemplate.recurrence !== 'once' ? editTemplate.recurrence.weekly : [1, 2, 3, 4, 5]),
   );
-  const [section, setSection] = useState<TaskSection>(editTemplate?.section ?? dayparts[0]?.id ?? 'open');
+  const [section, setSection] = useState<TaskSection>(draft?.section ?? editTemplate?.section ?? dayparts[0]?.id ?? 'open');
 
   // 업무 시간(선택, 0118) — 정하면 그 시간에 서버 크론이 알림을 쏜다. 수신자 판정은 서버가 한다.
   // 화면 어휘는 '업무 시간', 코드·DB 이름은 remindAt/remind_at 유지(워딩 규칙: 개명 대상은 보이는 문자열뿐).
-  const [remindOn, setRemindOn] = useState(!!editTemplate?.remindAt);
-  const [remindAt, setRemindAt] = useState(editTemplate?.remindAt ?? '');
+  const [remindOn, setRemindOn] = useState(draft?.remindOn ?? !!editTemplate?.remindAt);
+  const [remindAt, setRemindAt] = useState(draft?.remindAt ?? editTemplate?.remindAt ?? '');
   const [remindInfo, setRemindInfo] = useState(false); // ⓘ 인라인 펼침
   const remindValid = !remindOn || /^([01]\d|2[0-3]):[0-5]\d$/.test(remindAt);
 
@@ -131,10 +171,11 @@ export function TaskComposerModal({
   //   전에는 담당자를 고르는 순간 scope 가 private 로 바뀌어, "매장 전체 할일에 담당자"를 표현할 수가 없었다.
   //   개인 할일은 본인 것만 만든다(ownerId=me, createdBy=me) — 0017 RLS 가 지켜준다.
   const [taskScope, setTaskScope] = useState<'shared' | 'private'>(
-    editTemplate ? ((editTemplate.scope ?? 'shared') === 'private' ? 'private' : 'shared') : 'shared',
+    draft?.taskScope ?? (editTemplate ? ((editTemplate.scope ?? 'shared') === 'private' ? 'private' : 'shared') : 'shared'),
   );
   const personalMode = taskScope === 'private';
   const [picked, setPicked] = useState<string[]>(() => {
+    if (draft) return draft.picked;
     if (editTemplate) return assigneesOf(editTemplate);
     // 직원은 본인 또는 담당 없음만 고를 수 있다 — 프리필도 그 범위 안에서만.
     if (initialAssigneeId && (isOwner || initialAssigneeId === me) && [...others, { id: me }].some((o) => o.id === initialAssigneeId)) {
@@ -145,7 +186,7 @@ export function TaskComposerModal({
   const scrollRef = useRef<ScrollView>(null);
 
   // 노하우 첨부(사장만) — 검색은 발행 노하우 대상, 선택은 id 집합. 수정 모드는 기존 첨부로 프리필.
-  const [knowhowIds, setKnowhowIds] = useState<string[]>(initialKnowhowIds ?? []);
+  const [knowhowIds, setKnowhowIds] = useState<string[]>(draft?.knowhowIds ?? initialKnowhowIds ?? []);
   const [khQuery, setKhQuery] = useState('');
   const publishedEntries = useMemo(() => knowhowEntries.filter((e) => e.status === 'published'), [knowhowEntries]);
   const entryById = useMemo(() => new Map(knowhowEntries.map((e) => [e.id, e])), [knowhowEntries]);
@@ -270,6 +311,11 @@ export function TaskComposerModal({
     submittingRef.current = true;
     setSaving(true);
     setSaveError('');
+    const epoch = currentTenantEpoch();
+    const persist = (ids: string[]) => savePendingDraft(draftKey, {
+      ids, text, description, when: when === 'today' ? 'date' : when, pickedDate: when === 'today' ? today : pickedDate,
+      dows, section, remindOn, remindAt, taskScope, picked, knowhowIds,
+    } satisfies WorkDraft);
     try {
       let ok: boolean | void;
       if (routineMode) {
@@ -286,16 +332,24 @@ export function TaskComposerModal({
         if (!input) return;
         const retryId = saveIds[0] ?? genId('t');
         setSaveIds([retryId]);
+        await persist([retryId]);
+        if (isStaleEpoch(epoch)) return;
         ok = await onEdit(editTemplate.id, input, retryId);
       } else {
         const inputs = buildInputs();
         if (inputs.length === 0 || isDup) return;
         const ids = inputs.map((_, index) => saveIds[index] ?? genId('t'));
         setSaveIds(ids);
+        await persist(ids);
+        if (isStaleEpoch(epoch)) return;
         ok = await onSubmit(inputs, ids);
       }
       // 업무 설정의 루틴 편집은 로컬 초안이므로 반환값 없이 동기 완료된다.
-      if (ok !== false) onClose();
+      if (isStaleEpoch(epoch)) return;
+      if (ok !== false) {
+        if (!routineMode) await clearPendingDraft(draftKey);
+        if (!isStaleEpoch(epoch)) onClose();
+      }
       else setSaveError('저장하지 못한 내용이 있어요. 다시 저장해 주세요.');
     } catch {
       setSaveError('저장 결과를 확인하지 못했어요. 다시 저장해 주세요.');

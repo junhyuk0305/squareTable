@@ -1188,6 +1188,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
             return ok !== false;
           }}
           routineMode={composer.routineScope === 'global'}
+          draftContext={composer.routineScope === 'single' ? `single:${composer.routineDate ?? today}` : composer.routineScope}
           routineSectionLabel={composer.editTemplate ? DL[composer.editTemplate.section] : undefined}
           onDelete={removeTemplate}
           editTemplate={composer.editTemplate}
