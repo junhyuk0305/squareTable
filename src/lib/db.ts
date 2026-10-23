@@ -467,6 +467,7 @@ export type UnitNotifData = {
   assignments: QuizAssignment[];
   /** 내 열린 발송의 서버 상태(0332 · quiz 행에 실린 state). 옛 서버는 빈 배열 → 벨이 완료 여부만 본다. */
   quizProgress: QuizAssignmentProgress[] | undefined;
+  legacyQuizIds?: string[];
   /** 퀴즈 이름과 주기(0332 due_days · null = 1회성). 옛 서버는 dueDays 가 없다. */
   courses: { id: string; name: string; due_days?: number | null; audience?: 'staff' | 'guest' | null; position?: number }[];
   /** 근무 시간 수정 요청(대기만 · 사장·매니저 매장). */
@@ -523,6 +524,7 @@ export async function fetchCrossStoreNotifData(): Promise<DbResult<UnitNotifData
         }
         break;
       }
+      case 'legacy_quiz': (b.legacyQuizIds ??= []).push(p.id); break;
       case 'course': b.courses.push({
         id: p.id, name: p.name ?? '',
         ...('due_days' in p ? { due_days: p.due_days ?? null } : {}),
@@ -2699,6 +2701,14 @@ export async function fetchQuizAttempts(): Promise<QuizAttemptRow[]> {
     total: r.total ?? 0, correct: r.correct ?? 0, takenAt: r.taken_at ?? '',
   }));
 }
+/** 홈과 허브가 공유하는 서버 판정으로 아직 풀 옛 퀴즈를 읽는다. 실패는 null. */
+export async function fetchMyLegacyQuizOpen(): Promise<string[] | null> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase.rpc('my_legacy_quiz_open');
+  if (error) { readFail('fetchMyLegacyQuizOpen', error); return null; }
+  return (data ?? []).map((r: { course_id: string }) => r.course_id);
+}
+
 /**
  * 발송 원장 없는 옛 퀴즈의 "내가 제출한 노하우"(P4). 행 수 상한에 기대지 않게 퀴즈를 골라 읽는다.
  * 행은 서버가 제출(quiz_attempt_items)에서 적는다. 실패하면 null(화면은 안 푼 것으로 남긴다).
