@@ -86,7 +86,7 @@ try{
  const staff=await junior.rpc('quiz_staff_record',{p_rows:[{item_id:items[0],response:0,ord:0},{item_id:items[1],response:1,ord:1}]});out('staff_record',staff);
  out('owner_staff_rows',await must(owner.from('quiz_attempts').select('course_id,total,correct,submission_id').in('entry_id',entries)));
  const person=await owner.rpc('quiz_course_person',{p_course_id:courses[0],p_staff_id:junior.uid}); check('person is 1/2',!person.error&&person.data?.[0]?.asked===2&&person.data?.[0]?.correct===1,person);
- const stats=await owner.rpc('quiz_course_stats');const stat=stats.data?.find(r=>r.course_id===courses[0]);check('staff course stats 1/2',!stats.error&&stat?.asked===2&&stat?.correct===1,stat);
+ const stats=await owner.rpc('quiz_course_stats');const stat=stats.data?.find(r=>r.course_id===courses[0]);check('C5 self-only old stats are zero',!stats.error&&stat?.submissions===0&&stat?.asked===0&&stat?.correct===0,stat);
  out('anon_servable',await anon.rpc('quiz_link_items',{p_token:token}));
  const crossGrade=await anon.rpc('quiz_link_grade',{p_token:token,p_item_id:items[2],p_response:0});check('cross-course grade denied',!!crossGrade.error,crossGrade);
  const crossSubmit=await anon.rpc('quiz_link_submit',{p_token:token,p_guest_name:p,p_guest_phone:null,p_phone_verified:false,p_answers:[{item_id:items[2],response:0}]});check('cross-course submit rejected',!!crossSubmit.error||crossSubmit.data===0,crossSubmit);
@@ -132,7 +132,7 @@ try{
  check('deleted item snapshots remain visible',!history.error&&history.data?.some(r=>r.item_id===items[0])&&history.data.length===beforeHistory.data?.length,history.error??history.data?.length);
  const historyStats=await owner.rpc('quiz_course_stats');
  const historyStat=historyStats.data?.find(r=>r.course_id===courses[0]);
- check('history score remains per-item after deletion',!historyStats.error&&historyStat?.asked===6&&historyStat?.correct===3,historyStats.error??historyStat);
+ check('history score remains per-item after deletion, self excluded',!historyStats.error&&historyStat?.asked===4&&historyStat?.correct===2,historyStats.error??historyStat);
  const replay=await junior.rpc('quiz_staff_record_v2',request);
  check('idempotent replay survives item deletion',!replay.error&&replay.data===first.data,replay);
  await must(owner.from('quiz_links').update({revoked_at:new Date().toISOString()}).eq('id',link));
@@ -181,6 +181,7 @@ try{
  const selfDone=await junior.rpc('mark_quiz_completed',{p_id:legacyAssignment+'_2'});
  check('self answer does not complete the quiz',!selfDone.error&&selfDone.data===false,selfDone);
  const bStatsSelf=(await owner.rpc('quiz_course_stats')).data?.find(r=>r.course_id===courses[1]);
+ check('C5 self answer excluded from old stats columns',bStatsSelf?.submissions===bStatsBefore?.submissions&&bStatsSelf?.asked===bStatsBefore?.asked&&bStatsSelf?.correct===bStatsBefore?.correct,{before:bStatsBefore,after:bStatsSelf});
  check('self answer not in quiz rate (first_asked)',bStatsSelf?.first_asked===bStatsBefore?.first_asked&&bStatsSelf?.first_correct===bStatsBefore?.first_correct,{before:bStatsBefore,after:bStatsSelf});
  const oldRec2=await junior.rpc('quiz_staff_record',{p_rows:[{item_id:legacyItem,response:0}]});
  const oldRows2=oldRec2.data?await must(owner.from('quiz_attempt_items').select('self_check,source,course_id').eq('submission_id',oldRec2.data)):[];
