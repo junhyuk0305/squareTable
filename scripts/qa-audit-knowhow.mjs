@@ -151,7 +151,7 @@ console.log('\n[E5] 지운(보관한) 노하우는 할일·퀴즈 연결 판정�
 {
   const db = strip(read('src/lib/db.ts'));
   const fn = (name) => (db.match(new RegExp(`export async function ${name}\\([\\s\\S]*?\\n\\}`)) || [''])[0];
-  const wtk = fn('fetchTemplateKnowhow'), ce = fn('fetchCourseEntries');
+  const wtk = fn('fetchTemplateKnowhow'), ce = fn('fetchCourseEntriesResult');
   check('★할일 첨부 노하우는 읽을 수 있는(보관 안 된) 노하우와 묶인 것만 읽는다',
     /select\('template_id, entry_id, playbook_entries!inner\(id\)'\)/.test(wtk), wtk.slice(0, 160));
   check('★퀴즈에 담긴 노하우도 읽을 수 있는 노하우와 묶인 것만 읽는다',

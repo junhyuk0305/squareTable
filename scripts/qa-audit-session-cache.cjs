@@ -32,7 +32,6 @@ function environment(delayedName, failure) {
     if (name === 'enterBrandWorkspace') return { data: `${id}_workspace`, error: null };
     if (name === 'fetchMyBrandFull') return { data: { brand_id: id }, error: null };
     if (name === 'fetchOwnerLaborInputs') return { data: [], error: null };
-    if (name === 'fetchCourseEntries') return [];
     return { data: [{ id, unitId: id, unit_id: id, store_name: id, nickname: id, active: true, title: id, body: id, feed: [] }], error: null };
   }
   const transport = new Proxy({}, { get: (_, name) => async () => {

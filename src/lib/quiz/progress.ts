@@ -98,21 +98,6 @@ export function staffQuizTodo<A extends Assignment, P extends Progress>(
   return quizTodo(assignments, progress, { ...opts, courses: visible });
 }
 
-/**
- * 한 퀴즈의 남은 발송(카드·시트가 그 퀴즈를 열 때). quizTodo 와 같은 판정이다.
- * @deprecated 카드 목록은 quizTodo 를 쓴다. WorkBoard 가 quizTodo 로 옮기면 지운다.
- */
-export function pendingCourseAssignment<A extends Assignment, P extends Progress>(
-  courseId: string,
-  userId: string,
-  assignments: A[],
-  progress: P[],
-  preferredId?: string,
-): { assignment: A; progress: P } | null {
-  const hit = quizTodo(assignments.filter((a) => a.courseId === courseId), progress, { userId, preferredId })[0];
-  return hit?.progress ? { assignment: hit.assignment, progress: hit.progress } : null;
-}
-
 /** 옛 퀴즈 판정에 쓰는 courses 열(스토어 training_courses 행). */
 export type LegacyCourseRow = QuizCourseRow & { min_items?: number | null; created_at?: string | null };
 

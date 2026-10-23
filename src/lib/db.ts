@@ -2238,11 +2238,8 @@ export async function deleteTemplateKnowhow(templateId: string, entryIds: string
 // 같은 지식을 업무마다 다시 배우지 않게, 그리고 못 했을 때 무엇이 빠졌는지 알 수 있게.
 // "이 업무를 할 줄 아는가"는 저장하지 않고 파생한다 — 판정 SSOT 는 useWorkStore 한 곳.
 export type UnderstandingRow = { entryId: string; staffId: string; staffName: string; verifiedAt: string };
-/** 활성 매장의 전체 이해 확인 기록 — 사장 배지·본인 확인·재확인 주기 판정용(노출 범위는 UI 게이팅). */
-export async function fetchKnowhowUnderstanding(): Promise<UnderstandingRow[]> {
-  return (await fetchKnowhowUnderstandingResult()).data;
-}
-/** N08: 실패를 빈 배열로 숨기지 않는 판. 옛 함수는 옛 호출부(useWorkStore) 호환으로 남긴다. */
+/** 활성 매장의 전체 이해 확인 기록 — 사장 배지·본인 확인·재확인 주기 판정용(노출 범위는 UI 게이팅).
+ *  N08: 실패를 빈 배열로 숨기지 않는다. */
 export async function fetchKnowhowUnderstandingResult(): Promise<ReadResult<UnderstandingRow[]>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase.from('knowhow_understanding').select('entry_id, staff_id, staff_name, verified_at');
@@ -2354,11 +2351,8 @@ export async function fetchTrainingItems(): Promise<TrainingItemRow[]> {
 // training_items(위)는 이제 **읽기 전용 레거시**다. 1단계 정리 화면이 "퀴즈 때문에 생긴 껍데기
 // 업무"를 찾는 데만 쓰고, 코스 구성·직원 카드·통과 판정은 전부 여기를 본다.
 export type CourseEntryRow = { courseId: string; entryId: string; position: number };
-/** 활성 매장의 코스 항목 전체(전 코스 합본) — 코스 분리는 스토어 셀렉터가 한다. */
-export async function fetchCourseEntries(): Promise<CourseEntryRow[]> {
-  return (await fetchCourseEntriesResult()).data;
-}
-/** N08: 실패를 빈 배열로 숨기지 않는 판. 옛 함수는 옛 호출부(useWorkStore) 호환으로 남긴다. */
+/** 활성 매장의 코스 항목 전체(전 코스 합본) — 코스 분리는 스토어 셀렉터가 한다.
+ *  N08: 실패를 빈 배열로 숨기지 않는다. */
 export async function fetchCourseEntriesResult(): Promise<ReadResult<CourseEntryRow[]>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase
