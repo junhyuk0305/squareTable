@@ -33,3 +33,6 @@ for (const [file,args] of [['seed-demo.mjs',[empty]],['seed-brand-demo.mjs',[]],
 process.exitCode=failed?1:0;
 const {data:staff}=await db.from('profiles').select('id,role').eq('unit_id','store_001').throwOnError();
 for(const p of staff??[]) await db.from('unit_members').upsert({unit_id:'store_001',user_id:p.id,role:p.role},{onConflict:'unit_id,user_id'}).throwOnError();
+// 박지원은 store_001 매니저다(seed-quiz-demo 와 같은 전제). 역할은 unit_members 에만 둔다(profiles.role 에는 manager 가 없다).
+// qa-brand-deploy 의 매니저 단정(F7m·F7qm·J22m)이 이 행을 본다.
+await db.from('unit_members').update({role:'manager'}).eq('unit_id','store_001').eq('user_id',fixed[1][0]).throwOnError();
