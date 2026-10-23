@@ -8,7 +8,7 @@
 //   ③ 예약(미래)은 sent_at 이 null → 카드 조건(sentAt 있음) 불충족
 //   ④ 직원은 원장을 직접 못 고친다 — 마감·발송기록 위조 차단(RLS)
 //   ⑤ 열기·완료가 본인 행에만 찍힌다(0140), 남의 행은 false
-//   ⑥ 통과 기록(knowhow_understanding)은 본인만 쓸 수 있고 사장 결과 화면이 그걸 읽는다
+//   ⑥ 통과 기록(knowhow_understanding)은 서버가 제출 RPC 안에서 쓰고(0333) 사장 결과 화면이 그걸 읽는다
 //   ⑦ 문항 수 판정(quiz_item_counts)이 직원 세션에서 자기 매장 것만, active 만 센다
 //   ⑧ 크로스테넌트 — 남의 매장 발송 원장은 한 줄도 안 보인다
 //
@@ -115,7 +115,8 @@ async function main() {
   const ITEM = `qz_qj_${s}`;
   const { error: qiErr } = await owner.from('quiz_items').insert({
     id: ITEM, unit_id: UNIT, course_id: QUIZ, entry_ids: [ENTRY], kind: 't0', format: 'mc4',
-    payload: { ask: '마감할 때 먼저 하는 것은?', options: ['홀 정리', '기계 청소', '퇴근', '주문'], answer: 0 },
+    // ⑥ 에서 제출 RPC 가 서버 채점한다. mc4 채점 키는 choices·answer_index 다(0170).
+    payload: { ask: '마감할 때 먼저 하는 것은?', choices: ['홀 정리', '기계 청소', '퇴근', '주문'], answer_index: 0, explain: '홀부터 정리해요' },
     source: 'owner', status: 'active', created_by: ownerId,
   });
   check('노하우·퀴즈·문항 시드', !qiErr, qiErr?.message ?? '');
@@ -181,8 +182,13 @@ async function main() {
 
   // ── ⑥ 통과 기록 ────────────────────────────────────────────────────────
   console.log('— ⑥ 통과 기록 —');
+  // 0333: 이해 기록은 서버가 제출(quiz_staff_record_v2) 안에서 쓴다. 본인 직접 insert 도 오류 없이 무시된다.
   const { error: kuErr } = await jA.from('knowhow_understanding').insert({ unit_id: UNIT, entry_id: ENTRY, staff_id: aId, staff_name: 'QA받은직원' });
-  check('본인 통과 기록 insert', !kuErr, kuErr?.message ?? '');
+  const { data: kuDirect } = await admin.from('knowhow_understanding').select('entry_id').eq('entry_id', ENTRY).eq('staff_id', aId);
+  check('본인 직접 insert 는 무시(오류 없음 · 행 0)', !kuErr && (kuDirect ?? []).length === 0, kuErr?.message ?? `n=${kuDirect?.length}`);
+  const { data: sub, error: subErr } = await jA.rpc('quiz_staff_record_v2', { p_course_id: QUIZ, p_request_id: `qj_${s}_pass`, p_rows: [{ item_id: ITEM, response: 0, ord: 0 }] });
+  const { data: kuRow } = await admin.from('knowhow_understanding').select('staff_name, verified_at').eq('entry_id', ENTRY).eq('staff_id', aId).maybeSingle();
+  check('본인 통과 기록 = 제출 RPC(정답) 뒤 서버가 쓴다', !subErr && !!sub && !!kuRow?.verified_at && kuRow?.staff_name === 'QA받은직원', subErr?.message ?? JSON.stringify(kuRow));
   const { error: kuHack } = await jB.from('knowhow_understanding').insert({ unit_id: UNIT, entry_id: ENTRY, staff_id: aId, staff_name: '위조' });
   // 0333: 앱의 직접 쓰기는 오류 없이 무시된다(출시 앱에 실패 문구를 띄우지 않으려고). 위조 행이 안 생기는지가 핵심이다.
   const { data: kuForged } = await admin.from('knowhow_understanding').select('staff_name').eq('entry_id', ENTRY).eq('staff_id', aId).eq('staff_name', '위조');
@@ -280,6 +286,8 @@ async function cleanup() {
     await admin.from('quiz_links').delete().eq('unit_id', unit);
     await admin.from('quiz_items').delete().eq('unit_id', unit);
     await admin.from('knowhow_understanding').delete().eq('unit_id', unit);
+    await admin.from('quiz_attempt_items').delete().eq('unit_id', unit);
+    await admin.from('quiz_attempts').delete().eq('unit_id', unit);
     await admin.from('course_entries').delete().eq('unit_id', unit);
     await admin.from('training_courses').delete().eq('unit_id', unit);
   }

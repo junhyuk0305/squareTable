@@ -311,16 +311,29 @@ async function main() {
   const token = (await jA.auth.getSession()).data.session?.access_token;
   const r = await edgeAi(token, 'quiz', { taskText: names[0], sops: [{ title: names[0], situation: HOW[0], steps: [], donts: [] }] });
   check('④-1 quiz 엣지 200 · 문항 ≥1', r.ok && (r.body?.questions?.length ?? 0) >= 1, `status=${r.status} n=${r.body?.questions?.length}`);
+  // 0333: 이해 기록은 서버가 제출(quiz_staff_record_v2) 안에서 쓴다. 그 노하우 문항이 전부 정답일 때만이다.
+  //   앱의 직접 upsert·update 는 오류 없이 무시된다. 그래서 통과는 제출 RPC 로, 과거 시각은 service role 로 심는다.
+  //   이 절 전용 퀴즈(CQ)와 문항은 ⑥ 뒤에 지운다. ⑦ 이 E[0] 문항 수(2개)를 센다.
+  const CQ = `tc_kp_${s}`;
+  const QK = (i) => `qi_kp_${s}_${i}`;
+  { const r1 = await owner.from('training_courses').insert({ id: CQ, unit_id: UNIT, key: CQ, name: '이해 기록 QA', min_items: 1, max_items: 10, position: 9, active: true, audience: 'staff', start_at: null, due_days: null });
+    const r2 = r1.error ? r1 : await owner.from('course_entries').insert([0, 2, 3].map((i, pos) => ({ unit_id: UNIT, course_id: CQ, entry_id: E[i], position: pos })));
+    const r3 = r2.error ? r2 : await owner.from('quiz_items').insert([0, 2, 3].map((i) => ({ id: QK(i), unit_id: UNIT, course_id: CQ, entry_ids: [E[i]], kind: 't0', format: 'mc4',
+      payload: { ask: `${names[i]} 확인`, choices: ['정답', '오답', '모름'], answer_index: 0, explain: 'QA' } })));
+    check('④-1b 셋업: 제출 RPC 용 서버 문항(E0·E2·E3)', !r3.error, r3.error?.message ?? ''); }
+  const passByRpc = (i, tag) => jA.rpc('quiz_staff_record_v2', { p_course_id: CQ, p_request_id: `kp_${s}_${tag}`, p_rows: [{ item_id: QK(i), response: 0, ord: 0 }] });
   const firstPassAt = new Date(Date.now() - 40 * 24 * 3600 * 1000).toISOString(); // 40일 전 시드(정기 due 재현)
   { const { error } = await jA.from('knowhow_understanding').upsert(
       { unit_id: UNIT, entry_id: E[3], staff_name: 'QA직원', verified_at: firstPassAt }, { onConflict: 'entry_id,staff_id' });
-    check('④-2 통과 기록(40일 전 시드)', !error, error?.message ?? ''); }
+    const { data: direct } = await admin.from('knowhow_understanding').select('entry_id').eq('entry_id', E[3]).eq('staff_id', jAId);
+    check('④-2 직원 직접 쓰기는 무시(오류 없음 · 행 0 · 0333)', !error && (direct ?? []).length === 0, error?.message ?? `n=${direct?.length}`); }
+  { const { error } = await admin.from('knowhow_understanding').insert({ unit_id: UNIT, entry_id: E[3], staff_id: jAId, staff_name: 'QA직원', verified_at: firstPassAt });
+    check('④-2b 통과 기록(40일 전 · service role 시드)', !error, error?.message ?? ''); }
   const { data: u1 } = await jA.from('knowhow_understanding').select('entry_id, verified_at').eq('entry_id', E[3]).maybeSingle();
   const due1 = Date.now() - Date.parse(u1?.verified_at) > REGULAR_DUE_DAYS * 24 * 3600 * 1000;
   check('④-3 30일 경과 → 다시 확인(due)', due1, `verified_at=${u1?.verified_at}`);
-  { const { error } = await jA.from('knowhow_understanding').upsert(
-      { unit_id: UNIT, entry_id: E[3], staff_name: 'QA직원', verified_at: new Date().toISOString() }, { onConflict: 'entry_id,staff_id' });
-    check('④-4 재확인 통과 upsert 성공', !error, error?.message ?? ''); }
+  { const { data: sub, error } = await passByRpc(3, 'recheck');
+    check('④-4 재확인 통과 = 제출 RPC(정답) 저장', !error && !!sub, error?.message ?? String(sub)); }
   const { data: u2 } = await jA.from('knowhow_understanding').select('verified_at').eq('entry_id', E[3]).maybeSingle();
   const due2 = Date.now() - Date.parse(u2?.verified_at) > REGULAR_DUE_DAYS * 24 * 3600 * 1000;
   check('④-5 verified_at 갱신 → due 해제', !due2 && u2?.verified_at !== firstPassAt, `verified_at=${u2?.verified_at}`);
@@ -346,7 +359,8 @@ async function main() {
     const need = [E[2], E[3]];
     const before = await knowsOf();
     check('④-8 노하우 2건 중 1건만 통과 → 업무는 아직 아님(파생)', !need.every((id) => before.has(id)), `knows=${[...before].length}`);
-    await jA.from('knowhow_understanding').upsert({ unit_id: UNIT, entry_id: E[2], staff_name: 'QA직원' }, { onConflict: 'entry_id,staff_id' });
+    const { error: pe2 } = await passByRpc(2, 'e2');
+    if (pe2) console.log('    (제출 실패)', pe2.message);
     const after = await knowsOf();
     check('④-9 나머지 1건까지 통과 → 업무 통과(파생)', need.every((id) => after.has(id)), `knows=${[...after].length}`);
   }
@@ -363,11 +377,13 @@ async function main() {
   { const { error } = await owner.from('schedule_config').upsert({ unit_id: UNIT, regular_due_days: 0 });
     check('⑤-4 범위 밖(0일) 거부(check)', !!error, error ? `거부 ${error.code ?? ''}` : '(차단 안됨!)'); }
   { const tenDaysAgo = new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString();
-    await jA.from('knowhow_understanding').update({ verified_at: tenDaysAgo }).eq('entry_id', E[3]).eq('staff_id', jAId);
+    // 0333: 직원은 본인 행의 시각도 직접 못 고친다(0행). 과거 시각은 service role 로 심는다.
+    const { data: own } = await jA.from('knowhow_understanding').update({ verified_at: tenDaysAgo }).eq('entry_id', E[3]).eq('staff_id', jAId).select('entry_id');
+    await admin.from('knowhow_understanding').update({ verified_at: tenDaysAgo }).eq('entry_id', E[3]).eq('staff_id', jAId);
     const { data: u4 } = await jA.from('knowhow_understanding').select('verified_at').eq('entry_id', E[3]).eq('staff_id', jAId).maybeSingle();
     const due7 = Date.now() - Date.parse(u4?.verified_at) > 7 * 24 * 3600 * 1000;
     const due30 = Date.now() - Date.parse(u4?.verified_at) > 30 * 24 * 3600 * 1000;
-    check('⑤-5 10일 전 통과 → 7일 기준 due · 30일 기준 미도래(주기가 판정을 가름)', due7 && !due30); }
+    check('⑤-5 10일 전 통과 → 7일 기준 due · 30일 기준 미도래(주기가 판정을 가름 · 직원 직접 수정 0행)', (own?.length ?? 0) === 0 && due7 && !due30, `own=${own?.length} v=${u4?.verified_at}`); }
 
   // ── ⑥ 퀴즈 요청(0102 → 0111 노하우 축) ───────────────────────────────────
   console.log('\n━━ ⑥ 퀴즈 요청(노하우 축) ━━');
@@ -386,16 +402,13 @@ async function main() {
     check('⑥-3 즉시 요청 → due(통과 전)', !vE0 || Date.parse(vE0) < Date.parse(rq1.created_at), `v=${vE0 ?? '없음'}`);
     const vE1 = (myU ?? []).find((u) => u.entry_id === E[1])?.verified_at;
     check('⑥-4 매주(오늘) 요청 → due(오늘 통과 전)', !vE1 || new Date(vE1).toDateString() !== new Date().toDateString(), `v=${vE1 ?? '없음'}`); }
-  // 통과 → 즉시형 해소(파생). ⚠️ verified_at 은 클라 시계, created_at 은 서버 now() — 시계가 다르다.
-  //    검증 대상은 시계가 아니라 "통과 시각이 요청 시각 이후면 해소"라는 규칙이므로 서버 시각을 먼저 읽는다.
+  // 통과 → 즉시형 해소(파생). 0333: 통과 시각은 제출 때 서버 now() 다. 요청 created_at 도 서버 now() 라 시계가 같다.
   { const { data: rq } = await jA.from('training_requests').select('created_at').eq('id', RQ1).maybeSingle();
-    const passAt = new Date(Date.parse(rq?.created_at) + 1000).toISOString();
-    const { error: upErr } = await jA.from('knowhow_understanding').upsert(
-      { unit_id: UNIT, entry_id: E[0], staff_name: 'QA직원', verified_at: passAt }, { onConflict: 'entry_id,staff_id' });
+    const { error: upErr } = await passByRpc(0, 'e0');
     const { data: u } = await jA.from('knowhow_understanding').select('verified_at').eq('entry_id', E[0]).eq('staff_id', jAId).maybeSingle();
-    check('⑥-5 통과 후 즉시 요청 해소(verified_at ≥ 요청시각)',
+    check('⑥-5 통과(제출 RPC) 후 즉시 요청 해소(verified_at ≥ 요청시각)',
       !upErr && Date.parse(u?.verified_at) >= Date.parse(rq?.created_at),
-      upErr ? `통과 기록 실패: ${upErr.code ?? ''} ${upErr.message}` : `v=${u?.verified_at ?? '없음'} rq=${rq?.created_at ?? '없음'}`); }
+      upErr ? `제출 실패: ${upErr.code ?? ''} ${upErr.message}` : `v=${u?.verified_at ?? '없음'} rq=${rq?.created_at ?? '없음'}`); }
   { const { error } = await jA.from('training_requests').insert({ id: `trqX_${s}`, unit_id: UNIT, entry_id: E[0], staff_id: jAId, recurrence: null });
     check('⑥-6 직원 요청 생성 차단', !!error, error ? `거부 ${error.code ?? ''}` : '(차단 안됨!)'); }
   { await jA.from('training_requests').delete().eq('id', RQ2);
@@ -404,6 +417,10 @@ async function main() {
   { const { error } = await owner.from('training_requests').delete().eq('id', RQ2);
     const { data: gone } = await owner.from('training_requests').select('id').eq('id', RQ2).maybeSingle();
     check('⑥-8 사장 요청 취소', !error && !gone, error?.message ?? ''); }
+  // ④·⑥ 전용 퀴즈·문항 정리 — ⑦ 이후가 E[0]·E[2]·E[3] 문항 수와 사장 문항 목록을 센다.
+  { const r1 = await admin.from('quiz_items').delete().eq('course_id', CQ);
+    const r2 = await admin.from('training_courses').delete().eq('id', CQ);
+    if (r1.error || r2.error) console.log('    (④ 전용 퀴즈 정리 실패)', (r1.error ?? r2.error).message); }
 
   // ── ⑦ 문항 영속화·서버 채점(0107) ────────────────────────────────────────
   // 핵심 불변식 하나: **정답은 클라에 내려가지 않는다.** 직원은 테이블을 못 읽고, RPC 는 정답 키를

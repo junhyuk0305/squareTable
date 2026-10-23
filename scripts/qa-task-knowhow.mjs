@@ -230,27 +230,46 @@ async function flow4({ owner, ownerId, jA, jAId, UNIT, TMPL, entryRow }) {
   const correct = picks.filter((p, i) => p === qs[i].answer_index).length;
   const passed = qs.length >= 1 && correct === qs.length;
   check('④-3 전부 정답 채점=통과', passed, `${correct}/${qs.length}`);
-  // 통과 → knowhow_understanding upsert (0111: 축이 업무 → 노하우. staff_id=DB default auth.uid())
+  // 0333: 이해 기록은 서버가 제출(quiz_attempt_items) 안에서 쓴다. 그 노하우 문항이 전부 정답일 때만이다.
+  //   앱이 직접 보내는 upsert 는 오류 없이 무시된다(행 0). 그래서 사장이 서버 문항을 만들고 직원이 제출 RPC 로 맞힌다.
   const ENTRY_ID = ENTRY_OF(entryRow);
-  const { error: ue } = await jA.from('knowhow_understanding').upsert({ unit_id: UNIT, entry_id: ENTRY_ID, staff_name: 'QA알바A' }, { onConflict: 'entry_id,staff_id', ignoreDuplicates: true });
-  check('④-4 이해 기록(knowhow_understanding · 0111 노하우 축)', !ue, ue?.message ?? '');
+  // 이 업무에는 ②-4 에서 두 번째 노하우(캡처 승인분)가 붙어 있다. 노하우마다 문항 1개를 둔다.
+  const { data: linkRows } = await owner.from('work_template_knowhow').select('entry_id').eq('template_id', TMPL);
+  const need = [...new Set((linkRows ?? []).map((l) => l.entry_id))];
+  const COURSE = `tc_${s}`;
+  const itemOf = (entryId) => `qi_${s}_${need.indexOf(entryId)}`;
+  const mc = (ask) => ({ ask, choices: ['정답', '오답', '다른 답', '모름'], answer_index: 0, explain: 'QA' });
+  {
+    const r1 = await owner.from('training_courses').insert({ id: COURSE, unit_id: UNIT, key: COURSE, name: 'TK 이해 확인', min_items: 1, max_items: 10, position: 0, active: true, audience: 'staff', start_at: null, due_days: null });
+    const r2 = r1.error ? r1 : await owner.from('course_entries').insert(need.map((entry_id) => ({ course_id: COURSE, entry_id, unit_id: UNIT })));
+    const r3 = r2.error ? r2 : await owner.from('quiz_items').insert(need.map((id) => ({ id: itemOf(id), unit_id: UNIT, course_id: COURSE, entry_ids: [id], kind: 't0', format: 'mc4', payload: mc(id), source: 'owner', status: 'active', created_by: ownerId })));
+    check('④-4a 셋업: 서버 문항(퀴즈·노하우 담기·노하우별 문항)', !r3.error && need.length >= 2, r3.error?.message ?? `need=${need.length}`);
+  }
+  const submit = (entryIds, tag) => jA.rpc('quiz_staff_record_v2', {
+    p_course_id: COURSE, p_request_id: `tk_${s}_${tag}`,
+    p_rows: entryIds.map((id, i) => ({ item_id: itemOf(id), response: 0, ord: i })),
+  });
+  // 출시 앱 모양(insertKnowhowUnderstanding) 그대로 직접 쓰기 → 오류 없음 · 행 안 생김.
+  const { error: ue } = await jA.from('knowhow_understanding').upsert({ unit_id: UNIT, entry_id: ENTRY_ID, staff_name: 'QA알바A', verified_at: new Date().toISOString() }, { onConflict: 'entry_id,staff_id' });
+  const { data: direct } = await admin.from('knowhow_understanding').select('entry_id').eq('entry_id', ENTRY_ID).eq('staff_id', jAId);
+  check('④-4 직원 직접 쓰기는 무시(오류 없음 · 행 0 · 0333)', !ue && (direct ?? []).length === 0, ue?.message ?? `rows=${direct?.length}`);
+  const { data: sub1, error: se1 } = await submit([ENTRY_ID], 'first');
+  check('④-4b 제출 RPC(정답) 저장', !se1 && !!sub1, se1?.message ?? String(sub1));
   const { data: tu } = await admin.from('knowhow_understanding').select('staff_id, staff_name, entry_id').eq('entry_id', ENTRY_ID).maybeSingle();
-  check('④-5 staff_id=알바A uid(위조 아닌 DB default)', tu?.staff_id === jAId, `staff_id=${tu?.staff_id}`);
+  check('④-5 서버가 이해 기록(staff_id=알바A uid · 이름=프로필)', tu?.staff_id === jAId && tu?.staff_name === 'QA알바A', `staff_id=${tu?.staff_id} name=${tu?.staff_name}`);
   // 사장 '이해 확인' 배지의 소스 — 업무 단위 판정은 클라 파생(staffWhoUnderstandTask)이라 여기선 원시 행만 본다.
   const { data: ownerView } = await owner.from('knowhow_understanding').select('entry_id, staff_id, staff_name').eq('entry_id', ENTRY_ID);
   check('④-6 사장이 통과자 이름 조회(배지 소스)', (ownerView ?? []).some((u) => u.staff_id === jAId && u.staff_name === 'QA알바A'));
   // ★파생 규칙 실증(0111): "이 업무를 할 줄 안다 = 그 업무가 참조하는 노하우를 **전부** 안다".
-  //   이 업무에는 ②-4 에서 두 번째 노하우(캡처 승인분)가 붙어 있다 → 1건만 통과한 지금은 아직 아니다.
-  const { data: linkRows } = await owner.from('work_template_knowhow').select('entry_id').eq('template_id', TMPL);
-  const need = [...new Set((linkRows ?? []).map((l) => l.entry_id))];
+  //   1건만 통과한 지금은 아직 아니다.
   const { data: mine1 } = await owner.from('knowhow_understanding').select('entry_id').eq('staff_id', jAId);
   const knows1 = new Set((mine1 ?? []).map((x) => x.entry_id));
   const missing = need.filter((id) => !knows1.has(id));
   check('④-6b 일부 노하우만 통과 → 업무는 아직 아님(파생)', need.length >= 2 && missing.length > 0, `need=${need.length} knows=${knows1.size}`);
-  // 남은 노하우까지 통과시키면 그때 업무 통과가 된다 — 저장은 노하우 단위, 업무는 계산.
+  // 남은 노하우까지 통과시키면 그때 업무 통과가 된다 — 저장은 노하우 단위, 업무는 계산. 통과는 제출 RPC 로만.
   if (missing.length > 0) {
-    await jA.from('knowhow_understanding').upsert(
-      missing.map((id) => ({ unit_id: UNIT, entry_id: id, staff_name: 'QA알바A' })), { onConflict: 'entry_id,staff_id' });
+    const { error: se2 } = await submit(missing, 'rest');
+    if (se2) console.log('    (제출 실패)', se2.message);
   }
   const { data: mine2 } = await owner.from('knowhow_understanding').select('entry_id').eq('staff_id', jAId);
   const knows2 = new Set((mine2 ?? []).map((x) => x.entry_id));
@@ -278,7 +297,7 @@ async function flow4({ owner, ownerId, jA, jAId, UNIT, TMPL, entryRow }) {
   const { data: fkRow } = await admin.from('knowhow_quiz_stats').select('entry_id').eq('entry_id', 'pb_qa_nonexistent').maybeSingle();
   check('④-12 남의/없는 entry는 무시(0행)', !fkRpc && !fkRow, fkRpc?.message ?? '');
 
-  // ── 0104→0111 본인 퀴즈 이력 — ④-4에서 남긴 통과 기록이 노하우 제목과 함께 돌아온다(본인 한정 definer) ──
+  // ── 0104→0111 본인 퀴즈 이력 — ④-4b 제출로 서버가 남긴 통과 기록이 노하우 제목과 함께 돌아온다(본인 한정 definer) ──
   const { data: hist, error: he } = await jA.rpc('my_training_history');
   check('④-13 퀴즈 이력 RPC(본인 통과 행·노하우 제목 조인)', !he && (hist ?? []).some((h) => h.entry_id === ENTRY_ID && h.unit_id === UNIT && !!h.entry_title), he?.message ?? JSON.stringify(hist?.slice(0, 2)));
   const { data: ownerHist } = await owner.rpc('my_training_history');
