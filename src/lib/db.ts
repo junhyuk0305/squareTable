@@ -1389,41 +1389,46 @@ export async function rotateInviteCode(): Promise<{ inviteCode: string; expiresA
 
 // ── 플레이북 ───────────────────────────────────────────────
 // 노하우 전체 목록은 서버 응답 상한(PostgREST max_rows=1000)을 넘을 수 있다 → 끝까지 페이지로 읽는다.
-// 정렬은 created_at 에 id 를 더해 페이지 경계의 동점을 고정한다. 읽는 사이 새 행이 끼면 같은 행이
-// 다음 페이지에 또 올 수 있어 id 로 한 번만 담는다. 한 페이지라도 실패하면 일부 목록을 성공으로 주지 않는다.
-// ★서버 max_rows 가 1000 보다 작으면 첫 페이지에서 멈춘다(로컬·운영 기본값 1000).
-async function readAllPages(
-  page: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: any }>,
-): Promise<{ data: PlaybookEntry[]; error: any }> {
-  const PAGE = 1000;
-  const byId = new Map<string, PlaybookEntry>();
-  for (let offset = 0; ; offset += PAGE) {
-    const { data, error } = await page(offset, offset + PAGE - 1);
+// 바뀌지 않는 id를 커서로 쓴다. 앞 페이지 행이 삭제돼도 다음 행을 건너뛰지 않는다.
+// 서버 상한이 요청 크기보다 작을 수 있어 빈 페이지를 받아야 끝낸다.
+async function readAllPages<T extends { id: string }>(
+  page: (after: string | null) => PromiseLike<{ data: T[] | null; error: any }>,
+): Promise<{ data: T[]; error: any }> {
+  const rows: T[] = [];
+  let after: string | null = null;
+  for (;;) {
+    const { data, error } = await page(after);
     if (error) return { data: [], error };
-    for (const r of (data ?? []) as PlaybookEntry[]) if (!byId.has(r.id)) byId.set(r.id, r);
-    if ((data ?? []).length < PAGE) break;
+    if (!data?.length) break;
+    rows.push(...data);
+    after = data[data.length - 1].id;
   }
-  return { data: [...byId.values()], error: null };
+  return { data: rows, error: null };
 }
 
 export async function fetchEntries(): Promise<ReadResult<PlaybookEntry[]>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
   // 보관한 노하우(0248 archived_at)는 뺀다. 서버 RLS 도 막지만 앱이 먼저 기대지 않게 여기서도 거른다.
   // 0248 전 서버(웹이 먼저 나간 경우)에는 열이 없어 42703 이 온다 → 거르지 않고 한 번 더 읽는다.
-  let { data, error } = await readAllPages((from, to) => supabase
+  let { data, error } = await readAllPages<PlaybookEntry>((after) => {
+    const q = supabase
     .from('playbook_entries')
     .select('*')
     .is('archived_at', null)
-    .order('created_at', { ascending: false }).order('id').range(from, to));
+    .order('id');
+    return (after === null ? q : q.gt('id', after)).range(0, 999);
+  });
   if (error?.code === '42703') {
-    ({ data, error } = await readAllPages((from, to) => supabase.from('playbook_entries').select('*')
-      .order('created_at', { ascending: false }).order('id').range(from, to)));
+    ({ data, error } = await readAllPages<PlaybookEntry>((after) => {
+      const q = supabase.from('playbook_entries').select('*').order('id');
+      return (after === null ? q : q.gt('id', after)).range(0, 999);
+    }));
   }
   if (error) {
     readFail('fetchEntries', error);
     return { data: [], error: true };
   }
-  return { data: (data ?? []) as PlaybookEntry[], error: false };
+  return { data: data.sort((a, b) => b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id)), error: false };
 }
 
 // source 는 아직 스키마에 컬럼이 없다(타입엔 있으나 0001 테이블 미포함).
@@ -1444,10 +1449,12 @@ function stripNonColumns<T extends Record<string, unknown>>(obj: T): Omit<T, 'so
 export async function fetchOwnerKnowhowEntries(): Promise<DbResult<PlaybookEntry[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
   // setof RPC 결과에도 max_rows 가 걸린다 → 같은 페이지 읽기(서버 계약 그대로 · 정렬·범위만 요청에 싣는다).
-  const { data, error } = await readAllPages((from, to) => supabase.rpc('owner_knowhow_entries')
-    .order('created_at', { ascending: false }).order('id').range(from, to));
+  const { data, error } = await readAllPages<PlaybookEntry>((after) => {
+    const q = supabase.rpc('owner_knowhow_entries').order('id');
+    return (after === null ? q : q.gt('id', after)).range(0, 999);
+  });
   if (error) readFail('fetchOwnerKnowhowEntries', error);
-  return { data: error ? null : data, error: error as DbErr };
+  return { data: error ? null : data.sort((a, b) => b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id)), error: error as DbErr };
 }
 
 /**
@@ -2115,12 +2122,15 @@ function mapTemplateRow(r: any): TaskTemplate {
 export async function fetchTemplates(): Promise<ReadResult<TaskTemplate[]>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
   // select('*') — 0013 마이그레이션 적용 전후 모두 안전(없는 컬럼은 undefined).
-  const { data, error } = await supabase.from('work_templates').select('*').order('created_at');
+  const { data, error } = await readAllPages<any>((after) => {
+    const q = supabase.from('work_templates').select('*').order('id');
+    return (after === null ? q : q.gt('id', after)).range(0, 999);
+  });
   if (error) {
     readFail('fetchTemplates', error);
     return { data: [], error: true };
   }
-  return { data: (data ?? []).map(mapTemplateRow), error: false };
+  return { data: data.sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)).map(mapTemplateRow), error: false };
 }
 /** 업무 한 건을 ID 로 읽는다(저장 응답 유실 확인용). 목록 상한(max_rows)과 무관하다. 없으면 data=null. */
 export async function fetchTemplateById(id: string): Promise<ReadResult<TaskTemplate | null>> {
