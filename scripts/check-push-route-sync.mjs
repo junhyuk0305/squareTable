@@ -152,6 +152,7 @@ try {
     shift_time: { owner: 'shift_time', manager: 'shift_time' },
     // ── 서버 크론 발송(member_notices · 0247/0289/0315) ──
     'mn:approved': { junior: 'hub:join_approved' },
+    'mn:assign': { owner: 'assign', manager: 'assign', junior: 'assign' },
     'mn:rejected': { junior: 'hub:join_rejected' },
     'mn:removed': { manager: 'hub:member_removed', junior: 'hub:member_removed' },
     'mn:left': { owner: 'member_left' },

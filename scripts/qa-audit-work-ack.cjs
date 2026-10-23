@@ -36,7 +36,7 @@ function fixture(options = {}) {
   const epoch = load('src/lib/store/tenantEpoch.ts', {}, cache);
   const sync = load('src/lib/store/useSyncStore.ts', {}, cache);
   const rows = new Map(options.rows ?? []);
-  const counts = { insert: 0, read: 0, update: 0, attach: 0, push: 0 };
+  const counts = { insert: 0, read: 0, update: 0, attach: 0, push: 0, pushTo: [] };
   let store;
   const mocks = {
     '@/lib/supabase': { HAS_SUPABASE: true },
@@ -71,13 +71,12 @@ function fixture(options = {}) {
   return { store, rows, counts, sync: sync.useSyncStore, reset, options };
 }
 async function main() {
-  // ★10-23 KH03_WORK01: 최초 저장 응답만 유실되면 이 기기는 아직 배정 푸시를 보낸 적이 없다(푸시는 저장 성공 뒤에만).
-  //   예전 기대값 push 0 은 그 누락을 고정한 것이라 1(담당자 한 명에게 한 번)로 바꿨다.
-  await test('lost ACK confirms own persisted row, completes attachment, no false error, assignee notified once', async () => {
+  // C2: server assignment delivery is covered by qa-c2-assignment.sql. Client sends zero.
+  await test('lost ACK confirms own persisted row, completes attachment, no false error, server owns notifications', async () => {
     const f = fixture();
     assert.equal(await f.store.getState().addTask(draft, 'stable'), true);
     assert.equal(f.counts.insert, 1); assert.equal(f.rows.size, 1); assert.equal(f.counts.attach, 1);
-    assert.equal(f.sync.getState().error, null); assert.deepEqual(f.counts.pushTo, ['qa-staff']);
+    assert.equal(f.sync.getState().error, null); assert.deepEqual(f.counts.pushTo, []);
     assert.equal(f.rows.get('stable').createdAt, 'server-created-at');
   });
   await test('throwing insert response also recovers', async () => {
@@ -85,11 +84,11 @@ async function main() {
     assert.equal(await f.store.getState().addTask(draft, 'stable'), true);
     assert.equal(f.rows.size, 1);
   });
-  await test('prior insert plus changed draft updates same owned row and only new assignee is notified', async () => {
+  await test('prior insert plus changed draft updates same owned row and client does not notify', async () => {
     const f = fixture({ rows: [['stable', { ...draft, id: 'stable', text: 'Old draft', ownerId: 'old-staff', createdAt: 'original-time' }]] });
     assert.equal(await f.store.getState().addTask(draft, 'stable'), true);
     assert.equal(f.rows.size, 1); assert.equal(f.rows.get('stable').text, draft.text);
-    assert.equal(f.rows.get('stable').createdAt, 'original-time'); assert.equal(f.counts.push, 1);
+    assert.equal(f.rows.get('stable').createdAt, 'original-time'); assert.equal(f.counts.push, 0);
   });
   await test('recovered row with attachment failure retries without duplicate insert', async () => {
     const f = fixture({ attachOk: false });
@@ -143,25 +142,25 @@ async function main() {
     assert.equal(await f.store.getState().addTask(withoutCreator, 'stable'), true);
     assert.equal(f.counts.insert, 1);
   });
-  await test('ordinary successful insert retains existing assignment notification and skips readback', async () => {
+  await test('ordinary successful insert leaves notifications to server and skips readback', async () => {
     const f = fixture({ insertOk: true });
     assert.equal(await f.store.getState().addTask(draft, 'stable'), true);
-    assert.equal(f.counts.read, 0); assert.equal(f.counts.push, 1);
+    assert.equal(f.counts.read, 0); assert.equal(f.counts.push, 0);
   });
   // ── 10-23 KH03_WORK01 추가 ──
   await test('recovery finds own row beyond list page cap (1000)', async () => {
     const filler = Array.from({ length: 1000 }, (_, i) => ['f' + i, { ...draft, id: 'f' + i, createdBy: 'other-user' }]);
     const f = fixture({ rows: filler, listCap: 1000 });
     assert.equal(await f.store.getState().addTask(draft, 'stable'), true);
-    assert.equal(f.counts.insert, 1); assert.equal(f.counts.attach, 1); assert.deepEqual(f.counts.pushTo, ['qa-staff']);
+    assert.equal(f.counts.insert, 1); assert.equal(f.counts.attach, 1); assert.deepEqual(f.counts.pushTo, []);
   });
-  await test('multi-assignee lost ACK: each other assignee once, author never', async () => {
+  await test('multi-assignee lost ACK: no client notification', async () => {
     const f = fixture();
     const multi = { ...draft, ownerId: undefined, ownerIds: ['qa-staff', 'qa-owner', 'qa-staff2'] };
     assert.equal(await f.store.getState().addTask(multi, 'stable'), true);
-    assert.deepEqual([...f.counts.pushTo].sort(), ['qa-staff', 'qa-staff2']);
+    assert.deepEqual(f.counts.pushTo, []);
   });
-  await test('lost ACK then recovered update fails: no push; retry succeeds: push once in total', async () => {
+  await test('lost ACK then recovered update fails: no push; retry succeeds: no client push', async () => {
     const f = fixture({ updateOk: false });
     assert.equal(await f.store.getState().addTask(draft, 'stable'), false);
     assert.equal(f.counts.push, 0);
@@ -170,24 +169,24 @@ async function main() {
     assert.equal(JSON.stringify(shown?.ownerIds ?? [shown?.ownerId]), '["qa-staff"]');
     f.options.updateOk = true;
     assert.equal(await f.store.getState().addTask(draft, 'stable'), true);
-    assert.equal(f.counts.insert, 1); assert.deepEqual(f.counts.pushTo, ['qa-staff']);
+    assert.equal(f.counts.insert, 1); assert.deepEqual(f.counts.pushTo, []);
   });
-  await test('lost ACK then readback fails, retry recovers: push once in total', async () => {
+  await test('lost ACK then readback fails, retry recovers: no client push', async () => {
     const f = fixture({ readError: true });
     assert.equal(await f.store.getState().addTask(draft, 'stable'), false);
     f.options.readError = false;
     assert.equal(await f.store.getState().addTask(draft, 'stable'), true);
-    assert.equal(f.rows.size, 1); assert.deepEqual(f.counts.pushTo, ['qa-staff']);
+    assert.equal(f.rows.size, 1); assert.deepEqual(f.counts.pushTo, []);
   });
-  await test('lost ACK, readback fails, realtime hydrate brings row before retry: push once in total', async () => {
+  await test('lost ACK, readback fails, realtime hydrate brings row before retry: no client push', async () => {
     const f = fixture({ readError: true });
     assert.equal(await f.store.getState().addTask(draft, 'stable'), false);
     f.options.readError = false;
     f.store.setState({ templates: [f.rows.get('stable')] }); // 실시간 재조회가 먼저 들여온 서버 행
     assert.equal(await f.store.getState().addTask(draft, 'stable'), true);
-    assert.equal(f.counts.insert, 1); assert.equal(JSON.stringify(f.counts.pushTo), '["qa-staff"]');
+    assert.equal(f.counts.insert, 1); assert.equal(JSON.stringify(f.counts.pushTo), '[]');
   });
-  await test('tenant switch clears the not-yet-notified mark', async () => {
+  await test('tenant switch never sends client assignment notification', async () => {
     const f = fixture({ updateOk: false });
     assert.equal(await f.store.getState().addTask(draft, 'stable'), false);
     f.reset();
@@ -196,12 +195,12 @@ async function main() {
     assert.equal(await f.store.getState().addTask(draft, 'stable'), true);
     assert.equal(f.counts.push, 0);
   });
-  await test('lost ACK with attachment failure, retry: push once in total', async () => {
+  await test('lost ACK with attachment failure, retry: no client push', async () => {
     const f = fixture({ attachOk: false });
     assert.equal(await f.store.getState().addTask(draft, 'stable'), false);
     f.options.attachOk = true;
     assert.equal(await f.store.getState().addTask(draft, 'stable'), true);
-    assert.deepEqual(f.counts.pushTo, ['qa-staff']);
+    assert.deepEqual(f.counts.pushTo, []);
   });
   console.log(JSON.stringify({passed, failed, network:'disabled'}));
   process.exitCode = failed ? 1 : 0;

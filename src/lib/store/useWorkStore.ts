@@ -57,32 +57,16 @@ import type { QuizAssignment, TrainingCourse as TrainingCourseRow } from '@/lib/
 import { isBrandHidden } from '@/lib/brand/copy';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { coalesce, subscribeDebounced, settleWithin, HYDRATE_TIMEOUT_MS } from '@/lib/store/realtimeSync';
-import { currentTenantEpoch, isStaleEpoch, currentAccountEpoch } from '@/lib/store/tenantEpoch';
+import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import { genId } from '@/lib/utils/id';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { DEFAULT_DAYPARTS, resolveDayparts, daypartLabelMap, type Daypart } from '@/lib/store/daypartLabels';
-import { notifyUserMention, notifyUserAssign, notifyUserTraining, notifyOwnersQuizDone } from '@/lib/push/notify';
+import { notifyUserMention, notifyUserTraining, notifyOwnersQuizDone } from '@/lib/push/notify';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
 /** 방마다 동시에 둘 수 있는 활성 반복(주간) 할일 상한(남용 #26) — 캘린더/피드 폭주 방지. */
 const MAX_ACTIVE_RECURRING = 40;
-/** 최초 저장 응답을 못 받아 아직 배정 푸시가 안 나간 업무 id. 화면 상태가 아니라 이 기기의 발송 기록이다.
- *  값 = 표시한 때의 매장·계정 세대. 세대가 바뀌면(매장·계정 전환) 표시는 없는 것으로 보고 비운다. */
-const unnotifiedAssignTasks = new Map<string, string>();
-const assignMarkGen = () => `${currentTenantEpoch()}:${currentAccountEpoch()}`;
-function markUnnotifiedAssign(id: string): void {
-  const gen = assignMarkGen();
-  for (const [k, g] of unnotifiedAssignTasks) if (g !== gen) unnotifiedAssignTasks.delete(k);
-  unnotifiedAssignTasks.set(id, gen);
-}
-/** 표시가 지금 세대 것이면 true. 어느 쪽이든 표시는 지운다(한 번만 알린다). */
-function takeUnnotifiedAssign(id: string): boolean {
-  const g = unnotifiedAssignTasks.get(id);
-  unnotifiedAssignTasks.delete(id);
-  return g === assignMarkGen();
-}
-
 /**
  * 개수 상한·재확인 주기의 SSOT 는 **코스 행(0108 training_courses)** 하나다 — 사장 화면과
  * 직원 카드가 같은 행을 봐야 안내와 동작이 어긋나지 않는다.
@@ -929,9 +913,6 @@ export const useWorkStore = create<State>((set, get) => ({
     try { inserted = await insertTemplate(t); } catch { /* 응답 유실도 같은 ID를 조회해 확인한다. */ }
     if (isStaleEpoch(epoch)) return false;
     if (!inserted) {
-      // ★배정 푸시는 저장 성공 뒤에만 나가므로 이 업무의 담당자는 아직 알림을 받지 않았다. 확인 조회가 실패해
-      //   실시간 재조회가 행을 먼저 들여온 뒤 재시도(existing 분기)해도 editTask 가 이 표시로 한 번 알린다.
-      markUnnotifiedAssign(t.id);
       let recovered: TaskTemplate | undefined;
       try {
         // ID 로 직접 읽는다. 목록은 서버 응답 상한(max_rows)에서 잘려 상한 밖 업무를 못 찾는다.
@@ -941,9 +922,6 @@ export const useWorkStore = create<State>((set, get) => ({
       if (isStaleEpoch(epoch)) return false;
       if (recovered) {
         // 서버에 확인된 자기 업무만 복원한다. 현재 초안은 수정 경로로 저장한다. 생성 시각·작성자는 서버 값을 유지한다.
-        //   행은 서버 원본(담당자 포함) 그대로 둔다. editTask 가 저장 성공 때 위 표시로 현재 담당자에게
-        //   한 번 알리고 표시를 지운다. 실패하면 표시가 남아 다음 재시도가 알린다
-        //   (서버도 10분 안 같은 배정은 한 번만 보낸다 · 0324).
         set((s) => ({ templates: [...s.templates.filter((row) => row.id !== t.id), recovered] }));
         return get().editTask(t.id, input);
       }
@@ -960,13 +938,7 @@ export const useWorkStore = create<State>((set, get) => ({
       ? await get().attachKnowhow(t.id, input.knowhowIds)
       : true;
     if (isStaleEpoch(epoch)) return false;
-    // 배정 알림 — 저장 성공 후에만(실패·롤백 시 유령 배정 푸시 방지 — F2). 남에게 배정한 경우만, OS 푸시만.
-    if (ok) {
-      takeUnnotifiedAssign(t.id); // 새로 저장돼 아래에서 전원에게 알린다 → 남은 표시는 지운다.
-      for (const uid of assigneesOf(t)) {
-        if (uid !== t.createdBy) notifyUserAssign(uid, useSessionStore.getState().userName || '담당자', t.text, t.id);
-      }
-    }
+    // 배정 알림은 0339 서버 트리거가 담당한다.
     return ok && linksOk;
   },
   // 할일 수정 — 회의 반영(X 즉시삭제 → 연필 수정). 본문·시간대·담당·스케줄을 통째로 갱신.
@@ -1010,17 +982,7 @@ export const useWorkStore = create<State>((set, get) => ({
       if (toRemove.length) linksOk = (await get().detachKnowhow(id, toRemove)) && linksOk;
     }
     if (isStaleEpoch(epoch)) return false;
-    // 재배정 알림 — 저장 성공 후에만(F2). 새로 들어온 담당자에게만, 작성자 본인 배정 제외.
-    if (ok) {
-      const prev = assigneesOf(before);
-      // 응답 유실로 복구한 업무는 기존 담당자도 아직 알림을 못 받았다(addTask 참고). 이번 성공에서 한 번 알린다.
-      const unnotified = takeUnnotifiedAssign(id);
-      for (const uid of assigneesOf(updated)) {
-        if ((unnotified || !prev.includes(uid)) && uid !== updated.createdBy) {
-          notifyUserAssign(uid, useSessionStore.getState().userName || '담당자', updated.text, updated.id);
-        }
-      }
-    }
+    // 담당자 변경 알림도 서버에서 한 번만 보낸다.
     return ok && linksOk;
   },
   removeTemplate: (id) => {
