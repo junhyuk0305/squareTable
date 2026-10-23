@@ -5,6 +5,7 @@
 // `useBrandStore` 에 얹지 않은 이유: 셸이 브랜드 이름 때문에 그걸 늘 부른다 — 거기 얹으면 매장 축이 모든 화면에 따라붙는다.
 // 화면이 자기 포커스에서 부른다(useBrandBillingStore 와 같은 모양).
 import { create } from 'zustand';
+import { currentAccountEpoch, isStaleAccountEpoch } from '@/lib/store/tenantEpoch';
 import { coalesce } from '@/lib/store/realtimeSync';
 import {
   fetchBrandOverview,
@@ -31,7 +32,9 @@ const EMPTY = { overview: [], invites: [], loaded: false, error: null } satisfie
 
 export const useBrandUnitsStore = create<State>((set) => {
   const hydrate = coalesce(async () => {
+    const epoch = currentAccountEpoch();
     const [o, i] = await Promise.all([fetchBrandOverview(), fetchBrandInvites()]);
+    if (isStaleAccountEpoch(epoch)) return;
     const err = o.error ?? i.error;
     if (err) {
       reportError('brandUnits.hydrate', err);

@@ -6,6 +6,7 @@
 //   — 화면이 따로 세면 "화면엔 3곳, 청구서엔 2곳"이 된다.
 // `useBrandStore` 에 얹지 않은 이유: 대시보드·매장·노하우·퀴즈 화면은 청구를 안 본다. 결제 화면에서만 부른다.
 import { create } from 'zustand';
+import { currentAccountEpoch, isStaleAccountEpoch } from '@/lib/store/tenantEpoch';
 import { coalesce } from '@/lib/store/realtimeSync';
 import {
   fetchBrandBilling,
@@ -42,7 +43,9 @@ const EMPTY = { current: [], next: [], invoices: [], loaded: false, error: null 
 
 export const useBrandBillingStore = create<State>((set) => {
   const hydrate = coalesce(async () => {
+    const epoch = currentAccountEpoch();
     const [c, n, i] = await Promise.all([fetchBrandBilling(), fetchBrandBilling(nextPeriod()), fetchBrandInvoices()]);
+    if (isStaleAccountEpoch(epoch)) return;
     const err = c.error ?? n.error ?? i.error;
     if (err) {
       reportError('brandBilling.hydrate', err);

@@ -9,7 +9,7 @@
 //       · IP당 분당 3건 (★0124: DB 기반 — 예전 인메모리 Map 은 isolate 로컬이라 실측 24발 전부 통과했다)
 //       · 코드 3분 만료 · 오답 5회면 코드 무효(온라인 브루트포스 차단: 6자리×5회)
 //   - 코드는 평문 저장하지 않는다(sha256). 응답에 코드·해시를 절대 싣지 않는다.
-//   - (0238) 코드는 한 번만 쓴다. verify·change_phone·find_email·reset_password 가 성공하면 expires_at 을 지금으로 당긴다.
+//   - (0238) 코드는 한 번만 쓴다. verify·change_phone·find_email·reset_password 가 성공하면 expires_at 을 만료시킨다.
 //     verify 를 부르는 화면(가입·프로필 완성·번호 인증 블록·게스트 퀴즈)은 그 뒤에 같은 코드를 다시 쓰지 않는다.
 //     비밀번호 찾기는 verify 없이 reset_password 에 코드를 바로 싣는다.
 //   - (0238) JWT 가 실려 오면(로그인 상태) 함수 안에서 getUser 로 확인한다. verify 는 그 사용자를 verified_by 에 남기고,
@@ -104,7 +104,7 @@ function json(status: number, body: unknown, cors: Record<string, string>) {
 }
 
 // 코드 대조 — 만료 3분·오답 5회·해시. 틀리면 오답 횟수를 올린다(무음 실패 시 진행 거부).
-type CodeCheck = { ok: true; row: { code_hash: string } } | { ok: false; status: number; reason: string };
+type CodeCheck = { ok: true; row: { code_hash: string; expires_at: string } } | { ok: false; status: number; reason: string };
 // deno-lint-ignore no-explicit-any
 async function matchCode(admin: any, phone: string, code: string): Promise<CodeCheck> {
   if (code.length !== 6) return { ok: false, status: 400, reason: 'mismatch' };
@@ -123,14 +123,17 @@ async function matchCode(admin: any, phone: string, code: string): Promise<CodeC
   return { ok: true, row };
 }
 
-// 코드 소모 — 아직 유효한 같은 코드일 때만 expires_at 을 지금으로 당긴다. 동시에 두 요청이 와도 한쪽만 이긴다.
+// 코드 소모 — 대조한 발급본의 만료 시각까지 비교해 한 요청만 갱신한다.
+// 요청별 현재 시각을 저장하면 늦게 실행된 이전 요청도 통과하므로 고정 과거 시각으로 소모한다.
+// DB/클라 계약은 그대로다. 새 코드 발송은 expires_at 을 새로 설정하며 verified_at 이력은 보존한다.
 // 'taken' = 다른 요청이 먼저 썼거나 그사이 새 코드가 발송됐다(→ expired 로 답한다).
 // deno-lint-ignore no-explicit-any
-async function consumeCode(admin: any, phone: string, codeHash: string, extra: Record<string, unknown> = {}): Promise<'ok' | 'taken' | 'db'> {
+async function consumeCode(admin: any, phone: string, matched: { code_hash: string; expires_at: string }, extra: Record<string, unknown> = {}): Promise<'ok' | 'taken' | 'db'> {
   const nowIso = new Date().toISOString();
   const { data, error } = await admin.from('phone_otps')
-    .update({ expires_at: nowIso, ...extra })
-    .eq('phone', phone).eq('code_hash', codeHash).gt('expires_at', nowIso)
+    .update({ ...extra, expires_at: '1970-01-01T00:00:00.000Z' })
+    .eq('phone', phone).eq('code_hash', matched.code_hash)
+    .eq('expires_at', matched.expires_at).gt('expires_at', nowIso)
     .select('phone');
   if (error) { console.error('otp: consume failed:', error.message); return 'db'; }
   return data && data.length > 0 ? 'ok' : 'taken';
@@ -251,7 +254,7 @@ Deno.serve(async (req) => {
       inUse = (dup ?? []).length > 0;
     }
 
-    const c = await consumeCode(admin, phone, m.row.code_hash, {
+    const c = await consumeCode(admin, phone, m.row, {
       verified_at: new Date().toISOString(),
       verified_by: uid,
     });
@@ -282,7 +285,7 @@ Deno.serve(async (req) => {
       if ((dup ?? []).length > 0) return json(409, { ok: false, reason: 'phone_taken' }, cors);
     }
 
-    const c = await consumeCode(admin, phone, m.row.code_hash, {
+    const c = await consumeCode(admin, phone, m.row, {
       verified_at: new Date().toISOString(),
       verified_by: uid,
     });
@@ -313,7 +316,7 @@ Deno.serve(async (req) => {
       .eq('phone_norm', phone).is('deleted_at', null).order('signup_role').limit(2);
     if (pErr) return json(500, { ok: false, reason: 'db' }, cors);
 
-    const c = await consumeCode(admin, phone, m.row.code_hash);
+    const c = await consumeCode(admin, phone, m.row);
     if (c === 'db') return json(500, { ok: false, reason: 'db' }, cors);
     if (c === 'taken') return json(400, { ok: false, reason: 'expired' }, cors);
     if (!profs || profs.length === 0) return json(404, { ok: false, reason: 'no_account' }, cors);
@@ -370,7 +373,7 @@ Deno.serve(async (req) => {
     const uid = profs[0].id as string;
 
     // 코드 소모 먼저 — 같은 코드로 두 번 바꾸지 못한다. verified_at 은 인증 이력이라 같이 남기고, 인증한 사람은 그 계정이다.
-    const c = await consumeCode(admin, phone, m.row.code_hash, {
+    const c = await consumeCode(admin, phone, m.row, {
       verified_at: new Date().toISOString(),
       verified_by: uid,
     });

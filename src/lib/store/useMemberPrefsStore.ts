@@ -2,6 +2,7 @@
 // 닉네임·색·매장별 방해금지·음소거를 매장(unit_id)별로 보관한다. 계정 전역 알림 선호(usePreferencesStore)
 // 와 별개 축이다. 저장은 원자적 upsert RPC(saveMemberPrefs) 한 번 — 낙관적 반영 후 실패 시 롤백.
 import { create } from 'zustand';
+import { currentAccountEpoch, isStaleAccountEpoch } from '@/lib/store/tenantEpoch';
 import { fetchMemberPrefs, saveMemberPrefs, ackNotifications, type UnitMemberPrefsRow } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -63,10 +64,12 @@ export const useMemberPrefsStore = create<State>((set, get) => ({
   loadError: false,
 
   hydrate: async () => {
+    const epoch = currentAccountEpoch();
     const now = Date.now();
     if (now - _lastHydrateAt < HYDRATE_TTL_MS) return;
     _lastHydrateAt = now;
     const { data, error } = await fetchMemberPrefs();
+    if (isStaleAccountEpoch(epoch)) return;
     if (error || !data) {
       _lastHydrateAt = 0; // 실패는 TTL 미적용 — 다음 진입에서 즉시 재시도
       // ★못 불러왔어도 '기다리기'는 끝났다. 여기서 loaded 를 안 세우면 이 플래그를 게이트에 넣은
@@ -102,16 +105,18 @@ export const useMemberPrefsStore = create<State>((set, get) => ({
   ackFor: (unitId) => get().ackByUnit[unitId] ?? null,
 
   ackNotifs: async (unitId) => {
+    const epoch = currentAccountEpoch();
     const prev = get().ackByUnit[unitId] ?? null;
     set({ ackByUnit: { ...get().ackByUnit, [unitId]: new Date().toISOString() } });
     await guardWrite(
       ackNotifications(unitId),
-      () => set({ ackByUnit: { ...get().ackByUnit, [unitId]: prev } }),
+      () => { if (!isStaleAccountEpoch(epoch)) set({ ackByUnit: { ...get().ackByUnit, [unitId]: prev } }); },
       '모두 읽음 처리에 실패했어요.',
     );
   },
 
   save: async (unitId, patch) => {
+    const epoch = currentAccountEpoch();
     // ★읽기가 실패한 상태에서는 저장을 거부한다(#47). byUnit 이 비어 있으므로 prev 가 기본값이 되고,
     //   토글 하나를 눌러도 nickname·color·quiet_* 6개 필드 **전부**가 기본값으로 서버에 덮인다 —
     //   사용자가 설정한 적 없는 값이 사용자 것으로 확정되는 조용한 데이터 손상이다.
@@ -123,6 +128,7 @@ export const useMemberPrefsStore = create<State>((set, get) => ({
     set({ byUnit: { ...get().byUnit, [unitId]: next } });
     const row: UnitMemberPrefsRow = { unit_id: unitId, ...next };
     const { error } = await saveMemberPrefs(row);
+    if (isStaleAccountEpoch(epoch)) return { error: '계정이 바뀌었어요. 현재 계정에서 다시 확인해 주세요.' };
     if (error) {
       set({ byUnit: { ...get().byUnit, [unitId]: prev } }); // 롤백
       return { error: error.message };

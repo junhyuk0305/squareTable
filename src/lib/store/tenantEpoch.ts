@@ -23,3 +23,9 @@ export function currentTenantEpoch(): number {
 export function isStaleEpoch(epoch: number): boolean {
   return epoch !== _epoch;
 }
+
+// 계정 전체 목록은 같은 계정의 매장 전환에도 유효하다. 계정 변경만 별도로 무효화한다.
+let _accountEpoch = 0;
+export function bumpAccountEpoch(): void { _accountEpoch += 1; }
+export function currentAccountEpoch(): number { return _accountEpoch; }
+export function isStaleAccountEpoch(epoch: number): boolean { return epoch !== _accountEpoch; }

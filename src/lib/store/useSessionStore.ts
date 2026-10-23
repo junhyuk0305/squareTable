@@ -325,6 +325,8 @@ let _signOutGen = 0;
 // 시작 순번을 잡고, 더 늦게 시작한 로드가 이미 반영됐으면 버린다(먼저 끝난 로드는 그대로 반영한다).
 let _loadSeq = 0;
 let _appliedSeq = 0;
+// 전환 중 일반 프로필 폴링이 이전 매장을 다시 확정하지 않도록 한다.
+let _switchingUserId: string | null = null;
 
 // 로그아웃 상태 — 신원·매장·역할·과금 값을 전부 비운다. 로그아웃으로 떨어지는 길(로그아웃·auth 이벤트·탈퇴·
 // 로드 실패)이 여럿이라 한 곳에 둔다. 빠진 값이 있으면 다음 계정 로그인 전까지 이전 계정 값이 남는다.
@@ -341,7 +343,9 @@ async function loadProfile(
   userId: string,
   email: string,
   meta?: PendingOwnerMeta,
+  expectedUnitId?: string,
 ) {
+  if (_switchingUserId === userId && expectedUnitId === undefined) return false;
   const gen = _signOutGen;
   const seq = ++_loadSeq;
   try {
@@ -352,6 +356,9 @@ async function loadProfile(
       fetchSessionUnit(),
     ]);
     const profileErr = profileReadErr ?? (suErr && !isMissingRpc(suErr) ? suErr : null);
+    if (gen !== _signOutGen || seq < _appliedSeq) return false;
+    // 전환 뒤에는 예전 매장을 보존할 수 없다. 호출자가 재시도 가능한 연결 실패 상태로 닫는다.
+    if (expectedUnitId !== undefined && profileErr) return false;
 
     // 읽기 실패 위장 금지(§4.8) — supabase-js 는 쿼리 에러를 throw 하지 않고 {error} 로 준다.
     // 이 error 를 무시하면 profile=null 로 흘러 role='junior'·unit_id='' 인 "빈 신원"이 signed_in
@@ -391,6 +398,7 @@ async function loadProfile(
     // 다점포(0055 · 0285): 서버 auth_unit_id() 와 같은 값(이 세션의 매장)으로 클라 컨텍스트를 맞춰
     // split-brain(화면 매장과 RLS 매장이 다름) 을 막는다. 함수가 없는 서버면 active → 주매장(unit_id) 폴백.
     let unitId = suErr ? profile?.active_unit_id || profile?.unit_id || '' : sessionUnit ?? '';
+    if (expectedUnitId !== undefined && unitId !== expectedUnitId) return false;
     // 이번 로드에서 막 만든 매장 — 역할 판정이 매장 목록을 못 읽었을 때의 근거(deriveStoreRole).
     let createdUnitId = '';
 
@@ -434,6 +442,7 @@ async function loadProfile(
     let unitLocked = false;
     if (unitId) {
       const { data: unit, error: unitErr } = await fetchUnitInfo(unitId);
+      if (expectedUnitId !== undefined && (unitErr || !unit)) return false;
       // G3: 읽기 실패를 빈칸으로 덮지 않는다. 같은 사용자·같은 매장이면 이전에 알던 값을 지킨다(구독 읽기와 같은 패턴).
       //   빈 초대코드로 초대 문구가 나가면 직원이 합류할 수 없다.
       if (unitErr) reportError('session.fetchUnitInfo', unitErr);
@@ -511,6 +520,7 @@ async function loadProfile(
     let freshStores: MyUnitRow[] | null = []; // 이번에 읽은 목록 — 역할 판정 입력(null = 읽기 실패)
     if (unitId) {
       const { data: us, error: usErr } = await fetchMyUnits();
+      if (expectedUnitId !== undefined && (usErr || !us?.some((u) => u.unit_id === unitId))) return false;
       storesReadFailed = !!usErr;
       freshStores = usErr ? null : (us ?? []);
       // ★읽기 실패를 빈 목록으로 덮지 않는다(2026-08-25 감사 #7). 이 배열이 비면
@@ -621,6 +631,7 @@ async function loadProfile(
       bio: profile?.bio ?? '',
       phone: profile?.phone ?? '',
     });
+    return true;
   } catch (e) {
     // 네트워크 단절(fetch reject)로 프로필 조회가 던지면 앱이 'loading'에 영구히 멈추는 걸 막는다.
     // (supabase-js는 쿼리 에러를 throw하지 않고 {error}로 반환 → 그 경로는 위 try가 빈 unitId로 정상 처리.
@@ -629,7 +640,8 @@ async function loadProfile(
     // (테넌트 격리가 최우선). 재접속 시 로그인/재시도로 정상 복구된다.
     console.warn('[session] loadProfile 실패, 로그아웃 처리:', (e as Error)?.message ?? e);
     reportError('session.loadProfile', e); // 오프라인 등으로 세션 로드가 던져 로그아웃되는 경로를 관측
-    if (gen !== _signOutGen) return; // 로그아웃 뒤에 끝난 로드 — 그 뒤의 새 로그인을 덮지 않는다(G1)
+    if (gen !== _signOutGen) return; // 로그아웃 뒤에 끝난 실패는 새 로그인을 덮지 않는다.
+    if (seq < _appliedSeq || expectedUnitId !== undefined) return false;
     _lastLoadFault = 'load_failed'; // 로그인 직후라면 signInWithPassword 가 '네트워크 오류' 문구로 노출(#17)
     setUnitId(null);
     setAnalyticsContext({ userId: null, unitId: null, role: null });
@@ -1247,15 +1259,41 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   // 다점포(0055): 활성 매장 전환. switch_active_unit(멤버십 검증) → loadProfile(활성 반영: unitId·storeName·
   // db._unitId·stores 갱신) → owner/_layout의 hydrate effect가 unitId 변경을 보고 전 스토어를 재hydrate·재subscribe.
-  // (setUnitId는 loadProfile 안에서 동기 반영되므로 전환 직후 쓰기도 새 매장으로 태깅 — split-brain 없음.)
+  // 서버 전환 뒤 프로필을 확정하지 못하면 예전 매장을 닫고 연결 재시도로 복구한다.
   switchUnit: async (targetUnitId) => {
     if (!HAS_SUPABASE) return { error: null };
     // Phase 0: 직원도 자신이 속한 매장 사이를 전환할 수 있다. 권한 경계는 클라가 아니라 서버가 쥔다 —
     // switch_active_unit RPC 가 unit_members 멤버십(역할 무관)을 검증해 비소속 매장은 not_a_member 로 거부하고,
     // active_unit_id 는 RLS 로 동결돼 이 definer RPC 로만 바뀐다. (삭제는 여전히 오너 전용 — deleteStore 가드 유지.)
+    const prior = get();
+    const { userId: uid, email } = prior;
+    if (!uid || _switchingUserId) return { error: '매장 정보를 확인 중이에요. 잠시 후 다시 시도해 주세요.' };
     if (!targetUnitId || targetUnitId === get().unitId) return { error: null };
+    const gen = _signOutGen;
+    const current = () => gen === _signOutGen && get().userId === uid;
+    const failClosed = () => {
+      if (current()) {
+        _appliedSeq = ++_loadSeq;
+        setUnitId(null);
+        setAnalyticsContext({ userId: null, unitId: null, role: null });
+        set({ ...SIGNED_OUT, sessionCheck: 'offline' });
+      }
+      return { error: '매장 정보를 불러오지 못했어요. 연결을 확인하고 다시 시도해 주세요.' };
+    };
+    _switchingUserId = uid;
+    _appliedSeq = ++_loadSeq;
+    // 서버 전환과 응답 도착 사이에도 이전 매장으로 쓰지 못하게 먼저 화면·쓰기 문맥을 비운다.
+    setUnitId(null);
+    set({ ...SIGNED_OUT, status: 'loading', userId: uid, email });
+    try {
     const { error } = await switchActiveUnit(targetUnitId);
+    if (!current()) return { error: '계정이 바뀌었어요. 현재 계정에서 매장을 다시 선택해 주세요.' };
     if (error) {
+      // 통신 오류는 서버가 전환했는지 알 수 없다. 명시적인 거절만 이전 매장을 유지한다.
+      if (!/unit_locked|not_a_member|not_owner|invalid_unit|unit_not_found/.test(error.message)) return failClosed();
+      setUnitId(prior.unitId || null);
+      setAnalyticsContext({ userId: uid, unitId: prior.unitId || null, role: prior.role });
+      set(prior);
       // 0142 unit_locked = 무료 초과로 잠긴 매장. **재시도로는 절대 안 풀린다** — 폴백 문구('잠시 후 다시
       // 시도')로 떨어지면 사장이 같은 탭을 무한 반복하게 된다(PHONE_NOT_VERIFIED 가 낸 것과 같은 종류의
       // 무음 오류). /stores 는 자체 lockedUnits 로 미리 막지만 상단바 매장 드롭다운(StoreToggle)은
@@ -1269,9 +1307,16 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         : friendlyError(error.message, '매장을 전환하지 못했어요. 잠시 후 다시 시도해 주세요.');
       return { error: msg };
     }
-    const uid = get().userId;
-    if (uid) await loadProfile(set, uid, get().email);
+    const loaded = await loadProfile(set, uid, email, undefined, targetUnitId);
+    if (!current()) return { error: '계정이 바뀌었어요. 현재 계정에서 매장을 다시 선택해 주세요.' };
+    if (!loaded || get().unitId !== targetUnitId) return failClosed();
     return { error: null };
+    } catch (error) {
+      reportError('session.switchUnit', error);
+      return failClosed();
+    } finally {
+      _switchingUserId = null;
+    }
   },
 
   deleteStore: async (unitId) => {

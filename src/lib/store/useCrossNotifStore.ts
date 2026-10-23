@@ -2,6 +2,7 @@
 // 원시 묶음(UnitNotifData)만 보관하고 판정·목록은 화면이 crossStoreNotifs 유틸로 파생한다.
 // RLS 는 활성 매장만 노출하므로 realtime 불가 — 허브/알림 화면 진입 시점 fetch 로 갱신(폴링 온 포커스).
 import { create } from 'zustand';
+import { currentAccountEpoch, isStaleAccountEpoch } from '@/lib/store/tenantEpoch';
 import { fetchCrossStoreNotifData, fetchMyUnitClosureAlerts, fetchJoinNotices, markFeedRead as dbMarkFeedRead, type UnitNotifData, type UnitClosureAlert } from '@/lib/db';
 import type { JoinNotice } from '@/lib/store/useStaffStore';
 import { guardWrite } from '@/lib/store/useSyncStore';
@@ -44,11 +45,13 @@ export const useCrossNotifStore = create<State>((set, get) => ({
   loadError: false,
 
   hydrate: async () => {
+    const epoch = currentAccountEpoch();
     const now = Date.now();
     if (now - _lastHydrateAt < HYDRATE_TTL_MS) return;
     _lastHydrateAt = now;
     // 합류 결과 읽기 실패는 허브 실패로 보지 않는다(행 하나가 빠질 뿐 · 명부 스토어와 같은 관례).
     const [{ data, error }, { data: closures }, joinRes] = await Promise.all([fetchCrossStoreNotifData(), fetchMyUnitClosureAlerts(), fetchJoinNotices()]);
+    if (isStaleAccountEpoch(epoch)) return;
     if (error || !data) {
       _lastHydrateAt = 0; // 실패는 TTL 미적용 — 다음 진입에서 즉시 재시도
       // ★못 불러왔어도 '기다리기'는 끝났다. 여기서 loaded 를 안 세우면 이 플래그를 게이트에 넣은
@@ -67,6 +70,7 @@ export const useCrossNotifStore = create<State>((set, get) => ({
   },
 
   markFeedRead: async (unitId, feedId, me, writeDb = true) => {
+    const epoch = currentAccountEpoch();
     const prev = get().data;
     const d = prev.find((x) => x.unitId === unitId);
     const item = d?.feed.find((f) => f.id === feedId);
@@ -79,6 +83,6 @@ export const useCrossNotifStore = create<State>((set, get) => ({
     });
     // 실패 = 롤백 + 배너 고지(guardWrite 관례 — markNoticeRead 등 기존 읽음처리 경로와 동일).
     // ★read_by 키만 원자 갱신하는 RPC(0176) — 통째 UPDATE 는 그 사이 바뀐 본문을 되돌린다(#31).
-    if (writeDb) void guardWrite(dbMarkFeedRead(feedId), () => set({ data: prev }), '읽음 처리에 실패했어요.');
+    if (writeDb) void guardWrite(dbMarkFeedRead(feedId), () => { if (!isStaleAccountEpoch(epoch)) set({ data: prev }); }, '읽음 처리에 실패했어요.');
   },
 }));

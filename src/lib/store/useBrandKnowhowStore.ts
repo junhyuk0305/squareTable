@@ -10,6 +10,7 @@
 //   list    — 표 재료(배포 매장 수·배포 버전). 사본은 다른 매장의 행이라 정의자 RPC 로만 센다.
 //   matrix  — 교차표 칸(노하우 × 매장 상태). 사본이 없는 칸은 행이 없다 = 미배포.
 import { create } from 'zustand';
+import { currentAccountEpoch, isStaleAccountEpoch } from '@/lib/store/tenantEpoch';
 import { coalesce } from '@/lib/store/realtimeSync';
 import { fetchEntries } from '@/lib/db';
 import {
@@ -49,7 +50,9 @@ const EMPTY = { wsUnitId: null, entries: [], list: [], matrix: [], loaded: false
 
 export const useBrandKnowhowStore = create<State>((set, get) => {
   const hydrate = coalesce(async () => {
+    const epoch = currentAccountEpoch();
     const ws = await enterBrandWorkspace();
+    if (isStaleAccountEpoch(epoch)) return;
     if (ws.error || !ws.data) {
       reportError('brandKnowhow.enterWorkspace', ws.error ?? { message: 'no_workspace' });
       // 작업실이 없으면 노하우 축 전체가 못 선다 — 빈 표로 위장하지 않고 이유를 말한다.
@@ -57,6 +60,7 @@ export const useBrandKnowhowStore = create<State>((set, get) => {
       return;
     }
     const [e, l, m] = await Promise.all([fetchEntries(), fetchBrandKnowhow(), fetchBrandDeployMatrix()]);
+    if (isStaleAccountEpoch(epoch)) return;
     const err = l.error ?? m.error;
     if (e.error || err) {
       if (err) reportError('brandKnowhow.hydrate', err);
@@ -80,7 +84,9 @@ export const useBrandKnowhowStore = create<State>((set, get) => {
     hydrate,
     refresh: hydrate,
     deploy: async (entryIds, unitIds, required = false) => {
+      const epoch = currentAccountEpoch();
       const r = await deployBrandEntries(entryIds, unitIds, required);
+      if (isStaleAccountEpoch(epoch)) return { data: null, error: '계정이 바뀌었어요. 현재 계정에서 다시 확인해 주세요.' };
       if (r.error) {
         reportError('brandKnowhow.deploy', r.error);
         return { data: null, error: brandErrorMessage(r.error, '배포하지 못했어요.') };

@@ -70,7 +70,13 @@ function ReturnBody() {
         await refreshMembership();
         setPhase('done');
         setTitle('카드를 바꿨어요');
-        const charged = r.body.charged as { done?: number; failed?: number } | undefined;
+        const charged = r.body.charged as { done?: number; failed?: number; pending?: number } | undefined;
+        // 카드 교체 성공과 재결제 결과는 별개다. 응답 대기를 승인 거절로 표시하지 않는다.
+        if (r.body.retried && (charged?.pending || (!charged?.done && !charged?.failed))) {
+          setPhase('pending');
+          setDetail('밀린 결제 결과를 확인 중이에요. 잠시 후 요금제 화면에서 확인해 주세요.');
+          return;
+        }
         setDetail(
           r.body.retried
             ? charged?.done

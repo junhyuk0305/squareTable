@@ -11,6 +11,7 @@
 //   entryMatrix           — 노하우 교차표 칸. 배포 모달이 "함께 내려갈 노하우 n건"을 **미리** 말하는 데 쓴다(지시서 §3-2).
 import { create } from 'zustand';
 import { coalesce } from '@/lib/store/realtimeSync';
+import { currentAccountEpoch, isStaleAccountEpoch } from '@/lib/store/tenantEpoch';
 import { fetchCourseEntriesResult, fetchTrainingCourses, type CourseEntryRow } from '@/lib/db';
 import {
   enterBrandWorkspace,
@@ -52,7 +53,9 @@ const EMPTY = { wsUnitId: null, courses: [], courseEntries: [], list: [], matrix
 
 export const useBrandQuizStore = create<State>((set, get) => {
   const hydrate = coalesce(async () => {
+    const epoch = currentAccountEpoch();
     const ws = await enterBrandWorkspace();
+    if (isStaleAccountEpoch(epoch)) return;
     if (ws.error || !ws.data) {
       reportError('brandQuiz.enterWorkspace', ws.error ?? { message: 'no_workspace' });
       set({ loaded: true, error: brandErrorMessage(ws.error) });
@@ -65,6 +68,7 @@ export const useBrandQuizStore = create<State>((set, get) => {
       fetchBrandCourseMatrix(),
       fetchBrandDeployMatrix(),
     ]);
+    if (isStaleAccountEpoch(epoch)) return;
     const err = l.error ?? m.error ?? em.error;
     // N08: 담긴 노하우를 못 읽으면 빈 퀴즈로 보이지 않게 실패로 둔다.
     if (c.error || ce.error || err) {
@@ -90,7 +94,9 @@ export const useBrandQuizStore = create<State>((set, get) => {
     hydrate,
     refresh: hydrate,
     deploy: async (courseId, unitIds, required = false) => {
+      const epoch = currentAccountEpoch();
       const r = await deployBrandCourse(courseId, unitIds, required);
+      if (isStaleAccountEpoch(epoch)) return { data: null, error: '계정이 바뀌었어요. 현재 계정에서 다시 확인해 주세요.' };
       if (r.error) {
         reportError('brandQuiz.deploy', r.error);
         return { data: null, error: brandErrorMessage(r.error, '배포하지 못했어요.') };

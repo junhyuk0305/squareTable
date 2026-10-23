@@ -24,6 +24,7 @@ import { UNSECTIONED } from '@/lib/config/sections';
 import { EXTRACTION_MASTER } from '@/data/extraction-master';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import { aiCapNextStep } from '@/lib/config/tiers';
 import { showUpgradeHint } from '@/lib/config/store-policy';
 import { showToast } from '@/lib/store/useToastStore';
@@ -137,6 +138,7 @@ function HandoverImportBody() {
   const run = useCallback(async () => {
     if (tooShort) { setError('인수인계 내용을 조금 더 붙여넣어 주세요 (오픈·마감·규칙 등).'); return; }
     if (pipelineRunning) { showToast('이미 정리가 진행 중이에요. 잠시 후 검토 대기에서 확인해 주세요.', 'warn'); return; }
+    const epoch = currentTenantEpoch();
     setError(null);
     setNote(null);
     const { chunks, truncatedChunks } = chunkDocument(trimmed);
@@ -153,6 +155,8 @@ function HandoverImportBody() {
     const persistChunk = async (chunk: DocChunk, segs: StructuredSegment[]) => {
       let ok = 0;
       for (const seg of segs) {
+        // 화면을 나가도 같은 매장이면 계속한다. 계정·매장이 바뀌면 새 초안을 만들기 전에 중단한다.
+        if (isStaleEpoch(epoch)) throw new Error('import_tenant_changed');
         const entry = buildPlaybookEntryFromSquare(
           buildDirectUq(seg.category, seg.title),
           seg.square,
@@ -167,6 +171,7 @@ function HandoverImportBody() {
         );
         if (await addEntry(entry)) ok++;
         else failedSaves++;
+        if (isStaleEpoch(epoch)) throw new Error('import_tenant_changed');
       }
       if (segs.length > 0 && ok === 0) {
         throw new Error('draft_save_failed'); // 0063 미적용(PGRST204)·오프라인 등 — 파이프 중단
@@ -180,8 +185,9 @@ function HandoverImportBody() {
         chunks,
         categoryGuide: EXTRACTION_MASTER,
         persistChunk,
-        onProgress: (p) => { if (mounted.current) setProg(p); },
+        onProgress: (p) => { if (mounted.current && !isStaleEpoch(epoch)) setProg(p); },
       });
+      if (isStaleEpoch(epoch)) throw new Error('import_tenant_changed');
       if (!mounted.current) return;
       const notes: string[] = [];
       if (truncatedChunks > 0) notes.push(`문서가 길어 앞 ${chunks.length}묶음만 정리했어요 — 남은 부분은 추가한 뒤 이어서 붙여넣어 주세요.`);
@@ -196,6 +202,10 @@ function HandoverImportBody() {
       setRawText('');
       setPhase('review');
     } catch {
+      if (isStaleEpoch(epoch)) {
+        showToast('매장이 바뀌어 문서 정리를 멈췄어요. 이전 매장에서 검토 대기를 확인해 주세요.', 'warn');
+        return;
+      }
       if (!mounted.current) return;
       // 이미 저장된 draft는 남아 있다(체크포인트). 판단은 스냅샷(스테일 클로저)이 아니라 스토어 현재값으로 —
       // 이 run이 저장한 것뿐 아니라 이전 세션 잔여 draft도 포함해야 정확하다.

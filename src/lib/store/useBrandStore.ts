@@ -8,6 +8,7 @@
 //   얹으면 어느 화면을 열든 전 매장 요약이 따라 나간다. 매장 축은 `useBrandUnitsStore`,
 //   매장 상세의 직영 규칙·부담 날짜는 `useBrandUnitDetailStore`, 청구는 `useBrandBillingStore`.
 import { create } from 'zustand';
+import { currentAccountEpoch, isStaleAccountEpoch } from '@/lib/store/tenantEpoch';
 import { coalesce } from '@/lib/store/realtimeSync';
 import {
   fetchMyBrandFull,
@@ -35,7 +36,9 @@ const EMPTY: Pick<State, 'brand' | 'members' | 'loaded' | 'error'> = {
 
 export const useBrandStore = create<State>((set) => {
   const hydrate = coalesce(async () => {
+    const epoch = currentAccountEpoch();
     const [b, m] = await Promise.all([fetchMyBrandFull(), fetchBrandMembers()]);
+    if (isStaleAccountEpoch(epoch)) return;
     const err = b.error ?? m.error;
     if (err) {
       reportError('brand.hydrate', err);

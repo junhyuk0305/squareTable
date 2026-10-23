@@ -7,6 +7,7 @@ import { MiniCalendar } from '@/components/blocks/MiniCalendar';
 import { useDayparts, useDaypartLabels, assigneesOf, type NewTask, type TaskSection, type TaskTemplate, type Recurrence } from '@/lib/store/useWorkStore';
 import { type Member } from '@/components/work/MentionInput';
 import { maskHHMM } from '@/lib/utils/attendance';
+import { genId } from '@/lib/utils/id';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
@@ -46,15 +47,15 @@ export function TaskComposerModal({
 }: {
   onClose: () => void;
   /** 신규 등록 — 다중 배정이면 담당자 수만큼 NewTask 배열로 넘어온다. */
-  onSubmit: (inputs: NewTask[]) => void;
+  onSubmit: (inputs: NewTask[], taskIds: string[]) => Promise<boolean> | boolean | void;
   /** 수정 저장(editTemplate 있을 때). */
-  onEdit?: (id: string, patch: NewTask) => void;
+  onEdit?: (id: string, patch: NewTask, retryId: string) => Promise<boolean> | boolean;
   /** 삭제(수정 모드에서 노출). */
   onDelete?: (id: string) => void;
   /** 있으면 '수정' 모드 — 기존 할일을 프리필하고 저장 시 onEdit 호출. */
   editTemplate?: TaskTemplate;
   /** 같은 할일이 이미 등록돼 있는지 검사(있으면 등록을 막고 경고를 띄운다). */
-  isDuplicate?: (input: NewTask) => boolean;
+  isDuplicate?: (input: NewTask, retryId?: string) => boolean;
   isOwner: boolean;
   me: string;
   today: string;
@@ -78,8 +79,12 @@ export function TaskComposerModal({
   /** 루틴 모드의 요약 줄에 쓸 카테고리 이름(이 루틴이 속한 시간대). */
   routineSectionLabel?: string;
   /** 루틴 모드 저장 — 담당 없음이면 assigneeId 는 undefined. */
-  onSubmitRoutine?: (d: { text: string; description?: string; remindAt?: string; assigneeId?: string }) => void;
+  onSubmitRoutine?: (d: { text: string; description?: string; remindAt?: string; assigneeId?: string }) => Promise<boolean> | boolean | void;
 }) {
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const submittingRef = useRef(false);
+  const [saveIds, setSaveIds] = useState<string[]>([]);
   const isEdit = !!editTemplate;
   const dayparts = useDayparts();
   const DL = useDaypartLabels();
@@ -256,34 +261,48 @@ export function TaskComposerModal({
   // 중복 검사 — 신규 등록에서만(수정은 자기 자신과 겹칠 수 있어 제외). 담당자 구성까지 같으면 중복.
   const isDup = useMemo(() => {
     if (isEdit) return false;
-    return buildInputs().some((input) => !!isDuplicate?.(input));
+    return buildInputs().some((input, index) => !!isDuplicate?.(input, saveIds[index]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, when, pickedDate, dows, section, personalMode, picked, isOwner, me, today, isDuplicate, isEdit]);
+  }, [text, when, pickedDate, dows, section, personalMode, picked, isOwner, me, today, isDuplicate, isEdit, saveIds]);
 
-  function submit() {
-    if (!canSubmit) return;
-    if (routineMode) {
-      onSubmitRoutine?.({
-        text: text.trim(),
-        description: description.trim() || undefined,
-        ...(remindOn && remindValid && remindAt ? { remindAt } : null),
-        // 담당은 한 명만 — 루틴은 '이 일을 맡은 사람' 꼬리표라 여러 명이라는 개념이 없다.
-        ...(picked[0] ? { assigneeId: picked[0] } : null),
-      });
-      onClose();
-      return;
+  async function submit() {
+    if (!canSubmit || submittingRef.current) return;
+    submittingRef.current = true;
+    setSaving(true);
+    setSaveError('');
+    try {
+      let ok: boolean | void;
+      if (routineMode) {
+        if (!onSubmitRoutine) return;
+        ok = await onSubmitRoutine({
+          text: text.trim(),
+          description: description.trim() || undefined,
+          ...(remindOn && remindValid && remindAt ? { remindAt } : null),
+          // 담당은 한 명만 — 루틴은 '이 일을 맡은 사람' 꼬리표라 여러 명이라는 개념이 없다.
+          ...(picked[0] ? { assigneeId: picked[0] } : null),
+        });
+      } else if (isEdit && editTemplate && onEdit) {
+        const input = buildEditInput();
+        if (!input) return;
+        const retryId = saveIds[0] ?? genId('t');
+        setSaveIds([retryId]);
+        ok = await onEdit(editTemplate.id, input, retryId);
+      } else {
+        const inputs = buildInputs();
+        if (inputs.length === 0 || isDup) return;
+        const ids = inputs.map((_, index) => saveIds[index] ?? genId('t'));
+        setSaveIds(ids);
+        ok = await onSubmit(inputs, ids);
+      }
+      // 업무 설정의 루틴 편집은 로컬 초안이므로 반환값 없이 동기 완료된다.
+      if (ok !== false) onClose();
+      else setSaveError('저장하지 못한 내용이 있어요. 다시 저장해 주세요.');
+    } catch {
+      setSaveError('저장 결과를 확인하지 못했어요. 다시 저장해 주세요.');
+    } finally {
+      submittingRef.current = false;
+      setSaving(false);
     }
-    if (isEdit && editTemplate && onEdit) {
-      const input = buildEditInput();
-      if (!input) return;
-      onEdit(editTemplate.id, input);
-      onClose();
-      return;
-    }
-    const inputs = buildInputs();
-    if (inputs.length === 0 || isDup) return; // 중복이면 등록 막음(경고는 화면에 이미 떠 있다)
-    onSubmit(inputs);
-    onClose();
   }
 
   function revealScroll() {
@@ -291,12 +310,12 @@ export function TaskComposerModal({
   }
 
   return (
-    <BottomSheet visible={true} onClose={onClose} sheetStyle={{ height: '86%' }}>
+    <BottomSheet visible={true} onClose={() => { if (!submittingRef.current) onClose(); }} sheetStyle={{ height: '86%' }}>
           <Text style={s.title}>
             {routineMode ? (isEdit ? '루틴 업무 수정' : '루틴 업무 추가') : isEdit ? '할일 수정' : '할일 추가'}
           </Text>
 
-          <ScrollView keyboardShouldPersistTaps="handled" ref={scrollRef} style={s.scroll} contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
+          <ScrollView pointerEvents={saving ? 'none' : 'auto'} keyboardShouldPersistTaps="handled" ref={scrollRef} style={s.scroll} contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
             {/* ★추가되는 칸은 이것 하나다 — 배정과 공개를 가르는 축. 큰 카드 버튼을 만들지 않는다.
                 루틴은 매장 공통 일이라 이 선택 자체가 없다. */}
             {!routineMode && (
@@ -533,10 +552,12 @@ export function TaskComposerModal({
                 <Text style={s.destText} numberOfLines={1}>{isEdit ? '이렇게 바뀌어요' : '여기에 등록돼요'} · <Text style={s.destStrong}>{destLabel}</Text></Text>
               </View>
             )}
+            {!!saveError && <Text accessibilityRole="alert" style={s.infoText}>{saveError}</Text>}
             <View style={s.footBtns}>
               {/* 루틴 삭제는 여기서 하지 않는다 — 루틴을 지우는 자리는 업무 설정 한 곳이다(지우는 문을 둘로 만들지 않는다). */}
               {isEdit && !routineMode && onDelete && editTemplate && (
                 <Pressable
+                  disabled={saving}
                   onPress={() => { onDelete(editTemplate.id); onClose(); }}
                   style={({ pressed }) => [s.delBtn, pressed && { opacity: 0.85 }]}
                   accessibilityRole="button"
@@ -546,9 +567,9 @@ export function TaskComposerModal({
                   <Text style={s.delText}>삭제</Text>
                 </Pressable>
               )}
-              <Pressable onPress={submit} disabled={!canSubmit || isDup} style={({ pressed }) => [s.cta, { flex: 1 }, (!canSubmit || isDup) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
+              <Pressable onPress={submit} disabled={saving || !canSubmit || isDup} style={({ pressed }) => [s.cta, { flex: 1 }, (saving || !canSubmit || isDup) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
                 <Text style={s.ctaText}>
-                  {routineMode ? (isEdit ? '수정 저장' : '루틴 업무 추가') : isEdit ? '수정 저장' : isDup ? '이미 등록됨' : '할일 등록'}
+                  {saving ? '저장 중…' : routineMode ? (isEdit ? '수정 저장' : '루틴 업무 추가') : isEdit ? '수정 저장' : isDup ? '이미 등록됨' : '할일 등록'}
                 </Text>
               </Pressable>
             </View>

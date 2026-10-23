@@ -41,7 +41,7 @@ import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
 import { useBrandQuizStore } from '@/lib/store/useBrandQuizStore';
 import { useBrandBillingStore } from '@/lib/store/useBrandBillingStore';
 import { setCustomCategoryRegistry } from '@/lib/store/knowhowCategories';
-import { bumpTenantEpoch } from '@/lib/store/tenantEpoch';
+import { bumpTenantEpoch, bumpAccountEpoch } from '@/lib/store/tenantEpoch';
 
 /** 활성 매장 하나의 데이터 — 매장이 바뀌면 비운다. */
 const UNIT_STORES: StoreApi<any>[] = [
@@ -75,6 +75,7 @@ function resetUnitData() {
 }
 
 function resetTenantData() {
+  bumpAccountEpoch();
   resetUnitData();
   ACCOUNT_STORES.forEach(toInitial);
   resetHubHydrateTtl();
