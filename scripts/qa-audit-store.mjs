@@ -45,6 +45,9 @@ console.log('[C1] 무료 매장 좌석 잠금은 한 판정 — 상한(free_staf
     const d = lastDef(fn);
     check(`★${fn} 가 상한을 free_staff_cap() 에서 읽는다`, /free_staff_cap\(\)/.test(d.body) && !/(>=|<=|>|-|:=)\s*3\b/.test(d.body), d.file);
   }
+  // 상한보다 긴 옛 명단(3명 시절)이 남으면 그 사람들이 전부 안 잠긴다 — 0336 이 비운다.
+  check('★상한을 넘는 옛 명단(unit_kept_seats)을 비운다',
+    /delete from public\.unit_kept_seats[\s\S]*having count\(\*\) > public\.free_staff_cap\(\)/.test(sqlStrip(read(`supabase/migrations/${cap.file}`))), cap.file);
   check('seat_locked_for 는 내부 판정이다(클라 실행 불가)',
     fileHas(p.file, 'revoke all on function public.seat_locked_for(text, uuid) from public, anon, authenticated;'));
 
