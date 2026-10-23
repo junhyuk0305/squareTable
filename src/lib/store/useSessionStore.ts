@@ -49,6 +49,7 @@ import { emailChangeApplied, emailChangeRedirectTo } from '@/lib/account/findEma
 import { siteOrigin } from '@/lib/config/site';
 import { deleteAccountError, type DeleteStoreResult } from '@/lib/account/storeCopy';
 import { UNDER_14_TEXT, type ConsentKey } from '@/lib/config/consent';
+import { clearUserPendingDrafts } from '@/lib/storage/pendingDraft';
 
 // 0093: 세션 유효 역할. 활성 매장의 unit_members.role 에서 파생된다(owner·manager·junior 모두).
 // 판정은 sessionRole.ts deriveStoreRole 한 곳이고, loadProfile 이 그것을 부르는 유일한 지점이다.
@@ -1380,6 +1381,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           }
         },
       });
+      // 실패 뒤 남긴 업무·퀴즈 초안을 지운다(C1·C8). 실패해도 로그아웃은 계속한다.
+      if (userId) await clearUserPendingDrafts(userId).catch(() => {});
     }
     // 신원·매장 값을 전부 비운다. 매장 데이터 스토어는 tenantReset.ts 가 userId 변화를 보고 비운다.
     // 세대를 올려 푸시 해제를 기다리는 사이 시작된 loadProfile 이 끝나도 signed_in 으로 되살리지 않게 한다(G1).

@@ -359,6 +359,13 @@ function TaskComposerBody({
     }
   }
 
+  async function discardDraft() {
+    if (submittingRef.current) return;
+    await clearPendingDraft(draftKey).catch(() => {});
+    setSaveIds([]);
+    onClose();
+  }
+
   function revealScroll() {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 30);
   }
@@ -607,6 +614,12 @@ function TaskComposerBody({
               </View>
             )}
             {!!saveError && <Text accessibilityRole="alert" style={s.infoText}>{saveError}</Text>}
+            {/* 실패 뒤 남긴 초안·재시도 id 를 사용자가 직접 버린다. 버리면 다음에 열 때 새로 시작한다. */}
+            {!routineMode && !saving && (!!saveError || !!draft) && (
+              <Pressable onPress={() => void discardDraft()} style={s.khOpenBtn} accessibilityRole="button">
+                <Text style={s.khOpenText}>작성 중인 내용 버리기</Text>
+              </Pressable>
+            )}
             <View style={s.footBtns}>
               {/* 루틴 삭제는 여기서 하지 않는다 — 루틴을 지우는 자리는 업무 설정 한 곳이다(지우는 문을 둘로 만들지 않는다). */}
               {isEdit && !routineMode && onDelete && editTemplate && (
