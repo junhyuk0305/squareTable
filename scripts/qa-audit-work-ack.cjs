@@ -64,7 +64,7 @@ function fixture(options = {}) {
     '@/lib/store/useRoomStore': { useRoomStore: { getState: () => ({ currentRoomId: 'qa-room' }) } },
     '@/lib/store/useScheduleStore': { useScheduleStore: { getState: () => ({ config: {} }) } },
     '@/lib/store/useSessionStore': { useSessionStore: { getState: () => ({ userId: 'qa-owner', userName: 'QA' }) } },
-    '@/lib/push/notify': { notifyUserAssign: uid => { counts.push++; (counts.pushTo ??= []).push(uid); } },
+    '@/lib/push/notify': {},
   };
   store = load('src/lib/store/useWorkStore.ts', mocks, cache).useWorkStore;
   const reset = () => { epoch.bumpTenantEpoch(); store.setState(store.getInitialState(), true); };

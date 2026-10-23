@@ -95,11 +95,11 @@ async function main() {
   function tenantCase(db) {
     const cache = new Map();
     const epoch = load('src/lib/store/tenantEpoch.ts', {}, cache);
-    let notifications = 0;
+    const notifications = 0;
     const local = load('src/lib/store/useWorkStore.ts', {
       ...mocks,
       '@/lib/db': { insertTemplate: async () => true, updateTemplate: async () => true, insertTemplateKnowhow: async () => true, deleteTemplateKnowhow: async () => true, ...db },
-      '@/lib/push/notify': { notifyUserAssign: () => { notifications++; } },
+      '@/lib/push/notify': {},
     }, cache).useWorkStore;
     const reset = extractedFunction('src/lib/store/tenantReset.ts', 'resetUnitData', {
       bumpTenantEpoch: epoch.bumpTenantEpoch, UNIT_STORES: [local],

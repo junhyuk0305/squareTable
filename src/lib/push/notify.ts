@@ -275,17 +275,6 @@ export const notifyUserMention = (userId: string, author: string, text: string, 
     body: text,
   });
 
-/** 할일 배정 — 사장/동료가 나에게 할일을 배정했을 때 그 담당자에게만. 착지는 그 할일(taskRoute · 벨과 같다). */
-export const notifyUserAssign = (userId: string, author: string, text: string, templateId?: string) =>
-  pushNotify({
-    audience: 'user',
-    kind: 'assign',
-    itemId: templateId,
-    userId,
-    title: NOTIF.assign.title(author),
-    body: text,
-  });
-
 /** 훈련 요청(0102) — 관리자가 나에게 이해 확인을 요청했을 때 그 직원에게만.
  *  요청(training_requests)은 발송 원장(quiz_assignments) 행이 없어 ?quiz=<발송 id> 를 못 싣는다 → 업무 탭 착지(카드가 '요청'으로 뜬다). */
 export const notifyUserTraining = (userId: string, author: string, text: string) =>
