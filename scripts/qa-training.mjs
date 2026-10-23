@@ -686,8 +686,11 @@ async function main() {
 
   // ── ⑨ 응시 단위 점수(0112) ───────────────────────────────────────────────
   console.log('\n━━ ⑨ 응시 점수(0112) ━━');
+  // 0321 §7: 직원 직접 insert 는 회수됐다. 응시 기록은 제출 RPC(quiz_staff_record_v2)가 서버 채점으로 쓴다.
   { const { error } = await jA.from('quiz_attempts').insert({ unit_id: UNIT, entry_id: E[0], staff_id: jAId, total: 3, correct: 2 });
-    check('⑨-1 직원 본인 응시 기록', !error, error?.message ?? ''); }
+    check('⑨-1a 직원 직접 응시 기록 insert 차단(0321)', !!error, error ? `거부 ${error.code ?? ''}` : '(차단 안됨!)'); }
+  const { data: SUB9, error: sub9Err } = await jA.rpc('quiz_staff_record_v2', { p_course_id: CF, p_request_id: `t9_${s}`, p_rows: [{ item_id: QMC, response: 1, ord: 0 }] });
+  check('⑨-1 직원 본인 응시 기록(제출 RPC)', !sub9Err && !!SUB9, sub9Err?.message ?? `sub=${SUB9}`);
   { const { error } = await jA.from('quiz_attempts').insert({ unit_id: UNIT, entry_id: E[0], staff_id: ownerId, total: 3, correct: 3 });
     check('⑨-2 남의 명의 응시 기록 차단(WITH CHECK)', !!error, error ? `거부 ${error.code ?? ''}` : '(차단 안됨!)'); }
   { const { error } = await jA.from('quiz_attempts').insert({ unit_id: UNIT, entry_id: E[0], staff_id: jAId, guest_name: '둘다', total: 1, correct: 1 });
@@ -695,7 +698,7 @@ async function main() {
   { const { error } = await jA.from('quiz_attempts').insert({ unit_id: UNIT, entry_id: E[0], staff_id: jAId, total: 2, correct: 5 });
     check('⑨-4 맞은 개수 > 전체 차단(check)', !!error, error ? `거부 ${error.code ?? ''}` : '(차단 안됨!)'); }
   { const { data } = await owner.from('quiz_attempts').select('entry_id, staff_id, total, correct');
-    check('⑨-5 사장은 매장 전체 응시 열람', (data ?? []).some((a) => a.staff_id === jAId && a.total === 3 && a.correct === 2), `n=${data?.length}`); }
+    check('⑨-5 사장은 매장 전체 응시 열람', (data ?? []).some((a) => a.staff_id === jAId && a.entry_id === E[0] && a.total === 1 && a.correct === 1), `n=${data?.length}`); }
   {
     // 직원끼리는 서로 못 본다 — 사장 명의 기록을 admin 으로 심고 직원 시야에서 빠지는지 본다.
     await admin.from('quiz_attempts').insert({ unit_id: UNIT, entry_id: E[1], staff_id: ownerId, total: 4, correct: 4 });
@@ -780,10 +783,12 @@ async function main() {
     check('⑩-16 ★코스 밖 문항으로 점수 심기 차단(0행)', data === 0, `n=${data}`); }
   {
     // ★클라가 정오답을 정하지 못한다 — 오답 응답을 보내면 서버 재채점으로 correct=0 이 된다.
+    //   0321 §11: '번호 확인됨'도 앱 주장(p_phone_verified=true)이 아니라 서버 인증 기록(phone_otps 1시간 안)으로 정한다.
+    //   이 번호는 인증 기록이 없으니 true 를 보내도 false 로 남아야 한다.
     await g.rpc('quiz_link_submit', { p_token: TOK, p_guest_name: '오답박', p_guest_phone: '01098765432', p_phone_verified: true, p_answers: [{ item_id: QMC, response: 0 }] });
     const { data } = await owner.from('quiz_attempts').select('guest_name, guest_phone_verified, total, correct').eq('entry_id', E[0]);
     const row = (data ?? []).find((a) => a.guest_name === '오답박');
-    check('⑩-16b ★정오답은 서버가 정한다(오답 응답 → correct=0)', !!row && row.total === 1 && row.correct === 0 && row.guest_phone_verified === true, JSON.stringify(row));
+    check('⑩-16b ★정오답은 서버가 정한다(오답 응답 → correct=0)', !!row && row.total === 1 && row.correct === 0 && row.guest_phone_verified === false, JSON.stringify(row));
   }
   { const { data, error } = await owner.from('quiz_attempt_items').select('item_id, ord, format, payload, response, correct').eq('submission_id', SUB);
     const row = (data ?? [])[0];
