@@ -30,6 +30,7 @@ import { QUIZ_RENDERERS } from '@/components/work/quiz';
 import { openQuizLink, fetchQuizLinkItems, gradeQuizLink, submitQuizLink, type QuizLinkInfo } from '@/lib/db';
 import { usePhoneOtp } from '@/lib/otp';
 import { HAS_SUPABASE } from '@/lib/supabase';
+import { track } from '@/lib/analytics/track';
 import { formatPhone, isValidPhone, normalizePhone } from '@/lib/utils/validation';
 import { genId } from '@/lib/utils/id';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -111,6 +112,7 @@ export default function QuizLinkScreen() {
     if (usable.length === 0) { setPhase('closed'); return; }
     setItems(usable);
     setPhase('quiz');
+    track('quiz_start', { source: 'link', items: usable.length }); // 토큰·이름·번호는 싣지 않는다
   }, [canStart, tk]);
 
   /**

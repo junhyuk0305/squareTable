@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { StoredImage } from '@/components/StoredImage';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +12,7 @@ import { Space } from '@/lib/theme/layout';
 import { BadgeStyles } from '@/lib/theme/badge';
 import { knowhowSourceLabel } from '@/lib/utils/knowhowSource';
 import type { PlaybookEntry } from '@/types';
+import { track } from '@/lib/analytics/track';
 
 /**
  * EntryDetailModal — '물어보기' 답변의 [출처]를 누르면 원본 노하우 전체를 읽기 전용으로 본다.
@@ -30,6 +32,11 @@ export function EntryDetailModal({
   visible: boolean;
   onClose: () => void;
 }) {
+  // 노하우 열람은 DB 행이 남지 않는 행동이라 계측 이벤트로 남긴다(콘솔 사용자 타임라인).
+  const entryId = entry?.id;
+  useEffect(() => {
+    if (visible && entryId) track('knowhow_view', { entry_id: entryId });
+  }, [visible, entryId]);
   if (!entry) return null;
   const sq = entry.square;
   // 피드백 표본(thumbs_up+thumbs_down) 0이면 배지 숨김 — "해결률 0%"는 실패처럼 읽힌다.

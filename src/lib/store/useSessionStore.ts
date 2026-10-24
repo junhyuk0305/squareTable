@@ -33,7 +33,7 @@ import { sessionReadFailAction } from './sessionReadFail';
 import { sessionBootFault } from './sessionBootFault';
 import { deriveStoreRole } from './sessionRole';
 import { joinRejectAction, type JoinMarker } from './joinRejectDetect';
-import { setAnalyticsContext, track, reportError } from '@/lib/analytics/track';
+import { setAnalyticsContext, track, reportError, flushAnalyticsBeforeSignOut } from '@/lib/analytics/track';
 import { effectivePlanOf, type SubStatusRaw } from '@/lib/utils/subscription';
 import { normalizePlan, type PlanId } from '@/lib/config/tiers';
 import { Platform } from 'react-native';
@@ -1363,6 +1363,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           userId = null;
         }
       }
+      // 쌓인 행동 기록을 이 계정 토큰이 살아 있을 때 보낸다(최대 3초). 로그아웃 뒤에 가면 누구 것인지 못 남긴다(0340).
+      await flushAnalyticsBeforeSignOut();
       await signOutWithPushRelease({
         kv: authStorage,
         userId,

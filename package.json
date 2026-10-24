@@ -127,6 +127,8 @@
     "qa:room-writes": "node scripts/qa-room-client-writes.mjs --allow-remote",
     "qa:feed-boundary": "node scripts/qa-feed-boundary.mjs --allow-remote",
     "qa:swap-guard": "node scripts/qa-swap-guard.mjs --allow-remote",
+    "qa:telemetry": "node scripts/qa-telemetry.mjs --allow-remote",
+    "qa:telemetry:local": "node scripts/qa-telemetry.mjs --local",
     "qa:swap-transfer": "node scripts/qa-swap-transfer.mjs --allow-remote",
     "qa:retention": "node scripts/qa-retention.mjs",
     "qa:member-notices": "node scripts/qa-member-notices.mjs",

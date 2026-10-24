@@ -17,6 +17,7 @@ import { roundResultText, roundStepText, type QuizItemProgress } from '@/lib/qui
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import { pendingDraftKey, loadPendingDraft, savePendingDraft, clearPendingDraft } from '@/lib/storage/pendingDraft';
+import { track } from '@/lib/analytics/track';
 
 type QuizDraft = {
   requestId: string; items: QuizItem[]; marks: boolean[];
@@ -76,6 +77,10 @@ export function UnderstandingCheckSheet({
   const savingRef = useRef(false);
   const close = () => { if (!savingRef.current) onClose(); };
   const onSavingChange = (value: boolean) => { savingRef.current = value; };
+  // 응시 시작은 제출 전엔 행이 없다. 시작 뒤 quiz_attempts 가 없으면 콘솔이 미제출 이탈로 본다.
+  useEffect(() => {
+    track('quiz_start', { source: 'staff', course_id: courseId ?? null });
+  }, [courseId]);
   // '다시 하기'(시트 안 재시도)는 2026-10-15 사용자 결정으로 뺐다 — 틀리면 닫고, 카드에서 다시 시작한다.
   return (
     <BottomSheet visible={true} onClose={close} sheetStyle={{ height: '84%' }}>

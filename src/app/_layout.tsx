@@ -26,6 +26,7 @@ import { injectPwaHead } from '@/lib/pwa/head';
 import { usePushBootstrap } from '@/lib/push/usePushBootstrap';
 import { useAppBadgeSync } from '@/lib/push/appBadge';
 import { initAnalytics, installGlobalErrorHandlers, track } from '@/lib/analytics/track';
+import { useScreenTracking } from '@/lib/analytics/useScreenTracking';
 import { guardMarketingRoutes } from '@/lib/web/marketingGuard';
 
 // 마케팅 경로(/features·/pricing·/cafe…)로 앱이 뜨는 것을 렌더 전에 차단하고 정적 웹으로 돌려보낸다.
@@ -101,6 +102,8 @@ export default function RootLayout() {
   }, [booted]);
   // onDone 은 신원이 고정돼야 한다 — 인라인 화살표면 ready 가 바뀔 때마다 페이드가 다시 시작돼 안 끝난다.
   const handleSplashDone = useCallback(() => setSplashDone(true), []);
+  // 화면 이동·체류 계측 — 스플래시와 세션 로딩 중에는 남기지 않는다.
+  useScreenTracking(booted && splashDone);
 
   if (!fontsLoaded && !fontError) return null;
 
