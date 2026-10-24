@@ -16,6 +16,7 @@ import { TERMS_VERSION, PAYMENT_SLA_SENTENCE } from '@/lib/config/business';
 import { PLANS, PLAN_ORDER, planMonthlyPrice, supplyPrice, VAT_NOTE_SENTENCE, FREE_PROMO, SIGNUP_PROMO, type PlanId } from '@/lib/config/tiers';
 import { SHOW_BILLING, SHOW_CARD_BILLING, showIapSurface, showPaymentSurface } from '@/lib/config/store-policy';
 import { usePaymentClaimStore, CLAIM_ERROR_TEXT } from '@/lib/store/usePaymentClaimStore';
+import { PREPAID_OPEN_BEFORE_MS } from '@/lib/iap/notes';
 import {
   redeemPromoCode,
   fetchUnitSeatStatus,
@@ -25,6 +26,7 @@ import {
   fetchMyCardSubscription,
   fetchMyCardReleaseCandidates,
   fetchRenewsOutsideApp,
+  fetchMyMultiUntil,
   type SeatStatus,
   type IapSubscriptionRow,
   type CardSubscriptionRow,
@@ -143,6 +145,11 @@ function BillingBody() {
   const [cardLoaded, setCardLoaded] = useState(false);
   // 해지 예약 구독의 기간 만료 판정 기준 시각(렌더 중 Date.now() 금지 — 화면 진입 시각으로 고정).
   const [loadedAt] = useState(() => Date.now());
+  // 다점포 기간이 남은 내 매장의 가장 늦은 만료일(0342 my_multi_until) — 있으면 단일을 고르지 못한다.
+  //   단일 결제·신고는 그 매장의 요금제를 단일로 덮어 남은 다점포 기간이 내려간다. 서버도 multi_plan_active 로 막는다.
+  //   ★실패해도 loaded(null = 잠그지 않음) — 요금제 화면이 영영 로딩이 되면 안 된다.
+  const [multiUntil, setMultiUntil] = useState<string | null>(null);
+  const [multiLoaded, setMultiLoaded] = useState(false);
   // 결제 방법 — 카드 결제가 열린 웹에서는 카드가 기본. 계좌이체는 백업 경로라 닫지 않는다.
   const [payMethod, setPayMethod] = useState<'card' | 'transfer'>(SHOW_CARD_BILLING ? 'card' : 'transfer');
   // 무료 이용 코드(0092) — 기본 접힘(화면 요소 예산). 검증·기록·활성화는 전부 서버 RPC.
@@ -188,6 +195,11 @@ function BillingBody() {
       (cardSub.status === 'canceled' && new Date(cardSub.current_period_end).getTime() > loadedAt));
   // 확인 중인 계좌이체 신고가 있으면 계좌이체 쪽만 보여준다(그 상태 카드가 거기 있다) — 카드로 또 내면 서버가 막는다.
   const claimPending = latestClaim?.status === 'pending';
+  // 단일 잠금(0342) — 다점포 기간이 남은 매장이 있으면 새 단일 결제·신고를 못 고른다. 카드 구독 안의 줄이기(다점포 → 단일)는
+  //   다음 결제일부터 바뀌어 남은 기간이 내려가지 않으므로 잠그지 않는다(서버 card_begin_change 도 막지 않는다).
+  //   끝나기 3일 전부터 연다 — 앱 선불 잠금과 같은 경계(PREPAID_OPEN_BEFORE_MS · 서버 single_plan_locked).
+  const singleOpensAt = multiUntil ? new Date(multiUntil).getTime() - PREPAID_OPEN_BEFORE_MS : null;
+  const singleLocked = !cardLive && singleOpensAt !== null && singleOpensAt > loadedAt;
   // 카드 해지·변경 뒤 — 토스트 없이 구독·세션만 다시 읽는다(recheck 는 "현재 ○○ 요금제예요"를 띄운다).
   const reloadCard = async () => {
     await refreshMembership();
@@ -274,11 +286,29 @@ function BillingBody() {
     return () => { alive = false; };
   }, [isOwner, plan]);
 
-  // 화면 단일 게이트 — 이 화면이 읽는 원격 소스는 넷(입금 신고·좌석 현황·앱 구독·카드 구독)이고, 전부 자기 담당
+  // 다점포 기간 — 웹 결제(카드·계좌이체)를 하는 사장만. 결제가 반영되면(plan) 다시 읽는다.
+  useEffect(() => {
+    if (!isOwner || !SHOW_BILLING) return;
+    let alive = true;
+    void fetchMyMultiUntil().then((until) => {
+      if (!alive) return;
+      setMultiUntil(until);
+      // 잠긴 단일이 골라진 채 시작하지 않게(세션 요금제·진입 파라미터가 단일일 수 있다). 게이트가 서기 전이라 깜빡이지 않는다.
+      //   카드 구독 중이면 위 카드 조회가 구독 요금제로 다시 맞춘다(그때는 잠그지 않는다).
+      if (until && new Date(until).getTime() - PREPAID_OPEN_BEFORE_MS > Date.now()) {
+        setSelectedPlan((p) => (p === 'single' ? 'multi' : p));
+      }
+      setMultiLoaded(true);
+    });
+    return () => { alive = false; };
+  }, [isOwner, plan]);
+
+  // 화면 단일 게이트 — 이 화면이 읽는 원격 소스는 다섯(입금 신고·좌석 현황·앱 구독·카드 구독·다점포 기간)이고, 전부 자기 담당
   // 역할에서만 조회한다. 안 부르는 소스를 기다리면 영영 로딩이므로 필요한 쪽만 AND 한다.
   const needsClaims = isOwner && SHOW_BILLING;
   const needsCard = isOwner && SHOW_CARD_BILLING;
-  const ready = (!needsClaims || claimsLoaded) && (!manages || seatLoaded) && (!isOwner || iapLoaded) && (!needsCard || cardLoaded);
+  const ready =
+    (!needsClaims || (claimsLoaded && multiLoaded)) && (!manages || seatLoaded) && (!isOwner || iapLoaded) && (!needsCard || cardLoaded);
 
   // quiet = 이용권 패널이 결제·복원 뒤 반영을 기다리며 부르는 새로고침(5초마다). 토스트를 내지 않는다 —
   //   "현재 ○○ 요금제예요"가 결과 토스트("이 계정으로 산 이용권이 없어요" 등)를 1초 안에 덮었다(2026-09-14).
@@ -628,15 +658,18 @@ function BillingBody() {
                   const def = PLANS[pid];
                   const selected = pid === selectedPlan;
                   const current = pid === plan;
+                  const locked = pid === 'single' && singleLocked;
                   return (
                     <Pressable
                       key={pid}
+                      disabled={locked}
                       onPress={() => { planTouched.current = true; setSelectedPlan(pid); }}
                       style={[styles.planCard, selected && styles.planCardSelected]}
                       accessibilityRole="button"
-                      accessibilityState={{ selected }}
+                      accessibilityState={{ selected, disabled: locked }}
                       accessibilityLabel={`${def.name} 요금제${current ? ' (현재 요금제)' : ''} 선택`}
                     >
+                      <View style={[styles.planBody, locked && styles.planLocked]}>
                       <View style={styles.planHead}>
                         <Ionicons
                           name={selected ? 'radio-button-on' : 'radio-button-off'}
@@ -662,6 +695,13 @@ function BillingBody() {
                       </View>
                       <Text style={styles.planTagline}>{def.tagline}</Text>
                       <Text style={styles.planFeatures}>{def.features.join(' · ')}</Text>
+                      </View>
+                      {locked && singleOpensAt !== null && (
+                        <Text style={styles.planLockedNote}>
+                          {fmtDayKo(new Date(singleOpensAt).toISOString())}부터 단일 매장으로 바꿀 수 있어요. 다점포 이용 기간이{' '}
+                          {fmtDayKo(multiUntil as string)}까지 남아 있어요.
+                        </Text>
+                      )}
                     </Pressable>
                   );
                 })}
@@ -1126,6 +1166,10 @@ const styles = StyleSheet.create({
   planPriceRegular: { fontSize: 12, fontWeight: '600', color: InkColors.ink3, textDecorationLine: 'line-through', marginRight: Space.xs },
   planTagline: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink2, marginTop: 2 },
   planFeatures: { fontSize: 11.5, fontWeight: '600', color: InkColors.ink3, lineHeight: 17 },
+  // 단일 잠금(0342) — 내용만 흐리게 하고 이유 줄은 그대로 읽히게 둔다.
+  planBody: { gap: Space.xs },
+  planLocked: { opacity: 0.4 },
+  planLockedNote: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: BrandColors.warnText, marginTop: Space.xs },
 
   // 입금 신고 상태 카드 — 확인 중(중립) / 반려(경고 보더). 배경은 카드 기본 흰색 유지.
   claimPending: { borderColor: InkColors.ink3 },

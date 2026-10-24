@@ -163,6 +163,7 @@ const NAMED = [
   'customer_key_mismatch', 'not_owner', 'bad_plan', 'bad_store_count', 'consent_required',
   'iap_subscription_active', 'card_subscription_exists', 'payment_claim_pending', 'payment_in_progress',
   'no_active_card_subscription', 'no_billing_key', 'release_required', 'release_mismatch',
+  'card_store_limit', 'multi_plan_active',   // 0342 — 옛 DB 면 안 나오고, 옛 엣지면 unknown 으로 떨어진다(둘 다 동작)
 ];
 const namedError = (msg: string) => NAMED.find((n) => msg.includes(n)) ?? 'unknown';
 

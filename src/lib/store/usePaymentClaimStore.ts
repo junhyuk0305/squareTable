@@ -22,6 +22,7 @@ export type ClaimError =
   | 'bad_biz_no'
   | 'iap_subscription_active'
   | 'card_subscription_active'
+  | 'multi_plan_active'
   | 'unknown';
 
 function toClaimError(message?: string): ClaimError {
@@ -35,6 +36,8 @@ function toClaimError(message?: string): ClaimError {
   if (m.includes('iap_subscription_active')) return 'iap_subscription_active';
   // 웹 카드 자동결제 중 계좌이체 신고를 서버가 막는다(0208) — 이중 청구 방지.
   if (m.includes('card_subscription_active')) return 'card_subscription_active';
+  // 다점포 기간이 남았는데 단일을 신고하면 그 기간이 단일로 내려간다(0342).
+  if (m.includes('multi_plan_active')) return 'multi_plan_active';
   return 'unknown';
 }
 
@@ -47,6 +50,7 @@ export const CLAIM_ERROR_TEXT: Record<ClaimError, string> = {
   // ⛔ 여기에 웹 결제로 유도하는 문구를 넣지 않는다(스토어 위반). 앱에서 처리하라고만 안내한다.
   iap_subscription_active: '앱에서 결제 중이신 요금제가 있어요. 요금제 변경은 앱에서 해 주세요.',
   card_subscription_active: '카드 자동결제를 이용 중이에요. 요금제 변경은 이 화면의 카드 자동결제에서 해 주세요.',
+  multi_plan_active: '다점포 기간이 끝나기 3일 전부터 단일 매장으로 바꿀 수 있어요.',
   unknown: '입금 알림에 실패했어요. 잠시 후 다시 시도해 주세요.',
 };
 

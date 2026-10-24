@@ -15,6 +15,8 @@
 //       잠긴(이전) 매장은 후보가 아니고 갱신 때 되살아나지 않는다
 //    ⑭ 구독 상태 알림(0232, 채널 무관) — 카드·앱 구독 각각 늘었어요·끝나요·끝났어요 1행씩 · 스윕 재실행에도 1행 ·
 //       첫 결제엔 없음 · 계좌이체로 더 길게 열린 매장·본사 부담 매장(로컬만)엔 끝나요·끝났어요 없음 · 문구에 채널·금액 없음
+//    ⑰ 카드 매장 상한 3(0342 · 토스 1회 10만 원) — 첫 결제·늘리기 4개 거절 · 계좌이체는 상한 밖
+//    ⑱ 다점포 기간이 남은 사장의 단일 신청 거절(0342) — 카드·계좌이체 · 기간 끝·본사 부담(로컬만)은 막지 않음
 // B. 엣지(card-billing 이 떠 있을 때만) — precheck 허용 목록 · 토스 연결(가짜 authKey 는 토스가 거절) · renew 인증
 //
 // ⛔ 라이브 DB 에 쓰는 하니스다. 대상은 QA_SUPABASE_URL / QA_SUPABASE_ANON_KEY / QA_SUPABASE_SERVICE_ROLE_KEY 로
@@ -401,6 +403,7 @@ async function dbChecks() {
     await releaseChecks();
     await subAlertChecks();
     await prepaidChecks();
+    await guardChecks();
   } finally {
     if (trial !== null) await svcWrite('PATCH', 'app_config?key=eq.signup_trial_days', { value: trial });
     if (fm !== null) await svcWrite('PATCH', 'app_config?key=eq.billing_free_mode', { value: fm });
@@ -439,10 +442,14 @@ async function releaseChecks() {
   check('★⑬ 예고 취소(지금과 같은 선택) → 명단 비움', none.data?.mode === 'none' && (await choicesOf(S.uid)).length === 0 && (await sub(S.uid))?.pending_plan === null, JSON.stringify(none.data));
 
   await change('multi', 2, [u2]);
-  const up = await change('multi', 4);
+  const over = await change('multi', 4);
+  check('★⑰ 카드 늘리기 4개 → card_store_limit · 예고·명단 그대로(0342)', /card_store_limit/.test(over.err) && (await sub(S.uid))?.pending_store_count === 2 && JSON.stringify(await choicesOf(S.uid)) === JSON.stringify([u2]), over.err || JSON.stringify(over.data));
+  // 카드는 3개까지라(0342) 3 → 4 로 늘릴 수 없다. 구독을 다점포 2 로 내려 둔 상태를 만들고 3 으로 늘려 같은 경로를 본다.
+  await svcWrite('PATCH', `card_subscriptions?owner_id=eq.${S.uid}`, { store_count: 2, amount_krw: 58000 });
+  const up = await change('multi', 3);
   await svcRpc('card_record_charge', { p_order_id: up.data?.order_id, p_ok: true, p_payment_key: 'pk_qa_5up' });
   const sUp = await sub(S.uid);
-  check('★⑬ 늘리기로 되돌리면 예고·명단 비움 · 매장 3곳 계속 열림', sUp?.store_count === 4 && sUp?.pending_plan === null && (await choicesOf(S.uid)).length === 0 && (await unitSub(u2))?.status === 'active', JSON.stringify({ n: sUp?.store_count, p: sUp?.pending_plan }));
+  check('★⑬ 늘리기로 되돌리면 예고·명단 비움 · 매장 3곳 계속 열림', up.data?.mode === 'charge' && sUp?.store_count === 3 && sUp?.pending_plan === null && (await choicesOf(S.uid)).length === 0 && (await unitSub(u2))?.status === 'active', up.err || JSON.stringify({ n: sUp?.store_count, p: sUp?.pending_plan }));
 
   await change('multi', 2, [u1]);
   await S.c.rpc('card_cancel_subscription');
@@ -631,6 +638,80 @@ async function prepaidChecks() {
   check('★★⑮-b 카드 다점포가 선불 A·B 를 덮는다 — 미소비 슬롯 0', recB.ok && open.length === 0, recB.err || `open=${open.length}`);
   check('★⑮-b A 만료일이 줄지 않는다', new Date(a1?.paid_until).getTime() >= new Date(a0?.paid_until).getTime() - 1000, `${a0?.paid_until} → ${a1?.paid_until}`);
   check('★⑮-b B 만료일 ≥ 카드 기간 끝', new Date(b1?.paid_until).getTime() >= new Date(s1?.current_period_end).getTime() - 5000 && new Date(b1?.paid_until).getTime() >= new Date(b0?.paid_until).getTime() - 1000, `${b0?.paid_until} → ${b1?.paid_until} (끝 ${s1?.current_period_end})`);
+}
+
+// ⑰⑱ 0342 — 카드 매장 3개 상한 · 다점포 기간이 남은 사장의 단일 신청 거절(카드·계좌이체). dbChecks 안에서 부른다.
+async function guardChecks() {
+  console.log('\n■ ⑰ 카드 매장 상한 3 · ⑱ 다점포 기간 중 단일 거절(0342)');
+  const clearOrders = (o) => svcWrite('DELETE', `card_payments?owner_id=eq.${o.uid}`);
+  const claimSingle = (o) => o.c.rpc('submit_payment_claim', { p_plan: 'single', p_depositor: 'QA', p_terms_version: TERMS, p_store_count: 1 });
+
+  // ⑰ 상한
+  const G = await account(6);
+  check('★⑰ 카드 첫 결제 4개 → card_store_limit', /card_store_limit/.test((await begin(G, 'multi', 4)).err));
+  const ok3 = await begin(G, 'multi', 3);
+  check('⑰ 카드 첫 결제 3개는 된다 · 87,000', ok3.ok && orderOf(ok3)?.amount_krw === 87000, ok3.err || JSON.stringify(ok3.data));
+  await clearOrders(G);
+  const c15 = await G.c.rpc('submit_payment_claim', { p_plan: 'multi', p_depositor: 'QA', p_terms_version: TERMS, p_store_count: 5 });
+  check('⑰ 계좌이체는 상한 밖(5개 신고 가능)', !c15.error && c15.data?.store_count === 5, c15.error?.message ?? '');
+  await svcWrite('DELETE', `payment_claims?claimed_by=eq.${G.uid}`);
+
+  // ⑱ 다점포 기간이 남은 매장
+  await svcRpc('admin_activate_store', { p_unit_id: G.unit, p_days: 40, p_plan: 'multi' });
+  const mu = (await G.c.rpc('my_multi_until')).data;
+  const us = await unitSub(G.unit);
+  check('⑱ my_multi_until = 다점포 매장 만료일', !!mu && near(mu, us?.paid_until, 5000), `${mu} / ${us?.paid_until}`);
+  check('★⑱ 다점포 기간 중 카드 단일 → multi_plan_active', /multi_plan_active/.test((await begin(G, 'single', 1)).err));
+  const cs = await claimSingle(G);
+  check('★⑱ 다점포 기간 중 계좌이체 단일 → multi_plan_active', /multi_plan_active/.test(cs.error?.message ?? ''), cs.error?.message ?? 'no error');
+  const cm = await begin(G, 'multi', 2);
+  check('⑱ 다점포 기간 중에도 다점포 카드 결제는 된다', cm.ok, cm.err);
+  await clearOrders(G);
+  check('⑱ 매장 요금제는 그대로 다점포', (await unitSub(G.unit))?.plan === 'multi');
+  const svcMu = await svcRpc('owner_multi_until', { p_owner: G.uid });
+  const anonMu = await fetch(`${URL}/rest/v1/rpc/owner_multi_until`, { method: 'POST', headers: { apikey: ANON, Authorization: `Bearer ${G.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_owner: G.uid }) });
+  check('⑱ owner_multi_until 은 사장 토큰으로 못 부른다(남의 계정 조회 불가)', svcMu.ok && !anonMu.ok, `svc ${svcMu.status} / owner ${anonMu.status}`);
+
+  // ⑱ 끝나기 3일 전부터는 막지 않는다(앱 선불 잠금 notes.ts PREPAID_OPEN_BEFORE_MS 와 같은 경계)
+  await svcWrite('PATCH', `unit_subscriptions?unit_id=eq.${G.unit}`, { paid_until: days(3.2) });
+  check('★⑱ 다점포가 3일 넘게 남으면(3.2일) 카드 단일 거절', /multi_plan_active/.test((await begin(G, 'single', 1)).err));
+  await svcWrite('PATCH', `unit_subscriptions?unit_id=eq.${G.unit}`, { paid_until: days(2.8) });
+  const near3 = await begin(G, 'single', 1);
+  check('★⑱ 다점포가 3일 안 남으면(2.8일) 카드 단일 가능', near3.ok, near3.err);
+  await clearOrders(G);
+  const near3c = await claimSingle(G);
+  check('★⑱ 다점포가 3일 안 남으면 계좌이체 단일 가능', !near3c.error && near3c.data?.plan === 'single', near3c.error?.message ?? '');
+  await svcWrite('DELETE', `payment_claims?claimed_by=eq.${G.uid}`);
+
+  // ⑱ 기간이 끝난 다점포는 막지 않는다
+  await svcWrite('PATCH', `unit_subscriptions?unit_id=eq.${G.unit}`, { paid_until: days(-0.01) });
+  const muEnd = await G.c.rpc('my_multi_until');
+  check('⑱ 다점포 기간이 끝났으면 my_multi_until = null', !muEnd.error && muEnd.data === null, muEnd.error?.message ?? '');
+  const after = await begin(G, 'single', 1);
+  check('★⑱ 다점포 기간이 끝났으면 카드 단일 가능', after.ok, after.err);
+  await clearOrders(G);
+
+  // ⑱ 본사 부담 다점포 매장은 단일 경로가 고르지 않으므로 막지 않는다 — 로컬만(라이브에 본사 행을 만들지 않는다)
+  if (!/127\.0\.0\.1|localhost/.test(URL)) { skipped('⑱ 본사 부담 매장', '라이브 대상 — 본사 행을 만들지 않는다'); return; }
+  const brandId = `qa_guard_brand_${Date.now()}`;
+  try {
+    await svcRpc('admin_activate_store', { p_unit_id: G.unit, p_days: 40, p_plan: 'multi' });
+    await svcWrite('POST', 'brands', { id: brandId, name: 'QA가드본사' });
+    // unit_brand_paid(0235) = active · payer brand · 부담 시작일이 오늘 이전. 셋 다 채워야 본사 부담 매장이다.
+    //   insert 트리거(brand_unit_payer_dates)는 시작일을 매장 자기 기간 뒤로 박는다 → 이미 시작한 상태를 만들려면 뒤에서 옮긴다.
+    await svcWrite('POST', 'brand_units', { brand_id: brandId, unit_id: G.unit, payer: 'brand', visibility: 'summary', accepted_by: G.uid, status: 'active' });
+    await svcWrite('PATCH', `brand_units?brand_id=eq.${brandId}`, { payer_effective_from: days(-1).slice(0, 10) });
+    const bpaid = await svcRpc('unit_brand_paid', { p_unit: G.unit });
+    check('셋업 ⑱ 본사 부담 매장', bpaid.data === true, bpaid.err || String(bpaid.data));
+    const muBrand = await G.c.rpc('my_multi_until');
+    check('⑱ 본사 부담 다점포만 있으면 my_multi_until = null', !muBrand.error && muBrand.data === null, muBrand.error?.message ?? '');
+    const bp = await begin(G, 'single', 1);
+    check('★⑱ 본사 부담 다점포는 단일 결제를 막지 않는다', bp.ok, bp.err);
+    await clearOrders(G);
+  } finally {
+    await svcWrite('DELETE', `brand_units?brand_id=eq.${brandId}`).catch(() => {});
+    await svcWrite('DELETE', `brands?id=eq.${brandId}`).catch(() => {});
+  }
 }
 
 async function edgeChecks() {

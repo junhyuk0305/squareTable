@@ -17,6 +17,13 @@ const ANON = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 const ENDPOINT = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/card-billing` : '';
 const SDK_URL = 'https://js.tosspayments.com/v2/standard';
 
+/**
+ * 카드 자동결제로 살 수 있는 최대 매장 수. 토스 빌링 계약 "1회 10만 원 이하"(다점포 29,000 × 3 = 87,000).
+ * 서버 카운터파트 = 0342 card_begin_subscribe·card_begin_change 의 'card_store_limit'. 바꾸면 둘을 같이 바꾼다.
+ * 계좌이체는 이 상한과 무관하다(15개).
+ */
+export const CARD_MAX_STORES = 3;
+
 /** 엣지·RPC 오류 코드 → 화면 문구. 판정은 여기 한 곳(§② SSOT). 서버 카운터파트 = card-billing NAMED. */
 export const CARD_ERROR_TEXT: Record<string, string> = {
   card_billing_not_open: '카드 결제는 준비 중이에요. 지금은 계좌이체로 결제해 주세요.',
@@ -34,6 +41,8 @@ export const CARD_ERROR_TEXT: Record<string, string> = {
   not_resumable: '해지를 취소할 수 없어요. 이용 기간이 끝났다면 새로 결제해 주세요.',
   release_required: '다음 결제일에 닫을 매장을 골라 주세요.',
   release_mismatch: '닫을 매장을 다시 골라 주세요. 매장 목록이 바뀌었을 수 있어요.',
+  card_store_limit: `카드 자동결제는 매장 ${CARD_MAX_STORES}개까지예요. 더 많은 매장은 도입 문의로 알려 주세요.`,
+  multi_plan_active: '다점포 기간이 끝나기 3일 전부터 단일 매장으로 바꿀 수 있어요.',
   card_register_failed: '카드를 등록하지 못했어요.',
   charge_declined: '카드 결제가 승인되지 않았어요.',
   unauthorized: '로그인이 풀렸어요. 다시 로그인해 주세요.',

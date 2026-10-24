@@ -844,6 +844,20 @@ export async function fetchOwnerPrepaidUntil(): Promise<string | null> {
   return typeof data === 'string' ? data : null;
 }
 
+/**
+ * 0342: 다점포 기간이 남은 내 매장의 가장 늦은 만료일(없으면 null). 웹 요금제 화면이 단일을 잠근다.
+ * 옛 서버(함수 없음)·읽기 실패도 null 이다 — 잠그지 않는다(서버가 multi_plan_active 로 한 번 더 막는다).
+ */
+export async function fetchMyMultiUntil(): Promise<string | null> {
+  if (!HAS_SUPABASE) return null;
+  const { data, error } = await supabase.rpc('my_multi_until');
+  if (error) {
+    if (!isMissingRpc(error)) readFail('fetchMyMultiUntil', error);
+    return null;
+  }
+  return typeof data === 'string' ? data : null;
+}
+
 export type CardPaymentRow = { order_id: string; amount_krw: number; status: string; approved_at: string | null; receipt_url: string | null };
 /** 가장 최근 승인된 카드 결제 1건(영수증 링크용). */
 export async function fetchMyLastCardPayment(): Promise<DbResult<CardPaymentRow | null>> {

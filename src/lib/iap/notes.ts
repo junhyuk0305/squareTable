@@ -35,7 +35,11 @@ export function otherPaidNote(
   return `${fmtDay(paidUntil, now)}까지 이용 기간이 남아 있어요. 끝나기 3일 전부터 결제할 수 있어요.`;
 }
 
-const PREPAID_OPEN_BEFORE_MS = 3 * 24 * 60 * 60 * 1000;
+/**
+ * 남은 기간이 이만큼 이하면 다른 결제를 연다(끝나기 3일 전부터). 앱 선불 잠금·웹 단일 잠금(billing.tsx)이 같이 쓴다.
+ * 서버 카운터파트 = 0342 single_plan_locked 의 interval '3 days'. 바꾸면 둘을 같이 바꾼다.
+ */
+export const PREPAID_OPEN_BEFORE_MS = 3 * 24 * 60 * 60 * 1000;
 
 /**
  * 선불 기간이 남아 있으면 앱 결제를 잠근다(2026-10-05 결정 · 검증 = qa-iap-prepaid). 잠글 때만 문구, 아니면 null.

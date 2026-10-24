@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { PLANS, planMonthlyPrice, supplyPrice, type PlanId } from '@/lib/config/tiers';
 import { formatKrw } from '@/lib/config/billing';
@@ -12,7 +13,7 @@ import {
   type CardSubscriptionRow,
   type CardPaymentRow,
 } from '@/lib/db';
-import { cardPrecheck, cardChange, cardErrorText, cardRpcErrorCode, openCardRegistration } from '@/lib/payments/cardBilling';
+import { cardPrecheck, cardChange, cardErrorText, cardRpcErrorCode, openCardRegistration, CARD_MAX_STORES } from '@/lib/payments/cardBilling';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -54,6 +55,7 @@ type Props = {
 };
 
 export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, openStores = [], releaseChoice = [], onChanged }: Props) {
+  const router = useRouter();
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -75,6 +77,20 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
   const paidPlan = selectedPlan === 'free' ? null : selectedPlan;
   const count = selectedPlan === 'multi' ? storeCount : 1;
   const monthly = paidPlan ? planMonthlyPrice(paidPlan, count) : 0;
+  // 카드는 매장 CARD_MAX_STORES 개까지(토스 계약 1회 10만 원 · 서버 0342 card_store_limit). 넘으면 결제·변경 버튼 대신 도입 문의.
+  const overLimit = paidPlan === 'multi' && count > CARD_MAX_STORES;
+  const limitNotice = (
+    <View style={styles.card}>
+      <Text style={styles.body}>{cardErrorText('card_store_limit')}</Text>
+      <Pressable
+        onPress={() => router.push('/inquiry')}
+        style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }]}
+        accessibilityRole="button"
+      >
+        <Text style={styles.primaryText}>도입 문의하기</Text>
+      </Pressable>
+    </View>
+  );
 
   // 카드 등록창 열기 — 테스트 키 기간엔 서버가 허용한 계정만 연다(precheck). 창을 띄운 뒤에 막히면 카드만 입력하고 헛걸음한다.
   const openRegistration = async (successPath: string) => {
@@ -242,7 +258,8 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
           </Pressable>
         )}
 
-        {active && differs && (
+        {active && differs && overLimit && limitNotice}
+        {active && differs && !overLimit && (
           <>
             <Pressable
               disabled={busy || !releaseReady}
@@ -324,6 +341,14 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
 
   // ── 새로 결제 ────────────────────────────────────────────────────────────
   if (!paidPlan) return null;
+  if (overLimit) {
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>카드 자동결제</Text>
+        {limitNotice}
+      </View>
+    );
+  }
   const supply = supplyPrice(monthly);
   const next = new Date();
   next.setMonth(next.getMonth() + 1);
