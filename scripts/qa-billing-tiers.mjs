@@ -50,8 +50,10 @@ if (!URL || !ANON || !SERVICE) { console.error('FAIL: URL/ANON/SERVICE_ROLE env 
 const mk = () => createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
 const s = String(Date.now()).slice(-9);
 const pw = 'Test1234!qa';
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, skip = 0;
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  PASS', n, extra)) : (fail++, console.log('  FAIL', n, extra)); };
+// 못 돈 검사는 통과로 세지 않는다(AGENTS "건너뛴 것을 통과로 세지 않는다") — 최종 줄에 skip 수를 찍는다.
+const skipped = (n, why) => { skip++; console.log('  SKIP', n, why); };
 
 // KST 'YYYY-MM' — consume_ai_quota 의 월 경계와 동일 기준.
 const kstMonth = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit' })
@@ -128,6 +130,18 @@ async function edgeAnswer(client, query) {
   });
   return { status: res.status, body: await res.json().catch(() => null) };
 }
+// AI 엣지가 떠 있는가. 로컬 `supabase start` 만 하고 `functions serve` 를 안 하면 게이트웨이(kong)가
+// 503 {"message":"name resolution failed"} 를 돌려준다 — 서버 판정이 아니라 환경이다.
+async function aiEdgeReachable() {
+  try {
+    const res = await fetch(`${URL}/functions/v1/ai`, { method: 'OPTIONS' });
+    if (res.status !== 503) return { ok: true };
+    const j = await res.json().catch(() => null);
+    return /name resolution failed/.test(j?.message ?? '') ? { ok: false, why: '503 name resolution failed' } : { ok: true };
+  } catch (e) {
+    return { ok: false, why: e?.message ?? 'fetch 실패' };
+  }
+}
 const cleanup = [];
 async function cleanupAll() {
   for (const c of cleanup) {
@@ -192,19 +206,26 @@ async function main() {
 
     // ③ AI 캡(0082 플랜별): free=150. 한도 내 200 → 경계 아래(149)에서도 200 → 캡 도달(150)에서 402.
     //    경계를 149/150 양쪽으로 찍는 이유: 상수만 바꾸고 부등호를 안 고치면 off-by-one 이 조용히 남는다.
+    // AI 엣지가 없으면(로컬에서 functions serve 안 함) 캡 검사 8건을 SKIP 으로 센다 — 통과로 세지 않는다.
+    const aiEdge = await aiEdgeReachable();
+    const AI_FREE = ['AI answer 한도 내 200', `free: 캡 직전(used=${FREE_CAP - 1})은 200`, `free: 캡 도달(used=${FREE_CAP}) 402 ai_quota_exceeded`, `free: 402 응답이 캡 ${FREE_CAP} 을 실어보냄`];
+    if (!aiEdge.ok) {
+      for (const n of AI_FREE) skipped(n, `AI 엣지에 닿지 않음(${aiEdge.why}) — 환경`);
+    } else {
     const a1 = await edgeAnswer(F.c, '마감은 몇 시에 하나요');
-    check('AI answer 한도 내 200', a1.status === 200, `status=${a1.status}`);
+    check(AI_FREE[0], a1.status === 200, `status=${a1.status}`);
     await seedAiUsage(store1, FREE_CAP - 1);
     const a1b = await edgeAnswer(F.c, '마감은 몇 시에 하나요');
-    check(`free: 캡 직전(used=${FREE_CAP - 1})은 200`, a1b.status === 200, `status=${a1b.status}`);
+    check(AI_FREE[1], a1b.status === 200, `status=${a1b.status}`);
     await seedAiUsage(store1, FREE_CAP);
     const a2 = await edgeAnswer(F.c, '마감은 몇 시에 하나요');
     check(
-      `free: 캡 도달(used=${FREE_CAP}) 402 ai_quota_exceeded`,
+      AI_FREE[2],
       a2.status === 402 && a2.body?.error === 'ai_quota_exceeded',
       `status=${a2.status} used=${a2.body?.used}`,
     );
-    check(`free: 402 응답이 캡 ${FREE_CAP} 을 실어보냄`, a2.body?.cap === FREE_CAP, `cap=${a2.body?.cap}`);
+    check(AI_FREE[3], a2.body?.cap === FREE_CAP, `cap=${a2.body?.cap}`);
+    }
 
     // ④ 매장 캡: free 2호점 차단
     const { error: e2 } = await F.c.rpc('create_store', { p_store_name: 'QA 과금 2호점', p_industry: '헬스·피트니스', p_biz_no: null });
@@ -218,19 +239,24 @@ async function main() {
     check('single: 3번째 직원 승인 해제', !e4b, e4b?.message ?? '');
     // 0082 부터 유료도 무제한이 아니다 — 매장당 1500. free 캡을 넘긴 상태에서 200 이 나와야 하고
     // (플랜 상향으로 해제), 유료 캡까지 채우면 다시 402 여야 한다("무제한" 폐기 회귀 가드).
+    const AI_PAID = [`single: free 캡 초과분 해제(used>${FREE_CAP} 에도 200)`, `single: 유료 캡 직전(used=${PAID_CAP - 1})은 200`, `single: 유료 캡 도달(used=${PAID_CAP}) 402 — '무제한' 폐기 확인`, `single: 402 응답이 캡 ${PAID_CAP} 을 실어보냄`];
+    if (!aiEdge.ok) {
+      for (const n of AI_PAID) skipped(n, `AI 엣지에 닿지 않음(${aiEdge.why}) — 환경`);
+    } else {
     const a3 = await edgeAnswer(F.c, '마감은 몇 시에 하나요');
-    check(`single: free 캡 초과분 해제(used>${FREE_CAP} 에도 200)`, a3.status === 200, `status=${a3.status}`);
+    check(AI_PAID[0], a3.status === 200, `status=${a3.status}`);
     await seedAiUsage(store1, PAID_CAP - 1);
     const a3b = await edgeAnswer(F.c, '마감은 몇 시에 하나요');
-    check(`single: 유료 캡 직전(used=${PAID_CAP - 1})은 200`, a3b.status === 200, `status=${a3b.status}`);
+    check(AI_PAID[1], a3b.status === 200, `status=${a3b.status}`);
     await seedAiUsage(store1, PAID_CAP);
     const a3c = await edgeAnswer(F.c, '마감은 몇 시에 하나요');
     check(
-      `single: 유료 캡 도달(used=${PAID_CAP}) 402 — '무제한' 폐기 확인`,
+      AI_PAID[2],
       a3c.status === 402 && a3c.body?.error === 'ai_quota_exceeded',
       `status=${a3c.status} cap=${a3c.body?.cap}`,
     );
-    check(`single: 402 응답이 캡 ${PAID_CAP} 을 실어보냄`, a3c.body?.cap === PAID_CAP, `cap=${a3c.body?.cap}`);
+    check(AI_PAID[3], a3c.body?.cap === PAID_CAP, `cap=${a3c.body?.cap}`);
+    }
     await seedAiUsage(store1, 0); // 뒤 검사(multi 2호점 등)가 캡에 걸리지 않게 원복
     const { error: e2b } = await F.c.rpc('create_store', { p_store_name: 'QA 과금 2호점', p_industry: '헬스·피트니스', p_biz_no: null });
     check('single: 2호점 여전히 차단(no_store_slot)', /no_store_slot/.test(e2b?.message ?? ''), e2b?.message ?? '생성돼버림');
@@ -261,28 +287,28 @@ async function main() {
     console.log(`  … 서버 스위치 원복: billing_free_mode=${restored}`);
   }
 
-  // ── 5) ★0134 가입 프로모션이 실제로 부여되는가 ─────────────────────────────
-  // 위 캡 검증은 프로모션을 꺼 놓고 돌았다. 그래서 "켜면 진짜 붙는지"를 여기서 따로 켜서 본다
-  // (끈 상태만 검증하면 프로모션이 통째로 죽어도 게이트가 green 이다).
-  await setSignupTrialDays(30);
+  // ── 5) 가입 체험 폐지(2026-09-18) — 지금 규칙: 첫 매장은 무료, 2호점은 슬롯이 있어야 한다 ─────────
+  // 라이브 정본 = app_config signup_trial_days=0(09-18 실측). 옛 검사(0134·0141: 가입 매장 = multi/30일 체험)는
+  //   폐지된 약속을 기대해 늘 RED 였다. 라이브 값 0 으로 고정하고 지금 규칙을 본다.
+  //   ★status 는 보지 않는다 — 폐지 뒤에도 첫 매장이 trialing 으로 저장된다(별건 미결 · 메모리 free_signup_status_todo).
+  await setSignupTrialDays(0);
+  // 위 2) 의 finally 가 스위치를 이미 원복했다 — 무료 모드면 2호점 차단을 볼 수 없으므로 이 구간도 false 로 고정한다.
+  await setFreeMode(false);
   try {
-    const T = await signUp('owner', 'QA체험사장');
+    const T = await signUp('owner', 'QA가입사장');
     cleanup.push(T.c);
-    const { data: t1, error: te1 } = await T.c.rpc('create_store', { p_store_name: 'QA 체험 1호점', p_industry: '카페·디저트', p_biz_no: null });
+    const { data: t1, error: te1 } = await T.c.rpc('create_store', { p_store_name: 'QA 가입 1호점', p_industry: '카페·디저트', p_biz_no: null });
     const tUnit = t1?.[0]?.unit_id;
-    check('가입 프로모션 켠 뒤 매장 생성 OK', !te1 && !!tUnit, tUnit ?? te1?.message);
+    check('가입 첫 매장 생성 OK', !te1 && !!tUnit, tUnit ?? te1?.message);
     const { data: tsub } = await T.c.from('unit_subscriptions').select('plan, status, trial_ends_at').eq('unit_id', tUnit).maybeSingle();
-    // ★0141(2026-08-12): single → **multi**. 광고("14일 동안 다점포까지 전면 무료")와 서버가
-    //   갈라져 있던 것을 맞춘 것이다 — single 은 매장 1개라 말과 실제가 달랐다.
-    check('★가입 매장 = multi/trialing', tsub?.plan === 'multi' && tsub?.status === 'trialing', `plan=${tsub?.plan} status=${tsub?.status}`);
-    const days = tsub?.trial_ends_at ? Math.round((Date.parse(tsub.trial_ends_at) - Date.now()) / 86400000) : -1;
-    check('★체험 기간 = 30일', days === 30, `${days}일`);
+    check('★가입 첫 매장 = free(체험 폐지 · 다점포 체험 없음)', tsub?.plan === 'free', `plan=${tsub?.plan} status=${tsub?.status}`);
     const { data: tep } = await T.c.rpc('effective_plan', { p_unit: tUnit });
-    check('★서버 유효 플랜도 multi (좌석·AI 캡·다점포가 실제로 풀린다)', tep === 'multi', `ep=${tep}`);
-    // 프로모션 코드가 이 매장에서 막히지 않는가 — 0133 판정이 그대로였다면 여기서 already_paid 가 난다.
-    const { data: tuntil } = await T.c.rpc('effective_until', { p_unit: tUnit });
-    check('effective_until 이 체험 만료일을 돌려준다', !!tuntil && Date.parse(tuntil) > Date.now(), String(tuntil));
+    check('★서버 유효 플랜도 free', tep === 'free', `ep=${tep}`);
+    const { error: te2 } = await T.c.rpc('create_store', { p_store_name: 'QA 가입 2호점(불가)', p_industry: '카페·디저트', p_biz_no: null });
+    check('★가입 직후에도 2호점은 슬롯이 있어야 한다(no_store_slot)', /no_store_slot/.test(te2?.message ?? ''), te2?.message ?? '생성돼버림');
   } finally {
+    const fmBack = await setFreeMode(originalFreeMode === true);
+    console.log(`  … 서버 스위치 원복: billing_free_mode=${fmBack}`);
     const back = await setSignupTrialDays(originalTrialDays);
     console.log(`  … 가입 프로모션 원복: signup_trial_days=${back}`);
   }
@@ -299,7 +325,7 @@ async function main() {
     check('원복 후: 캡 유지 확인(프로브 사장 1호점 생성 OK)', !ge, ge?.message ?? '');
   }
 
-  console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
+  console.log(`\nRESULT: ${pass} passed, ${fail} failed, ${skip} skipped`);
   // process.exit는 .finally 콜백을 기다리지 않는다 — 정리는 exit 전에 직접 수행.
   await cleanupAll();
   await cleanupSeededPhones(URL, SERVICE, seededPhones);

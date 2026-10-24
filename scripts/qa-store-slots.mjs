@@ -8,7 +8,9 @@
 //   ⑥ 금액 = 산 개수 × 29,000 (소유 매장 수와 무관 · 0192 부가세 포함가)
 //   ⑦ 금액·개수 위조 직접 insert 차단(RLS 재장착 확인)
 //   ⑧ 0137 무료 지급(관리 콘솔 버튼)
-//   ⑨ ★0141 가입 체험 구간 — 슬롯 면제 + 종료 후 재차단 + 체험 매장도 슬롯을 먹는다(0136)
+//   ⑨ 가입 직후 — ⑨-a 첫 매장 = 무료 · 2호점은 슬롯 필요(2026-09-18 체험 폐지 · 라이브 signup_trial_days=0)
+//      ⑨-b 체험 상태(trialing)로 저장된 첫 매장도 슬롯을 먹는다(0136)
+//   (2026-10-24: 옛 ⑨-a 는 폐지된 0141 체험 — 1호점 multi · 슬롯 없이 2호점 — 을 기대해 늘 RED 였다. 아래 머리말은 그 시절 설명이다.)
 //
 // ★★①~⑧ 은 **가입 프로모션을 끄고** 돈다(2026-08-12).
 //   0141 이 "체험 중에는 슬롯을 면제한다"를 넣으면서, 프로모션이 켜진 채로 돌면 no_store_slot
@@ -80,6 +82,7 @@ async function setSignupTrialDays(days) {
   return rows[0].value;
 }
 let originalTrialDays = null;
+let originalFreeMode = null; // app_config 원시 값('true'·'false') — 원복 기준
 
 let seq = 0;
 const seededPhones = [];
@@ -103,9 +106,13 @@ const cleanup = [];
 const MULTI_VAT = 29000; // 매장당 부가세 포함가(0192)
 
 async function main() {
+  // 무료 모드면 슬롯 게이트가 우회된다 → 실행 동안 false 로 고정하고 끝나면 원래 값으로 돌린다(qa-card-billing 과 같은 방식).
+  //   ★공유 로컬 DB 에서 다른 세션이 실행 중에 뒤집으면 결과가 흔들린다 — 하니스는 동시에 돌리지 않는다.
+  originalFreeMode = (await svcSel('app_config?key=eq.billing_free_mode&select=value'))[0]?.value ?? null;
+  if (originalFreeMode !== null && originalFreeMode !== 'false') await svcPatch('app_config?key=eq.billing_free_mode', { value: 'false' });
   const { data: fm } = await svcRpc('billing_free_mode');
-  info(`billing_free_mode=${fm}`);
-  if (fm === true) { console.log('  ⚠ 무료 모드가 켜져 있어 슬롯 게이트가 우회된다 — 검증 불가'); fail++; return; }
+  info(`billing_free_mode=${originalFreeMode} → ${fm}(끝나면 원복)`);
+  if (fm === true) { console.log('  ⚠ 무료 모드를 끄지 못했다 — 슬롯 게이트 검증 불가'); fail++; return; }
 
   // ★①~⑧ 은 슬롯 강제 구간이다 → **첫 create_store 전에** 가입 프로모션을 끈다(0141 면제 회피).
   originalTrialDays = await getSignupTrialDaysRaw();
@@ -229,33 +236,34 @@ async function main() {
   // ══════════════════════════════════════════════════════════════════════════
   // 위 ①~⑧ 은 "슬롯이 없으면 못 연다"를 지킨다. 이 구간은 그 규칙의 **예외**가 약속대로
   // 열리고, 약속이 끝나면 **다시 닫히는지**를 지킨다. 둘 다 없으면 광고와 서버가 갈라진다.
-  await setSignupTrialDays(14);
+  // ★2026-09-18 가입 체험 폐지 — 라이브 정본 signup_trial_days=0. 옛 ⑨-a(0141: 체험 1호점 = multi ·
+  //   체험 중 슬롯 없이 2호점 · 2호점이 종료일 승계)는 폐지된 약속을 기대해 늘 RED 였다. 라이브 값으로 고정하고
+  //   지금 규칙(첫 매장 = 무료 · 2호점은 슬롯 필요)을 본다. ⑨-b(체험 상태 매장도 슬롯을 먹는다)는 그대로 둔다 —
+  //   폐지 뒤에도 첫 매장이 trialing 으로 저장되므로(메모리 free_signup_status_todo) 그 회귀 가드는 아직 유효하다.
+  await setSignupTrialDays(0);
   try {
-    // ── ⑨-a 면제 + 종료 후 재차단 ────────────────────────────────────────────
-    const T = await signUp('owner', 'QA체험다점포');
+    // ── ⑨-a 가입 첫 매장 = 무료 · 2호점은 슬롯 필요 ─────────────────────────────
+    const T = await signUp('owner', 'QA가입다점포');
     cleanup.push(T.c);
-    const { data: t1 } = await T.c.rpc('create_store', { p_store_name: 'QA체험 1호점', p_industry: '카페·디저트', p_biz_no: null });
+    const { data: t1 } = await T.c.rpc('create_store', { p_store_name: 'QA가입 1호점', p_industry: '카페·디저트', p_biz_no: null });
     const TS1 = t1?.[0]?.unit_id;
     const tep1 = await svcRpc('effective_plan', { p_unit: TS1 });
-    check('⑨-a 체험 1호점은 multi 로 열린다(0141 — 광고가 약속한 전 요금제 무료)', tep1.data === 'multi', `ep=${tep1.data}`);
+    check('⑨-a 가입 첫 매장은 free 로 열린다(09-18 체험 폐지 · 다점포 체험 없음)', tep1.data === 'free', `ep=${tep1.data}`);
 
-    const { data: t2, error: te2 } = await T.c.rpc('create_store', { p_store_name: 'QA체험 2호점', p_industry: '카페·디저트', p_biz_no: null });
-    const TS2 = t2?.[0]?.unit_id;
-    check('⑨-a ★체험 중에는 슬롯 없이 2호점이 열린다', !te2 && !!TS2, te2?.message ?? TS2);
+    const { data: t2, error: te2 } = await T.c.rpc('create_store', { p_store_name: 'QA가입 2호점(불가)', p_industry: '카페·디저트', p_biz_no: null });
+    check('⑨-a ★가입 직후에도 슬롯 없이 2호점을 못 연다(no_store_slot)', /no_store_slot/.test(te2?.message ?? '') && !t2?.[0]?.unit_id, te2?.message ?? '생성돼버림');
 
     const tslot = await T.c.rpc('my_store_slots');
     const tsl = Array.isArray(tslot.data) ? tslot.data[0] : tslot.data;
-    check('⑨-a 면제로 열린 매장은 슬롯을 소비하지 않는다(장부가 어긋나지 않는다)', tsl?.open_count === 0, `open=${tsl?.open_count}`);
+    check('⑨-a 막힌 생성은 슬롯 장부를 건드리지 않는다', tsl?.open_count === 0, `open=${tsl?.open_count}`);
 
-    const tsubs = await svcSel(`unit_subscriptions?select=unit_id,plan,status,trial_ends_at&unit_id=in.(${TS1},${TS2})`);
-    const ends = tsubs.map((r) => r.trial_ends_at);
-    check('⑨-a ★2호점은 1호점 종료일을 승계한다(매장마다 새로 14일이면 체험이 무한 연장된다)',
-      tsubs.length === 2 && ends[0] === ends[1], JSON.stringify(ends));
+    const tsubs = await svcSel(`unit_subscriptions?select=unit_id,plan&unit_id=eq.${TS1}`);
+    check('⑨-a ★첫 매장 요금제 행 = free(다점포로 저장되지 않는다)', tsubs.length === 1 && tsubs[0].plan === 'free', JSON.stringify(tsubs));
 
-    // 체험 종료를 강제 → 면제가 사라지고 다시 슬롯을 요구해야 한다.
-    await svcPatch(`unit_subscriptions?unit_id=in.(${TS1},${TS2})`, { trial_ends_at: new Date(Date.now() - 86400000).toISOString() });
-    const { error: te3 } = await T.c.rpc('create_store', { p_store_name: 'QA체험 3호점(불가)', p_industry: '카페·디저트', p_biz_no: null });
-    check('⑨-a ★★체험이 끝나면 다시 슬롯을 요구한다(no_store_slot)', /no_store_slot/.test(te3?.message ?? ''), te3?.message ?? '생성돼버림');
+    // 첫 매장 체험 종료일이 지나도 결과는 같다(체험으로 열리던 길이 남아 있지 않다).
+    await svcPatch(`unit_subscriptions?unit_id=eq.${TS1}`, { trial_ends_at: new Date(Date.now() - 86400000).toISOString() });
+    const { error: te3 } = await T.c.rpc('create_store', { p_store_name: 'QA가입 3호점(불가)', p_industry: '카페·디저트', p_biz_no: null });
+    check('⑨-a ★★종료일이 지나도 슬롯을 요구한다(no_store_slot)', /no_store_slot/.test(te3?.message ?? ''), te3?.message ?? '생성돼버림');
 
     // ── ⑨-b 0136 매출 구멍 회귀 — 체험 매장도 슬롯을 먹는다 ──────────────────
     // 프로모션이 켜져야만 재현되는 구멍이다: 체험 매장이 배정 대상에서 빠지면
@@ -296,6 +304,10 @@ main()
     if (originalTrialDays !== null) {
       try { await setSignupTrialDays(originalTrialDays); }
       catch { console.error('  !! 원복 실패 — app_config.signup_trial_days 수동 확인 필요'); fail++; }
+    }
+    if (originalFreeMode !== null && originalFreeMode !== 'false') {
+      try { await svcPatch('app_config?key=eq.billing_free_mode', { value: originalFreeMode }); }
+      catch { console.error('  !! 원복 실패 — app_config.billing_free_mode 수동 확인 필요'); fail++; }
     }
     console.log('  … 정리 완료');
     console.log(`FINAL: ${pass} passed, ${fail} failed`);
