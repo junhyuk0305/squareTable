@@ -15,15 +15,7 @@
 <script defer src="/promo.js"></script>
 <script defer src="/analytics.js"></script>
 <style>
-/* 요금제 페이지 전용 — 비교표 · 결제 안내 */
-.cmp{margin-top:40px;overflow-x:auto;border:1px solid var(--line);border-radius:var(--r-lg)}
-.cmp table{width:100%;border-collapse:collapse;min-width:560px;font-size:13.5px}
-.cmp th,.cmp td{padding:13px 16px;text-align:center;border-top:1px solid var(--line)}
-.cmp thead th{border-top:0;background:var(--paper);font-weight:900;font-size:13px}
-.cmp td:first-child,.cmp th:first-child{text-align:left;font-weight:700;color:var(--ink2)}
-.cmp td b{font-weight:800;color:var(--ink)}
-.cmp .y{color:var(--good);font-weight:900}
-.cmp .n{color:var(--ink3)}
+/* 요금제 페이지 전용 — 결제 안내 */
 .pay{margin-top:44px;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-lg);padding:26px 24px}
 .pay h3{font-size:18px;font-weight:900;letter-spacing:-.02em;margin:0}
 .pay ul{margin:12px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
@@ -144,27 +136,6 @@
   </div>
   <div class="pnote">표시 금액은 부가세 포함이에요 · 가맹점 여러 곳을 한 번에 들이는 프랜차이즈 본사는 <a href="/inquiry">도입 문의</a></div>
 
-  <div class="cmp">
-    <table>
-      <thead>
-        <tr><th>비교</th><th>무료</th><th>단일 매장</th><th>다점포</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>월 요금 (부가세 포함)</td><td><b>₩0</b></td><td><b>₩25,000</b></td><td><b>매장당 ₩29,000</b></td></tr>
-        <tr><td>이용 기간 · 결제</td><td>—</td><td>결제일부터 1개월 · 매월 자동결제</td><td>결제일부터 1개월 · 매월 자동결제</td></tr>
-        <tr><td>매장 수</td><td>1곳</td><td>1곳</td><td>2곳 이상</td></tr>
-        <tr><td>직원 수</td><td>2명까지</td><td>무제한</td><td>무제한</td></tr>
-        <tr><td>AI 사용량<br><small>답변 1 · 퀴즈 만들기 2 · PDF 쪽당 1</small></td><td>월 200</td><td>월 3,000</td><td>매장당 월 3,000</td></tr>
-        <tr><td>노하우 저장</td><td class="y">무제한</td><td class="y">무제한</td><td class="y">무제한</td></tr>
-        <tr><td>퀴즈 묶음 · 이해 확인 퀴즈</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
-        <tr><td>채팅 업무 · 공지 · 알림</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
-        <tr><td>출퇴근 · 근무표 · 인건비 집계</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
-        <tr><td>전체 매장 한눈에 보기</td><td class="n">—</td><td class="n">—</td><td class="y">✓</td></tr>
-        <tr><td>매장 간 노하우 가져오기</td><td class="n">—</td><td class="n">—</td><td class="y">✓</td></tr>
-        <tr><td>약정</td><td>없음</td><td>없음 · 언제든 해지</td><td>없음 · 언제든 해지</td></tr>
-      </tbody>
-    </table>
-  </div>
 
   <div class="pay">
     <h3>결제 안내</h3>
@@ -182,15 +153,10 @@
   <section class="sec" id="faq">
     <div class="eyebrow2">자주 묻는 질문</div>
     <h2 class="h2">시작 전에 <span class="u">궁금한 것들</span></h2>
-    <p class="hsub">여기 없는 질문은 <a href="mailto:cristianojun@naver.com" style="font-weight:800;text-decoration:underline">cristianojun@naver.com</a>으로 보내주세요.</p>
 
     <div class="fgroup">
       <h4><span class="dot"></span>요금과 결제</h4>
       <div class="faq">
-        <details>
-          <summary>무료 요금제에 기간 제한이 있나요?<span class="x">+</span></summary>
-          <p class="fa">없어요. 매장 1곳 · 직원 2명 · AI 사용량 월 200 안에서 기간 제한 없이 계속 무료예요. 신용카드 없이 시작하고, 무료 체험이 끝나서 돈이 빠져나가는 일도 없어요.</p>
-        </details>
         <details>
           <summary>자동결제를 해지하거나 결제가 안 되면 어떻게 되나요?<span class="x">+</span></summary>
           <p class="fa">이미 결제한 기간이 끝날 때까지는 그대로 쓰고, 그 뒤엔 앱이 잠기지 않고 무료 요금제로 바뀌어요. 쌓아둔 노하우와 기록은 그대로 남아요. 카드 결제가 승인되지 않으면 하루 간격으로 두 번 더 시도하고, 그 사이 요금제 화면에서 카드를 바꿀 수 있어요. 무료로 바뀌면 무료 요금제 한도(직원 2명 · AI 사용량 월 200)가 다시 적용돼서, 직원이 2명을 넘는 매장은 나중에 합류한 직원부터 잠시 이용이 멈춰요. 다시 결제하면 바로 열려요.</p>
@@ -232,16 +198,8 @@
       <h4><span class="dot"></span>이용과 데이터</h4>
       <div class="faq">
         <details>
-          <summary>AI가 아무 답이나 지어내지 않나요?<span class="x">+</span></summary>
-          <p class="fa">매장의 정석의 AI는 사장님이 남긴 노하우에 근거해서만 답하고, 어떤 노하우에서 나온 답인지 출처를 함께 보여줘요. 근거가 없으면 답을 지어내는 대신 사장님께 질문을 전달하고, 사장님의 답이 새 노하우로 쌓여요.</p>
-        </details>
-        <details>
           <summary>우리 가게 노하우를 다른 매장이 볼 수 있나요?<span class="x">+</span></summary>
           <p class="fa">볼 수 없어요. 모든 데이터는 데이터베이스 단계에서 매장 단위로 분리돼요. 매장 간 노하우 이동은 같은 사장님 소유의 매장 사이에서, 사장님이 직접 가져올 때만 일어나요.</p>
-        </details>
-        <details>
-          <summary>쌓인 노하우를 가지고 나갈 수 있나요?<span class="x">+</span></summary>
-          <p class="fa">네. 노하우는 언제든 텍스트로 내보낼 수 있어요. 데이터는 사장님 것이라는 게 원칙이에요.</p>
         </details>
         <details>
           <summary>탈퇴하면 데이터는 어떻게 되나요?<span class="x">+</span></summary>
