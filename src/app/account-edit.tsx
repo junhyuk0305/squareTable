@@ -236,7 +236,8 @@ function AccountEditForm() {
 
               <Text style={styles.label}>업종<Text style={styles.req}> *</Text></Text>
               <View style={styles.chipWrap}>
-                {INDUSTRIES.map((it) => (
+                {/* 옛 업종(지금 목록에 없는 값)으로 저장된 매장은 그 값도 보여 준다 — 안 보이면 선택이 빈 것처럼 보인다. */}
+                {(!industry || (INDUSTRIES as readonly string[]).includes(industry) ? INDUSTRIES : [industry, ...INDUSTRIES]).map((it) => (
                   <Pressable key={it} onPress={() => setBiz(it)} style={[styles.chip, biz === it && styles.chipOn]}>
                     <Text style={[styles.chipText, biz === it && styles.chipTextOn]}>{it}</Text>
                   </Pressable>

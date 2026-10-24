@@ -13,7 +13,8 @@ export type PlaybookTemplate = PlaybookEntry & { recommended?: boolean };
 
 export const KNOWHOW_TEMPLATES = packsJson as unknown as PlaybookTemplate[];
 
-// 가입 업종(signup.tsx INDUSTRIES) → 적용 팩. 카페·음식점(홀+주방) 전용팩, 나머지는 공통으로 커버.
+// 매장 업종 → 적용 팩. 카페·음식점(홀+주방) 전용팩, 나머지는 공통으로 커버.
+// 가입 선택지는 2개(industry.ts INDUSTRIES)지만 옛 값으로 저장된 매장이 있어 키는 지우지 않는다.
 // (업종 전용팩은 추후 추가 — 매핑에 pack_id만 늘리면 자동 반영.)
 export const INDUSTRY_PACKS: Record<string, string[]> = {
   // 카페·음식점 전용팩 보유. 나머지 F&B는 공통팩(클레임·환불·위생 등 업종 무관 표준)으로 커버.
