@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>기능 — 매장의 정석</title>
-<meta name="description" content="노하우 AI 답변, 퀴즈 묶음, 채팅 업무, 출퇴근·급여, 다점포 관리까지. 매장의 정석이 매장 운영에서 대신하는 일을 실제 화면으로 보여드려요.">
+<meta name="description" content="노하우 AI 답변, 직원 교육 퀴즈, 노하우가 붙은 할 일, 다점포 관리까지. 알바 교육과 직원 교육에서 매장의 정석이 대신하는 일을 실제 화면으로 보여드려요.">
 <meta property="og:title" content="기능 — 매장의 정석">
 <meta property="og:description" content="한 번만 알려주면 그다음은 AI가. 매장의 정석이 매장 운영에서 대신하는 일들.">
 <link rel="canonical" href="https://dochackchack.com/features">
@@ -96,11 +96,11 @@
 .chapter h3{font-size:clamp(22px,2.8vw,30px);font-weight:900;letter-spacing:-.035em;margin:9px 0 0;line-height:1.24}
 .chapter .fp{font-size:15px;color:var(--ink2);margin:12px 0 0;max-width:480px;line-height:1.65}
 /* 예시 본문 — 현장에서 실제로 벌어지는 상황과, 매장의 정석에서 그게 어떻게 되는지 */
-.chapter .ex{margin-top:18px;background:var(--paper);border-radius:var(--r-md);padding:15px 17px;border-left:3px solid var(--yellowDeep);max-width:480px}
-.chapter .ex .exlb{display:block;font-size:10.5px;font-weight:900;letter-spacing:.06em;color:var(--ink3)}
-.chapter .ex p{font-size:13.5px;color:var(--ink2);margin:5px 0 0;line-height:1.65}
-.chapter .ex .exlb+p+.exlb{margin-top:13px}
-.chapter .ex .then{color:var(--ink);font-weight:600}
+.chapter .ex{margin-top:22px;background:var(--paper);border-radius:var(--r-md);padding:22px 24px;max-width:520px}
+.chapter .ex .exlb{display:inline-block;font-size:13px;font-weight:700;color:var(--ink2);background:var(--bg);padding:4px 12px;border-radius:var(--r-pill)}
+.chapter .ex p{font-size:16px;color:var(--ink2);margin:10px 0 0;line-height:1.65}
+.chapter .ex .exlb+p+.exlb{margin-top:20px;background:var(--yellow);color:var(--ink)}
+.chapter .ex .then{font-size:17px;color:var(--ink);font-weight:700}
 .chapter ul{margin:16px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
 .chapter li{font-size:14px;color:var(--ink2);padding-left:23px;position:relative;line-height:1.55}
 .chapter li svg{position:absolute;left:0;top:3px;color:var(--good);width:15px;height:15px}
@@ -211,8 +211,6 @@
 <symbol id="n-multi" viewBox="0 0 24 24"><path d="M3 9l1.6-5h14.8L21 9M4.2 9v10h15.6V9M4 9h16M9.5 19v-5h5v5"/></symbol>
 <symbol id="n-cafe" viewBox="0 0 24 24"><path d="M4 8h13v4a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8zM17 9h2a2 2 0 0 1 0 4h-2M6 3v2M9.5 3v2M13 3v2"/></symbol>
 <symbol id="n-restaurant" viewBox="0 0 24 24"><path d="M6 3v7a2 2 0 0 0 4 0V3M8 10v11M17 3c-1.5 1.5-2 3-2 5.5S16 12 17.5 12H18V3zM18 12v9"/></symbol>
-<symbol id="n-gym" viewBox="0 0 24 24"><path d="M4 9v6M7 7v10M17 7v10M20 9v6M7 12h10"/></symbol>
-<symbol id="n-academy" viewBox="0 0 24 24"><path d="M4 4.5h6a2.5 2.5 0 0 1 2 2.5 2.5 2.5 0 0 1 2-2.5h6v13h-6a2.5 2.5 0 0 0-2 2 2.5 2.5 0 0 0-2-2H4zM12 7v12"/></symbol>
 </defs></svg>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" id="tab-icons"><defs>
 <symbol id="t-home" viewBox="0 0 24 24"><path d="M3.5 10.5L12 4l8.5 6.5V20h-5v-5.5h-7V20h-5z"/></symbol>
@@ -263,12 +261,8 @@
     <div class="drop"><a href="/cafe">업종별 활용</a>
       <div class="dm i">
       <div class="mega-col">
-        <a class="mi" href="/cafe"><span class="mic"><svg class="ic"><use href="#n-cafe"/></svg></span><span class="mtx"><span class="mt">카페</span><span class="md">레시피 기준 · 오픈/마감 순서 · 클레임 대응</span></span></a>
         <a class="mi" href="/restaurant"><span class="mic"><svg class="ic"><use href="#n-restaurant"/></svg></span><span class="mtx"><span class="mt">음식점</span><span class="md">계량·조리 기준 · 홀 응대 · 밑준비와 마감</span></span></a>
-      </div>
-      <div class="mega-col">
-        <a class="mi" href="/gym"><span class="mic"><svg class="ic"><use href="#n-gym"/></svg></span><span class="mtx"><span class="mt">헬스장·필라테스</span><span class="md">환불·홀딩 규정 · 상담 순서 · 시설 점검</span></span></a>
-        <a class="mi" href="/academy"><span class="mic"><svg class="ic"><use href="#n-academy"/></svg></span><span class="mtx"><span class="mt">학원</span><span class="md">보강·환불 기준 · 등하원 · 강사 교육</span></span></a>
+        <a class="mi" href="/cafe"><span class="mic"><svg class="ic"><use href="#n-cafe"/></svg></span><span class="mtx"><span class="mt">카페</span><span class="md">레시피 기준 · 오픈/마감 순서 · 클레임 대응</span></span></a>
       </div>
       </div>
     </div>
@@ -407,7 +401,47 @@
 </div>
 
 <footer class="site">
-  <div class="grid"></div>
+  <div class="grid">
+    <div class="b">
+      <span class="lg2">매장의 정석</span>
+      <p>사장님 머릿속 노하우로 새 알바를 가르치는 AI. 음식점 · 카페 알바·직원 교육 서비스.</p>
+      <a class="em" href="mailto:cristianojun@naver.com">cristianojun@naver.com</a>
+    </div>
+    <div>
+      <h6>기능</h6>
+      <ul>
+        <li><a href="/features">기능 한눈에 보기</a></li>
+        <li><a href="/features#ai">직원 질문에 AI가 답하기</a></li>
+        <li><a href="/features#training">신입 퀴즈 묶음</a></li>
+        <li><a href="/features#chat">업무 배정과 완료 기록</a></li>
+        <li><a href="/features#multi">여러 매장 관리</a></li>
+      </ul>
+    </div>
+    <div>
+      <h6>업종별 활용</h6>
+      <ul>
+        <li><a href="/restaurant">음식점</a></li>
+        <li><a href="/cafe">카페</a></li>
+      </ul>
+    </div>
+    <div>
+      <h6>시작하기</h6>
+      <ul>
+        <li><a href="/signup">무료로 시작</a></li>
+        <li><a href="/pricing">요금제</a></li>
+        <li><a href="/inquiry">도입 문의</a></li>
+        <li><a href="/login">로그인</a></li>
+      </ul>
+    </div>
+    <div>
+      <h6>정책</h6>
+      <ul>
+        <li><a href="/terms">이용약관</a></li>
+        <li><a href="/privacy">개인정보 처리방침</a></li>
+        <li><a href="/ai-policy">AI 운영 정책</a></li>
+      </ul>
+    </div>
+  </div>
   <div class="base">스퀘어테이블 · 대표 장준혁 · 사업자등록번호 466-03-04380 · 서울특별시 구로구 남부순환로95길 54, 106동 1504호 · 전화 010-8282-9583 · 문의 cristianojun@naver.com<br>© 2026 스퀘어테이블</div>
 </footer>
 

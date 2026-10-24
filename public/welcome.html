@@ -13,123 +13,247 @@
 <link rel="stylesheet" href="/site.css">
 <script defer src="/promo.js"></script>
 <script defer src="/analytics.js"></script>
+
+
 <script>document.documentElement.className+=' js';</script>
 <style>
-/* ── 홈 전용 ── */
-/* hero */
-.hero{display:grid;grid-template-columns:1.05fr .95fr;gap:24px;align-items:center;padding:64px 0 48px;background:radial-gradient(90% 120% at 6% 0%,#FFFDF3 0%,#fff 60%)}
-@media(max-width:860px){.hero{grid-template-columns:1fr;padding:44px 0 30px}}
-.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:800;color:var(--ink2)}
-.eyebrow .pin{width:8px;height:8px;border-radius:50%;background:var(--yellowDeep);box-shadow:0 0 0 4px var(--yellowSoft)}
-.hero h1{font-size:clamp(34px,5vw,54px);font-weight:900;letter-spacing:-.045em;line-height:1.08;margin:16px 0 0}
-.hero h1 .mk{position:relative;white-space:nowrap}
-.hero h1 .mk .bar{position:absolute;left:-4px;right:-4px;bottom:5px;height:16px;background:var(--yellow);z-index:-1;border-radius:3px;transform-origin:left center;transform:scaleX(0)}
-.js .hero h1 .mk.lit .bar{animation:swipe .6s .35s cubic-bezier(.2,.7,.3,1) forwards}
+/* ── 홈(2안 · 매장 필름) 전용 — 2026-10-23 정리본.
+   site.css 토큰(라운드 10/16/20/pill · 그림자 e1~e3 · 노랑 액센트)만 쓴다. 매직 라운드 금지. ── */
+p,.sub,.abody,.trust,.lnote,.hsub,h1,h2,h4{word-break:keep-all;overflow-wrap:break-word}
+
+/* hero — 스크롤에 따라 매장 사진이 가로로 흐르고, 그 아래 답변이 뜬다 */
+.hero{display:block;position:relative;height:190vh;min-height:1320px;padding:0;margin:0}
+.hero-stage{position:sticky;top:76px;height:calc(100vh - 76px);min-height:660px;max-height:900px;display:grid;grid-template-columns:.9fr 1.1fr;gap:56px;align-items:center;padding:40px 0}
+.hleft{max-width:560px;min-width:0}
+.eyebrow{display:inline-block;font-size:14px;font-weight:600;color:var(--ink2)}
+.eyebrow .pin{display:none}
+.hero h1{font-size:clamp(38px,4.2vw,58px);font-weight:800;line-height:1.2;letter-spacing:-.05em;margin:18px 0 0;position:relative;z-index:0}
+.hero h1 .mk{position:relative;white-space:nowrap;isolation:isolate}
+.hero h1 .mk .bar{display:none}
+.hero h1 .mk:nth-of-type(2) .bar{display:block;position:absolute;left:-4px;right:-4px;bottom:.1em;height:.3em;background:var(--yellow);z-index:-1;border-radius:3px;transform-origin:left center;transform:scaleX(0)}
+.js .hero h1 .mk.lit .bar{animation:swipe .6s .5s cubic-bezier(.2,.7,.3,1) forwards}
 @keyframes swipe{to{transform:scaleX(1)}}
-.hero p.sub{font-size:17px;color:var(--ink2);max-width:460px;margin:18px 0 0;font-weight:500}
-.hero .hcta{display:flex;gap:10px;margin-top:26px;flex-wrap:wrap}
-.hero .hcta a{font-size:15px;font-weight:900;padding:15px 26px;border-radius:var(--r-pill)}
-.hero .hcta a.p{background:var(--yellow);color:var(--ink);box-shadow:var(--ey)}
-.hero .hcta a.p:hover{background:var(--yellowDeep)}
-.hero .hcta a.s{background:var(--bg);color:var(--ink);border:1px solid var(--line);box-shadow:var(--e1)}
-.trust{font-size:12.5px;color:var(--ink3);margin-top:16px}
-.trust b{color:var(--ink2);font-weight:800}
-.heroArt{display:flex;justify-content:center}
-.phone{width:288px;background:var(--bg);border:8px solid #0c0c0c;border-radius:40px;box-shadow:var(--e3);overflow:hidden}
-.pbar{display:flex;align-items:center;gap:8px;padding:12px 15px;border-bottom:1px solid var(--line)}
-.pwm{font-weight:900;font-size:16px;position:relative;letter-spacing:-.03em}
-.pwm::after{content:"";position:absolute;left:0;right:0;bottom:1px;height:5px;background:var(--yellow);z-index:-1;border-radius:2px}
-.ptag{margin-left:auto;font-size:11px;font-weight:900;color:var(--ink2);background:var(--paper);padding:4px 10px;border-radius:var(--r-pill)}
-.chat{height:296px;padding:15px 14px;display:flex;flex-direction:column;justify-content:flex-end;gap:9px;overflow:hidden}
+.hero .ending{white-space:nowrap}
+.hero p.sub{font-size:18px;line-height:1.65;font-weight:400;color:var(--ink2);margin:16px 0 0;max-width:430px}
+.dl{margin-top:28px}
+.dl .dlt{font-size:14px;font-weight:600}
+.stores{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+.store{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:15px;font-weight:700;padding:13px 22px;min-height:48px;border-radius:var(--r-pill);background:var(--bg);color:var(--ink);border:1px solid var(--line);box-shadow:var(--e1)}
+.store svg{width:19px;height:19px;fill:currentColor}
+.store:hover{background:var(--paper)}
+.stores.big .store:first-child{background:var(--yellow);border-color:var(--yellow);box-shadow:var(--ey)}
+.stores.big .store:first-child:hover{background:var(--yellowDeep)}
+.os-ios .stores.big a[href*="play.google"],.os-android .stores.big a[href*="apple.com"]{display:none}
+.os-android .stores.big .store{background:var(--yellow);border-color:var(--yellow);box-shadow:var(--ey)}
+.dl .trust{font-size:13px;color:var(--ink3);margin-top:12px}
+.dl .trust b{font-weight:600;color:var(--ink2)}
+.webstart{display:inline-flex;align-items:center;min-height:44px;margin-top:6px;font-size:14px;font-weight:500;color:var(--ink2);text-decoration:underline;text-underline-offset:3px}
+
+.art-scroll{height:100%;min-width:0}
+.heroArt{position:relative;height:100%;max-height:640px;overflow:hidden;border-radius:var(--r-lg)}
+.places{position:absolute;left:0;top:0;display:flex;width:max-content;height:260px;gap:10px;transform:translateX(var(--travel,0px));will-change:transform;pointer-events:none}
+.place{flex:0 0 330px;width:330px;height:260px;object-fit:cover;border-radius:var(--r-md);background:var(--paper)}
+.phone{position:absolute;left:0;right:0;bottom:16px;background:var(--bg);border-radius:var(--r-lg);box-shadow:var(--e3);overflow:hidden;z-index:3}
+.pbar{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.pwm{font-weight:800;font-size:15px;letter-spacing:-.03em;position:relative;isolation:isolate}
+.pwm::after{content:"";position:absolute;left:-2px;right:-2px;bottom:1px;height:5px;background:var(--yellow);z-index:-1;border-radius:2px}
+.ptag{margin-left:auto;font-size:11px;font-weight:600;color:var(--ink2);background:var(--paper);padding:4px 10px;border-radius:var(--r-pill)}
+.chat{height:290px;padding:16px 18px;display:flex;flex-direction:column;justify-content:flex-end;gap:10px;overflow:hidden}
 @keyframes popIn{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
-.cq{align-self:flex-end;max-width:80%;background:var(--ink);color:#fff;font-size:13.5px;font-weight:600;padding:9px 13px;border-radius:14px 14px 5px 14px;animation:popIn .34s cubic-bezier(.2,.7,.3,1) both;line-height:1.45}
-.ca{align-self:flex-start;max-width:90%;background:var(--bg);border:1px solid var(--line);border-radius:5px 14px 14px 14px;box-shadow:var(--e2);padding:11px 13px;animation:popIn .4s cubic-bezier(.2,.7,.3,1) both}
-.ca .lbl{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:900;color:var(--ink2)}
+.cq{align-self:flex-end;max-width:82%;background:var(--ink);color:#fff;font-size:14px;font-weight:500;padding:10px 14px;border-radius:14px 14px 5px 14px;line-height:1.45;animation:popIn .34s cubic-bezier(.2,.7,.3,1) both}
+.ca{align-self:flex-start;max-width:92%;background:var(--bg);border-radius:5px 14px 14px 14px;box-shadow:var(--e2);padding:12px 14px;animation:popIn .4s cubic-bezier(.2,.7,.3,1) both}
+.ca .lbl{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--ink2)}
 .ca .lbl .yd{width:7px;height:7px;border-radius:50%;background:var(--yellowDeep)}
-.ca .abody{font-size:13.5px;color:var(--ink);margin-top:6px;line-height:1.5}
-.ca .abody b{font-weight:800}
-.ca .src{margin-top:9px;background:var(--sourceBg);border-left:3px solid var(--yellowDeep);border-radius:0 8px 8px 0;padding:6px 9px;font-size:11px;color:#8a6a12;font-weight:700}
-.typing{align-self:flex-start;display:flex;gap:4px;background:var(--bg);border:1px solid var(--line);box-shadow:var(--e1);padding:11px 13px;border-radius:5px 14px 14px 14px;animation:popIn .3s both}
+.ca .abody{font-size:14px;color:var(--ink);margin-top:6px;line-height:1.55}
+.ca .abody b{font-weight:700}
+.ca .src{margin-top:9px;background:var(--sourceBg);border-left:3px solid var(--yellowDeep);border-radius:0 8px 8px 0;padding:6px 9px;font-size:11px;color:#8a6a12;font-weight:600}
+.typing{align-self:flex-start;display:flex;gap:4px;background:var(--bg);box-shadow:var(--e1);padding:11px 13px;border-radius:5px 14px 14px 14px;animation:popIn .3s both}
 .typing i{width:6px;height:6px;border-radius:50%;background:var(--ink3);animation:blink 1.2s infinite}
 .typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
 @keyframes blink{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
-.saved{align-self:center;font-size:11px;font-weight:900;color:#7a5f10;background:var(--yellowSoft);padding:5px 12px;border-radius:var(--r-pill);animation:popIn .34s both;display:flex;align-items:center;gap:5px}
+.saved{align-self:center;display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#7a5f10;background:var(--yellowSoft);padding:5px 12px;border-radius:var(--r-pill);animation:popIn .34s both}
 .caret::after{content:"▍";color:var(--ink3);animation:cb .7s steps(1) infinite}
 @keyframes cb{50%{opacity:0}}
 
-/* pain — editorial */
-.pains{margin-top:26px}
-.pain{display:flex;gap:18px;align-items:baseline;padding:18px 4px;border-top:1px solid var(--line)}
-.pain:first-child{border-top:0}
-.pain .pnum{font-size:15px;font-weight:900;color:var(--ink3);font-variant-numeric:tabular-nums;flex:0 0 auto;width:26px}
-.pain h4{font-size:19px;font-weight:900;letter-spacing:-.02em;margin:0}
-.pain h4 .hl{position:relative;white-space:nowrap}
-.pain h4 .hl::after{content:"";position:absolute;left:-2px;right:-2px;bottom:0;height:8px;background:var(--yellowSoft);z-index:-1;border-radius:2px}
-.pain p{font-size:14px;color:var(--ink2);margin:6px 0 0}
+/* 섹션 공통 — 제목·강조 밑줄. 화면에 들어오면 왼쪽부터 그어진다(여러 줄이어도 줄마다) */
+.ul,.h2 .u{background:linear-gradient(var(--yellow),var(--yellow)) no-repeat 0 92%/100% .32em;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.js .reveal .ul,.js .reveal .h2 .u{background-size:0 .32em;transition:background-size .8s .3s cubic-bezier(.2,.7,.3,1)}
+.js .reveal.in .ul,.js .reveal.in .h2 .u{background-size:100% .32em}
+.cost-section .h2 .u{background:none}
+/* 카드 호버 — 노랑으로 바뀌며 살짝 뜬다 */
+.js .reveal.in:is(.cell,.qi,.ic2,.pt){transition:opacity .62s cubic-bezier(.2,.7,.3,1),transform .62s cubic-bezier(.2,.7,.3,1),translate .25s cubic-bezier(.2,.7,.3,1),background-color .25s,box-shadow .25s}
+@media(hover:hover){
+  :is(.cell,.qi,.ic2,.pt):hover,.js .reveal.in:is(.cell,.qi,.ic2,.pt):hover{background-color:var(--yellowSoft);translate:0 -4px;box-shadow:var(--e3);transition-delay:0s!important}
+}
 
-/* bento */
-.bento{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-top:26px}
-@media(max-width:860px){.bento{grid-template-columns:1fr}}
-.cell{background:var(--bg);border:1px solid var(--line);border-radius:var(--r-lg);padding:22px;box-shadow:var(--e1);display:flex;flex-direction:column}
-.cell.core{grid-column:span 3;box-shadow:var(--e2);min-height:344px}
-.cell.sub{grid-column:span 2;min-height:296px}
-@media(max-width:860px){.cell.core,.cell.sub{grid-column:auto;min-height:0}}
-.kind{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:900;letter-spacing:.03em;padding:3px 9px;border-radius:var(--r-pill);margin-bottom:11px;width:fit-content}
-.kind.core{background:var(--ink);color:var(--yellow)}.kind.sub{background:var(--paper);color:var(--ink2)}
-.cell h4{font-size:18px;font-weight:900;letter-spacing:-.02em;margin:0}
-.cell p{font-size:13.5px;color:var(--ink2);margin:7px 0 0}
-.prev{margin-top:auto;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-md);padding:13px;height:132px;display:flex;flex-direction:column;justify-content:center;gap:8px;position:relative;overflow:hidden}
-.cell.core .prev{height:200px}
-.prev.fchat{justify-content:flex-end}
+/* 비용 */
+.cost-section{border-top:1px solid var(--line)}
+.cost-heading .eyebrow2{font-size:20px;font-weight:700;color:var(--ink)}
+.yellow-sweep{position:relative;display:inline-block;isolation:isolate;white-space:nowrap}
+.yellow-sweep::after{content:"";position:absolute;left:-.02em;right:-.02em;bottom:.06em;height:.28em;background:var(--yellow);z-index:-1;border-radius:3px;transform:scaleX(1);transform-origin:left}
+.js .cost-section .yellow-sweep::after{transform:scaleX(0)}
+.js .cost-section .cost-playing .yellow-sweep::after{animation:costUnderline .75s .08s cubic-bezier(.2,.7,.3,1) both}
+@keyframes costUnderline{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.cost-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:40px;margin-top:40px}
+.cost-grid .chart{min-width:0}
+.chart .ct{font-size:16px;font-weight:500;line-height:1.7;margin-bottom:22px}
+.chart .ct b{font-weight:700}
+.cost-number i{font-style:normal}
+.cost-number{font-size:clamp(56px,6vw,76px);line-height:1;letter-spacing:-.05em;font-weight:800;font-variant-numeric:tabular-nums}
+.cost-number span{font-size:.36em;font-weight:500}
+.cost-number em{font-size:.5em;font-style:normal;font-weight:500}
+.count-value{display:inline-block;font-variant-numeric:tabular-nums}
+.cost-number .count-value{font:inherit;min-width:2.05em}
+.cost-sub{font-size:13px;color:var(--ink2);margin:12px 0 0}
+.cost-svg{display:block;width:100%;margin-top:12px;max-height:290px}
+.cost-svg .draw{stroke:var(--ink);stroke-width:4;stroke-linecap:round}
+.cost-svg .dot{fill:var(--ink)}
+.cost-svg text{font-size:15px;fill:var(--ink2);font-weight:500}
+.cost-svg .lab{font-size:19px;font-weight:800;fill:var(--ink)}
+.cost-svg .alpha{stroke:var(--ink);stroke-width:4;stroke-linecap:round;stroke-dasharray:10 7}
+.cost-svg .small{font-size:13px;fill:var(--ink2)}
+.js .cost-svg .draw{stroke-dasharray:1;stroke-dashoffset:calc(1 - var(--draw-p,0))}
+.js .cost-svg .lab,.js .cost-svg .dot{opacity:var(--label-p,0)}
+.js .cost-svg .alpha-mask{stroke-dasharray:1;stroke-dashoffset:calc(1 - var(--alpha-p,0))}
+.js .cost-svg .lab2{opacity:var(--end-p,0)}
+.annual .ct{font-size:clamp(24px,2.6vw,30px);font-weight:800;letter-spacing:-.03em;line-height:1.3;margin:0 0 .3em}
+.annual .ct b{font-weight:800}
+.annual{background:var(--paper);border-radius:var(--r-lg);padding:28px}
+.annual-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:0 0 30px}
+.annual-head strong{font-size:clamp(48px,5vw,64px);line-height:1;font-weight:800;letter-spacing:-.05em;font-variant-numeric:tabular-nums}
+.annual-head .count-value{min-width:1.12em;text-align:right}
+.annual-head small{font-size:.36em;font-weight:500}
+.bars{display:flex;flex-direction:column;gap:20px}
+.br{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
+.br .bl{font-size:14px;font-weight:500}
+.br .bl small{display:block;font-size:12px;color:var(--ink2);margin-top:2px}
+.br .bt{grid-column:1/-1;height:14px;background:var(--line);border-radius:var(--r-pill);overflow:hidden}
+.br .bt i{display:block;height:100%;width:var(--w);background:var(--ink);border-radius:var(--r-pill);transform-origin:left;transform:scaleX(var(--bar-p,1))}
+.br.hot .bt i{background:var(--yellow)}
+.js .br .bt i{transform:scaleX(var(--bar-p,0))}
+.br .bv{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.bar-note{font-size:12px;color:var(--ink2);line-height:1.7;margin:22px 0 0}
+.lnote{font-size:12px;line-height:1.8;color:var(--ink2);margin:34px 0 0;padding-top:20px;border-top:1px solid var(--line)}
+
+/* 사장님 말 — 카드 없이 줄만 */
+.pains{margin-top:30px;max-width:760px}
+.pain{display:flex;gap:18px;align-items:baseline;padding:22px 0;border-top:1px solid var(--line)}
+.pain:first-child{border-top:0}
+.pain .pnum{flex:0 0 28px;font-size:14px;font-weight:600;color:var(--ink3);font-variant-numeric:tabular-nums}
+.pain h4{font-size:21px;font-weight:700;letter-spacing:-.02em;margin:0;line-height:1.35}
+.pain .hl{font-weight:700}
+.pain p{font-size:16px;color:var(--ink2);margin:6px 0 0}
+
+/* 하는 일 — 카드 3장, 그림자로 띄움 */
+.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:32px}
+.cell{display:flex;flex-direction:column;background:var(--bg);border-radius:var(--r-lg);padding:24px;box-shadow:var(--e2);min-height:0}
+.kind{display:inline-flex;align-items:center;gap:5px;width:fit-content;font-size:12px;font-weight:600;color:var(--ink2);background:var(--paper);padding:4px 10px;border-radius:var(--r-pill);margin-bottom:14px}
+.cell h4{font-size:20px;font-weight:700;letter-spacing:-.02em;margin:0;line-height:1.35}
+.cell p{font-size:15px;line-height:1.6;color:var(--ink2);margin:8px 0 0}
+.prev{margin-top:22px;background:var(--paper);border-radius:var(--r-md);padding:14px;height:280px;display:flex;flex-direction:column;justify-content:center;gap:8px;position:relative;overflow:hidden}
+.prev.fchat{justify-content:flex-end;height:280px;padding:14px}
+.prev.fchat .cq{font-size:13.5px}.prev.fchat .ca .abody{font-size:13.5px}
 #todo{justify-content:flex-start}
-.morelink{margin-top:22px;text-align:center}
-.morelink a{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:900;color:var(--ink);background:var(--paper);padding:12px 22px;border-radius:var(--r-pill)}
-.morelink a:hover{background:var(--line)}
-/* mini checklist + tlog + toast */
+.row{box-shadow:var(--e1);border:0}
+.row .mn{font-weight:600}
+.row .mb{font-weight:700}
 .mcheck{display:flex;flex-direction:column;gap:9px}
-.mck{display:flex;align-items:center;gap:10px;font-size:12.5px;font-weight:700}
-.mck .box{width:20px;height:20px;border-radius:6px;border:2px solid var(--line);display:flex;align-items:center;justify-content:center}
+.mck{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:500;background:var(--bg);border-radius:10px;padding:10px 12px;box-shadow:var(--e1)}
+.mck .box{flex:0 0 auto;width:22px;height:22px;border-radius:7px;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;transition:background .2s,border-color .2s}
 .mck .box svg{width:12px;height:12px;opacity:0;transition:opacity .2s}
 .mck.done .box{background:var(--yellow);border-color:var(--yellowDeep);color:var(--ink)}
-.mck.done .box svg{opacity:1}.mck.done span{color:var(--ink3);text-decoration:line-through}
+.mck.done .box svg{opacity:1}
+.mck.done span:last-child{color:var(--ink3);text-decoration:line-through}
 .tlog{margin-top:2px}
-.tlogrow{display:flex;gap:8px;align-items:center;font-size:11.5px;background:var(--bg);border:1px solid var(--line);box-shadow:var(--e1);border-radius:10px;padding:8px 10px;color:var(--ink);line-height:1.4;animation:popIn .34s both}
+.tlogrow{display:flex;gap:8px;align-items:center;font-size:13px;background:var(--bg);box-shadow:var(--e1);border-radius:10px;padding:9px 11px;color:var(--ink);line-height:1.4;animation:popIn .34s both}
 .tlogrow .tk{flex:0 0 auto;width:18px;height:18px;border-radius:6px;background:var(--good);color:#fff;display:flex;align-items:center;justify-content:center}
 .tlogrow .tk svg{width:11px;height:11px;stroke-width:2.6}
-.talert{position:absolute;left:13px;right:13px;bottom:13px;display:flex;align-items:center;gap:7px;background:var(--ink);color:#fff;font-size:11.5px;font-weight:800;padding:10px 12px;border-radius:12px;box-shadow:var(--e3);opacity:0;transform:translateY(24px);transition:opacity .34s,transform .34s cubic-bezier(.2,.7,.3,1)}
+.talert{position:absolute;left:14px;right:14px;bottom:14px;display:flex;align-items:center;gap:7px;background:var(--ink);color:#fff;font-size:13px;font-weight:600;padding:11px 13px;border-radius:12px;box-shadow:var(--e3);opacity:0;transform:translateY(24px);transition:opacity .34s,transform .34s cubic-bezier(.2,.7,.3,1)}
 .talert .yb{color:var(--yellow)}.talert.show{opacity:1;transform:none}
+.morelink{margin-top:26px;text-align:center}
+.morelink a{display:inline-flex;align-items:center;gap:6px;min-height:44px;font-size:15px;font-weight:600;color:var(--ink);background:var(--paper);padding:12px 22px;border-radius:var(--r-pill)}
+.morelink a:hover{background:var(--line)}
 
-/* steps */
-.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:30px}
-@media(max-width:860px){.steps{grid-template-columns:1fr}}
-.step{background:var(--bg);border:1px solid var(--line);border-radius:var(--r-lg);padding:22px;box-shadow:var(--e1)}
-.step .n{width:36px;height:36px;border-radius:50%;background:var(--ink);color:var(--yellow);font-weight:900;font-size:16px;display:flex;align-items:center;justify-content:center}
-.step h5{font-size:17px;font-weight:900;margin:14px 0 5px;letter-spacing:-.02em}
-.step p{font-size:13.5px;color:var(--ink2);margin:0}
+/* 먼저 묻는 두 가지 */
+.qa{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:32px}
+.qi{background:var(--paper);border-radius:var(--r-lg);padding:32px}
+.qi h4{display:flex;align-items:flex-start;gap:14px;font-size:22px;font-weight:800;letter-spacing:-.02em;margin:0;line-height:1.4}
+.qi .qm{flex:0 0 auto;width:36px;height:36px;border-radius:50%;background:var(--yellow);font-size:17px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-top:-2px}
+.qi p{font-size:16px;line-height:1.7;color:var(--ink2);margin:12px 0 0 50px}
 
-/* 업종별 활용 카드 */
-.igrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:26px}
-@media(max-width:860px){.igrid{grid-template-columns:1fr 1fr}}
-@media(max-width:520px){.igrid{grid-template-columns:1fr}}
-.ic2{display:flex;flex-direction:column;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-lg);padding:20px;box-shadow:var(--e1)}
-.ic2:hover{border-color:var(--ink);box-shadow:var(--e2)}
-.ic2 .in{font-size:16px;font-weight:900;letter-spacing:-.02em}
-.ic2 .id2{font-size:12.5px;color:var(--ink2);margin-top:7px;line-height:1.55}
-.ic2 .ig{margin-top:14px;display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:900;color:var(--ink)}
+/* 업종 */
+.igrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:32px}
+.ic2{display:flex;flex-direction:column;background:var(--bg);border-radius:var(--r-lg);padding:24px;box-shadow:var(--e1);transition:box-shadow .2s}
+.ic2:hover{box-shadow:var(--e2)}
+.ic2 .in{font-size:20px;font-weight:700;letter-spacing:-.02em}
+.ic2 .id2{font-size:15px;color:var(--ink2);margin-top:8px;line-height:1.55}
+.ic2 .ig{margin-top:16px;display:inline-flex;align-items:center;gap:5px;min-height:44px;font-size:15px;font-weight:600;color:var(--ink)}
 
 /* 요금 티저 */
-.pteaser{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px}
-@media(max-width:720px){.pteaser{grid-template-columns:1fr}}
-.pt{display:flex;flex-direction:column;background:var(--bg);border:1.5px solid var(--line);border-radius:var(--r-lg);padding:20px 22px;box-shadow:var(--e1)}
-.pt:hover{border-color:var(--ink)}
-.pt.hot{border-color:var(--ink);box-shadow:var(--e2)}
-.pt .n{font-size:13.5px;font-weight:900}
-.pt .v{font-size:24px;font-weight:900;letter-spacing:-.03em;margin-top:8px}
-.pt .v small{font-size:12px;color:var(--ink2);font-weight:700}
-.pt .d{font-size:12.5px;color:var(--ink2);margin-top:6px}
-</style>
-</head>
-<body>
+.pteaser{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:32px}
+.pt{display:flex;flex-direction:column;background:var(--bg);border-radius:var(--r-lg);padding:24px;box-shadow:var(--e1)}
+.pt:hover{box-shadow:var(--e2)}
+.pt.hot{box-shadow:var(--e2);outline:2px solid var(--ink);outline-offset:-2px}
+.pt .n{font-size:15px;font-weight:600;color:var(--ink2)}
+.pt .v{font-size:28px;font-weight:800;letter-spacing:-.03em;margin-top:8px;font-variant-numeric:tabular-nums}
+.pt .v small{font-size:13px;color:var(--ink2);font-weight:500}
+.pt .d{font-size:15px;color:var(--ink2);margin-top:8px}
+.pnote{font-size:14px;color:var(--ink2);margin-top:26px;text-align:center}
+.pnote a{font-weight:600;color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+
+/* 마지막 CTA 띠 — 검정 면은 여기 하나 */
+.foot{margin-top:0}
+.foot .stores.big{justify-content:center;max-width:440px;margin:26px auto 0}
+.foot .stores.big .store{flex:1 1 160px;background:var(--yellow);border-color:var(--yellow);color:var(--ink);box-shadow:none;font-size:16px;min-height:52px}
+.foot .stores.big .store:hover{background:var(--yellowDeep)}
+.foot .fbtns{margin-top:16px}
+.foot .fghost{font-weight:600;font-size:15px;padding:12px 22px;min-height:44px}
+
+@media(max-width:860px){
+  .hero{height:auto;min-height:0;padding:28px 0 0}
+  .hero-stage{position:static;display:block;height:auto;min-height:0;max-height:none;padding:0}
+  .hleft{max-width:none}
+  .hero h1{font-size:36px;line-height:1.22;margin-top:16px}
+  .hero p.sub{font-size:16px;margin-top:14px}
+  .dl{margin-top:22px}
+  .stores.big .store{flex:1 1 140px;padding:12px 16px;font-size:14px}
+  .art-scroll{height:140vh;min-height:830px;margin-top:24px}
+  .heroArt{position:sticky;top:80px;height:70vh;min-height:520px;max-height:580px}
+  .places{height:210px;gap:8px}
+  .place{flex-basis:260px;width:260px;height:210px}
+  .phone{bottom:12px}
+  .chat{height:255px;padding:14px}
+  .ca{max-width:100%}
+  .cost-heading .eyebrow2{font-size:17px}
+  .cost-grid{grid-template-columns:1fr;gap:28px;margin-top:28px}
+  .annual{padding:22px 18px}
+  .bento,.qa,.igrid,.pteaser{grid-template-columns:1fr}
+  .prev,.prev.fchat{height:260px}
+  .pain h4{font-size:19px}.pain p{font-size:15px}
+  .cell h4,.qi h4,.ic2 .in{font-size:19px}
+  .qi{padding:22px}
+  .qi p{margin-left:0}
+}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .hero{height:auto!important;min-height:0!important}
+  .hero-stage{position:static!important;height:auto!important;min-height:0!important;max-height:none!important}
+  .art-scroll{height:auto!important;min-height:0!important}
+  .heroArt{position:relative!important;top:auto!important;height:580px!important}
+  .places{position:absolute;inset:0;width:100%;height:100%;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:8px;transform:none!important}
+  .place{width:100%;height:100%;flex:auto}
+  .phone{left:14px;right:14px;bottom:14px}
+  .js .hero h1 .mk .bar{transform:scaleX(1)!important;animation:none!important}
+  .js .cost-section .yellow-sweep::after{transform:scaleX(1)!important;animation:none!important}
+  .js .cost-svg .draw{stroke-dashoffset:0!important}
+  .js .cost-svg .lab,.js .cost-svg .dot,.js .cost-svg .lab2{opacity:1!important}
+  .js .cost-svg .alpha-mask{stroke-dashoffset:0!important}
+  .js .reveal .ul,.js .reveal .h2 .u{background-size:100% .32em!important;transition:none!important}
+  .js .br .bt i{transform:none!important}
+  .talert,.tlogrow,.cq,.ca,.typing,.saved{animation:none!important;transition:none!important}
+}
+</style></head>
+<body data-motion="2">
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" id="nav-icons"><defs>
 <symbol id="n-input" viewBox="0 0 24 24"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3zM13.5 6.5l3 3"/></symbol>
 <symbol id="n-inbox" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 13h5l1.5 2h3L15 13h5"/></symbol>
@@ -140,8 +264,6 @@
 <symbol id="n-multi" viewBox="0 0 24 24"><path d="M3 9l1.6-5h14.8L21 9M4.2 9v10h15.6V9M4 9h16M9.5 19v-5h5v5"/></symbol>
 <symbol id="n-cafe" viewBox="0 0 24 24"><path d="M4 8h13v4a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8zM17 9h2a2 2 0 0 1 0 4h-2M6 3v2M9.5 3v2M13 3v2"/></symbol>
 <symbol id="n-restaurant" viewBox="0 0 24 24"><path d="M6 3v7a2 2 0 0 0 4 0V3M8 10v11M17 3c-1.5 1.5-2 3-2 5.5S16 12 17.5 12H18V3zM18 12v9"/></symbol>
-<symbol id="n-gym" viewBox="0 0 24 24"><path d="M4 9v6M7 7v10M17 7v10M20 9v6M7 12h10"/></symbol>
-<symbol id="n-academy" viewBox="0 0 24 24"><path d="M4 4.5h6a2.5 2.5 0 0 1 2 2.5 2.5 2.5 0 0 1 2-2.5h6v13h-6a2.5 2.5 0 0 0-2 2 2.5 2.5 0 0 0-2-2H4zM12 7v12"/></symbol>
 </defs></svg>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
 <symbol id="i-cafe" viewBox="0 0 24 24"><path d="M4 8h13v4a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8zM17 9h2a2 2 0 0 1 0 4h-2M6 3v2M9.5 3v2M13 3v2"/></symbol>
@@ -186,15 +308,11 @@
       </div>
       </div>
     </div>
-    <div class="drop"><a href="/cafe">업종별 활용</a>
+    <div class="drop"><a href="/restaurant">업종별 활용</a>
       <div class="dm i">
       <div class="mega-col">
-        <a class="mi" href="/cafe"><span class="mic"><svg class="ic"><use href="#n-cafe"/></svg></span><span class="mtx"><span class="mt">카페</span><span class="md">레시피 기준 · 오픈/마감 순서 · 클레임 대응</span></span></a>
         <a class="mi" href="/restaurant"><span class="mic"><svg class="ic"><use href="#n-restaurant"/></svg></span><span class="mtx"><span class="mt">음식점</span><span class="md">계량·조리 기준 · 홀 응대 · 밑준비와 마감</span></span></a>
-      </div>
-      <div class="mega-col">
-        <a class="mi" href="/gym"><span class="mic"><svg class="ic"><use href="#n-gym"/></svg></span><span class="mtx"><span class="mt">헬스장·필라테스</span><span class="md">환불·홀딩 규정 · 상담 순서 · 시설 점검</span></span></a>
-        <a class="mi" href="/academy"><span class="mic"><svg class="ic"><use href="#n-academy"/></svg></span><span class="mtx"><span class="mt">학원</span><span class="md">보강·환불 기준 · 등하원 · 강사 교육</span></span></a>
+        <a class="mi" href="/cafe"><span class="mic"><svg class="ic"><use href="#n-cafe"/></svg></span><span class="mtx"><span class="mt">카페</span><span class="md">레시피 기준 · 오픈/마감 순서 · 클레임 대응</span></span></a>
       </div>
       </div>
     </div>
@@ -202,58 +320,95 @@
     <a href="/inquiry">도입 문의</a>
     <a href="/login">로그인</a>
   </div>
-  <a class="cta" href="/signup">무료로 시작</a>
+  <a class="cta" href="#download">앱 받기</a>
   <label class="nmb" for="nm" aria-label="메뉴 열기"><span></span><span></span><span></span></label>
 </div></div>
 
-<div class="wrap">
-  <!-- HERO -->
-  <section class="hero">
+<div class="wrap">  <!-- HERO -->
+  <section class="hero"><div class="hero-stage">
     <div class="hleft">
-      <span class="eyebrow"><span class="pin"></span>카페 · 음식점 · 헬스장 · 학원 사장님을 위한 매장 운영 AI</span>
-      <h1>직원 질문,<br>이제 <span class="mk" id="mk"><span class="bar"></span>AI가 답합니다</span></h1>
-      <p class="sub">한 번 알려준 답을 AI가 기억해요. 직원이 물으면 우리 가게 방식대로 답해요.</p>
-      <div class="hcta">
-        <a class="p" href="/signup">무료로 시작하기</a>
-        <a class="s" href="/features">기능 살펴보기</a>
+      <span class="eyebrow"><span class="pin"></span>음식점 · 카페 알바·직원 교육 AI</span>
+      <h1><span class="mk"><span class="bar"></span>알바 한 명</span> 바뀔 때마다<br><span class="mk"><span class="bar"></span>18.6만 원 + α</span>가 <span class="ending">나갑니다</span></h1>
+      <p class="sub">새 알바 교육, 이제 AI가 맡아요.</p>
+      <div class="dl" id="download">
+        <div class="dlt">앱 받고 무료로 시작하세요</div>
+      <div class="stores big">
+        <a class="store" href="https://apps.apple.com/kr/app/id6806148337" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.4 12.6c0-2.5 2-3.7 2.1-3.8-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.8 1.2 1.8 2.6 3.1 2.6 1.3-.1 1.7-.8 3.3-.8 1.5 0 1.9.8 3.3.8 1.4 0 2.2-1.2 3-2.5 1-1.4 1.4-2.8 1.4-2.9-.1 0-2.6-1-2.6-4.2zM14 5.2c.7-.8 1.2-2 1-3.2-1 0-2.2.7-3 1.5-.6.7-1.2 1.9-1 3.1 1.1.1 2.3-.6 3-1.4z"/></svg>App Store</a>
+        <a class="store" href="https://play.google.com/store/apps/details?id=com.dochackchack.app" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.6 2.3c-.3.3-.4.7-.4 1.2v17c0 .5.1.9.4 1.2l9.6-9.7zM14.3 13.1l2.9 2.9-11.3 6.5c-.6.3-1.1.3-1.5.1zM17.2 8 14.3 10.9 4.4 1.4c.4-.2.9-.2 1.5.1zM18.5 8.7l3 1.7c.9.5.9 1.3 0 1.8l-3 1.7-3.1-3z"/></svg>Google Play</a>
       </div>
-      <div class="trust">신용카드 없이 시작 · <b>매장 1곳 · 직원 2명 · AI 월 200</b> 무료</div>
+        <div class="trust">신용카드 없이 시작 · <b>매장 1곳 · 직원 2명 · AI 월 200</b> 무료</div>
+      </div>
+      <a class="webstart" href="/signup">PC에서는 웹으로 시작하기 →</a>
     </div>
-    <div class="heroArt">
+    <div class="art-scroll"><div class="heroArt"><div class="places"><img class="place place-1" src="/img/hero-hook-1.webp" alt="같은 설명, 또 처음부터" width="900" height="675"><img class="place place-2" src="/img/hero-hook-2.webp" alt="오늘만 열 번째 같은 질문" width="900" height="675"><img class="place place-3" src="/img/hero-hook-3.webp" alt="겨우 가르쳤더니 그만둔 알바" width="900" height="675"><img class="place place-4" src="/img/hero-hook-4.webp" alt="사장님 없으면 멈추는 매장" width="900" height="675"></div>
       <div class="phone">
         <div class="pbar"><span class="pwm">매장의 정석</span><span class="ptag">신촌점 · 물어보기</span></div>
         <div class="chat fchat" id="demoChat"></div>
       </div>
     </div>
-  </section>
+  </div></div></section>
 
-  <!-- PAIN -->
+<section class="sec cost-section" id="loss">
+<div class="cost-heading reveal"><div class="eyebrow2">예시 · 직원 4명 음식점</div><h2 class="h2">새 알바가 <span class="u yellow-sweep">제 몫을 하기까지</span></h2></div>
+<div class="cost-grid">
+<div class="chart reveal training"><div class="ct">새 알바 한 명, 첫 한 달 동안 <b class="yellow-sweep">쌓이는 교육 인건비</b></div>
+<div class="cost-number" aria-label="18.6만 원 + α"><i class="yellow-sweep"><span class="count-value" data-count="18.6" aria-hidden="true">18.6</span><span aria-hidden="true">만 원</span> <em aria-hidden="true">+ α</em></i></div><p class="cost-sub">첫 3일 교육 18시간 + 이후 추가 대응</p>
+<svg class="cost-svg" viewBox="0 0 540 270" role="img" aria-label="교육 18시간의 인건비 185,760원. 이후 적응 기간에 추가 대응 비용 α가 더해지며 금액은 측정 전">
+<g stroke="#d5d7d1"><line x1="22" y1="200" x2="518" y2="200"/><line x1="22" y1="105" x2="518" y2="105"/></g>
+<path class="draw" pathLength="1" d="M22 200 L220 105" fill="none"/>
+<mask id="alphaMask" maskUnits="userSpaceOnUse"><path class="alpha-mask" pathLength="1" d="M220 105 C 320 100, 420 93, 518 85" fill="none" stroke="#fff" stroke-width="12"/></mask>
+<path class="alpha" d="M220 105 C 320 100, 420 93, 518 85" fill="none" mask="url(#alphaMask)"/>
+<circle class="dot" cx="220" cy="105" r="6"/><text class="lab" x="220" y="80" text-anchor="middle">18.6만 원</text>
+<circle class="dot lab2" cx="518" cy="85" r="6"/><text class="lab lab2" x="518" y="60" text-anchor="end">18.6만 원 + α</text>
+<text class="small lab2" x="518" y="128" text-anchor="end">적응 기간 추가 대응 α · 금액 측정 전</text>
+<text x="22" y="236">첫 출근</text><text x="220" y="236" text-anchor="middle">3일 · 18시간</text><text x="518" y="236" text-anchor="end">4주</text>
+</svg></div>
+<div class="chart reveal annual">
+<div class="annual-head"><div class="ct"><b class="yellow-sweep">1년이면 이만큼</b></div><strong aria-label="50만 원 + α"><span class="count-value" data-count="50" aria-hidden="true">50</span><small aria-hidden="true">만 원 + α</small></strong></div>
+<div class="bars">
+<div class="br"><div class="bl">알바 1명 교체</div><div class="bt"><i style="--w:9.3%"></i></div><div class="bv" aria-label="18.6만 원 + α"><span class="count-value" data-count="18.6" aria-hidden="true">18.6</span><span aria-hidden="true">만 원 + α</span></div></div>
+<div class="br"><div class="bl">한 자리, 1년<small>1년에 2.7번 바뀌어요</small></div><div class="bt"><i style="--w:25%"></i></div><div class="bv" aria-label="50만 원 + α"><span class="count-value" data-count="50" aria-hidden="true">50</span><span aria-hidden="true">만 원 + α</span></div></div>
+<div class="br hot"><div class="bl">직원 4명 매장, 1년</div><div class="bt"><i style="--w:100%"></i></div><div class="bv" aria-label="200만 원 + α"><span class="count-value" data-count="200" aria-hidden="true">200</span><span aria-hidden="true">만 원 + α</span></div></div>
+</div><p class="bar-note">막대는 계산 가능한 교육 인건비만 비교합니다.<br>α는 각 기간과 인원에 따른 추가 대응 비용의 합계예요.</p></div>
+</div><p class="lnote reveal">계산 예시: 주말 이틀 × 하루 6시간. 첫 3일 교육 18시간 × 2026년 최저시급 10,320원 = 185,760원. 한 자리 연간 교체 횟수는 숙박·음식점업 임시·일용직 월 이직률 22.4%(고용노동부 사업체노동력조사, 2023) × 12개월 = 2.688회로 가정. 한 자리 연간 499,323원, 4자리는 1,997,292원을 각각 약 50만 원, 200만 원으로 표시했어요. α는 이후 질문과 실수에 대한 사장님·선임의 추가 대응 비용이며 아직 측정 전이에요. 매장마다 다를 수 있는 예시예요.</p>
+</section>
+
+  <!-- 사장님 말 -->
   <section class="sec">
-    <div class="reveal"><div class="eyebrow2">이런 순간, 있으시죠</div>
-    <h2 class="h2">사장님 시간을 뺏는 <span class="u">네 가지</span></h2></div>
+    <div class="reveal"><div class="eyebrow2">이런 말, 해 보셨죠</div>
+    <h2 class="h2">사장님, 또 <span class="u">처음부터</span> 설명하고 계시죠</h2></div>
     <div class="pains stagger">
-      <div class="pain reveal"><div class="pnum">01</div><div><h4>또 <span class="hl">처음부터</span></h4><p>직원 한 명 바뀔 때마다 같은 설명을 다시 해요.</p></div></div>
-      <div class="pain reveal"><div class="pnum">02</div><div><h4>쉬는 날에 <span class="hl">오는 전화</span></h4><p>“사장님, 이건 어떻게 해요?”</p></div></div>
-      <div class="pain reveal"><div class="pnum">03</div><div><h4><span class="hl">머릿속에만</span> 있는 노하우</h4><p>적어둘 시간이 없어요. 그래서 내가 없으면 가게가 멈춰요.</p></div></div>
-      <div class="pain reveal"><div class="pnum">04</div><div><h4><span class="hl">흩어진</span> 지시</h4><p>카톡에, 메모지에, 말로. 아무도 제대로 못 봐요.</p></div></div>
+      <div class="pain reveal"><div class="pnum">01</div><div><h4>“이거 <span class="hl ul">지난번에</span> 알려줬잖아”</h4><p>신입이 바뀔 때마다 같은 설명을 다시 해요.</p></div></div>
+      <div class="pain reveal"><div class="pnum">02</div><div><h4>쉬는 날에 <span class="hl ul">오는 전화</span></h4><p>“사장님, 이건 어떻게 해요?”</p></div></div>
+      <div class="pain reveal"><div class="pnum">03</div><div><h4>“<span class="hl ul">내가 없으면</span> 가게가 안 돌아가”</h4><p>노하우가 사장님 머릿속에만 있어요.</p></div></div>
     </div>
   </section>
 
-  <!-- FEATURE 요약 -->
+  <!-- 하는 일 -->
   <section class="sec" id="feature">
     <div class="reveal"><div class="eyebrow2">매장의 정석이 하는 일</div>
-    <h2 class="h2">한 번만 알려주면, <span class="u">그다음은 AI가</span></h2></div>
+    <h2 class="h2">새 알바 교육, <span class="u">이제 AI가 맡아요</span></h2></div>
     <div class="bento stagger">
-      <div class="cell core reveal">
-        <span class="kind core"><svg class="ic"><use href="#i-bulb"/></svg>핵심 · 노하우 AI</span>
-        <h4>우리 가게 노하우, AI가 즉답</h4>
-        <p>사장님이 한 번 남긴 답으로 AI가 직원 질문에 답해요. 말로 남기거나 인수인계서 PDF를 올려도 돼요.</p>
+      <div class="cell reveal">
+        <span class="kind"><svg class="ic"><use href="#i-bulb"/></svg>물어보면</span>
+        <h4><span class="ul">사장님 대신 답해요</span></h4>
+        <p>신입이 물으면 사장님이 남긴 노하우로 답해요. 어디서 나온 답인지도 보여 줘요.</p>
         <div class="prev fchat" id="coreChat"></div>
       </div>
-      <div class="cell core reveal">
-        <span class="kind core"><svg class="ic"><use href="#i-chat"/></svg>핵심 · 채팅 업무</span>
-        <h4>체크하면 기록과 알림까지</h4>
-        <p>할 일에 노하우를 붙여 두면 직원이 보고 그대로 해요. 체크하면 채팅에 남고 사장님께 알림이 가요.</p>
+      <div class="cell reveal">
+        <span class="kind"><svg class="ic"><use href="#n-training"/></svg>첫 출근부터</span>
+        <h4><span class="ul">순서대로 배우고 확인해요</span></h4>
+        <p>배울 노하우를 골라 두면 신입이 순서대로 배우고 퀴즈로 확인해요.</p>
+        <div class="prev rows">
+          <div class="row"><span class="mi"><svg class="ic"><use href="#i-check"/></svg></span><span class="mn">포스 마감 정산</span><span class="mb">통과</span></div>
+          <div class="row"><span class="mi"><svg class="ic"><use href="#i-check"/></svg></span><span class="mn">육수 계량</span><span class="mb">통과</span></div>
+          <div class="row"><span class="mi"><svg class="ic"><use href="#i-bulb"/></svg></span><span class="mn">홀 주문 받는 순서</span><span class="mb">다음</span></div>
+        </div>
+      </div>
+      <div class="cell reveal">
+        <span class="kind"><svg class="ic"><use href="#i-chat"/></svg>매일</span>
+        <h4><span class="ul">오픈·마감은 체크로 남아요</span></h4>
+        <p>할 일에 노하우를 붙여 두면 보고 그대로 해요. 체크하면 사장님께 알림이 가요.</p>
         <div class="prev" id="todo">
           <div class="mcheck">
             <div class="mck done"><span class="box"><svg class="ic"><use href="#i-check"/></svg></span><span>원두 그라인더 청소</span></div>
@@ -263,77 +418,38 @@
           <div class="talert"><svg class="ic yb"><use href="#i-bell"/></svg>사장님께 알림 전송</div>
         </div>
       </div>
-      <div class="cell sub reveal">
-        <span class="kind sub">부가</span>
-        <h4>신입 교육은 퀴즈 묶음으로</h4>
-        <p>배울 노하우를 골라 두면 신입이 첫 출근부터 순서대로 배우고 퀴즈로 확인해요. 잊을 때쯤 한 번 더 확인해요.</p>
-        <div class="prev rows">
-          <div class="row"><span class="mi"><svg class="ic"><use href="#i-check"/></svg></span><span class="mn">포스 마감 정산</span><span class="mb">통과</span></div>
-          <div class="row"><span class="mi"><svg class="ic"><use href="#i-bulb"/></svg></span><span class="mn">우유 스팀 온도</span><span class="mb">다음</span></div>
-        </div>
-      </div>
-      <div class="cell sub reveal">
-        <span class="kind sub">부가</span>
-        <h4>여러 매장도 한 계정에서</h4>
-        <p>여러 매장을 한 화면에서 봐요. 노하우를 다른 매장으로 가져오고, 운영은 매니저에게 맡겨요.</p>
-        <div class="prev rows">
-          <div class="row"><span class="mi"><svg class="ic"><use href="#i-cafe"/></svg></span><span class="mn">신촌점</span><span class="mb">확인필요 2</span></div>
-          <div class="row"><span class="mi"><svg class="ic"><use href="#i-cafe"/></svg></span><span class="mn">홍대점</span><span class="mb">노하우 가져오기</span></div>
-        </div>
-      </div>
-      <div class="cell sub reveal">
-        <span class="kind sub">부가</span>
-        <h4>출퇴근·인건비 한눈에</h4>
-        <p>출근·퇴근이 기록으로 남고, 이번 달 인건비가 자동 집계돼요.</p>
-        <div class="prev rows">
-          <div class="row"><span class="mi"><svg class="ic"><use href="#i-clock"/></svg></span><span class="mn">김민재 · 6시간</span><span class="mb">₩61,000</span></div>
-          <div class="row"><span class="mi"><svg class="ic"><use href="#i-clock"/></svg></span><span class="mn">이수민 · 5시간</span><span class="mb">₩51,000</span></div>
-        </div>
-      </div>
     </div>
-    <div class="morelink reveal"><a href="/features">기능 자세히 보기<svg class="ic"><use href="#i-arrow"/></svg></a></div>
+    <div class="morelink reveal"><a href="/features">출퇴근·인건비·여러 매장 기능 보기<svg class="ic"><use href="#i-arrow"/></svg></a></div>
+  </section>
+
+  <!-- 먼저 묻는 두 가지 -->
+  <section class="sec">
+    <div class="reveal"><div class="eyebrow2">먼저 물어보세요</div>
+    <h2 class="h2">사장님들이 <span class="u">가장 많이 묻는 두 가지</span></h2></div>
+    <div class="qa stagger">
+      <div class="qi reveal"><h4><span class="qm" aria-hidden="true">Q</span><span class="ul">노하우 정리할 시간이 없는데요?</span></h4><p>업종만 고르면 기본 노하우가 미리 담겨요. 더 넣고 싶으면 말로 하거나 인수인계서 PDF를 올리면 돼요.</p></div>
+      <div class="qi reveal"><h4><span class="qm" aria-hidden="true">Q</span><span class="ul">AI가 모르는 걸 물으면요?</span></h4><p>답이 없으면 사장님께 1탭으로 넘어와요. 사장님이 한 번 답하면 가게 매뉴얼로 남아요.</p></div>
+    </div>
   </section>
 
   <!-- 업종별 활용 -->
   <section class="sec">
     <div class="reveal"><div class="eyebrow2">업종별 활용</div>
     <h2 class="h2">우리 가게에서는 <span class="u">어떻게 쓰나요</span></h2>
-    <p class="hsub">업종마다 반복되는 일이 달라요. 하루 흐름대로 보여드려요.</p></div>
+    <p class="hsub">업종마다 신입이 배울 게 달라요. 하루 흐름대로 보여드려요.</p></div>
     <div class="igrid stagger">
-      <a class="ic2 reveal" href="/cafe">
-        <span class="in">카페</span>
-        <span class="id2">레시피 기준 · 오픈/마감 · 클레임 대응</span>
-        <span class="ig">보러 가기<svg class="ic"><use href="#i-arrow"/></svg></span>
-      </a>
       <a class="ic2 reveal" href="/restaurant">
-        <span class="in">음식점</span>
+        <span class="in"><span class="ul">음식점</span></span>
         <span class="id2">계량·조리 기준 · 홀 응대 · 오픈/마감</span>
         <span class="ig">보러 가기<svg class="ic"><use href="#i-arrow"/></svg></span>
       </a>
-      <a class="ic2 reveal" href="/gym">
-        <span class="in">헬스장·필라테스</span>
-        <span class="id2">환불·홀딩 규정 · 상담 순서 · 시설 점검</span>
-        <span class="ig">보러 가기<svg class="ic"><use href="#i-arrow"/></svg></span>
-      </a>
-      <a class="ic2 reveal" href="/academy">
-        <span class="in">학원</span>
-        <span class="id2">보강·환불 기준 · 등하원 · 강사 교육</span>
+      <a class="ic2 reveal" href="/cafe">
+        <span class="in"><span class="ul">카페</span></span>
+        <span class="id2">레시피 기준 · 오픈/마감 · 클레임 대응</span>
         <span class="ig">보러 가기<svg class="ic"><use href="#i-arrow"/></svg></span>
       </a>
     </div>
   </section>
-
-  <!-- STEPS -->
-  <section class="sec">
-    <div class="reveal"><div class="eyebrow2">3단계면 끝</div>
-    <h2 class="h2">시작하고, 물어보고, <span class="u">쌓인다</span></h2></div>
-    <div class="steps stagger">
-      <div class="step reveal"><div class="n">1</div><h5>매장 만들기</h5><p>업종만 고르면 그 업종 기본 노하우가 미리 담겨요.</p></div>
-      <div class="step reveal"><div class="n">2</div><h5>직원이 질문</h5><p>모르는 건 AI에게. 답이 없으면 사장님께 1탭으로 전달돼요.</p></div>
-      <div class="step reveal"><div class="n">3</div><h5>노하우로 저장</h5><p>사장님이 한 번 답하면 가게 매뉴얼로 남아요.</p></div>
-    </div>
-  </section>
-
 
   <!-- 요금 티저 -->
   <section class="sec">
@@ -361,9 +477,13 @@
 </div>
 
 <div class="foot" id="start">
-  <h3>한 번만 알려주면, 그다음은 <span class="k">알아서</span>.</h3>
+  <h3>다음 신입은 <span class="k">AI가 가르치게</span>.</h3>
+  <div class="stores big">
+    <a class="store" href="https://apps.apple.com/kr/app/id6806148337" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.4 12.6c0-2.5 2-3.7 2.1-3.8-1.2-1.7-3-1.9-3.6-2-1.5-.2-3 .9-3.8.9-.8 0-2-.9-3.3-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.8 1.2 1.8 2.6 3.1 2.6 1.3-.1 1.7-.8 3.3-.8 1.5 0 1.9.8 3.3.8 1.4 0 2.2-1.2 3-2.5 1-1.4 1.4-2.8 1.4-2.9-.1 0-2.6-1-2.6-4.2zM14 5.2c.7-.8 1.2-2 1-3.2-1 0-2.2.7-3 1.5-.6.7-1.2 1.9-1 3.1 1.1.1 2.3-.6 3-1.4z"/></svg>App Store</a>
+    <a class="store" href="https://play.google.com/store/apps/details?id=com.dochackchack.app" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.6 2.3c-.3.3-.4.7-.4 1.2v17c0 .5.1.9.4 1.2l9.6-9.7zM14.3 13.1l2.9 2.9-11.3 6.5c-.6.3-1.1.3-1.5.1zM17.2 8 14.3 10.9 4.4 1.4c.4-.2.9-.2 1.5.1zM18.5 8.7l3 1.7c.9.5.9 1.3 0 1.8l-3 1.7-3.1-3z"/></svg>Google Play</a>
+  </div>
   <div class="fbtns">
-    <a class="fcta" href="/signup">무료로 시작하기</a>
+    <a class="fghost" href="/signup">PC에서 웹으로 시작</a>
     <a class="fghost" href="/inquiry">도입 문의</a>
   </div>
 </div>
@@ -372,7 +492,7 @@
   <div class="grid">
     <div class="b">
       <span class="lg2">매장의 정석</span>
-      <p>사장님 머릿속 노하우를 가게 전용 AI로. 카페 · 음식점 · 헬스장 · 학원 매장 운영 서비스.</p>
+      <p>사장님 머릿속 노하우로 새 알바를 가르치는 AI. 음식점 · 카페 알바·직원 교육 서비스.</p>
       <a class="em" href="mailto:cristianojun@naver.com">cristianojun@naver.com</a>
     </div>
     <div>
@@ -388,10 +508,8 @@
     <div>
       <h6>업종별 활용</h6>
       <ul>
-        <li><a href="/cafe">카페</a></li>
         <li><a href="/restaurant">음식점</a></li>
-        <li><a href="/gym">헬스장·필라테스</a></li>
-        <li><a href="/academy">학원</a></li>
+        <li><a href="/cafe">카페</a></li>
       </ul>
     </div>
     <div>
@@ -414,7 +532,6 @@
   </div>
   <div class="base">스퀘어테이블 · 대표 장준혁 · 사업자등록번호 466-03-04380 · 서울특별시 구로구 남부순환로95길 54, 106동 1504호 · 전화 010-8282-9583 · 문의 cristianojun@naver.com<br>© 2026 스퀘어테이블</div>
 </footer>
-
 <script>
 (function(){
   var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -427,7 +544,11 @@
   revealEls.forEach(function(el){ io.observe(el); });
   // 안전망: IO 미지원·미스크롤 등 어떤 경우에도 콘텐츠가 영구히 숨지 않도록 잠시 뒤 전부 노출(스크롤하면 그 전에 IO가 먼저 띄움).
   setTimeout(function(){ revealEls.forEach(function(el){ el.classList.add('in'); }); }, 1600);
-  setTimeout(function(){ var m=document.getElementById('mk'); if(m) m.classList.add('lit'); }, 250);
+  setTimeout(function(){ document.querySelectorAll('.hero .mk').forEach(function(m){ m.classList.add('lit'); }); }, 250);
+  // 휴대폰이면 앱 받기 버튼을 그 기기 스토어 하나로 크게 보여 준다.
+  var ua = navigator.userAgent;
+  var os = /iPhone|iPad|iPod/.test(ua) ? 'ios' : /Android/.test(ua) ? 'android' : '';
+  if(os) document.documentElement.classList.add('os-'+os);
 
   function el(cls, html){ var d=document.createElement('div'); d.className=cls; if(html!=null) d.innerHTML=html; return d; }
   async function typeInto(node, text){ node.textContent=''; node.classList.add('caret'); for(var i=0;i<text.length;i++){ node.textContent+=text[i]; await sleep(40); } node.classList.remove('caret'); }
@@ -445,9 +566,9 @@
       chat.style.transition='opacity .45s'; chat.style.opacity=0; await sleep(500); chat.style.transition='';
     }
   }
-  var ANS_HERO='<div class="lbl"><span class="yd"></span>우리 가게 노하우</div><div class="abody">아이스 아메리카노는 시럽 <b>2펌프</b>예요. “연하게” 요청하면 1펌프.</div><div class="src">사장님이 남긴 노하우 · 오픈 매뉴얼</div>';
+  var ANS_HERO='<div class="lbl"><span class="yd"></span>우리 가게 노하우</div><div class="abody">김치찌개 육수는 1인분 <b>2국자</b>예요. 2인분부터는 1국자씩 더해요.</div><div class="src">사장님이 남긴 노하우 · 조리 기준</div>';
   var ANS_MILK='<div class="lbl"><span class="yd"></span>우리 가게 노하우</div><div class="abody">스팀 우유는 <b>60~65℃</b>예요. 라떼아트용은 60℃로 살짝 낮게.</div><div class="src">사장님이 남긴 노하우 · 음료 제조</div>';
-  chatDemo('demoChat','아아 시럽 몇 펌프예요?', ANS_HERO);
+  chatDemo('demoChat','김치찌개 육수 몇 국자 넣어요?', ANS_HERO);
   chatDemo('coreChat','우유 데우는 온도 몇 도예요?', ANS_MILK);
 
   async function todoDemo(){
@@ -464,5 +585,45 @@
   todoDemo();
 })();
 </script>
-</body>
+<script>
+(function(){
+ const hero=document.querySelector('.hero'),art=document.querySelector('.heroArt'),rail=document.querySelector('.places'),cost=document.querySelector('.cost-section'),annual=document.querySelector('.annual'),media=matchMedia('(prefers-reduced-motion: reduce)');
+ const mode=Number(document.body.dataset.motion),clamp=x=>Math.max(0,Math.min(1,x));let queued=false;
+ function update(){queued=false;const mobile=innerWidth<=860,track=mobile?document.querySelector('.art-scroll'):hero,rect=track.getBoundingClientRect(),stickyHeight=mobile?art.offsetHeight:document.querySelector('.hero-stage').offsetHeight,top=mobile?80:76;
+ const p=media.matches?1:clamp((top-rect.top)/Math.max(1,track.offsetHeight-stickyHeight));
+ hero.style.setProperty('--p',p);hero.style.setProperty('--open',clamp((p-.08)/.72));hero.style.setProperty('--s2',clamp((p-.08)/.23));hero.style.setProperty('--s3',clamp((p-.3)/.23));hero.style.setProperty('--s4',clamp((p-.52)/.23));hero.style.setProperty('--answer',clamp((p-.72)/.23));
+ art.style.setProperty('--open',clamp((p-.08)/.72));
+ if(mode===2)art.style.setProperty('--travel',-p*Math.max(0,rail.scrollWidth-art.clientWidth)+'px');
+ hero.dataset.progress=p.toFixed(3);
+ }
+ function request(){if(!queued){queued=true;requestAnimationFrame(update)}}
+ addEventListener('scroll',request,{passive:true});addEventListener('resize',request);media.addEventListener('change',request);addEventListener('load',request);update();
+})();
+</script><script>
+(function(){
+ const section=document.querySelector('.cost-section'),reduce=matchMedia('(prefers-reduced-motion: reduce)'),blocks=[section.querySelector('.cost-heading'),section.querySelector('.training'),section.querySelector('.annual')];
+ const states=new Map(),clamp=v=>Math.max(0,Math.min(1,v)),ease=t=>1-Math.pow(1-t,3);
+ function render(block,elapsed,complete){
+  const progress=(delay,duration)=>complete?1:ease(clamp((elapsed-delay)/duration));
+  block.querySelectorAll('[data-count]').forEach((node,i)=>{
+   const target=Number(node.dataset.count),decimal=Number.isInteger(target)?0:1,amount=progress(160+i*170,1450);
+   node.textContent=(target*amount).toFixed(decimal);
+  });
+  if(block.classList.contains('training')){
+   const draw=progress(280,1600);block.style.setProperty('--draw-p',draw);block.style.setProperty('--label-p',progress(1450,400));block.style.setProperty('--alpha-p',progress(1700,1100));block.style.setProperty('--end-p',progress(2600,400));section.dataset.progress=draw.toFixed(3);
+  }
+  block.querySelectorAll('.br').forEach((row,i)=>row.style.setProperty('--bar-p',progress(320+i*230,1250)));
+ }
+ function finish(block){const state=states.get(block);if(state&&state.frame)cancelAnimationFrame(state.frame);states.set(block,{done:true,frame:0});block.classList.add('cost-playing');render(block,0,true)}
+ function play(block){if(states.has(block))return;if(reduce.matches){finish(block);return}block.classList.add('cost-playing');const state={done:false,frame:0,start:performance.now()};states.set(block,state);
+  function frame(now){render(block,now-state.start,false);if(now-state.start<3100){state.frame=requestAnimationFrame(frame)}else{finish(block)}}
+  render(block,0,false);state.frame=requestAnimationFrame(frame);
+ }
+ // 화면을 완전히 벗어나면 처음 상태로 되돌려, 다시 들어올 때마다 새로 그린다.
+ function reset(block){const state=states.get(block);if(!state)return;if(state.frame)cancelAnimationFrame(state.frame);states.delete(block);block.classList.remove('cost-playing');render(block,0,false)}
+ const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.intersectionRatio>=.2)play(entry.target);else if(!entry.isIntersecting)reset(entry.target)}),{threshold:[0,.2]});
+ blocks.forEach(block=>{if(reduce.matches)finish(block);else observer.observe(block)});
+ reduce.addEventListener('change',()=>{if(reduce.matches){observer.disconnect();blocks.forEach(finish)}});
+})();
+</script></body>
 </html>

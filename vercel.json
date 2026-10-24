@@ -2,6 +2,12 @@
   "buildCommand": "npx expo export -p web && node scripts/inject-landing-redirect.mjs && node scripts/seo-postbuild.mjs",
   "outputDirectory": "dist",
   "installCommand": "npm install",
+  "redirects": [
+    { "source": "/gym", "destination": "/restaurant", "permanent": true },
+    { "source": "/academy", "destination": "/restaurant", "permanent": true },
+    { "source": "/gym.html", "destination": "/restaurant", "permanent": true },
+    { "source": "/academy.html", "destination": "/restaurant", "permanent": true }
+  ],
   "rewrites": [
     { "source": "/privacy", "destination": "/privacy.html" },
     { "source": "/terms", "destination": "/terms.html" },
@@ -22,8 +28,6 @@
     { "source": "/pricing", "destination": "/pricing.html" },
     { "source": "/cafe", "destination": "/cafe.html" },
     { "source": "/restaurant", "destination": "/restaurant.html" },
-    { "source": "/gym", "destination": "/gym.html" },
-    { "source": "/academy", "destination": "/academy.html" },
     { "source": "/welcome", "destination": "/welcome.html" },
     { "source": "/", "has": [{ "type": "query", "key": "code" }], "destination": "/app.html" },
     { "source": "/", "has": [{ "type": "query", "key": "error" }], "destination": "/app.html" },
