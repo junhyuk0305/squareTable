@@ -41,19 +41,20 @@ p,.sub,.abody,.trust,.lnote,.hsub,h1,h2,h4{word-break:keep-all;overflow-wrap:bre
 .store{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:15px;font-weight:700;padding:13px 22px;min-height:48px;border-radius:var(--r-pill);background:var(--bg);color:var(--ink);border:1px solid var(--line);box-shadow:var(--e1)}
 .store svg{width:19px;height:19px;fill:currentColor}
 .store:hover{background:var(--paper)}
-.stores.big .store:first-child{background:var(--yellow);border-color:var(--yellow);box-shadow:var(--ey)}
-.stores.big .store:first-child:hover{background:var(--yellowDeep)}
-.os-ios .stores.big a[href*="play.google"],.os-android .stores.big a[href*="apple.com"]{display:none}
-.os-android .stores.big .store{background:var(--yellow);border-color:var(--yellow);box-shadow:var(--ey)}
+/* 앱 받기 — 기기와 상관없이 두 스토어를 같은 크기·같은 강조로 나란히 */
+.stores.big{max-width:440px}
+.stores.big .store{flex:1 1 160px;background:var(--yellow);border-color:var(--yellow);box-shadow:var(--ey)}
+.stores.big .store:hover{background:var(--yellowDeep)}
 .dl .trust{font-size:13px;color:var(--ink3);margin-top:12px}
 .dl .trust b{font-weight:600;color:var(--ink2)}
 .webstart{display:inline-flex;align-items:center;min-height:44px;margin-top:6px;font-size:14px;font-weight:500;color:var(--ink2);text-decoration:underline;text-underline-offset:3px}
 
 .art-scroll{height:100%;min-width:0}
-.heroArt{position:relative;height:100%;max-height:640px;overflow:hidden;border-radius:var(--r-lg)}
-.places{position:absolute;left:0;top:0;display:flex;width:max-content;height:260px;gap:10px;transform:translateX(var(--travel,0px));will-change:transform;pointer-events:none}
+/* 사진 줄과 폰 화면은 위아래로 쌓는다 — 겹쳐 두면 낮은 화면에서 폰이 사진을 덮는다 */
+.heroArt{position:relative;display:flex;flex-direction:column;gap:14px;padding-bottom:16px;overflow:hidden;border-radius:var(--r-lg)}
+.places{position:relative;flex:none;display:flex;width:max-content;height:260px;gap:10px;transform:translateX(var(--travel,0px));will-change:transform;pointer-events:none}
 .place{flex:0 0 330px;width:330px;height:260px;object-fit:cover;border-radius:var(--r-md);background:var(--paper)}
-.phone{position:absolute;left:0;right:0;bottom:16px;background:var(--bg);border-radius:var(--r-lg);box-shadow:var(--e3);overflow:hidden;z-index:3}
+.phone{position:relative;flex:none;margin-top:auto;background:var(--bg);border-radius:var(--r-lg);box-shadow:var(--e3);overflow:hidden;z-index:3}
 .pbar{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line)}
 .pwm{font-weight:800;font-size:15px;letter-spacing:-.03em;position:relative;isolation:isolate}
 .pwm::after{content:"";position:absolute;left:-2px;right:-2px;bottom:1px;height:5px;background:var(--yellow);z-index:-1;border-radius:2px}
@@ -217,11 +218,11 @@ p,.sub,.abody,.trust,.lnote,.hsub,h1,h2,h4{word-break:keep-all;overflow-wrap:bre
   .hero p.sub{font-size:16px;margin-top:14px}
   .dl{margin-top:22px}
   .stores.big .store{flex:1 1 140px;padding:12px 16px;font-size:14px}
+  .foot .stores.big .store{flex-basis:140px}
   .art-scroll{height:140vh;min-height:830px;margin-top:24px}
-  .heroArt{position:sticky;top:80px;height:70vh;min-height:520px;max-height:580px}
+  .heroArt{position:sticky;top:80px;gap:10px;padding-bottom:12px}
   .places{height:210px;gap:8px}
   .place{flex-basis:260px;width:260px;height:210px}
-  .phone{bottom:12px}
   .chat{height:255px;padding:14px}
   .ca{max-width:100%}
   .cost-heading .eyebrow2{font-size:17px}
@@ -242,7 +243,7 @@ p,.sub,.abody,.trust,.lnote,.hsub,h1,h2,h4{word-break:keep-all;overflow-wrap:bre
   .heroArt{position:relative!important;top:auto!important;height:580px!important}
   .places{position:absolute;inset:0;width:100%;height:100%;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:8px;transform:none!important}
   .place{width:100%;height:100%;flex:auto}
-  .phone{left:14px;right:14px;bottom:14px}
+  .phone{margin:auto 14px 0}
   .js .hero h1 .mk .bar{transform:scaleX(1)!important;animation:none!important}
   .js .cost-section .yellow-sweep::after{transform:scaleX(1)!important;animation:none!important}
   .js .cost-svg .draw{stroke-dashoffset:0!important}
@@ -545,10 +546,6 @@ p,.sub,.abody,.trust,.lnote,.hsub,h1,h2,h4{word-break:keep-all;overflow-wrap:bre
   // 안전망: IO 미지원·미스크롤 등 어떤 경우에도 콘텐츠가 영구히 숨지 않도록 잠시 뒤 전부 노출(스크롤하면 그 전에 IO가 먼저 띄움).
   setTimeout(function(){ revealEls.forEach(function(el){ el.classList.add('in'); }); }, 1600);
   setTimeout(function(){ document.querySelectorAll('.hero .mk').forEach(function(m){ m.classList.add('lit'); }); }, 250);
-  // 휴대폰이면 앱 받기 버튼을 그 기기 스토어 하나로 크게 보여 준다.
-  var ua = navigator.userAgent;
-  var os = /iPhone|iPad|iPod/.test(ua) ? 'ios' : /Android/.test(ua) ? 'android' : '';
-  if(os) document.documentElement.classList.add('os-'+os);
 
   function el(cls, html){ var d=document.createElement('div'); d.className=cls; if(html!=null) d.innerHTML=html; return d; }
   async function typeInto(node, text){ node.textContent=''; node.classList.add('caret'); for(var i=0;i<text.length;i++){ node.textContent+=text[i]; await sleep(40); } node.classList.remove('caret'); }

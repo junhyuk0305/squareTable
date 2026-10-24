@@ -127,7 +127,6 @@ p,h1,h2,h3,h4{word-break:keep-all;overflow-wrap:break-word}
 
 /* ── 요금 카드 ── */
 .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px}
-@media(max-width:860px){.pgrid{grid-template-columns:1fr}}
 .pc{background:var(--bg);border:1.5px solid var(--line);border-radius:var(--r-lg);padding:24px 22px;box-shadow:var(--e1);position:relative}
 .pc.hot{border-color:var(--ink);box-shadow:var(--e2)}
 .pc .rec{position:absolute;top:-11px;left:22px;font-size:10.5px;font-weight:900;background:var(--ink);color:var(--yellow);padding:4px 11px;border-radius:var(--r-pill)}
@@ -142,6 +141,20 @@ p,h1,h2,h3,h4{word-break:keep-all;overflow-wrap:break-word}
 .pc .pbtn.p{background:var(--yellow);color:var(--ink);box-shadow:var(--ey)}
 .pc .pbtn.p:hover{background:var(--yellowDeep)}
 .pc .pbtn.s{background:var(--paper);color:var(--ink)}
+/* 휴대폰에서도 세 카드를 가로 한 줄로 — 칸이 좁아 글씨·여백을 줄이고 버튼 높이를 맞춘다(2026-10-24 사용자 결정) */
+@media(max-width:860px){
+  .pgrid{gap:8px}
+  .pc{display:flex;flex-direction:column;padding:18px 8px 10px;min-width:0}
+  .pc .rec{left:50%;transform:translateX(-50%);white-space:nowrap;font-size:9.5px;padding:3px 8px}
+  .pc .pn{font-size:14px}
+  .pc .pg{font-size:11px;line-height:1.4}
+  .pc .pp{font-size:17px;flex-wrap:wrap;gap:0 3px;margin-top:12px}
+  .pc .pp small{font-size:11px}
+  .pc ul{flex:1;gap:6px;margin-top:12px}
+  .pc li{font-size:11px;line-height:1.4;padding-left:15px;word-break:keep-all}
+  .pc li svg{width:12px;height:12px}
+  .pc .pbtn{font-size:12.5px;padding:10px 4px;margin-top:14px}
+}
 .pnote{font-size:12.5px;color:var(--ink3);margin-top:16px;text-align:center}
 .pnote a{font-weight:800;color:var(--ink2);text-decoration:underline}
 
