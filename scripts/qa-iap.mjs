@@ -180,6 +180,14 @@ async function setSignupTrialDays(v) {
   return rows[0]?.value;
 }
 let originalIapEnabled = null;
+// 전면 무료 모드면 create_store 가 슬롯 없이 매장을 연다 → 구독 흔적·닫을 매장 검증이 무의미해진다.
+// 시작할 때 끄고 끝나면 원복한다(qa-card-billing 과 같은 방식). 공유 로컬 DB 에서 다른 세션이 도중에 켜면
+// ㉔ 가 release_mismatch 로 거짓 실패했다(2026-10-24) → ㉔ 직전에 다시 읽어 환경 탓을 따로 알린다.
+let originalFreeMode = null;
+async function freeModeOn() {
+  const rows = await svcSel('app_config?key=eq.billing_free_mode&select=value');
+  return rows[0]?.value === 'true';
+}
 
 async function liveChecks() {
   console.log('\n■ B. sync_iap_slots 라이브 검증');
@@ -192,8 +200,12 @@ async function liveChecks() {
   }
   check('셋업: 인자 검증이 산다(owner 없이 부르면 거부)', !probe.ok, `status=${probe.status}`);
 
+  const fmRows = await svcSel('app_config?key=eq.billing_free_mode&select=value');
+  originalFreeMode = fmRows[0]?.value ?? null;
+  if (originalFreeMode !== null) await svcPatch('app_config?key=eq.billing_free_mode', { value: 'false', updated_at: iso(Date.now()) });
   const { data: fm } = await svcRpc('billing_free_mode');
-  if (fm === true) { console.log('  ⚠ 전면 무료 모드가 켜져 있어 슬롯 게이트가 우회된다 — 검증 불가'); fail++; return; }
+  if (fm === true) { console.log('  ⚠ 전면 무료 모드를 끄지 못했다 — 슬롯 게이트가 우회돼 검증 불가'); fail++; return; }
+  info(`billing_free_mode=${originalFreeMode} → false (끝나면 원복)`);
 
   // 가입 체험이 켜져 있으면 매장이 무료가 아니라 배정 대상 판정이 달라진다 → 끄고 돈다(qa-store-slots 와 같은 이유).
   const cur = await svcSel('app_config?key=eq.signup_trial_days&select=value');
@@ -986,6 +998,10 @@ async function slotRuleChecks() {
 
   // ══ ㉔ 논리 점검 2026-10-05 B4 — 앱 줄이기의 닫을 매장은 구독으로 연 매장만(0262) ══════════════════
   {
+    if (await freeModeOn()) {
+      console.error('  !! 다른 세션이 실행 도중 billing_free_mode 를 켰다 — ㉔ 결과는 환경 탓일 수 있다(하니스 동시 실행 금지)');
+      fail++;
+    }
     const R = await reuseOwner(2);
     const A = await mkStore(R, 'QA㉔ 1호점');
     await evt(R, `qa_b4_${s}`, 'INITIAL_PURCHASE', 'multi_2_monthly', 'multi', 2, iso(days(30)));
@@ -1042,6 +1058,10 @@ main()
     if (originalIapEnabled !== null) {
       try { await svcPatch('app_config?key=eq.iap_enabled', { value: originalIapEnabled, updated_at: iso(Date.now()) }); }
       catch { console.error('  !! 원복 실패 — app_config.iap_enabled 수동 확인'); fail++; }
+    }
+    if (originalFreeMode !== null) {
+      try { await svcPatch('app_config?key=eq.billing_free_mode', { value: originalFreeMode, updated_at: iso(Date.now()) }); }
+      catch { console.error('  !! 원복 실패 — app_config.billing_free_mode 수동 확인'); fail++; }
     }
     console.log(`\nFINAL: ${pass} passed, ${fail} failed, ${skip} skipped`);
     process.exitCode = fail > 0 ? 1 : 0;
