@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -6,7 +7,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { fetchUnitKnowhow, copyKnowhowBetween, copyKnowhowPhotos, type UnitKnowhowRow } from '@/lib/db';
-import { SectionLabel } from '@/components/SectionLabel';
 import { StepProgress } from '@/components/blocks/StepProgress';
 import { InfoDot } from '@/components/InfoDot';
 import { Appear } from '@/components/Appear';
@@ -205,8 +205,7 @@ export function OwnerKnowhowImport() {
               />
             </View>
 
-            <SectionLabel icon="arrow-up-circle-outline" title="어느 매장에서 보낼까요?" />
-            <View style={styles.sourceWrap}>
+            <SectionGroup icon="arrow-up-circle-outline" title="어느 매장에서 보낼까요?"><View style={styles.sourceWrap}>
               {owned.map((s) => {
                 const on = fromId === s.unit_id;
                 return (
@@ -215,7 +214,7 @@ export function OwnerKnowhowImport() {
                     onPress={() => pickFrom(s.unit_id)}
                     style={[styles.sourceChip, on && styles.sourceChipOn]}
                     accessibilityRole="button"
-                    accessibilityState={{ selected: on }}
+                    accessibilityState={{ selected: on }} aria-pressed={on}
                     accessibilityLabel={`${s.store_name}에서 보내기`}
                   >
                     <Ionicons name="storefront" size={14} color={on ? InkColors.bubbleText : InkColors.ink2} />
@@ -223,10 +222,9 @@ export function OwnerKnowhowImport() {
                   </Pressable>
                 );
               })}
-            </View>
+            </View></SectionGroup>
 
-            <SectionLabel icon="arrow-down-circle-outline" title="어느 매장이 받을까요?" />
-            <View style={styles.sourceWrap}>
+            <SectionGroup icon="arrow-down-circle-outline" title="어느 매장이 받을까요?"><View style={styles.sourceWrap}>
               {owned
                 // 보내는 매장은 받는 후보에서 뺀다 — 고를 수 있게 두면 눌러 보고 나서 거절당한다.
                 .filter((s) => s.unit_id !== fromId)
@@ -238,7 +236,7 @@ export function OwnerKnowhowImport() {
                       onPress={() => pickTo(s.unit_id)}
                       style={[styles.sourceChip, on && styles.sourceChipOn]}
                       accessibilityRole="button"
-                      accessibilityState={{ selected: on }}
+                      accessibilityState={{ selected: on }} aria-pressed={on}
                       accessibilityLabel={`${s.store_name}이 받기`}
                     >
                       <Ionicons name="storefront" size={14} color={on ? InkColors.bubbleText : InkColors.ink2} />
@@ -246,7 +244,7 @@ export function OwnerKnowhowImport() {
                     </Pressable>
                   );
                 })}
-            </View>
+            </View></SectionGroup>
             {!fromId ? (
               <Text style={styles.hintText}>보내는 매장을 먼저 골라 주세요.</Text>
             ) : !toId ? (
@@ -281,7 +279,7 @@ export function OwnerKnowhowImport() {
                 </Pressable>
               </View>
             ) : (
-              <Appear delay={120} style={styles.block}>
+              <SectionGroup title="복사할 노하우" >
                 {/* 찾기 — 8건 미만이면 안 그린다. 단, 검색어가 남아 있으면 강제로 띄운다(끌 수 없는 거르기 금지). */}
                 {(rows?.length ?? 0) >= FILTER_MIN || filtering ? (
                   <View style={SearchStyles.box}>
@@ -334,14 +332,14 @@ export function OwnerKnowhowImport() {
                         onPress={() => toggle(r.id)}
                         style={[styles.row, on && styles.rowOn]}
                         accessibilityRole="checkbox"
-                        accessibilityState={{ checked: on }}
+                        accessibilityState={{ checked: on }} aria-checked={on}
                         accessibilityLabel={r.title}
                       >
                         <View style={[styles.check, on && styles.checkOn]}>
                           {on ? <Ionicons name="checkmark" size={13} color={InkColors.bubbleText} /> : null}
                         </View>
                         <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={styles.rowTitle} numberOfLines={1}>{r.title}</Text>
+                          <Text style={styles.rowTitle}>{r.title}</Text>
                           {/* 종류(루틴/돌발) 라벨 비노출(07-31 단일화). RPC가 section을 안 주므로 소분류만 남긴다. */}
                           {r.subcategory ? (
                             <View style={styles.rowMeta}>
@@ -356,7 +354,7 @@ export function OwnerKnowhowImport() {
                     );
                   })}
                 </View>
-              </Appear>
+              </SectionGroup>
             )}
           </>
         ) : null}
@@ -364,6 +362,7 @@ export function OwnerKnowhowImport() {
         {/* ── 3단계 · 복사 완료 ─────────────────────────────────────────────────── */}
         {step === 3 ? (
           <Appear delay={0} style={styles.block}>
+<SectionGroup title="복사 완료">
             <View style={styles.doneHead}>
               <Ionicons name="checkmark-circle" size={22} color={BrandColors.goodText} />
               <Text style={styles.doneTitle}>
@@ -401,7 +400,8 @@ export function OwnerKnowhowImport() {
             <Text style={styles.hiddenNote}>
               복사된 노하우는 “점검 필요”로 표시돼요. 받는 매장 기준(주소·연락처 등)이 맞는지 점검해 주세요.
             </Text>
-          </Appear>
+          </SectionGroup>
+</Appear>
         ) : null}
 
         <View style={{ height: 96 }} />
@@ -498,13 +498,13 @@ const styles = StyleSheet.create({
   listHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   listCount: { fontSize: 13, color: InkColors.ink3, fontWeight: '700' },
   selectAll: { fontSize: 13, fontWeight: '800', color: BrandColors.brand },
-  list: { gap: Space.sm },
+  list: { gap: 0 },
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 11,
-    backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
+    backgroundColor: InkColors.bg, borderBottomWidth: 1, borderColor: InkColors.line,
     padding: 13,
   },
-  rowOn: { borderColor: InkColors.ink2, ...Elevation.e1 },
+  rowOn: { backgroundColor: InkColors.bgSoft },
   check: {
     width: 22, height: 22, borderRadius: Radius.sm, borderWidth: 1.5, borderColor: InkColors.line,
     alignItems: 'center', justifyContent: 'center', backgroundColor: InkColors.paper,
@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
   rowTitle: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
   rowMeta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
   rowSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', flexShrink: 1 },
-  rowPreview: { fontSize: 12.5, color: InkColors.ink3, fontWeight: '500', marginTop: 4, lineHeight: 17 },
+  rowPreview: { fontSize: 14, color: InkColors.ink2, fontWeight: '500', marginTop: 4, lineHeight: 21 },
 
   retryLink: { fontSize: 13, fontWeight: '800', color: BrandColors.brand, textDecorationLine: 'underline' },
 

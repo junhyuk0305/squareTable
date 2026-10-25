@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles } from '@/lib/theme/button';
 
 /**
  * 시트 머리말 — 제목 (+ 닫기). 모든 시트가 같은 모양을 갖도록 강제한다.
@@ -266,8 +267,8 @@ export const qst = StyleSheet.create({
   },
   stepValue: { fontSize: 15, fontWeight: '800', color: InkColors.ink, minWidth: 64, textAlign: 'center' },
 
-  cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 15, alignItems: 'center', minHeight: 48, ...Elevation.e1 },
-  ctaText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  cta: { ...ButtonStyles.brand },
+  ctaText: { ...ButtonStyles.brandText },
 
   ghost: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44,

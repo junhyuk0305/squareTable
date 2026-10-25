@@ -51,12 +51,13 @@ export default function HqSettingsBrandScreen() {
         </View>
       </HqCard>
 
-      <HqSlab title="연결 해제" hint="점주도, 본사도 언제든 끝낼 수 있어요" />
-      <HqCard>
+      <HqCard title="연결 해제" sub="점주도, 본사도 언제든 끝낼 수 있어요">
+      <HqCard embedded>
         <Text style={styles.body}>해제하면 본사 화면에서 그 매장이 바로 사라져요. 매장이 받았던 노하우는 매장에 그대로 남아요.</Text>
         <Text style={styles.body}>본사 부담 매장이었다면 당월 말까지는 유지돼요.</Text>
         <Text style={styles.body}>해제는 <Text style={{ fontWeight: '700' }}>매장 &gt; 매장 상세 &gt; 연결과 규칙</Text>에서 해요.</Text>
       </HqCard>
+</HqCard>
     </HqPage>
   );
 }

@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 /**
  * 퀴즈 설정 탭(2026-09-13 사장 요청) — 이름·주기·마감·**배포**를 한 자리에서 고치고 저장 하나로 반영한다.
  *
@@ -28,7 +29,6 @@ import {
   updateQuizAssignmentsDue,
 } from '@/lib/db';
 import { todayKst, addDaysKst, daysBetweenKst } from '@/lib/quiz/schedule';
-import { SectionLabel } from '@/components/SectionLabel';
 import { MiniCalendar } from '@/components/blocks/MiniCalendar';
 import { QuizDeployPanel } from '@/components/owner/quiz/QuizDeployPanel';
 import { PrimaryButton, GhostButton, qst } from '@/components/owner/quiz/kit';
@@ -204,7 +204,7 @@ export function QuizSettingsPanel({
                 onPress={() => setCycle(c.days)}
                 style={[qst.chip, on && qst.chipOn]}
                 accessibilityRole="button"
-                accessibilityState={{ selected: on }}
+                accessibilityState={{ selected: on }} aria-pressed={on}
                 accessibilityLabel={c.label}
               >
                 <Text style={[qst.chipText, on && qst.chipTextOn]}>{c.label}</Text>
@@ -259,9 +259,9 @@ export function QuizSettingsPanel({
 
       {/* ── 배포 ─────────────────────────────────────────────────────────── */}
       <View style={s.labeled}>
-      <SectionLabel icon="send-outline" title="배포" />
+
       {audience == null ? (
-        <View style={s.card}>
+        <SectionGroup title="배포" >
           <Text style={qst.fieldLabel}>누구에게 낼 퀴즈예요?</Text>
           <Text style={qst.fieldHint}>고르면 그 방식만 보여줘요. 우리 직원은 앱으로, 외부 사람은 링크로 받아요.</Text>
           <View style={qst.chipWrap}>
@@ -282,9 +282,9 @@ export function QuizSettingsPanel({
               <Text style={qst.chipText}>외부 사람</Text>
             </Pressable>
           </View>
-        </View>
+        </SectionGroup>
       ) : audience === 'staff' ? (
-        <View style={s.card}>
+        <SectionGroup title="배포" >
           <Text style={qst.fieldLabel}>받는 사람</Text>
           <Text style={qst.fieldHint}>
             체크하고 저장하면 근무 시간에 맞춰 나가요. 이미 받은 사람은 뺄 수 없어요.
@@ -303,13 +303,13 @@ export function QuizSettingsPanel({
                     disabled={locked}
                     style={[s.person, on && s.personOn, locked && s.personLocked]}
                     accessibilityRole="checkbox"
-                    accessibilityState={{ checked: on, disabled: locked }}
+                    accessibilityState={{ checked: on, disabled: locked }} aria-checked={on} aria-disabled={locked}
                     accessibilityLabel={locked ? `${p.name} 이미 받았어요` : p.name}
                   >
                     <View style={[s.check, on && s.checkOn]}>
                       {on ? <Ionicons name="checkmark" size={13} color={InkColors.bubbleText} /> : null}
                     </View>
-                    <Text style={s.personName} numberOfLines={1}>{p.name}</Text>
+                    <Text style={s.personName}>{p.name}</Text>
                     {locked ? <Text style={s.lockText}>이미 받았어요</Text> : null}
                   </Pressable>
                 );
@@ -329,7 +329,7 @@ export function QuizSettingsPanel({
               />
             </View>
           ) : null}
-        </View>
+        </SectionGroup>
       ) : (
         // 외부 사람 — 링크만. 패널이 링크 목록·복사·기간·회수와 '이 링크로 푼 사람'을 그대로 맡는다.
         <QuizDeployPanel course={course} onOpenResult={onOpenResult} />
@@ -360,13 +360,13 @@ const s = StyleSheet.create({
     padding: Space.md,
     ...Elevation.e1,
   },
-  people: { gap: Space.xs, marginTop: Space.xs },
+  people: { marginTop: Space.xs },
   person: {
     flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48,
-    paddingHorizontal: Space.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
+    paddingHorizontal: Space.sm, paddingVertical: Space.sm, borderBottomWidth: 1, borderColor: InkColors.line,
     backgroundColor: InkColors.bg,
   },
-  personOn: { borderColor: InkColors.ink2 },
+  personOn: { backgroundColor: InkColors.bgSoft },
   personLocked: { backgroundColor: InkColors.bgSoft },
   check: {
     width: 22, height: 22, borderRadius: Radius.sm, borderWidth: 1.5, borderColor: InkColors.line,

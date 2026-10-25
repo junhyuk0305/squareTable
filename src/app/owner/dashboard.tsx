@@ -12,7 +12,7 @@ import { CoachmarkTour, type TourStep } from '@/components/CoachmarkTour';
 import { useTourStore } from '@/lib/store/useTourStore';
 
 import { RoleTabBar, goToTab } from '@/components/RoleTabBar';
-import { SectionLabel } from '@/components/SectionLabel';
+import { SectionGroup } from '@/components/SectionGroup';
 import { AlertRow } from '@/components/blocks/AlertRow';
 import { HeroSubNav, type HeroSubNavItem } from '@/components/blocks/HeroSubNav';
 import { AppTopBar } from '@/components/AppTopBar';
@@ -32,7 +32,7 @@ import { styles } from '@/styles/ownerDashboardStyles';
 // 홈 목록 상한. ui.md 배치 규칙 3의 기본값은 3이지만 2026-08-12에 4, 2026-08-19에 **5**로 올렸다 —
 // 완료된 것도 목록에서 지우지 않기로 하면서(방금 누른 것이 사라지지 않게) 4로는 미완료가 밀려났다.
 // 5는 화면 예산의 '리스트 첫 노출 5±2' 안이다.
-const HOME_LIST_LIMIT = 5;
+const HOME_LIST_LIMIT = 3;
 
 export default function OwnerDashboardScreen() {
   const router = useRouter();
@@ -289,7 +289,7 @@ export default function OwnerDashboardScreen() {
                 ? `“${heroQuery.query_text}”\n${heroQuery.junior_name} · ${formatAsked(heroQuery.asked_at)}`
                 : '직원이 모르는 걸 물으면 여기로 와요.'
             }
-            ctaLabel={heroQuery ? '답하러 가기 →' : '오늘 한 줄 노하우 남기기 →'}
+            ctaLabel={heroQuery ? '답하러 가기 →' : '노하우 추가하기'}
             onCta={() =>
               heroQuery
                 ? router.push({ pathname: '/owner/coach', params: { uqId: heroQuery.id } })
@@ -347,10 +347,10 @@ export default function OwnerDashboardScreen() {
             업무를 등록해도 홈에서 사라지는 버그였다. 뜨는 조건은 "오늘 업무가 있는가" 하나다. */}
         {/* 할일이 0건이어도 섹션은 남긴다 — 새 매장은 기본 할일이 없으므로(2026-09-03 시드 제거) 여기서 첫 할일을 등록한다. */}
         <Appear delay={stagger(2)} style={styles.section}>
-            <SectionLabel
+            <SectionGroup groupId="owner-today"
               icon="today-outline"
-              title="오늘"
-              trailing={
+              title="오늘 업무"
+              action={
                 // 전체보기는 **할일 화면**으로 간다 — 예전엔 '/owner/work'(채팅방 목록)로 보내
                 // "오늘 업무 전체보기"를 눌렀는데 채팅방 목록이 나왔다(2026-08-19 수정).
                 // 직원 홈(junior/home.tsx)이 이미 쓰던 `?view=todo` 경로와 같은 것을 쓴다.
@@ -360,7 +360,7 @@ export default function OwnerDashboardScreen() {
                     onPress={() => goToTab('/owner/work?view=todo')}
                     accessibilityRole="button"
                     accessibilityLabel="오늘 업무 전체보기"
-                    style={({ pressed }) => pressed && { opacity: 0.6 }}
+                    style={({ pressed }) => [{ minHeight: 48, justifyContent: 'center' }, pressed && { opacity: 0.6 }]}
                   >
                     {/* 잘린 개수를 말한다 — "4개가 전부"와 "4개만 보여주는 중"은 화면만 봐선 구분이 안 된다. */}
                     <Text style={styles.moreLink}>
@@ -369,8 +369,8 @@ export default function OwnerDashboardScreen() {
                   </Pressable>
                 ) : undefined
               }
-            />
-            <View style={styles.taskCard}>
+            >
+
               {/* 카드 맨 위 = 오늘 전체 진행. 잘라 보여주는 5건이 아니라 **오늘 할일 전부**를 센다
                   (5건만 세면 "3/5 다 했다"고 말해 놓고 아래 전체보기에 8건이 남아 있는 거짓말이 된다). */}
               {todayTasks.length > 0 && (
@@ -417,9 +417,10 @@ export default function OwnerDashboardScreen() {
               {todayTasks.slice(0, HOME_LIST_LIMIT).map((t, i) => (
                 <Pressable
                   key={t.id}
+                  testID={`design-group-row-owner-today--${t.id}`}
                   onPress={() => onToggleTask(t)}
                   accessibilityRole="checkbox"
-                  accessibilityState={{ checked: t.done }}
+                  accessibilityState={{ checked: t.done }} aria-checked={t.done}
                   accessibilityLabel={`${t.text}${t.done ? ' 완료 해제' : ' 완료'}`}
                   style={({ pressed }) => [styles.taskRow, i > 0 && styles.taskRowDivider, pressed && { opacity: 0.6 }]}
                 >
@@ -429,7 +430,7 @@ export default function OwnerDashboardScreen() {
                     color={t.done ? BrandColors.good : InkColors.ink3}
                   />
                   <View style={styles.taskBody}>
-                    <Text style={[styles.taskText, t.done && styles.taskTextDone]} numberOfLines={1}>
+                    <Text style={[styles.taskText, t.done && styles.taskTextDone]}>
                       {/* 업무 시간(0118) — 할일 화면과 같은 자리·같은 형태로 제목 앞에 붙인다. */}
                       {t.at ? <Text style={styles.taskTime}>{t.at} </Text> : null}
                       {t.text}
@@ -450,7 +451,7 @@ export default function OwnerDashboardScreen() {
                   ) : null}
                 </Pressable>
               ))}
-            </View>
+            </SectionGroup>
           </Appear>
 
         {/* ③ X2 다음 행동 — 화면에 한 자리다. 우선순위는 nextAction이 정하고,

@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { Text, Pressable, ScrollView } from 'react-native';
 import { NotificationPermissionSheet } from '@/components/NotificationPermissionSheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
@@ -10,9 +10,8 @@ import { Appear, stagger } from '@/components/Appear';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { JuniorWelcomeCoach } from '@/components/junior/JuniorWelcomeCoach';
-import { SectionLabel } from '@/components/SectionLabel';
+import { SectionGroup } from '@/components/SectionGroup';
 import { HeroSubNav } from '@/components/blocks/HeroSubNav';
-import { AlertRow } from '@/components/blocks/AlertRow';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { openSinceText } from '@/lib/utils/attendance';
 import { ForgotCheckoutCard } from '@/components/junior/ForgotCheckoutCard';
@@ -24,7 +23,7 @@ import { styles } from '@/styles/juniorHomeStyles';
 
 /** 홈 목록은 3건 + "전체보기 ›" — 전 화면 공통 배치 규칙(2026-08-05 블록 어휘). */
 // 홈 목록 상한 — 사장 홈(owner/dashboard.tsx)과 같은 값을 유지한다(2026-08-12: 3 → 4).
-const HOME_LIST_LIMIT = 4;
+const HOME_LIST_LIMIT = 3;
 
 /**
  * 직원 홈 — 사령탑(하루의 앵커).
@@ -137,16 +136,16 @@ export default function JuniorHomeScreen() {
 
         {/* 2) 오늘 업무 — 목록 3건 + 전체보기 ›. 체크는 컨트롤이다 — 누르면 진짜 완료된다(업무 탭과 같은 toggleTask). */}
         <Appear delay={stagger(1)} style={styles.section}>
-          <SectionLabel
+          <SectionGroup groupId="junior-today"
             icon="checkbox-outline"
             title="오늘 업무"
-            trailing={
+            action={
               taskTotal > 0 ? (
                 <Pressable
                   onPress={() => goToTab('/junior/work?view=todo')}
                   accessibilityRole="button"
                   accessibilityLabel="오늘 업무 전체보기"
-                  style={({ pressed }) => pressed && { opacity: 0.6 }}
+                  style={({ pressed }) => [{ minHeight: 48, justifyContent: 'center' }, pressed && { opacity: 0.6 }]}
                 >
                   {/* 잘린 개수를 말한다 — "4개가 전부"와 "4개만 보여주는 중"은 화면만 봐선 구분이 안 된다. */}
                   <Text style={styles.moreLink}>
@@ -155,17 +154,18 @@ export default function JuniorHomeScreen() {
                 </Pressable>
               ) : undefined
             }
-          />
-          <View style={styles.todoCard}>
+          >
+
             {taskTotal === 0 ? (
               <Text style={styles.todoEmpty}>오늘 할일이 없어요</Text>
             ) : (
               todayTasks.slice(0, HOME_LIST_LIMIT).map((t, i) => (
                 <Pressable
                   key={t.id}
+                  testID={`design-group-row-junior-today--${t.id}`}
                   onPress={() => onToggleTask(t)}
                   accessibilityRole="checkbox"
-                  accessibilityState={{ checked: t.done }}
+                  accessibilityState={{ checked: t.done }} aria-checked={t.done}
                   accessibilityLabel={`${t.text}${t.done ? ' 완료 해제' : ' 완료'}`}
                   style={({ pressed }) => [styles.todoRow, i > 0 && styles.todoRowDivider, pressed && { opacity: 0.6 }]}
                 >
@@ -174,24 +174,29 @@ export default function JuniorHomeScreen() {
                     size={20}
                     color={t.done ? BrandColors.good : InkColors.ink3}
                   />
-                  <Text style={[styles.todoText, t.done && styles.todoTextDone]} numberOfLines={1}>
+                  <Text style={[styles.todoText, t.done && styles.todoTextDone]}>
                     {t.text}
                   </Text>
                 </Pressable>
               ))
             )}
-          </View>
+          </SectionGroup>
         </Appear>
 
         {/* 3) 안 푼 퀴즈 — 0건이면 AlertRow가 스스로 null을 돌려준다(상시 노출 금지).
             Appear로 감싸지 않는다 — 0건일 때 빈 래퍼가 남아 목록 간격만 벌어진다. */}
         {/* ★누르면 업무 채팅이 아니라 **퀴즈가 바로 열린다**(2026-10-15 안드로이드 QA #5) — `quiz=` 는 WorkBoard 가
             카드의 다음 노하우로 응시 시트를 연다. 값은 누를 때마다 달라야 같은 탭을 두 번 눌러도 다시 열린다. */}
+        <SectionGroup title="배정된 퀴즈" groupId="junior-quizzes">
         {quizProgressError ? (
           <LoadErrorState title="퀴즈 진행 상태를 불러오지 못했어요" onRetry={() => void useWorkStore.getState().hydrate()} />
         ) : quizCountReady ? (
-        <AlertRow label="안 푼 퀴즈" count={openQuizCount} onPress={() => goToTab(`/junior/work?quiz=${Date.now()}`)} />
-        ) : null}
+          <>
+            <Text style={styles.todoEmpty}>{openQuizCount > 0 ? `아직 풀지 않은 퀴즈 ${openQuizCount}개` : '지금 풀 퀴즈가 없어요'}</Text>
+            {openQuizCount > 0 && <Pressable accessibilityRole="button" onPress={() => goToTab(`/junior/work?quiz=${Date.now()}`)} style={styles.quizAction}><Text style={styles.moreLink}>퀴즈 풀기 ›</Text></Pressable>}
+          </>
+        ) : <Text style={styles.todoEmpty}>퀴즈를 불러오고 있어요…</Text>}
+        </SectionGroup>
           </>
         )}
       </ScrollView>

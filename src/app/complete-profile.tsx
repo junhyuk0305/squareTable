@@ -1,3 +1,5 @@
+import { SectionGroup } from '@/components/SectionGroup';
+import { ButtonStyles } from '@/lib/theme/button';
 import { useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
@@ -19,7 +21,7 @@ import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Radius } from '@/lib/theme/elevation';
 import { ChipStyles } from '@/lib/theme/chip';
 import type { Role } from '@/types';
 
@@ -174,9 +176,7 @@ function CompleteProfileForm() {
 
         {/* 역할 — 소셜 로그인은 역할 정보가 없으니 여기서 고른다(트리거는 항상 직원으로 시작). */}
         <Appear delay={stagger(1)}>
-        <Text style={styles.roleQ}>어떤 분이세요?</Text>
-        </Appear>
-        <Appear delay={stagger(2)}>
+        <SectionGroup title="어떤 분이세요?">
         <View style={styles.roleRow}>
           {(
             [
@@ -196,8 +196,10 @@ function CompleteProfileForm() {
             </Pressable>
           ))}
         </View>
+        </SectionGroup>
         </Appear>
 
+        <SectionGroup title="내 정보" contentStyle={{ gap: 16 }}>
         <Appear delay={stagger(3)}>
         <Field label="이름" value={name} onChange={setName} placeholder="홍길동" required />
         </Appear>
@@ -287,8 +289,10 @@ function CompleteProfileForm() {
         </View>
         </Appear>
 
+        </SectionGroup>
+
         {role === 'owner' ? (
-          <>
+          <SectionGroup title="매장 정보" contentStyle={{ gap: 16 }}>
             <Appear delay={stagger(6)}>
             <Field label="매장 이름" value={storeName} onChange={setStoreName} placeholder="예: 우리 카페 신촌점" required />
             </Appear>
@@ -322,7 +326,7 @@ function CompleteProfileForm() {
               )}
             </View>
             </Appear>
-          </>
+          </SectionGroup>
         ) : (
           <Appear delay={stagger(6)}>
           <View style={styles.joinNote}>
@@ -345,7 +349,7 @@ function CompleteProfileForm() {
 
         <Appear delay={stagger(9)}>
         <Pressable onPress={submit} disabled={busy} style={({ pressed }) => [styles.primary, busy && styles.primaryDisabled, pressed && !busy && { opacity: 0.88 }]}>
-          {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{role === 'owner' ? (storeRetry ? '매장 다시 만들기' : '매장 만들고 시작하기') : '저장하고 시작하기'}</Text>}
+          {busy ? <ActivityIndicator color={InkColors.ink} /> : <Text style={styles.primaryText}>{role === 'owner' ? (storeRetry ? '매장 다시 만들기' : '매장 만들고 시작하기') : '저장하고 시작하기'}</Text>}
         </Pressable>
         </Appear>
 
@@ -398,20 +402,20 @@ function Field({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: 24, gap: 14 },
+  safe: { flex: 1, backgroundColor: InkColors.bgSoft },
+  scroll: { padding: 20, gap: 24 },
   intro: { gap: 4, marginBottom: 2 },
   introTitle: { fontSize: 20, fontWeight: '900', color: InkColors.ink },
   introSub: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
   roleQ: { fontSize: 16, fontWeight: '800', color: InkColors.ink, marginBottom: 2 },
-  roleRow: { flexDirection: 'row', gap: 12, marginBottom: 4 },
+  roleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 4 },
   roleCard: { flex: 1, backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: InkColors.line, borderRadius: 16, padding: 16, gap: 4 },
-  roleCardOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB', ...Elevation.e1 },
+  roleCardOn: { borderColor: InkColors.ink, backgroundColor: InkColors.bgSoft },
   // 그림 이모지 금지(워딩 §2.3) — Ionicons로 교체. 아이콘도 Text 기반이라 글자 크기 설정에 함께 반응한다.
   roleIcon: { marginBottom: 4 },
   roleLabel: { fontSize: 16, fontWeight: '800', color: InkColors.ink2, marginTop: 4 },
   roleLabelOn: { color: BrandColors.brand },
-  roleDesc: { fontSize: 12, color: InkColors.ink3, lineHeight: 17 },
+  roleDesc: { fontSize: 14, color: InkColors.ink2, lineHeight: 21 },
   roleCheck: { position: 'absolute', top: 10, right: 10, width: 20, height: 20, borderRadius: 10, backgroundColor: BrandColors.brand, alignItems: 'center', justifyContent: 'center' },
   roleCheckMark: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
   field: { gap: 6 },
@@ -436,9 +440,9 @@ const styles = StyleSheet.create({
   joinNoteText: { flex: 1, fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   joinNoteStrong: { fontWeight: '800', color: InkColors.ink },
   err: { color: BrandColors.accentText, fontSize: 15, fontWeight: '700', lineHeight: 22 },
-  primary: { marginTop: Space.sm, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center' },
+  primary: { ...ButtonStyles.brand, marginTop: Space.sm },
   primaryDisabled: { opacity: 0.6 },
-  primaryText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22, fontWeight: '800' },
+  primaryText: ButtonStyles.brandText,
   logoutRow: { alignItems: 'center', paddingVertical: 10 },
   logoutText: { fontSize: 14, lineHeight: 20, color: InkColors.ink3 },
   logoutStrong: { color: InkColors.ink, fontWeight: '800' },

@@ -1,3 +1,4 @@
+import { qs } from '@/components/work/quiz/quizStyles';
 /**
  * 풀어보기 — 사장이 자기가 만든 문항을 **직원이 보는 화면 그대로** 직접 풀어본다.
  * 문항 목록(저장된 것)과 편집 시트(저장 전 초안) 두 곳에서 연다. 새 라우트는 만들지 않는다.
@@ -76,9 +77,9 @@ export function QuizPreviewSheet({ quiz, onClose }: { quiz: QuizPreviewTarget; o
         {result ? (
           <View style={pst.gradeBox}>
             <Text style={[pst.gradeTitle, { color: result.correct ? BrandColors.goodText : BrandColors.badText }]}>
-              {result.correct ? '맞았어요' : '아쉬워요'}
+              {result.correct ? '정답' : '오답'}
             </Text>
-            {explain ? <Text style={pst.gradeText}>{explain}</Text> : null}
+            {explain ? <View style={qs.explanation}><Text style={qs.explanationTitle}>해설</Text><Text style={pst.gradeText}>{explain}</Text></View> : null}
           </View>
         ) : null}
       </ScrollView>
@@ -94,7 +95,7 @@ export function QuizPreviewSheet({ quiz, onClose }: { quiz: QuizPreviewTarget; o
 
 const pst = StyleSheet.create({
   kicker: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink3, marginTop: Space.xs },
-  ask: { fontSize: 16, fontWeight: '800', color: InkColors.ink, lineHeight: 24, marginBottom: Space.xs },
+  ask: { fontSize: 23, fontWeight: '800', color: InkColors.ink, lineHeight: 33, marginBottom: Space.md },
   gradeBox: {
     borderRadius: Radius.md, backgroundColor: InkColors.bgSoft,
     padding: Space.lg, marginTop: Space.lg, gap: Space.xs,

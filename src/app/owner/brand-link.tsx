@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 // /owner/brand-link — 설정 > 본사 연결(정본 §4-E ②): 상태 · 요금 부담 · 공개 수준(즉시 변경) · 상향 요청 응답 · 요금 부담 제안 응답 · 해제.
 //
 // 재료 = useOwnerBrandStore(my_brand_view: 내가 사장인 매장의 active 연결). 0행이면 이 화면에 올 진입점이 없다.
@@ -10,7 +11,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { ScreenLoading } from '@/components/ScreenLoading';
-import { SectionLabel } from '@/components/SectionLabel';
 import { BottomSheet } from '@/components/BottomSheet';
 import { BrandMirrorView } from '@/components/owner/BrandMirrorView';
 import { useOwnerBrandStore } from '@/lib/store/useOwnerBrandStore';
@@ -67,7 +67,7 @@ export default function BrandLinkScreen() {
             <LinkCard key={l.unit_id} link={l} onChanged={() => void hydrate()} />
           ))}
           <View style={styles.labeled}>
-          <SectionLabel icon="eye-outline" title="공개 수준이 뜻하는 것" />
+          <SectionGroup icon="eye-outline" title="공개 수준이 뜻하는 것">
           <View style={styles.card}>
             {VISIBILITY_LEVELS.map((lv, i) => (
               <View key={lv.key} style={[styles.lvRow, i > 0 && styles.rowBorder]}>
@@ -80,7 +80,8 @@ export default function BrandLinkScreen() {
               <Text style={styles.lvItems}>{NEVER_SHARED.join(' · ')}</Text>
             </View>
           </View>
-          </View>
+          </SectionGroup>
+</View>
         </ScrollView>
       )}
     </SafeAreaView>
@@ -208,7 +209,7 @@ function LinkCard({ link, onChanged }: { link: MyBrandViewRow; onChanged: () => 
                 key={lv.key}
                 testID={`brand-vis-${lv.key}`}
                 accessibilityRole="radio"
-                accessibilityState={{ checked: on, disabled: locked }}
+                accessibilityState={{ checked: on, disabled: locked }} aria-checked={on} aria-disabled={locked}
                 accessibilityLabel={locked ? `${lv.label} — 본사가 정해서 고를 수 없어요` : lv.label}
                 disabled={busy}
                 onPress={() => setLevel(lv.key)}

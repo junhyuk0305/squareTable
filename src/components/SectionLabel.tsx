@@ -18,16 +18,20 @@ export function SectionLabel({
   title,
   hint,
   trailing,
+  inside = false,
+  groupId,
 }: {
   icon?: keyof typeof Ionicons.glyphMap;
   title: string;
   hint?: string;
   trailing?: React.ReactNode;
+  inside?: boolean;
+  groupId?: string;
 }) {
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, inside && styles.inside]}>
       {icon ? <Ionicons name={icon} size={15} color={InkColors.ink2} /> : null}
-      <Text style={styles.title}>{title}</Text>
+      <Text accessibilityRole="header" testID={groupId && `design-group-title-${groupId}`} style={[styles.title, inside && styles.insideTitle]}>{title}</Text>
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}
       {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
     </View>
@@ -35,6 +39,8 @@ export function SectionLabel({
 }
 
 const styles = StyleSheet.create({
+  inside: { marginTop: 0, marginBottom: 0, paddingHorizontal: 0, flexWrap: 'wrap', gap: Space.sm },
+  insideTitle: { fontSize: 18, lineHeight: 26, flexShrink: 1 },
   // 제목 달린 섹션 앞은 카드↔카드보다 한 단(md) 더 띈다(2026-09-03 웹 실측 피드백) — 화면마다 gap 을
   // 고치지 않고 라벨이 스스로 위 여백을 든다. 부모 gap(대개 md)과 합쳐 24 안팎이 된다.
   // 제목↔카드는 10 으로 통일한다(2026-10-14 사용자 결정). 부모 gap 은 대개 sm(8)이라 라벨이 아래 2를 더 든다.

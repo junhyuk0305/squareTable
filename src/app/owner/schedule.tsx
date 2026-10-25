@@ -12,6 +12,8 @@ import { EmptyState } from '@/components/EmptyState';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { SectionLabel } from '@/components/SectionLabel';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles } from '@/lib/theme/button';
 import { WeekStrip, type WeekDay } from '@/components/blocks/WeekStrip';
 import { DayTimeline, type TimelineRow } from '@/components/schedule/DayTimeline';
 import { ShiftQuickSheet, type ShiftEditTarget } from '@/components/schedule/ShiftQuickSheet';
@@ -291,8 +293,9 @@ export default function OwnerScheduleScreen() {
         {/* ② 컨펌 대기 — 사장의 핵심 액션. 제목은 카드 밖, 대기 건수는 우측 뱃지 */}
         <View onLayout={(e) => { focusY.current.section = e.nativeEvent.layout.y; }}>
         <Appear delay={stagger(1)}>
-        <View style={styles.section}>
+        <View style={styles.section} testID="design-group-schedule-requests">
           <SectionLabel
+            inside groupId="schedule-requests"
             icon="swap-horizontal-outline"
             title="승인할 요청"
             trailing={
@@ -349,8 +352,9 @@ export default function OwnerScheduleScreen() {
 
         {/* ③ 하루 근무 — 운영시간 축 하나 위에 사람마다 바. 추가는 이 카드 안에서 끝낸다 */}
         <Appear delay={stagger(2)}>
-        <View style={styles.section}>
+        <View style={styles.section} testID="design-group-schedule-day">
           <SectionLabel
+            inside groupId="schedule-day"
             title={fmtDateKo(selected)}
             trailing={
               <Text style={styles.total}>
@@ -582,7 +586,7 @@ function PendingCard({
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: Space.gutter, gap: Space.lg },
-  section: { gap: Space.sm },
+  section: { ...CardStyles.group, padding: Space.lg, gap: Space.md },
 
   badge: { minWidth: 22, height: 22, paddingHorizontal: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.accentSolid, alignItems: 'center', justifyContent: 'center' },
   badgeText: { fontSize: 12, fontWeight: '900', color: InkColors.bubbleText },
@@ -599,7 +603,7 @@ const styles = StyleSheet.create({
 
   // 하루 타임라인
   total: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
-  dayCard: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: Space.md, ...Elevation.e1 },
+  dayCard: { gap: Space.md },
   dayNone: { fontSize: 15, lineHeight: 21, color: InkColors.ink2, textAlign: 'center', paddingVertical: Space.lg },
   offText: { fontSize: 12, fontWeight: '700', color: InkColors.ink3, paddingTop: Space.sm },
   basisNote: { fontSize: 12, fontWeight: '600', color: InkColors.ink3, lineHeight: 17, paddingTop: Space.sm, paddingHorizontal: 4 },
@@ -607,11 +611,11 @@ const styles = StyleSheet.create({
   excText: { flex: 1, fontSize: 12, fontWeight: '700', color: InkColors.ink3, lineHeight: 17 },
   excBtn: { minHeight: 34, justifyContent: 'center', paddingHorizontal: 10, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line },
   excBtnText: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
-  addRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, minHeight: 48, marginTop: Space.sm, borderRadius: Radius.sm, borderWidth: 1, borderStyle: 'dashed', borderColor: InkColors.line },
+  addRow: { ...ButtonStyles.brand, flexDirection: 'row', gap: Space.xs, marginTop: Space.sm },
   addText: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
 
   // 컨펌 카드
-  card: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.yellowDeep, padding: Space.md, gap: Space.sm, ...Elevation.e1 },
+  card: { borderTopWidth: 1, borderTopColor: InkColors.line, paddingVertical: Space.md, gap: Space.sm },
   // 알림(?request=)으로 들어온 요청 카드 강조 — 명부(?member=)·공지 패널(?feed=)과 같은 테두리.
   focusCard: { borderWidth: 2, borderColor: BrandColors.accentSolid, borderRadius: Radius.md },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },

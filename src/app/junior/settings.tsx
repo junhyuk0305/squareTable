@@ -119,7 +119,7 @@ export default function StoreSettings() {
           <LoadErrorState title="매장 설정을 불러오지 못했어요" onRetry={() => void retryPrefs()} />
         ) : (
           <>
-        <SettingsSection>
+        <SettingsSection title="내 정보">
           {/* 색 점 + 매장명 + (있으면) 내 별칭. 탭하면 개인화 시트.
               카드 안 첫 행이므로 카드 크롬(배경·보더·라운드)은 SettingsSection이 이고 여기는 여백만 갖는다. */}
           <Pressable
@@ -259,7 +259,7 @@ export default function StoreSettings() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
+  safe: { flex: 1, backgroundColor: InkColors.bgSoft },
   scroll: { padding: 20, paddingTop: 16 },
 
   // 카드 크롬은 SettingsSection이 갖는다 — 여기는 카드 안 첫 행의 여백만(토큰).

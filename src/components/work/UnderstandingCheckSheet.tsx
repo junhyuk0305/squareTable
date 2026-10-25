@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { qs } from '@/components/work/quiz/quizStyles';
 import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -466,10 +467,12 @@ function SavedQuizBody({
         />
 
         {grade ? (
-          <View style={[s.gradeBox, grade.correct ? s.resultPass : s.resultFail]}>
-            <Text style={s.gradeTitle}>{grade.correct ? '맞았어요' : '이건 이렇게 해요'}</Text>
-            {grade.explain ? <Text style={s.gradeText}>{grade.explain}</Text> : null}
-          </View>
+          <>
+            <View style={[s.gradeBox, grade.correct ? s.resultPass : s.resultFail]}>
+              <Text style={[s.gradeTitle, { color: grade.correct ? BrandColors.goodText : BrandColors.badText }]}>{grade.correct ? '정답' : '오답'}</Text>
+            </View>
+            {grade.explain ? <View style={qs.explanation}><Text style={qs.explanationTitle}>해설</Text><Text style={s.gradeText}>{grade.explain}</Text></View> : null}
+          </>
         ) : null}
 
         {failed ? (
@@ -601,7 +604,7 @@ function LegacyQuizBody({
                       onPress={() => setPicks((p) => ({ ...p, [qi]: ci }))}
                       style={[s.choice, isPicked && !revealed && s.choiceOn, showRight && s.choiceRight, showWrong && s.choiceWrong]}
                       accessibilityRole="radio"
-                      accessibilityState={{ selected: isPicked }}
+                      accessibilityState={{ selected: isPicked }} aria-checked={isPicked}
                     >
                       <Ionicons
                         name={showRight ? 'checkmark-circle' : showWrong ? 'close-circle' : isPicked ? 'radio-button-on' : 'radio-button-off'}
@@ -665,7 +668,7 @@ const s = StyleSheet.create({
 
   // 저장된 문항 경로
   step: { fontSize: 12, fontWeight: '800', color: InkColors.ink3, marginBottom: Space.xs },
-  ask: { fontSize: 16, fontWeight: '800', color: InkColors.ink, lineHeight: 24, marginBottom: Space.md },
+  ask: { fontSize: 23, fontWeight: '800', color: InkColors.ink, lineHeight: 33, marginBottom: Space.lg },
   gradeBox: { borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, padding: Space.lg, marginTop: Space.lg, gap: Space.xs },
   gradeTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
   gradeText: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },

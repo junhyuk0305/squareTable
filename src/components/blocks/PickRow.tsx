@@ -40,25 +40,27 @@ export type PickRowItem = {
 export function PickRow({
   rows,
   more,
+  embedded = false,
 }: {
   rows: PickRowItem[];
   more?: { label: string; onPress: () => void };
+  embedded?: boolean;
 }) {
   if (rows.length === 0) return null;
 
   return (
-    <View style={styles.card}>
+    <View style={!embedded && styles.card}>
       {rows.map((r, i) => (
         <Pressable
           key={r.key}
           accessibilityRole="checkbox"
-          accessibilityState={{ checked: r.picked }}
+          accessibilityState={{ checked: r.picked }} aria-checked={r.picked}
           accessibilityLabel={r.title}
           onPress={r.onToggle}
           style={({ pressed }) => [styles.row, i > 0 && styles.divider, pressed && styles.pressed]}
         >
           <View style={styles.body}>
-            <Text style={styles.title} numberOfLines={1}>{r.title}</Text>
+            <Text style={styles.title}>{r.title}</Text>
             {r.chips && r.chips.length > 0 ? (
               <View style={styles.chips}>
                 {r.chips.map((c, j) => (

@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 import { useMemo, useRef, useState } from 'react';
 import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { InviteBlock } from '@/components/owner/InviteBlock';
@@ -14,7 +15,6 @@ import { templatesForIndustry, forkTemplate, type PlaybookTemplate } from '@/dat
 import { standardSections, UNSECTIONED } from '@/lib/config/sections';
 import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
-import { SectionLabel } from '@/components/SectionLabel';
 import { PressableScale } from '@/components/PressableScale';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Space, SCREEN_GUTTER, CONTENT_MAX_WIDTH, frameCapStyle } from '@/lib/theme/layout';
@@ -251,7 +251,7 @@ export default function OwnerOnboardingScreen() {
               onPress={toggleBundle}
               style={({ pressed }) => [styles.bundle, allRecommendedOn && styles.bundleOn, pressed && { opacity: 0.95 }]}
               accessibilityRole="checkbox"
-              accessibilityState={{ checked: allRecommendedOn }}
+              accessibilityState={{ checked: allRecommendedOn }} aria-checked={allRecommendedOn}
               accessibilityLabel={`도입 1일차 필수 ${recommended.length}개 한 번에 담기`}
             >
               <View style={styles.bundleHead}>
@@ -284,7 +284,7 @@ export default function OwnerOnboardingScreen() {
             onPress={() => setExpanded((v) => !v)}
             style={({ pressed }) => [styles.discloseRow, pressed && { opacity: 0.7 }]}
             accessibilityRole="button"
-            accessibilityState={{ expanded }}
+            accessibilityState={{ expanded }} aria-expanded={expanded}
           >
             <View style={{ flex: 1 }}>
               <Text style={styles.discloseTitle}>직접 고르기</Text>
@@ -300,20 +300,19 @@ export default function OwnerOnboardingScreen() {
                 const allOn = items.every((t) => checked[t.id]);
                 return (
                   <View key={sec} style={styles.group}>
-                    <SectionLabel
-                      title={sec}
-                      trailing={
+                    <SectionGroup title={sec}
+                      action={
                         <Pressable onPress={() => toggleCategory(items)} hitSlop={8} style={styles.catAll}>
                           <Text style={styles.catAllText}>{allOn ? '전체 해제' : '전체 선택'}</Text>
                         </Pressable>
-                      }
-                    />
+                      }>
                     <View style={styles.rows}>
                       {items.map((t) => (
                         <TemplateRow key={t.id} tpl={t} on={!!checked[t.id]} onToggle={() => toggle(t.id)} />
                       ))}
                     </View>
-                  </View>
+                  </SectionGroup>
+</View>
                 );
               })}
             </Collapse>
@@ -375,7 +374,7 @@ function TemplateRow({ tpl, on, onToggle }: { tpl: PlaybookTemplate; on: boolean
       onPress={onToggle}
       style={({ pressed }) => [styles.row, on && styles.rowOn, pressed && { opacity: 0.9 }]}
       accessibilityRole="checkbox"
-      accessibilityState={{ checked: on }}
+      accessibilityState={{ checked: on }} aria-checked={on}
       accessibilityLabel={tpl.title}
     >
       <View style={[styles.check, on && styles.checkOn]}>

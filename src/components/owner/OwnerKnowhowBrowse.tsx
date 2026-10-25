@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   View, Text, Pressable, StyleSheet, ScrollView, TextInput,
@@ -22,7 +23,6 @@ import { EmptyState } from '@/components/EmptyState';
 import { InfoDot } from '@/components/InfoDot';
 import { VerifyBadge } from '@/components/VerifyBadge';
 import { BrandCopyBadges } from '@/components/owner/BrandCopyBadges';
-import { SectionLabel } from '@/components/SectionLabel';
 import { TwoPane, Pane } from '@/components/shell/TwoPane';
 import { SegmentTabs, type SegmentItem } from '@/components/SegmentTabs';
 import { Heatmap, type HeatCell, type HeatGroup, type HeatLegend, type HeatLevel } from '@/components/blocks/Heatmap';
@@ -440,9 +440,10 @@ export function OwnerKnowhowBrowse({
   //   한 갈래에 몰리면(예: '고객 응대' 300건) 그 묶음 하나가 300줄이다.
   const groupBlock = (key: string, title: string, items: PlaybookEntry[]) => (
     <View key={key} style={styles.group}>
-      <SectionLabel title={title} hint={`${items.length}건`} />
-      <PagedRows key={`${key}-${listKey}`} items={items} render={entryItem} style={styles.list} />
-    </View>
+      <SectionGroup title={title} description={`${items.length}건`}>
+      <PagedRows key={`${key}-${listKey}`} items={items} render={entryItem} />
+    </SectionGroup>
+</View>
   );
 
   // 정렬 컨트롤 대신 쓰는 묶음 — "많이 쓰임 / 오래 확인 안 함 / 그 밖".
@@ -486,6 +487,7 @@ export function OwnerKnowhowBrowse({
         {hasEntries && (
           <Appear>
             <Heatmap
+              metric="questions"
               head={{
                 value: String(heatHead.asked),
                 unit: `/${visible.length}개`,
@@ -682,12 +684,13 @@ export function OwnerKnowhowBrowse({
               // ★전량 렌더 금지 — 이 목록은 일반 ScrollView 안이라 가상화가 없다.
               //   2026-08-08 실측: 노하우 400건에서 DOM 5,776 노드 · 6.7초. 끊어 그리고 남은 수를 밝힌다.
               //   key = 거르기 조건 → 조건이 바뀌면 컴포넌트가 다시 서면서 '더 보기'가 처음으로 돌아간다.
-              <PagedRows
+              <SectionGroup title="노하우 목록" description={`${listFiltered.length}개`}>
+<PagedRows
                 key={listKey}
                 items={listFiltered}
                 render={entryItem}
-                style={styles.list}
               />
+</SectionGroup>
             )}
           </>
         )}

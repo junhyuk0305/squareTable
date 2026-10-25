@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 import { useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndicator } from 'react-native';
@@ -19,7 +20,7 @@ import { allConsented, consentPayload, UNDER_14_TEXT, type ConsentChecked } from
 import { EMAIL_TAKEN_TEXT, ROLE_SPLIT_TEXT } from '@/lib/account/copy';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Radius } from '@/lib/theme/elevation';
 import { ButtonStyles } from '@/lib/theme/button';
 import { ChipStyles } from '@/lib/theme/chip';
 import type { Role } from '@/types';
@@ -187,9 +188,7 @@ export default function SignupScreen() {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {/* 역할 — 가입 첫 단계에서 어떤 사용자인지 분명히 고른다 */}
         <Appear delay={0}>
-        <Text style={styles.roleQ}>어떤 분이세요?</Text>
-        </Appear>
-        <Appear delay={0}>
+        <SectionGroup title="어떤 분이세요?">
         <View style={styles.roleRow}>
           {(
             [
@@ -211,8 +210,10 @@ export default function SignupScreen() {
         </View>
         {/* J11: 직원 계정으로는 매장을 열 수 없다(0157). 전환 기능 대신 처음부터 알려 준다. */}
         <Text style={styles.roleSplit}>{ROLE_SPLIT_TEXT}</Text>
+        </SectionGroup>
         </Appear>
 
+        <SectionGroup title="내 정보" contentStyle={{ gap: 16 }}>
         <Appear delay={60}>
         <Field label="이름" value={name} onChange={setName} placeholder="홍길동" required />
         </Appear>
@@ -350,8 +351,10 @@ export default function SignupScreen() {
         </View>
         </Appear>
 
+        </SectionGroup>
+
         {role === 'owner' ? (
-          <>
+          <SectionGroup title="매장 정보" contentStyle={{ gap: 16 }}>
             <Appear delay={120}>
             <Field label="매장 이름" value={storeName} onChange={setStoreName} placeholder="예: 우리 카페 신촌점" required />
             </Appear>
@@ -388,7 +391,7 @@ export default function SignupScreen() {
 
             {/* 요금제 안내는 가입 폼에 두지 않는다(인지부하 축소). 가입은 무료로 시작하고,
                 가격 인지·업그레이드는 온보딩 완료 화면·설정(PricingTable)에서만 노출한다(SSOT=tiers.ts). */}
-          </>
+          </SectionGroup>
         ) : (
           <Appear delay={120}>
           <View style={styles.joinNote}>
@@ -416,7 +419,7 @@ export default function SignupScreen() {
           style={({ pressed }) => [styles.primary, busy && styles.primaryDisabled, pressed && !busy && { opacity: 0.88 }]}
         >
           {busy ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={InkColors.ink} />
           ) : (
             // 계정 생성까지 끝난 뒤 가게 연결만 실패해 재시도하는 상태면 라벨을 '가게 다시 만들기'로 바꿔
             // (계정은 이미 있으니 다시 안 만든다는 뜻) 에러 안내문과 일치시킨다.
@@ -482,12 +485,12 @@ function Field({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: 24, gap: 14 },
+  safe: { flex: 1, backgroundColor: InkColors.bgSoft },
+  scroll: { padding: 20, gap: 24 },
   roleQ: { fontSize: 16, fontWeight: '800', color: InkColors.ink, marginBottom: 2 },
-  roleRow: { flexDirection: 'row', gap: 12, marginBottom: 4 },
+  roleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 4 },
   roleCard: {
-    flex: 1,
+    flexGrow: 1, flexShrink: 1, flexBasis: 120,
     backgroundColor: '#FFFFFF',
     borderWidth: 2,
     borderColor: InkColors.line,
@@ -496,12 +499,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   // 선택 = 잉크 테두리 + 소프트 섀도로 '선택된 border'를 굵게(bold) 강조(입력칸 선택 효과와 통일).
-  roleCardOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB', ...Elevation.e1 },
+  roleCardOn: { borderColor: InkColors.ink, backgroundColor: InkColors.bgSoft },
   // 그림 이모지 금지(워딩 §2.3) — Ionicons로 교체. 아이콘도 Text 기반이라 글자 크기 설정에 함께 반응한다.
   roleIcon: { marginBottom: 4 },
   roleLabel: { fontSize: 16, fontWeight: '800', color: InkColors.ink2, marginTop: 4 },
   roleLabelOn: { color: BrandColors.brand },
-  roleDesc: { fontSize: 12, color: InkColors.ink3, lineHeight: 17 },
+  roleDesc: { fontSize: 14, color: InkColors.ink2, lineHeight: 21 },
   roleSplit: { fontSize: 13, color: InkColors.ink2, lineHeight: 19, marginBottom: 4 },
   roleCheck: {
     position: 'absolute',
@@ -540,7 +543,7 @@ const styles = StyleSheet.create({
   //   기본 크기에서는 지금처럼 한 줄이다. 버튼 paddingVertical 은 아랫줄로 내려갔을 때의 높이다(한 줄일 땐 입력칸 높이로 늘어난다).
   otpRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   otpInput: { flexGrow: 1, flexShrink: 1, flexBasis: 160 },
-  otpBtn: { minWidth: 116, minHeight: 44, flexShrink: 1, paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  otpBtn: { minWidth: 116, minHeight: 48, flexShrink: 1, paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   otpBtnDim: { opacity: 0.5 },
   otpBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2, textAlign: 'center' },
   otpMsg: { fontSize: 12, fontWeight: '600', color: BrandColors.accentText, marginTop: -2 },
@@ -550,9 +553,9 @@ const styles = StyleSheet.create({
   chipText: ChipStyles.text,
   chipTextOn: ChipStyles.textOn,
   err: { fontSize: 15, color: BrandColors.accentText, fontWeight: '600', lineHeight: 22 },
-  primary: { ...ButtonStyles.primary, marginTop: 6, backgroundColor: BrandColors.brand },
+  primary: { ...ButtonStyles.brand, marginTop: 6 },
   primaryDisabled: { backgroundColor: InkColors.line },
-  primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  primaryText: ButtonStyles.brandText,
   loginRow: { alignItems: 'center', paddingVertical: 6 },
   loginText: { fontSize: 14, color: InkColors.ink3 },
   loginStrong: { color: BrandColors.brand, fontWeight: '800' },

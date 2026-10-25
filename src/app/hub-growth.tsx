@@ -71,7 +71,7 @@ export default function HubGrowthScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
+  safe: { flex: 1, backgroundColor: InkColors.bgSoft },
   scroll: { padding: Space.gutter, gap: Space.lg, paddingBottom: 40 },
   titleBlock: { gap: 4 },
   title: { fontSize: 26, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5 },

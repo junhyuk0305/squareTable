@@ -362,7 +362,7 @@ export function TodoScreen({
           const isCol = collapsed[`${selected}:${g.key}`];
           return (
             <Appear key={g.key} delay={stagger(gi)} style={s.group}>
-              <Pressable onPress={() => setCollapsed((c) => ({ ...c, [`${selected}:${g.key}`]: !isCol }))} style={s.groupHead}>
+              <Pressable onPress={() => setCollapsed((c) => ({ ...c, [`${selected}:${g.key}`]: !isCol }))} style={s.groupHead} accessibilityRole="button" accessibilityLabel={g.label} accessibilityState={{ expanded: !isCol }} aria-expanded={!isCol}>
                 <Text style={s.groupName}>{g.label}</Text>
                 <Text style={s.groupCnt}>{g.doneN}/{g.total}</Text>
                 <Ionicons name={isCol ? 'chevron-down' : 'chevron-up'} size={14} color={InkColors.ink3} style={{ marginLeft: 'auto' }} />
@@ -400,7 +400,6 @@ export function TodoScreen({
                         onLayout={t.id === focusPending ? scheduleFocusScroll : undefined}
                         style={[s.item, isMine && s.itemMine, i === g.tasks.length - 1 && { borderBottomWidth: 0 }]}
                       >
-                        <View style={[s.scopeBar, { backgroundColor: isMine ? MINE : SHARED }]} />
                         <Pressable onPress={() => {
                           // 완료 취소 시 첨부한 완료 사진이 함께 삭제되므로 미리 경고(파괴적 동작).
                           if (on && photoUrl) {
@@ -408,8 +407,8 @@ export function TodoScreen({
                             return;
                           }
                           onToggle(t.id, selected);
-                        }} style={[s.box, on && s.boxOn]}>
-                          {on && <Ionicons name="checkmark" size={13} color={InkColors.ink} />}
+                        }} style={s.checkHit} accessibilityRole="checkbox" accessibilityLabel={`${t.text} 완료`} accessibilityState={{ checked: on }} aria-checked={on}>
+                          <View style={[s.box, on && s.boxOn]}>{on && <Ionicons name="checkmark" size={13} color={InkColors.ink} />}</View>
                         </Pressable>
                         <View style={{ flex: 1 }}>
                           <Text style={[s.itemText, on && s.itemTextOn]}>
@@ -417,7 +416,7 @@ export function TodoScreen({
                             {t.remindAt ? <Text style={s.timeTag}>{t.remindAt} </Text> : null}
                             {t.sectionNote ? `${t.sectionNote} · ${t.text}` : t.text}
                           </Text>
-                          {t.description ? <Text style={[s.itemDesc, on && s.itemDescOn]} numberOfLines={2}>{t.description}</Text> : null}
+                          {t.description ? <Text style={[s.itemDesc, on && s.itemDescOn]}>{t.description}</Text> : null}
                           {(mark || repeat) && (
                             <Text style={s.itemMeta}>
                               {mark ? `${mark.byName} 완료 · ${hhmm(mark.at)}` : ''}
@@ -542,19 +541,19 @@ const s = StyleSheet.create({
   listScroll: { paddingHorizontal: 13, paddingTop: 8, gap: 11 },
   empty: { textAlign: 'center', color: InkColors.ink2, fontSize: 15, marginTop: 30 },
   group: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, ...Elevation.e1 },
-  groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, minHeight: 46 },
-  groupName: { fontWeight: '800', fontSize: 13.5, color: InkColors.ink },
+  groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, minHeight: 52 },
+  groupName: { flexShrink: 1, fontWeight: '800', fontSize: 18, color: InkColors.ink },
   groupCnt: { fontSize: 11, fontWeight: '700', color: InkColors.ink3 },
   groupList: { paddingHorizontal: 10, paddingBottom: 6 },
   item: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: InkColors.paper },
   // 내 할일 = 옅은 테라코타 틴트로 한눈에 구분(스코프 바·태그와 같은 색 계열).
   itemMine: { backgroundColor: CategoryColors.Event + '12', borderRadius: Radius.sm },
-  scopeBar: { width: 4, height: 22, borderRadius: Radius.pill },
-  box: { width: 21, height: 21, borderRadius: 6, borderWidth: 1.6, borderColor: InkColors.line, alignItems: 'center', justifyContent: 'center', backgroundColor: InkColors.bg },
+  checkHit: { width: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  box: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.6, borderColor: InkColors.controlBorder, alignItems: 'center', justifyContent: 'center', backgroundColor: InkColors.bg },
   boxOn: { backgroundColor: BrandColors.yellow, borderColor: BrandColors.yellowDeep },
   itemText: { fontSize: 15, fontWeight: '500', color: InkColors.ink },
   itemTextOn: { color: InkColors.ink3, textDecorationLine: 'line-through' },
-  itemDesc: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink3, marginTop: 2 },
+  itemDesc: { fontSize: 15, lineHeight: 23, color: InkColors.ink2, marginTop: 4 },
   itemDescOn: { color: InkColors.ink3 },
   itemMeta: { fontSize: 11, color: InkColors.ink3, marginTop: 2 },
   // '매일 반복' — 반복이라는 사실만 알리는 부제. 경고가 아니라 정보라 파랑 계열.

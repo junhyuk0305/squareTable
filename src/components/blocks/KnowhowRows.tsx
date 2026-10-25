@@ -4,6 +4,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { SectionGroup } from '@/components/SectionGroup';
 
 /**
  * D10 · 노하우 행 — **좌측 라벨 열 + 점**. 노하우 본문을 그리는 자리는 전부 이것 하나다.
@@ -61,8 +62,19 @@ const LABEL_COL_W = 58;
 /** 점 지름. 같은 이유로 토큰 대상 아님. */
 const DOT = 8;
 
-export function KnowhowRows({ rows }: { rows: KnowhowRow[] }) {
+export function KnowhowRows({ rows, variant = 'compact' }: { rows: KnowhowRow[]; variant?: 'compact' | 'grouped' }) {
   if (rows.length === 0) return null;
+
+  if (variant === 'grouped') return (
+    <View style={styles.groups}>
+      {rows.map((r, i) => (
+        <SectionGroup key={`${r.kind}-${i}`} title={r.label ?? LABEL[r.kind]}>
+          {r.render ?? <RowValue row={r} />}
+          {r.sub ? <Text style={styles.sub}>{r.sub}</Text> : null}
+        </SectionGroup>
+      ))}
+    </View>
+  );
 
   return (
     <View>
@@ -101,17 +113,18 @@ function RowValue({ row }: { row: KnowhowRow }) {
 }
 
 const styles = StyleSheet.create({
+  groups: { gap: Space.xl },
   row: { flexDirection: 'row', gap: Space.md, alignItems: 'flex-start', paddingVertical: Space.md },
   rowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
 
   label: { width: LABEL_COL_W, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingTop: 2 },
   dot: { width: DOT, height: DOT, borderRadius: Radius.pill },
   // 위치 꼬리표라 본문 15sp 하한 대상이 아니다(simplicity-voice §4 '보조').
-  labelText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink3 },
+  labelText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
 
   value: { flex: 1, minWidth: 0 },
-  text: { fontSize: 15, lineHeight: 22, color: InkColors.ink },
-  sub: { fontSize: 12.5, color: InkColors.ink3, marginTop: Space.xs },
+  text: { flexShrink: 1, fontSize: 16, lineHeight: 25, color: InkColors.ink },
+  sub: { fontSize: 14, lineHeight: 21, color: InkColors.ink2, marginTop: Space.xs },
 
   bullet: { flexDirection: 'row', gap: Space.sm, alignItems: 'flex-start' },
   bulletGap: { marginTop: Space.sm },

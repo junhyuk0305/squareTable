@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 import { useEffect, useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
@@ -9,7 +10,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { fetchOwnerKnowhowEntries } from '@/lib/db';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
-import { SectionLabel } from '@/components/SectionLabel';
 import { EmptyState } from '@/components/EmptyState';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -181,8 +181,8 @@ export default function HubKnowhowScreen() {
               <Appear key={g.uid} delay={stagger(gi + 2)}>
               <View style={st.group}>
                 {/* 0은 "0개"가 아니라 "없어요" (워딩 §5). */}
-                <SectionLabel title={g.name} hint={g.items.length === 0 ? '없어요' : `${g.items.length}개`} />
-                <View style={st.card}>
+                <SectionGroup title={g.name} description={g.items.length === 0 ? '없어요' : `${g.items.length}개`} contentStyle={st.cardGroup}>
+
                   {g.items.length === 0 ? (
                     // 빈 매장을 이름만 세워 두면 막다른 길이 된다 — 채우러 갈 곳을 준다(복잡도 §4 빈 화면 규칙).
                     <Pressable
@@ -217,7 +217,7 @@ export default function HubKnowhowScreen() {
                       <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
                     </Pressable>
                   ))}
-                </View>
+                </SectionGroup>
               </View>
               </Appear>
             ))
@@ -244,6 +244,7 @@ const st = StyleSheet.create({
     backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line,
     paddingHorizontal: Space.lg, paddingVertical: Space.xs, ...Elevation.e2,
   },
+  cardGroup: { paddingHorizontal: Space.lg, paddingVertical: Space.xs },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.sm + 2, minHeight: 56 },
   rowTop: { borderTopWidth: 1, borderTopColor: InkColors.line },
   rowTitle: { fontSize: 15, fontWeight: '700', color: InkColors.ink },

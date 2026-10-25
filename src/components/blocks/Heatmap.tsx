@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { SectionGroup } from '@/components/SectionGroup';
 
 /**
  * 규모 3단계(퀴즈 개발계획 §10-9 · 데모 §2-11) — 열 수는 개수로 자동.
@@ -54,6 +55,13 @@ const LEVEL_BG: Record<HeatLevel, string> = {
   3: BrandColors.heat3,
   4: BrandColors.heat4,
 };
+const QUERY_BG: Record<HeatLevel, string> = {
+  0: InkColors.bg,
+  1: BrandColors.queryHeat1,
+  2: BrandColors.queryHeat2,
+  3: BrandColors.queryHeat3,
+  4: BrandColors.queryHeat4,
+};
 
 /**
  * H5 · 히트맵(블록어휘 §7-2) — 노하우 1개 = 상자 1개, 카테고리별 그룹. **퀴즈 홈의 히어로.**
@@ -72,8 +80,9 @@ export function Heatmap({
   onPressCell,
   onPressGroup,
   legend = QUIZ_LEGEND,
-  hint = '상자 하나 = 노하우 하나 · 길게 누르면 이름이 보여요',
+  hint = '상자 하나가 노하우 하나예요. 목록에서 이름을 볼 수 있어요.',
   maxGroups,
+  metric = 'understanding',
 }: {
   /** 머리줄 — 큰 값("41" + "%") · 제목("직원이 아는 노하우") · 우측 보조("58개"·"이번 주 ↑14칸"). */
   head: { value: string; unit?: string; title: string; aside?: string };
@@ -86,7 +95,10 @@ export function Heatmap({
   hint?: string;
   /** 이 개수까지만 카테고리를 펴고 나머지는 접는다. 없으면 전부 편다(노하우 탭은 그대로). */
   maxGroups?: number;
+  metric?: 'understanding' | 'questions';
 }) {
+  const palette = metric === 'questions' ? QUERY_BG : LEVEL_BG;
+  const [listMode, setListMode] = useState(false);
   const total = groups.reduce((n, g) => n + g.cells.length, 0);
   const stage = STAGE.find((s) => total <= s.max) ?? STAGE[STAGE.length - 1];
   const collapse = total > STAGE[1].max;
@@ -105,21 +117,23 @@ export function Heatmap({
   const hiddenGroups = groups.length - shownGroups.length;
 
   return (
-    <View style={styles.card}>
+    <SectionGroup title={head.title} description={head.aside} action={
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded: listMode }} aria-expanded={listMode} onPress={() => setListMode(v => !v)} style={styles.modeButton}>
+        <Text style={styles.modeText}>{listMode ? '격자로 보기' : '목록으로 보기'}</Text>
+      </Pressable>
+    }>
       <View style={styles.head}>
         <Text style={styles.big}>
           {head.value}
           {head.unit ? <Text style={styles.bigUnit}>{head.unit}</Text> : null}
         </Text>
-        <Text style={styles.headTitle} numberOfLines={1}>{head.title}</Text>
-        {head.aside ? <Text style={styles.aside} numberOfLines={1}>{head.aside}</Text> : null}
       </View>
-      <Text style={styles.peek} numberOfLines={1}>
+      <Text style={styles.peek}>
         {peek ? `${peek.title} — ${peek.status}` : hint}
       </Text>
 
       {shownGroups.map((g) => {
-        const shown = collapse ? g.cells.slice(0, stage.cols) : g.cells;
+        const shown = !listMode && collapse ? g.cells.slice(0, stage.cols) : g.cells;
         const rest = g.cells.length - shown.length;
         return (
           <View key={g.name} style={[styles.group, onPressGroup && styles.groupTight]}>
@@ -140,7 +154,23 @@ export function Heatmap({
                 {g.name}<Text style={styles.groupCount}>  {g.cells.length}개</Text>
               </Text>
             )}
-            <View style={[styles.grid, { marginHorizontal: -stage.gap / 2 }]}>
+            {listMode ? (
+              <View>
+                {shown.map(c => (
+                  <Pressable key={c.id} testID="heat-list-row" accessibilityRole="button" onPress={() => onPressCell(c.id)}
+                    style={({ pressed }) => [styles.listRow, pressed && styles.cellPressed]}>
+                    <View style={[styles.legendBox, { backgroundColor: palette[c.level] }, c.level === 0 && styles.cellEmpty]} />
+                    <View style={styles.listBody}>
+                      <Text style={styles.listTitle}>{c.title}</Text>
+                      <Text style={styles.listStatus}>{c.status}</Text>
+                      {c.stale && <Text style={styles.staleText}>{legend.stale}</Text>}
+                      {c.miss && <Text style={styles.missText}>{legend.miss}</Text>}
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={InkColors.ink2} />
+                  </Pressable>
+                ))}
+              </View>
+            ) : <View style={[styles.grid, { marginHorizontal: -stage.gap / 2 }]}>
               {shown.map((c) => {
                 const border = c.stale
                   ? styles.cellStale
@@ -159,9 +189,11 @@ export function Heatmap({
                       onLongPress={() => setPeek(c)}
                       onHoverIn={() => setPeek(c)}
                       onHoverOut={() => setPeek(null)}
+                      onFocus={() => setPeek(c)}
+                      onBlur={() => setPeek(null)}
                       style={({ pressed }) => [
                         styles.cell,
-                        { borderRadius: stage.radius, backgroundColor: LEVEL_BG[c.level] },
+                        { borderRadius: stage.radius, backgroundColor: palette[c.level] },
                         border,
                         pressed && styles.cellPressed,
                       ]}
@@ -169,7 +201,7 @@ export function Heatmap({
                   </View>
                 );
               })}
-            </View>
+            </View>}
             {rest > 0 ? (
               onPressGroup ? (
                 <Pressable
@@ -192,7 +224,7 @@ export function Heatmap({
       {foldable ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityState={{ expanded: moreOpen }}
+          accessibilityState={{ expanded: moreOpen }} aria-expanded={moreOpen}
           accessibilityLabel={moreOpen ? '카테고리 접기' : `카테고리 ${hiddenGroups}개 더 보기`}
           onPress={() => setMoreOpen((v) => !v)}
           style={({ pressed }) => [styles.foldRow, pressed && styles.cellPressed]}
@@ -210,10 +242,10 @@ export function Heatmap({
         <View style={[styles.legendBox, styles.cellEmpty]} />
         <View style={styles.legendGap} />
         <Text style={styles.legendText}>{legend.scale[0]}</Text>
-        <View style={[styles.legendBox, { backgroundColor: BrandColors.heat1 }]} />
-        <View style={[styles.legendBox, { backgroundColor: BrandColors.heat2 }]} />
-        <View style={[styles.legendBox, { backgroundColor: BrandColors.heat3 }]} />
-        <View style={[styles.legendBox, { backgroundColor: BrandColors.heat4 }]} />
+        <View style={[styles.legendBox, { backgroundColor: palette[1] }]} />
+        <View style={[styles.legendBox, { backgroundColor: palette[2] }]} />
+        <View style={[styles.legendBox, { backgroundColor: palette[3] }]} />
+        <View style={[styles.legendBox, { backgroundColor: palette[4] }]} />
         <Text style={styles.legendText}>{legend.scale[1]}</Text>
         {/* ★테두리 두 종류는 **그 축을 실제로 쓰는 화면에서만** 범례에 나온다(2026-08-27).
             셀에 하나도 없는데 범례에 남으면 "빨간 테두리가 어딘가 있나 보다"라고 읽는다 —
@@ -233,11 +265,19 @@ export function Heatmap({
           </>
         ) : null}
       </View>
-    </View>
+    </SectionGroup>
   );
 }
 
 const styles = StyleSheet.create({
+  modeButton: { minHeight: 48, justifyContent: 'center' },
+  modeText: { fontSize: 15, lineHeight: 23, fontWeight: '700', color: InkColors.ink },
+  listRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingVertical: Space.md, borderTopWidth: 1, borderTopColor: InkColors.line },
+  listBody: { flex: 1, minWidth: 0 },
+  listTitle: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: InkColors.ink },
+  listStatus: { fontSize: 15, lineHeight: 23, color: InkColors.ink2 },
+  staleText: { fontSize: 14, lineHeight: 21, color: BrandColors.warnText },
+  missText: { fontSize: 14, lineHeight: 21, color: BrandColors.badText },
   card: {
     paddingHorizontal: Space.lg,
     paddingTop: Space.lg,

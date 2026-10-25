@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +14,7 @@ import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { ButtonStyles } from '@/lib/theme/button';
 import { Space } from '@/lib/theme/layout';
 
 type WorkSettingsPanelProps = {
@@ -136,7 +138,7 @@ function WorkSettingsForm({ members, me, onSaved }: WorkSettingsPanelProps) {
           </Pressable>
 
           <ScrollView keyboardShouldPersistTaps="handled" style={s.scroll} contentContainerStyle={s.scrollPad} showsVerticalScrollIndicator={false}>
-            <Text style={s.fieldLabel}>카테고리 이름</Text>
+            <SectionGroup title="카테고리 이름" style={{ marginBottom: Space.xl }}>
             <TextInput
               value={open.label}
               onChangeText={(v) => setLabel(openIdx, v)}
@@ -146,8 +148,8 @@ function WorkSettingsForm({ members, me, onSaved }: WorkSettingsPanelProps) {
               maxLength={12}
             />
 
-            <Text style={[s.fieldLabel, { marginTop: Space.lg }]}>루틴 업무</Text>
-            <Text style={s.fieldHint}>여기 적어두면 매일 할일에 자동으로 떠요. 담당자를 고르면 이름이 붙고, 다른 사람도 그대로 볼 수 있어요.</Text>
+            </SectionGroup>
+            <SectionGroup title="루틴 업무" description="여기 적어두면 매일 할일에 자동으로 떠요. 담당자를 고르면 이름이 붙고, 다른 사람도 그대로 볼 수 있어요.">
 
             {open.routines.length === 0 && <Text style={s.empty}>아직 루틴 업무가 없어요. 매일 하는 일을 적어보세요.</Text>}
 
@@ -162,11 +164,11 @@ function WorkSettingsForm({ members, me, onSaved }: WorkSettingsPanelProps) {
                     accessibilityRole="button"
                     accessibilityLabel={`${r.text || '이름 없는 루틴'} 수정`}
                   >
-                    <Text style={[s.routineText, !r.text && s.routineTextEmpty]} numberOfLines={1}>
+                    <Text style={[s.routineText, !r.text && s.routineTextEmpty]}>
                       {r.text || '이름 없는 루틴'}
                     </Text>
                     {/* 무엇이 설정돼 있는지 한 줄 요약 — 시트를 열지 않고도 보인다. */}
-                    <Text style={s.routineMeta} numberOfLines={1}>
+                    <Text style={s.routineMeta}>
                       {[
                         r.remindAt ?? null,
                         r.assigneeId ? `담당 ${nameOf(r.assigneeId)}` : null,
@@ -185,6 +187,8 @@ function WorkSettingsForm({ members, me, onSaved }: WorkSettingsPanelProps) {
               <Ionicons name="add" size={16} color={InkColors.ink} />
               <Text style={s.addDashedText}>루틴 업무 추가</Text>
             </Pressable>
+
+            </SectionGroup>
 
             {confirmDelete === open.id ? (
               <View style={s.confirmBar}>
@@ -212,15 +216,15 @@ function WorkSettingsForm({ members, me, onSaved }: WorkSettingsPanelProps) {
       ) : (
         // ── 1단: 카테고리 목록 ────────────────────────────────────
         <ScrollView keyboardShouldPersistTaps="handled" style={s.scroll} contentContainerStyle={s.scrollPad} showsVerticalScrollIndicator={false}>
-          <Text style={s.lead}>매장 흐름에 맞게 업무 카테고리를 짜고, 카테고리마다 매일 하는 루틴 업무와 담당자를 정해요. 매장 전체에 공통 적용돼요.</Text>
+          <SectionGroup title="업무 카테고리" description="카테고리마다 매일 하는 업무와 담당자를 정해요. 저장하면 매장 전체에 적용돼요.">
 
-          <View style={s.list}>
+          <View>
             {items.map((d, i) => (
               <Appear key={d.id} delay={stagger(i)}>
                 <View style={[s.row, i === items.length - 1 && { borderBottomWidth: 0 }]}>
                   <Pressable onPress={() => setOpenId(d.id)} style={({ pressed }) => [s.rowMain, pressed && { opacity: 0.7 }]} accessibilityRole="button">
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={s.rowTitle} numberOfLines={1}>{d.label.trim() || '이름 없는 카테고리'}</Text>
+                      <Text style={s.rowTitle}>{d.label.trim() || '이름 없는 카테고리'}</Text>
                       <Text style={s.rowMeta}>
                         {d.routines.length === 0 ? '루틴 업무 없음' : `루틴 업무 ${d.routines.length}개`}
                         {d.routines.some((r) => r.assigneeId) ? ` · 담당 ${d.routines.filter((r) => r.assigneeId).length}개` : ''}
@@ -244,6 +248,7 @@ function WorkSettingsForm({ members, me, onSaved }: WorkSettingsPanelProps) {
             <Ionicons name="add" size={16} color={InkColors.ink} />
             <Text style={s.addDashedText}>카테고리 추가</Text>
           </Pressable>
+          </SectionGroup>
         </ScrollView>
       )}
 
@@ -298,7 +303,7 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: InkColors.line },
   rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.lg, minWidth: 0 },
   rowTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  rowMeta: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
+  rowMeta: { fontSize: 14, color: InkColors.ink2, marginTop: 2 },
   orderBtns: { flexDirection: 'row', alignItems: 'center' },
 
   // 2단 — 헤더/필드
@@ -320,21 +325,14 @@ const s = StyleSheet.create({
   },
 
   // 2단 — 루틴 카드(텍스트 + 담당자 칩)
-  routineCard: {
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: Radius.md,
-    backgroundColor: '#FFFFFF',
-    padding: Space.md,
-    marginBottom: Space.sm,
-  },
+  routineCard: { borderBottomWidth: 1, borderBottomColor: InkColors.line, paddingVertical: Space.md },
   routineHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   routineMain: { flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', gap: 1 },
   routineText: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
   routineTextEmpty: { color: InkColors.ink3, fontWeight: '600' },
-  routineMeta: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
+  routineMeta: { fontSize: 14, color: InkColors.ink2, fontWeight: '600' },
   bullet: { width: 5, height: 5, borderRadius: Radius.pill, backgroundColor: InkColors.ink3 },
-  iconBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+  iconBtn: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   chipRow: { gap: Space.xs, paddingTop: Space.sm },
   chip: { paddingHorizontal: Space.md, paddingVertical: 6, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
   chipOn: { backgroundColor: BrandColors.yellowSoft, borderColor: BrandColors.gold },
@@ -347,7 +345,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.xs,
     borderWidth: 1.5,
-    borderStyle: 'dashed',
+    borderStyle: 'solid',
     borderColor: InkColors.ink3,
     borderRadius: Radius.md,
     paddingVertical: Space.md,
@@ -366,6 +364,6 @@ const s = StyleSheet.create({
   cDelText: { fontSize: 12.5, fontWeight: '800', color: '#FFFFFF' },
 
   foot: { paddingHorizontal: Space.lg, paddingTop: Space.md, paddingBottom: Space.lg, borderTopWidth: 1, borderTopColor: InkColors.line, backgroundColor: InkColors.cream },
-  saveBtn: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: Space.lg, alignItems: 'center' },
-  saveText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  saveBtn: ButtonStyles.brand,
+  saveText: ButtonStyles.brandText,
 });

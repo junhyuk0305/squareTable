@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 // StarterChecklist — 사장 허브 '현황' 탭 상단 시작 체크리스트(콜드스타트 슬라이스 A).
 //
 // 신규 매장 첫날의 현황 탭은 0뿐이라 죽은 화면이다. 이 카드가 "빈 → 씨앗 → 채워짐"의
@@ -9,7 +10,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { starterSteps } from '@/lib/utils/starterProgress';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
-import { SectionLabel } from '@/components/SectionLabel';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -33,8 +33,8 @@ export function StarterChecklist({ row }: { row: OwnerOverviewRow }) {
 
   return (
     <View>
-      <SectionLabel title="시작하기" />
-      <View style={styles.card}>
+      <SectionGroup title="시작하기" contentStyle={styles.cardGroup}>
+
         <View style={styles.headRow}>
           <Text style={styles.headText}>매장이 채워지는 중이에요</Text>
           <Text style={styles.headCount}>{doneCount}/{steps.length}</Text>
@@ -52,7 +52,7 @@ export function StarterChecklist({ row }: { row: OwnerOverviewRow }) {
               disabled={s.done || !!switching}
               style={({ pressed }) => [styles.row, pressed && { opacity: 0.85 }]}
               accessibilityRole="button"
-              accessibilityState={{ disabled: s.done }}
+              accessibilityState={{ disabled: s.done }} aria-disabled={s.done}
               accessibilityLabel={s.done ? `${s.title} 완료` : s.title}
             >
               <View style={[styles.check, s.done && styles.checkOn]}>
@@ -69,7 +69,7 @@ export function StarterChecklist({ row }: { row: OwnerOverviewRow }) {
             </Pressable>
           );
         })}
-      </View>
+      </SectionGroup>
     </View>
   );
 }
@@ -85,6 +85,7 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     ...Elevation.e2,
   },
+  cardGroup: { paddingHorizontal: Space.lg, paddingVertical: Space.md },
   headRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: Space.xs },
   headText: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink },
   headCount: { fontSize: 13, fontWeight: '800', color: InkColors.ink3 },

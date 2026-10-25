@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 // 직원 허브 '성장' 탭 본문 — 축적 레이어(슬라이스 C, 3탭 확장의 두 번째 탭).
 //
 // 무엇: "내가 남긴 것"의 축적을 본인에게 되돌려준다(순환 보상 단계 — M1 채택).
@@ -16,7 +17,6 @@ import { fetchMyTrainingHistory, type TrainingHistoryRow } from '@/lib/db';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
 import { storeColor } from '@/lib/utils/storeColor';
-import { SectionLabel } from '@/components/SectionLabel';
 import { ProgressRing } from '@/components/blocks/ProgressRing';
 import { RollupRows } from '@/components/blocks/RollupRows';
 import { StatCard, StatCardGrid } from '@/components/blocks/StatCardGrid';
@@ -123,7 +123,7 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
       <>
       {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
       {header}
-      <View style={{ gap: Space.md }}>
+      <View style={{ gap: Space.xl }}>
         <Appear delay={stagger(0)}>
           <View style={styles.card}>
             <Text style={styles.emptyTitle}>여기에 내가 남긴 것이 쌓여요</Text>
@@ -233,14 +233,14 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
 
       {/* ── 내가 남긴 것 ── */}
       <Appear delay={stagger(1)} style={{ gap: Space.sm }}>
-        <SectionLabel title="내가 남긴 것" />
+        <SectionGroup title="내가 남긴 것">
         {/* 블록 L4(§7-2) — MiniStats(숫자 3칸 나열)를 2열 지표 카드로 갈아탔다(2026-08-27).
             숫자 옆에 대상·근거가 붙는다(R2): '내가 만든 노하우'는 참조 횟수를 보조줄로 데리고 오고,
             0건일 때 큰 숫자를 세우던 '최근 30일 참조' 칸은 사라진다.
             가르침 실적(taught)은 **0건이면 칸을 만들지 않고** 아래 한 줄 링크가 대신 말한다 —
             28sp '0건'은 성과 없음을 크게 외치는 꼴이다(2026-08-19 판정 유지).
             ★막대(visual)를 주지 않는다: 이 세 값에는 이력 원장도, 쪼갤 구성도 없다(R4). */}
-        <StatCardGrid
+        <StatCardGrid grouped
           items={[
             {
               key: 'knowhow',
@@ -268,9 +268,10 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
               : []),
           ]}
         />
+
         {/* 노하우 0개면 카드를 세우지 않는다 — 옛 판본은 테두리·그림자만 있는 빈 상자가 남았다(2026-08-06). */}
         {myEntries.length > 0 && (
-        <View style={styles.card}>
+        <View>
           {/* 내 노하우 원문 목록(0094) — 행 탭 = 원문 시트. 카운트와 같은 술어라 개수가 일치한다. */}
           {(showAllEntries ? myEntries : myEntries.slice(0, ENTRY_LIST_FIRST)).map((e) => (
             <Pressable
@@ -283,7 +284,7 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
               {growth.length > 1 && (
                 <View style={[styles.dot, { backgroundColor: storeColor(e.unit_id, prefFor(e.unit_id).color) }]} />
               )}
-              <Text style={styles.rowTitle} numberOfLines={1}>{e.title}</Text>
+              <Text style={styles.rowTitle}>{e.title}</Text>
               {(e.stats?.query_hits_30d ?? 0) > 0 && (
                 <Text style={styles.rowSub}>{`${e.stats.query_hits_30d}번 참조`}</Text>
               )}
@@ -302,6 +303,7 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
           )}
         </View>
         )}
+      </SectionGroup>
       </Appear>
 
       {/* ── 매장별 축적 — 합계는 위 L4로 올라갔다. 여기 남는 건 매장별 분해뿐이라
@@ -311,8 +313,8 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
              숙련 주장 없음(완료 ≠ 숙련). ── */}
       {growth.length > 1 && (
       <Appear delay={stagger(2)} style={{ gap: Space.sm }}>
-        <SectionLabel title="매장별" />
-        <RollupRows
+        <SectionGroup title="매장별">
+        <RollupRows embedded
           rows={growth.map((r) => {
             const last = latestByUnit.get(r.unit_id);
             return {
@@ -330,15 +332,16 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
             };
           })}
         />
+</SectionGroup>
       </Appear>
       )}
 
       {trainingError && (
         <Appear delay={stagger(3)}>
-          <SectionLabel title="퀴즈로 확인한 노하우" />
-          <View style={styles.card}>
+          <SectionGroup title="퀴즈로 확인한 노하우" contentStyle={styles.cardGroup}>
+
             <Text style={styles.emptyBody}>퀴즈 기록을 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.</Text>
-          </View>
+          </SectionGroup>
         </Appear>
       )}
       {/* ── 훈련 통과 이력(0104) — 있을 때만. 통과 사실만 말하고 점수·등급을 만들지 않는다 ── */}
@@ -346,14 +349,14 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
         <Appear delay={stagger(3)}>
           {/* 제목이 히어로와 같은 말을 쓴다 — 위 링의 분자가 곧 이 목록이다(되물음 테스트: "퀴즈"만으론
               뭘 통과했는지 안 읽힌다). */}
-          <SectionLabel title="퀴즈로 확인한 노하우" hint={`${trainingHistory.length}개`} />
-          <View style={styles.card}>
+          <SectionGroup title="퀴즈로 확인한 노하우" description={`${trainingHistory.length}개`} contentStyle={styles.cardGroup}>
+
             {(showAllTraining ? trainingHistory : trainingHistory.slice(0, ENTRY_LIST_FIRST)).map((h) => (
               <View key={`${h.unitId}_${h.entryId}`} style={styles.row}>
                 {growth.length > 1 && (
                   <View style={[styles.dot, { backgroundColor: storeColor(h.unitId, prefFor(h.unitId).color) }]} />
                 )}
-                <Text style={styles.rowTitle} numberOfLines={1}>{h.entryTitle}</Text>
+                <Text style={styles.rowTitle}>{h.entryTitle}</Text>
                 <Text style={styles.rowSub}>{fmtMonthDay(h.verifiedAt)}</Text>
               </View>
             ))}
@@ -367,7 +370,7 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
                 <Text style={styles.moreBtnText}>{`나머지 ${trainingHistory.length - ENTRY_LIST_FIRST}개 보기`}</Text>
               </Pressable>
             )}
-          </View>
+          </SectionGroup>
         </Appear>
       )}
 
@@ -410,6 +413,7 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     ...Elevation.e2,
   },
+  cardGroup: { paddingHorizontal: Space.lg, paddingVertical: Space.md },
 
   // 빈 상태
   emptyTitle: { fontSize: 17, fontWeight: '900', color: InkColors.ink, paddingTop: Space.xs },
@@ -486,6 +490,6 @@ const styles = StyleSheet.create({
   moreBtn: { alignItems: 'center', paddingVertical: Space.sm + 2, borderTopWidth: 1, borderTopColor: InkColors.line },
   moreBtnText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   rowTitle: { flex: 1, fontSize: 13.5, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
-  rowSub: { fontSize: 12, color: InkColors.ink3 },
+  rowSub: { fontSize: 14, lineHeight: 21, color: InkColors.ink2, flexShrink: 1 },
   dot: { width: 8, height: 8, borderRadius: 4 },
 });

@@ -54,7 +54,7 @@ export function ScalePick({ payload, disabled, result, onAnswer }: QuizRendererP
               ]}
               accessibilityRole="button"
               accessibilityLabel={label}
-              accessibilityState={{ selected: isPicked, disabled: disabled || picked !== null }}
+              accessibilityState={{ selected: isPicked, disabled: disabled || picked !== null }} aria-pressed={isPicked} aria-disabled={disabled || picked !== null}
             >
               <Text style={st.sideText}>{label}</Text>
               {showRight || showWrong ? (
@@ -63,7 +63,8 @@ export function ScalePick({ payload, disabled, result, onAnswer }: QuizRendererP
                   size={20}
                   color={showRight ? BrandColors.good : BrandColors.bad}
                 />
-              ) : null}
+              ) : isPicked ? <Ionicons name="checkmark-circle" size={22} color={InkColors.ink} /> : null}
+              {showRight || showWrong ? <Text style={[qs.choiceMark, { color: showRight ? BrandColors.goodText : BrandColors.badText }]}>{showRight ? '정답' : '내 답 · 오답'}</Text> : null}
             </Pressable>
           );
         })}
@@ -81,8 +82,8 @@ const st = StyleSheet.create({
   side: {
     flex: 1,
     minHeight: 132,
-    borderWidth: 1,
-    borderColor: InkColors.line,
+    borderWidth: 2,
+    borderColor: InkColors.controlBorder,
     borderRadius: Radius.lg,
     backgroundColor: InkColors.bg,
     alignItems: 'center',
@@ -91,8 +92,8 @@ const st = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.lg,
   },
-  sideOn: { borderColor: InkColors.ink, backgroundColor: InkColors.bgSoft },
-  sideRight: { borderColor: BrandColors.good, backgroundColor: '#E6F1EA' },
-  sideWrong: { borderColor: BrandColors.bad, backgroundColor: '#FBECEC' },
+  sideOn: qs.choiceOn,
+  sideRight: qs.choiceRight,
+  sideWrong: qs.choiceWrong,
   sideText: { fontSize: 19, fontWeight: '800', color: InkColors.ink, lineHeight: 27, textAlign: 'center' },
 });

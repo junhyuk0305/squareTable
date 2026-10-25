@@ -226,7 +226,7 @@ export default function OwnerSettings() {
           ) : null}
         </SettingsSection>
 
-        <SettingsSection>
+        <SettingsSection title="계정 관리">
           {aiUsed != null && (
             <SettingsRow
               first
@@ -284,7 +284,7 @@ export default function OwnerSettings() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
+  safe: { flex: 1, backgroundColor: InkColors.bgSoft },
   scroll: { padding: 20, paddingTop: 16 },
   inviteGap: { marginBottom: 18 },
 

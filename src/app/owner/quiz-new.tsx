@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
@@ -628,7 +629,7 @@ export default function QuizNewScreen() {
             </View>
           ) : (
             <Appear>
-              <View style={st.stepBody}>
+              <SectionGroup title="퀴즈 기본 정보" contentStyle={st.stepBody}>
                 {/* 받는 쪽 — 여기서 갈려야 뒤 단계가 헛돌지 않는다. 외부는 보낼 계정이 없어 링크로 나간다. */}
                 <Text style={st.label}>누가 풀 건가요?</Text>
                 <View style={st.chips}>
@@ -655,7 +656,7 @@ export default function QuizNewScreen() {
                     ? '링크를 연 사람에게 이 이름이 보여요. 비워 두면 고른 노하우로 지어 드려요.'
                     : '직원에게 이 이름이 보여요. 비워 두면 고른 노하우로 지어 드려요.'}
                 </Text>
-              </View>
+              </SectionGroup>
             </Appear>
           )
         )}
@@ -687,7 +688,7 @@ export default function QuizNewScreen() {
             )
           ) : (
             <Appear>
-              <View style={st.stepBody}>
+              <SectionGroup title="노하우 고르기" contentStyle={st.stepBody}>
                 <Text style={st.lead}>고른 노하우에서 문제를 만들어요</Text>
 
                 {/* 찾기 바 — 노하우 화면(OwnerKnowhowBrowse)과 **같은 형태**다(검색창 모양은 SearchStyles 공용): 검색 한 줄 + 카테고리 칩
@@ -724,7 +725,7 @@ export default function QuizNewScreen() {
                         hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                         style={[st.catChip, onlyUncovered && st.catChipOn]}
                         accessibilityRole="button"
-                        accessibilityState={{ selected: onlyUncovered }}
+                        accessibilityState={{ selected: onlyUncovered }} aria-pressed={onlyUncovered}
                         accessibilityLabel={`아직 안 물어본 노하우만 보기 ${uncoveredCount}개`}
                       >
                         <Text style={[st.catChipText, onlyUncovered && st.catChipTextOn]}>
@@ -737,7 +738,7 @@ export default function QuizNewScreen() {
                       hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                       style={[st.catChip, cat === null && st.catChipOn]}
                       accessibilityRole="button"
-                      accessibilityState={{ selected: cat === null }}
+                      accessibilityState={{ selected: cat === null }} aria-pressed={cat === null}
                       accessibilityLabel="전체 카테고리"
                     >
                       <Text style={[st.catChipText, cat === null && st.catChipTextOn]}>전체</Text>
@@ -752,7 +753,7 @@ export default function QuizNewScreen() {
                           hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                           style={[st.catChip, on && st.catChipOn]}
                           accessibilityRole="button"
-                          accessibilityState={{ selected: on }}
+                          accessibilityState={{ selected: on }} aria-pressed={on}
                           accessibilityLabel={`${m.label} 카테고리`}
                         >
                           <View style={[st.catDot, { backgroundColor: m.color }]} />
@@ -773,7 +774,7 @@ export default function QuizNewScreen() {
                         onPress={() => toggle(e.id)}
                         style={({ pressed }) => [st.chk, i > 0 && st.rowDivider, pressed && { opacity: 0.6 }]}
                         accessibilityRole="checkbox"
-                        accessibilityState={{ checked: on }}
+                        accessibilityState={{ checked: on }} aria-checked={on}
                         accessibilityLabel={e.title}
                       >
                         <View style={[st.box, on && st.boxOn]}>
@@ -795,7 +796,7 @@ export default function QuizNewScreen() {
                   })}
                   {ranked.length === 0 ? <Text style={st.emptyLine}>찾는 노하우가 없어요</Text> : null}
                 </View>
-              </View>
+              </SectionGroup>
             </Appear>
           )
         )}
@@ -805,7 +806,7 @@ export default function QuizNewScreen() {
               ① 지금 만들고 있는 줄에 스피너를 돌리고 ② 끝난 줄은 Appear 로 올라오게 하고
               ③ 위에서 개수가 차오르는 진행 링을 돌린다. 프리미티브는 그대로 2개(Appear·Collapse)다. */}
         {step === 3 && (
-          <>
+          <SectionGroup title="문제 만드는 중">
             <View style={st.makingHead}>
               <ProgressRing
                 value={processedCount}
@@ -815,7 +816,7 @@ export default function QuizNewScreen() {
               />
             </View>
             <Text style={st.lead}>20~30초 걸려요. 이 화면을 켜 두세요</Text>
-            <View style={st.listCard}>
+            <View>
               {made.map((m, i) => {
                 const running = m.state === 'wait' && i === runningIndex;
                 return (
@@ -857,7 +858,7 @@ export default function QuizNewScreen() {
                 );
               })}
             </View>
-          </>
+          </SectionGroup>
         )}
 
         {/* ── 4/5 문항 검토 — AI가 만든 것을 사장이 승인하는 지점. 생략할 수 없다 ── */}
@@ -879,6 +880,7 @@ export default function QuizNewScreen() {
               </View>
             ) : null}
 
+            <SectionGroup title="문항 검토">
             <Text style={st.lead}>
               {okItems.length > 0 ? `AI가 노하우로 문항 ${okItems.length}개를 만들었어요` : '아직 만들어진 문항이 없어요'}
             </Text>
@@ -890,7 +892,7 @@ export default function QuizNewScreen() {
               <View style={st.qcard}>
                 <Text style={st.qFormat}>{m.formatLabel}</Text>
                 <Text style={st.qAsk}>{String(m.item?.payload?.ask ?? '')}</Text>
-                <Text style={st.qSource} numberOfLines={1}>근거 · {m.title}</Text>
+                <Text style={st.qSource} >근거 · {m.title}</Text>
                 <View style={st.qActs}>
                   <SmallAction label="미리보기" tone="ink" onPress={() => setPreview(m.item)} />
                   <SmallAction
@@ -906,6 +908,8 @@ export default function QuizNewScreen() {
               </View>
               </Appear>
             ))}
+
+            </SectionGroup>
 
             {/* D1 — 낼 게 부족함. "실패"가 아니라 재료 부족이라 말하고 **어느 노하우**인지 지목한다. */}
             {thin.length > 0 && (
@@ -939,7 +943,7 @@ export default function QuizNewScreen() {
             ★마감일은 보내는 날보다 빠를 수 없다 — 달력의 `min` 이 막는다(문구로 부탁하지 않는다). ── */}
         {step === 5 && (
           <Appear>
-            <View style={st.stepBody}>
+            <SectionGroup title="배포 설정" contentStyle={st.stepBody}>
             {audience === 'staff' ? (
               !staffLoaded ? (
                 /* 직원 목록이 오기 전에 그리면 "합류한 직원이 없어요"가 먼저 스친다 — 없는 게 아니라 안 온 것이다. */
@@ -964,7 +968,7 @@ export default function QuizNewScreen() {
                         onPress={() => setTo((v) => (v.includes(m.id) ? v.filter((x) => x !== m.id) : [...v, m.id]))}
                         style={({ pressed }) => [st.chk, i > 0 && st.rowDivider, pressed && { opacity: 0.6 }]}
                         accessibilityRole="checkbox"
-                        accessibilityState={{ checked: to.includes(m.id) }}
+                        accessibilityState={{ checked: to.includes(m.id) }} aria-checked={to.includes(m.id)}
                         accessibilityLabel={m.name}
                       >
                         <View style={[st.box, to.includes(m.id) && st.boxOn]}>
@@ -1055,7 +1059,7 @@ export default function QuizNewScreen() {
 
             {/* 2026-09-11: "근무일에만 · 하루 1번 · 주 2번까지만 보내요" 줄을 뺐다. 사장이 **할 수 있는
                 일이 없는** 문장이라 읽고 나서 다음 행동이 없었다(빈도 상한은 0139 가 알아서 지킨다). */}
-            </View>
+            </SectionGroup>
           </Appear>
         )}
 
@@ -1063,7 +1067,7 @@ export default function QuizNewScreen() {
             사장이 링크를 찾으러 상세 화면의 ⋯ 를 다시 뒤져야 한다. ── */}
         {step === 6 && madeToken && (
           <Appear>
-            <View style={st.stepBody}>
+            <SectionGroup title="배포 결과" contentStyle={st.stepBody}>
               <View style={st.doneHead}>
                 <Ionicons name="link" size={26} color={InkColors.ink} />
                 <Text style={st.doneTitle}>링크가 만들어졌어요</Text>
@@ -1073,7 +1077,7 @@ export default function QuizNewScreen() {
                 <Text style={st.linkText} selectable numberOfLines={2}>{quizLinkUrl(madeToken)}</Text>
               </View>
               <Text style={st.hint}>이 주소를 보내면 상대가 이름과 전화번호만 적고 바로 풀어요.</Text>
-            </View>
+            </SectionGroup>
           </Appear>
         )}
 
@@ -1224,7 +1228,7 @@ function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () 
       onPress={onPress}
       style={({ pressed }) => [st.chip, on && st.chipOn, pressed && { opacity: 0.7 }]}
       accessibilityRole="button"
-      accessibilityState={{ selected: on }}
+      accessibilityState={{ selected: on }} aria-pressed={on}
       accessibilityLabel={label}
     >
       <Text style={[st.chipText, on && st.chipTextOn]}>{label}</Text>
@@ -1239,7 +1243,7 @@ function Primary({ label, disabled, onPress }: { label: string; disabled?: boole
       disabled={disabled}
       style={({ pressed }) => [st.primary, disabled && st.primaryOff, pressed && !disabled && { opacity: 0.85 }]}
       accessibilityRole="button"
-      accessibilityState={{ disabled: !!disabled }}
+      accessibilityState={{ disabled: !!disabled }} aria-disabled={!!disabled}
       accessibilityLabel={label}
     >
       <Text style={[st.primaryText, disabled && st.primaryTextOff]}>{label}</Text>
@@ -1293,18 +1297,17 @@ const st = StyleSheet.create({
   boxOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
 
   qcard: {
-    backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
-    padding: Space.lg, gap: Space.xs, ...Elevation.e2,
+    borderTopWidth: 1, borderTopColor: InkColors.line, paddingVertical: Space.lg, gap: Space.xs,
   },
   qFormat: { fontSize: 12, fontWeight: '800', color: BrandColors.mentionText },
-  qAsk: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 22 },
+  qAsk: { fontSize: 18, fontWeight: '700', color: InkColors.ink, lineHeight: 28 },
   qSource: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },
   // 근거 줄과 버튼 사이를 띄운다 — 붙어 있으면 버튼이 본문의 일부처럼 읽힌다(2026-09-11).
-  qActs: { flexDirection: 'row', gap: Space.sm, marginTop: Space.md },
+  qActs: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, marginTop: Space.md },
   // ★납작한 직사각형으로(2026-09-11 지시). 44dp 가 하한이다 — 더 낮추면 터치 타깃 규칙(48dp)에서
   //   너무 멀어지고 `qa:quiz-ui` 의 L3 검사(44dp+)가 빨강이 된다. 대신 좌우를 넓혀 비율을 만든다.
   smallAct: {
-    minHeight: 44, justifyContent: 'center', paddingHorizontal: Space.lg,
+    minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.lg,
     borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', ...Elevation.e1,
   },
   smallActText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
@@ -1358,7 +1361,7 @@ const st = StyleSheet.create({
   rowTitleWaiting: { color: InkColors.ink3 },
 
   calWrap: { gap: Space.md },
-  textAction: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
+  textAction: { alignSelf: 'flex-start', minHeight: 48, justifyContent: 'center' },
   textActionText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, textDecorationLine: 'underline' },
   noteBox: {
     flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm,

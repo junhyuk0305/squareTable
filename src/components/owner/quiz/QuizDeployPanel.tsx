@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 /**
  * 배포 패널 — 퀴즈 상세의 '배포' 세그먼트 본문(2026-09-11).
  *
@@ -40,7 +41,6 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { EmptyState } from '@/components/EmptyState';
 import { MiniCalendar } from '@/components/blocks/MiniCalendar';
-import { SectionLabel } from '@/components/SectionLabel';
 import {
   COPY_LINK_LABEL,
   COPY_LINK_ICON,
@@ -173,11 +173,12 @@ export function QuizDeployPanel({ course, onOpenResult }: { course: TrainingCour
     showToast('링크를 지웠어요 · 이제 열리지 않아요', 'good');
   };
 
-  if (!loaded) return <ScreenLoading label="링크를 불러오고 있어요…" />;
-  if (loadError) return <EmptyState title="링크를 불러오지 못했어요" body="잠시 후 다시 시도해 주세요." cta={{ label: '다시 시도', onPress: () => { void reload(); } }} />;
+  if (!loaded) return <SectionGroup title="외부 응시 링크"><ScreenLoading label="링크를 불러오고 있어요…" /></SectionGroup>;
+  if (loadError) return <SectionGroup title="외부 응시 링크"><EmptyState title="링크를 불러오지 못했어요" body="잠시 후 다시 시도해 주세요." cta={{ label: '다시 시도', onPress: () => { void reload(); } }} /></SectionGroup>;
 
   return (
     <View style={st.wrap}>
+      <SectionGroup title="외부 응시 링크" description={closed > 0 ? `${live.length}개 · 지난 링크 ${closed}개` : `${live.length}개`}>
       {/* 경고는 안내 카드 하나로 묶는다 — 배경색 블록은 이 화면에서 이것 하나. */}
       <View style={st.warnBox}>
         <Ionicons name="alert-circle-outline" size={17} color={BrandColors.warn} />
@@ -199,12 +200,9 @@ export function QuizDeployPanel({ course, onOpenResult }: { course: TrainingCour
       ) : (
         <>
           {/* 이름은 '링크' 하나로 둔다(2026-09-13) — '열려 있는'은 힌트(지난 링크 N개)가 이미 말한다. */}
-          <SectionLabel
-            title="링크"
-            hint={closed > 0 ? `${live.length}개 · 지난 링크 ${closed}개` : `${live.length}개`}
-          />
+          <View style={st.listGroup}>
           {/* 반복 동종 항목이라 행으로 쌓는다 — 링크마다 카드를 만들지 않는다. */}
-          <View style={st.list}>
+
             {live.map((l, i) => (
               <View key={l.id} style={[st.row, i > 0 && st.rowTop]}>
                 <View style={st.rowHead}>
@@ -225,13 +223,23 @@ export function QuizDeployPanel({ course, onOpenResult }: { course: TrainingCour
         </>
       )}
 
+      <View style={st.cta}>
+        <PrimaryButton
+          label={live.length > 0 ? '링크 또 만들기' : '링크 만들기'}
+          onPress={openCreate}
+          accessibilityLabel={live.length > 0 ? '링크 또 만들기' : '링크 만들기'}
+        />
+        <Text style={st.ctaHint}>사람이 바뀌면 새 링크를 만들어 보내세요. 퀴즈는 이것 하나 그대로예요.</Text>
+      </View>
+      </SectionGroup>
+
       {/* 이 링크로 푼 사람 — 배포와 결과가 한 자리에 있어야 "또 내보낼까"를 여기서 정할 수 있다.
           ⛔ 채용 전환 액션(뽑기·합류 초대)은 두지 않는다 — 명시적으로 스코프 밖이다. */}
       {subs.length > 0 && (
         <View style={st.results}>
           {/* N16: 같은 사람이 여러 번 낼 수 있다. 사람 수가 아니라 제출 건수다. */}
-          <SectionLabel title={guestSubmissionsLabel(subs.length)} />
-          <View style={st.list}>
+          <SectionGroup title={guestSubmissionsLabel(subs.length)} contentStyle={st.listGroup}>
+
             {subs.map((s, i) => (
               <Pressable
                 key={s.submissionId}
@@ -250,18 +258,11 @@ export function QuizDeployPanel({ course, onOpenResult }: { course: TrainingCour
                 <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
               </Pressable>
             ))}
-          </View>
+          </SectionGroup>
         </View>
       )}
 
-      <View style={st.cta}>
-        <PrimaryButton
-          label={live.length > 0 ? '링크 또 만들기' : '링크 만들기'}
-          onPress={openCreate}
-          accessibilityLabel={live.length > 0 ? '링크 또 만들기' : '링크 만들기'}
-        />
-        <Text style={st.ctaHint}>사람이 바뀌면 새 링크를 만들어 보내세요. 퀴즈는 이것 하나 그대로예요.</Text>
-      </View>
+
 
       {/* 날짜 고르기 — 만들기와 기간 바꾸기가 같은 일(며칠까지 열어 둘까)이라 시트 하나다. */}
       {pick && (
@@ -347,6 +348,7 @@ const st = StyleSheet.create({
     borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.lg,
     backgroundColor: '#FFFFFF', paddingHorizontal: Space.lg, ...Elevation.e1,
   },
+  listGroup: { paddingHorizontal: Space.lg },
   // 주소 줄과 버튼은 서로 다른 일이라 사이를 벌리고(gap), 버튼 아래는 행 경계라 좁힌다(2026-09-13).
   // 버튼 자체의 48dp 는 st.act 의 minHeight 가 지킨다 — 행 패딩으로 키우지 않는다.
   row: { paddingTop: Space.sm, paddingBottom: Space.xs, gap: Space.md },

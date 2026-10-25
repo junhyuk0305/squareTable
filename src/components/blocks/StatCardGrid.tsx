@@ -47,8 +47,15 @@ export type StatCardItem = {
  * 홀수 개면 마지막 줄은 빈 칸으로 채워 폭을 맞춘다(마지막 칸만 두 배로 넓어지면 위계가 생긴다).
  * 표시 전용: 값·단위·톤은 호출부가 정한다.
  */
-export function StatCardGrid({ items }: { items: StatCardItem[] }) {
+export function StatCardGrid({ items, grouped = false }: { items: StatCardItem[]; grouped?: boolean }) {
   if (items.length === 0) return null;
+  if (grouped) return (
+    <View>
+      {items.map((item, i) => (
+        <StatCard key={item.key} item={item} grouped style={i > 0 && styles.divider} />
+      ))}
+    </View>
+  );
   const rows: StatCardItem[][] = [];
   for (let i = 0; i < items.length; i += 2) rows.push(items.slice(i, i + 2));
 
@@ -70,14 +77,14 @@ export function StatCardGrid({ items }: { items: StatCardItem[] }) {
  * 칸 하나. 가로 스크롤(D 형태 — '푸는 중' 카드 줄)에서도 같은 칸을 쓰므로 따로 내보낸다 —
  * 그리드와 스크롤이 서로 다른 카드를 그리면 같은 지표가 다르게 보인다.
  */
-export function StatCard({ item, style }: { item: StatCardItem; style?: StyleProp<ViewStyle> }) {
+export function StatCard({ item, style, grouped = false }: { item: StatCardItem; style?: StyleProp<ViewStyle>; grouped?: boolean }) {
   const dim = item.tone === 'dim';
   const body = (
     <>
       <View style={styles.labelRow}>
         <Text
-          style={[styles.label, item.info && styles.labelShrink]}
-          numberOfLines={1}
+          style={[styles.label, grouped && styles.groupLabel, item.info && styles.labelShrink]}
+          numberOfLines={grouped ? undefined : 1}
         >
           {item.label}
         </Text>
@@ -91,21 +98,21 @@ export function StatCard({ item, style }: { item: StatCardItem; style?: StylePro
         ) : null}
         {item.onPress ? <Ionicons name="chevron-forward" size={13} color={InkColors.ink3} /> : null}
       </View>
-      <Text style={styles.value} numberOfLines={1}>
+      <Text style={styles.value} numberOfLines={grouped ? undefined : 1}>
         {item.value}
         {item.unit ? <Text style={styles.unit}>{item.unit}</Text> : null}
       </Text>
       {/* 부제·시각요소는 칸 **바닥**에 붙는다(2026-09-03) — 값 바로 아래 두면 칸마다 높이가 달라 아래 여백이 들쭉날쭉했다. */}
       {item.sub || item.visual ? (
         <View style={styles.bottom}>
-          {item.sub ? <Text style={styles.sub} numberOfLines={1}>{item.sub}</Text> : null}
+          {item.sub ? <Text style={[styles.sub, grouped && styles.groupSub]} numberOfLines={grouped ? undefined : 1}>{item.sub}</Text> : null}
           {item.visual ? <View style={styles.visual}>{item.visual}</View> : null}
         </View>
       ) : null}
     </>
   );
   const cardStyle = [
-    dim ? styles.cardDim : styles.card,
+    grouped ? styles.groupRow : dim ? styles.cardDim : styles.card,
     style,
   ];
 
@@ -134,6 +141,10 @@ const cardBase = {
 };
 
 const styles = StyleSheet.create({
+  groupRow: { paddingVertical: Space.md, minHeight: 48 },
+  divider: { borderTopWidth: 1, borderTopColor: InkColors.line },
+  groupLabel: { fontSize: 16, lineHeight: 24, color: InkColors.ink },
+  groupSub: { fontSize: 15, lineHeight: 23, color: InkColors.ink2 },
   grid: { gap: Space.sm },
   row: { flexDirection: 'row', gap: Space.sm },
   cell: { flex: 1, minWidth: 0 },

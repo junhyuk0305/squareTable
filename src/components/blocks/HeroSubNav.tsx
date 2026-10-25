@@ -2,8 +2,9 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { BrandColors, InkColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles } from '@/lib/theme/button';
+import { SectionGroup } from '@/components/SectionGroup';
 
 /** 서브내비 칸 수 — **상한 4칸**. 5칸이면 460px에서 라벨이 두 줄로 깨진다(정본 배치규칙 ④).
  *  칸은 flex:1 이라 3칸도 정상이다(2026-08-19 사장 홈이 '급여' 칸을 빼고 3칸이 됐다). */
@@ -25,16 +26,7 @@ export type HeroSubNavItem = {
   badgeHint?: string;
 };
 
-/**
- * N2 · 히어로 직결 서브내비 — 검은 색면 히어로 + 바닥에 이어 붙은 바로가기(최대 4칸).
- *
- * 왜 카드가 아니라 색면인가: 카드 모서리에 서브내비를 붙이면 라운드에 잘려 지저분해진다.
- * 왜 붙여야 하는가: 떨어뜨리면 A1 원형 액션 로우와 중복돼 블록을 하나 더 먹는다.
- * (2026-08-05 블록 어휘 v3 · 출처앱 오늘얼마)
- *
- * `items`를 비우면 서브내비 없이 히어로만 전체 라운드로 그린다(직원 홈 용법).
- * 표시 전용: 데이터·판정 로직을 넣지 않는다.
- */
+/** Home summary with a shared white surface, brand action and related shortcuts. */
 export function HeroSubNav({
   label,
   value,
@@ -59,9 +51,8 @@ export function HeroSubNav({
   const hasNav = nav.length > 0;
 
   return (
-    <View>
-      <View style={[styles.hero, hasNav ? styles.heroWithNav : styles.heroAlone]}>
-        <Text style={styles.label}>{label}</Text>
+    <SectionGroup title={label} flush>
+      <View style={styles.hero}>
         <Text style={styles.value}>{value}</Text>
         {!!caption && <Text style={styles.caption}>{caption}</Text>}
         {!!ctaLabel && !!onCta && (
@@ -97,69 +88,49 @@ export function HeroSubNav({
                     </View>
                   )}
                 </View>
-                <Text style={styles.cellLabel} numberOfLines={1}>{it.label}</Text>
+                <Text style={styles.cellLabel}>{it.label}</Text>
               </Pressable>
             </View>
           ))}
         </View>
       )}
-    </View>
+    </SectionGroup>
   );
 }
 
 const styles = StyleSheet.create({
   hero: {
-    backgroundColor: InkColors.ink,
-    paddingVertical: Space.lg,
-    paddingHorizontal: Space.gutter,
-  },
-  heroWithNav: { borderTopLeftRadius: Radius.md, borderTopRightRadius: Radius.md },
-  heroAlone: { borderRadius: Radius.md },
-  label: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: InkColors.bubbleText,
-    opacity: 0.65,
+    paddingBottom: Space.lg,
+    paddingHorizontal: Space.lg,
   },
   value: {
-    fontSize: 32,
-    lineHeight: 40,
+    fontSize: 26,
+    lineHeight: 34,
     fontWeight: '900',
     letterSpacing: -1,
-    color: InkColors.bubbleText,
-    marginTop: Space.xs,
+    color: InkColors.ink,
     marginBottom: Space.sm,
   },
   caption: {
     // 사장 홈에서 이 자리는 직원 질문 원문이다 — 읽어서 판단하는 문장이라 본문 15sp 하한 대상.
     // (정본 HTML의 12~13.5px은 웹 목업 값이다.)
-    fontSize: 15,
-    lineHeight: 22,
-    color: InkColors.bubbleText,
-    opacity: 0.82,
+    fontSize: 16,
+    lineHeight: 24,
+    color: InkColors.ink2,
   },
   cta: {
+    ...ButtonStyles.brand,
     marginTop: Space.md,
-    paddingVertical: Space.md,
-    borderRadius: Radius.sm,
-    backgroundColor: BrandColors.yellow,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
   },
-  ctaText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  ctaText: { ...ButtonStyles.brandText },
   pressed: { opacity: 0.75 },
   subnav: {
     flexDirection: 'row',
-    backgroundColor: InkColors.bg,
-    borderWidth: 1,
-    borderTopWidth: 0,
-    borderColor: InkColors.line,
-    borderBottomLeftRadius: Radius.md,
-    borderBottomRightRadius: Radius.md,
-    overflow: 'hidden',
+    flexWrap: 'wrap',
+    borderTopWidth: 1,
+    borderTopColor: InkColors.line,
   },
-  cell: { flex: 1 },
+  cell: { flexGrow: 1, flexShrink: 1, flexBasis: 88, minWidth: 0 },
   divider: {
     position: 'absolute',
     left: 0,
@@ -176,7 +147,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xs,
     minHeight: 48,
   },
-  cellLabel: { fontSize: 11, fontWeight: '700', color: InkColors.ink2 },
+  cellLabel: { fontSize: 14, lineHeight: 21, fontWeight: '700', color: InkColors.ink2, textAlign: 'center' },
   badge: {
     position: 'absolute',
     top: -4,

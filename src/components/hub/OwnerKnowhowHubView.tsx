@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 // 사장 허브 '노하우' 탭 본문 — 지식 신선도(슬라이스 D, 3탭 확장의 두 번째 탭).
 //
 // 무엇: "매장 지식이 지금도 맞는가"를 매장 단위로 보여준다(O4·O5 — 격자·bus factor 없이).
@@ -21,7 +22,6 @@ import { storeColor } from '@/lib/utils/storeColor';
 import { sortByUrgency } from '@/lib/utils/unknownQuery';
 import { formatAsked } from '@/lib/utils/time';
 import { StorePickerSheet, type StorePickerRow } from '@/components/hub/StorePickerSheet';
-import { SectionLabel } from '@/components/SectionLabel';
 import { ActionRow } from '@/components/blocks/ActionRow';
 import { FocusCard } from '@/components/blocks/FocusCard';
 import { ProgressPill } from '@/components/blocks/ProgressPill';
@@ -179,7 +179,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
     {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
     {header}
     {/* 카드↔카드 = md(12). 제목 달린 섹션 앞의 추가 여백은 SectionLabel 자신이 든다(2026-09-03). */}
-    <View style={{ gap: Space.md }}>
+    <View style={{ gap: Space.xl }}>
       {/* ── 노하우 0 매장 = 담기가 먼저(빈 화면 행동 버튼).
              2026-08-07: **단일 매장에서만** 그린다. 다점포에서는 아래 '매장별 노하우' 카드가
              0개인 매장까지 전부 행으로 보여주므로, 여기에 또 세우면 같은 매장이 두 번 나온다. ── */}
@@ -365,8 +365,8 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
              목록으로 가는 길은 위 ActionRow '노하우 목록'이 대신한다 — 도달 경로 손실 0. ── */}
       {overview.length > 1 && (
         <Appear delay={stagger(4)}>
-          <SectionLabel title="매장별 노하우" />
-          <View style={styles.card}>
+          <SectionGroup title="매장별 노하우" contentStyle={styles.cardGroup}>
+
             {/* 0개인 매장도 뺴지 않는다 — "어느 매장이 비었나"가 이 카드의 존재 이유다.
                 착지는 매장을 가리지 않고 노하우 목록 하나로 통일한다(빈 목록 화면이 담기를 안내한다). */}
             {overview
@@ -380,7 +380,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
                   accessibilityLabel={`${labelOf(r.unit_id)} 노하우 ${r.knowhow}개 관리`}
                 >
                   <View style={[styles.dot, { backgroundColor: colorOf(r.unit_id) }]} />
-                  <Text style={styles.rowTitle} numberOfLines={1}>{labelOf(r.unit_id)}</Text>
+                  <Text style={styles.rowTitle}>{labelOf(r.unit_id)}</Text>
                   <ProgressPill text={String(r.knowhow)} tone="neutral" />
                   <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
                 </Pressable>
@@ -399,7 +399,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
                 <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
               </Pressable>
             )}
-          </View>
+          </SectionGroup>
         </Appear>
       )}
 
@@ -411,9 +411,9 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
              '직원 질문'은 현황 탭의 '답 기다리는 질문'과 같은 수(pending_q)다 — 같은 이름으로 부른다. ── */}
       {!(allClear && totals.knowhow > 0) && (
         <Appear delay={stagger(5)}>
-          <SectionLabel title="고칠 노하우" hint={`${totals.pending + totals.review + totals.stale}건`} />
+          <SectionGroup title="고칠 노하우" description={`${totals.pending + totals.review + totals.stale}건`} >
           {/* 제목과 카드 사이 = 다른 섹션 카드의 marginTop(Space.sm)과 같게 — 블록 자체엔 바깥 여백이 없다. */}
-          <View style={{ marginTop: Space.sm }}>
+
           {(() => {
             const reviewRow: RollupRow = {
               key: 'review',
@@ -434,7 +434,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
             if (urgent) {
               return (
                 <View style={{ gap: Space.sm }}>
-                  <FocusCard
+                  <FocusCard embedded
                     kicker={`가장 급한 것 — 답 기다리는 질문 ${totals.pending}건 중 제일 오래됨`}
                     quote={urgent.query_text}
                     meta={`${urgent.junior_name} · ${formatAsked(urgent.asked_at)}부터 기다리는 중`}
@@ -444,7 +444,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
                       onPress: () => { if (overview[0]) void goStore(overview[0].unit_id, '/owner/inbox'); },
                     }}
                   />
-                  <RollupRows rows={[reviewRow, staleRow].filter((r) => r.count > 0)} />
+                  <RollupRows embedded rows={[reviewRow, staleRow].filter((r) => r.count > 0)} />
                 </View>
               );
             }
@@ -456,9 +456,9 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
               target: totals.pending > 0 ? '답 하나가 노하우 하나가 돼요' : undefined,
               onPress: jump('답 기다리는 질문', (r) => r.pending_q, '/owner/inbox'),
             };
-            return <RollupRows rows={[pendingRow, reviewRow, staleRow].filter((r) => r.count > 0)} />;
+            return <RollupRows embedded rows={[pendingRow, reviewRow, staleRow].filter((r) => r.count > 0)} />;
           })()}
-          </View>
+          </SectionGroup>
         </Appear>
       )}
 
@@ -492,6 +492,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
 const styles = StyleSheet.create({
   loading: { paddingVertical: Space.xl * 2, alignItems: 'center' },
   card: { ...CardStyles.list, marginTop: Space.sm },
+  cardGroup: {  },
 
   // 히어로 카드(H3′) — 링 + 범례. 데모 §4 `card.hero` 20/20/16.
   heroCard: {

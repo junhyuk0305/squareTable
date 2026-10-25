@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
@@ -286,7 +287,7 @@ export default function OwnerStaffScreen() {
             상태 한 줄 없음 — 이 화면은 퀴즈·근무표 건수를 읽지 않는다(새 쿼리 금지). */}
         <Appear delay={stagger(2)}>
         <View style={{ gap: Space.sm }}>
-          <SectionLabel title="바로 가기" />
+          <SectionGroup title="바로 가기">
           <ActionRow
             variant="tile"
             items={[
@@ -294,7 +295,8 @@ export default function OwnerStaffScreen() {
               { key: 'schedule', icon: 'calendar-outline', label: '근무표', onPress: () => router.push('/owner/schedule') },
             ]}
           />
-        </View>
+        </SectionGroup>
+</View>
         </Appear>
 
         </Pane>
@@ -304,8 +306,8 @@ export default function OwnerStaffScreen() {
         {pending.length > 0 && (
           <Appear delay={stagger(3)}>
           <View style={styles.pendingWrap}>
-            <SectionLabel title={`합류 신청 (${pending.length}명)`} />
-            <View style={[styles.list, styles.pendingList]}>
+            <SectionGroup title={`합류 신청 (${pending.length}명)`} contentStyle={[styles.listGroup, styles.pendingListGroup]}>
+
               {pending.map((p, i) => (
                 <Appear key={p.id} delay={stagger(i)} style={[styles.staffRow, p.id === focusMemberId && styles.focusRow]}>
                   <Avatar name={p.name} size={40} fontSize={15} />
@@ -321,7 +323,7 @@ export default function OwnerStaffScreen() {
                   </Pressable>
                 </Appear>
               ))}
-            </View>
+            </SectionGroup>
           </View>
           </Appear>
         )}
@@ -434,8 +436,8 @@ export default function OwnerStaffScreen() {
         {/* 이번 정산 기간 퇴사자 — 이번 달에 일하고 나간 직원도 이번 달 급여를 줘야 한다. 금액은 위 직원 줄과 같은 규칙이다. */}
         {departed.length > 0 && (
           <Appear delay={stagger(6)} style={{ gap: Space.sm }}>
-          <SectionLabel title={`이번 정산 기간 퇴사자 (${departed.length}명)`} />
-          <View style={styles.list}>
+          <SectionGroup title={`이번 정산 기간 퇴사자 (${departed.length}명)`} contentStyle={styles.listGroup}>
+
             {departed.map((d) => (
               <View key={d.id} style={styles.staffItem}>
                 <View style={[styles.staffRow, styles.staffRowFlat]}>
@@ -450,7 +452,7 @@ export default function OwnerStaffScreen() {
                 </View>
               </View>
             ))}
-          </View>
+          </SectionGroup>
           </Appear>
         )}
         <Appear delay={stagger(6)}>
@@ -610,6 +612,7 @@ const styles = StyleSheet.create({
   pendingWrap: { gap: 8 },
   // 흰 카드가 세로로 이어지면 "승인해야 진행되는 항목"이 나열 속에 묻힌다 → 옐로 틴트로 떼어놓는다.
   pendingList: { backgroundColor: BrandColors.yellowSoft, borderColor: BrandColors.gold },
+  pendingListGroup: {  },
   // 알림으로 들어온 신청 행 — 테두리만 강조.
   focusRow: { borderWidth: 2, borderColor: BrandColors.accentSolid, borderRadius: Radius.md, paddingHorizontal: 8 },
   rejectBtn: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line },
@@ -618,6 +621,7 @@ const styles = StyleSheet.create({
   approveText: { fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
 
   list: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
+  listGroup: { paddingHorizontal: 14 },
   staffRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   // 직원 항목 컨테이너(0093) — 행 + (사장 전용) 매니저 지정 줄. 구분선은 여기 하나만.
   staffItem: { borderBottomWidth: 1, borderBottomColor: InkColors.line },

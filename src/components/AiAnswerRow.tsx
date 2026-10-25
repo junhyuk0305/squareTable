@@ -19,18 +19,20 @@ export function AiAnswerRow({
   row,
   titleOf,
   onOpenEntry,
+  embedded = false,
 }: {
   row: AiAnswer;
   /** 노하우 id → 제목. 이미 지워졌으면 undefined — 그 칩은 안 그린다. */
   titleOf: (entryId: string) => string | undefined;
   onOpenEntry: (entryId: string) => void;
+  embedded?: boolean;
 }) {
   const used = row.matched_entry_ids
     .map((id) => ({ id, title: titleOf(id) }))
     .filter((x): x is { id: string; title: string } => !!x.title);
 
   return (
-    <View style={st.row}>
+    <View style={embedded ? st.embedded : st.row}>
       <Text style={st.query} numberOfLines={2}>{row.query_text}</Text>
       {used.length > 0 ? (
         <View style={st.chipWrap}>
@@ -71,6 +73,7 @@ function shortWhen(iso: string): string {
 }
 
 const st = StyleSheet.create({
+  embedded: { paddingVertical: Space.md, gap: Space.xs, borderTopWidth: 1, borderTopColor: InkColors.line },
   row: {
     backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
     padding: Space.md, gap: Space.xs, marginBottom: Space.sm,

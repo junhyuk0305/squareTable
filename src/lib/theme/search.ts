@@ -18,7 +18,7 @@ export const SearchStyles = StyleSheet.create({
     paddingHorizontal: Space.lg,
     backgroundColor: InkColors.bg,
     borderWidth: 1.5,
-    borderColor: InkColors.lineStrong,
+    borderColor: InkColors.controlBorder,
     borderRadius: Radius.pill,
   },
   input: { flex: 1, fontSize: 15, color: InkColors.ink, paddingVertical: Space.sm },

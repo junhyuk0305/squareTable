@@ -9,7 +9,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 
-import { HqPage, HqButton, HqPill, HqEmpty, HqLoadError, HqNotice } from '@/components/hq/HqKit';
+import { HqCard, HqPage, HqButton, HqPill, HqEmpty, HqLoadError, HqNotice } from '@/components/hq/HqKit';
 import { HqTable, Cell } from '@/components/hq/HqTable';
 import { AddStoreModal } from '@/components/hq/AddStoreModal';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -79,7 +79,8 @@ export default function HqStoreInvitesScreen() {
         <HqLoadError title="초대 목록을 불러오지 못했어요" onRetry={refresh} testID="hq-invites-error" />
       ) : (
         <Appear>
-          <HqTable
+          <HqCard title="보낸 초대">
+          <HqTable embedded
             columns={[
               { key: 'phone', label: '점주 전화번호', width: 180, render: (i) => <Cell kind="name">{formatPhone(i.phone ?? '')}</Cell> },
               { key: 'payer', label: '요금 부담', width: 120, render: (i) => <HqPill tone={i.payer === 'brand' ? 'y' : 'n'} label={i.payer ? payerLabel(i.payer) : '—'} /> },
@@ -122,6 +123,7 @@ export default function HqStoreInvitesScreen() {
             <HqNotice>만료된 초대는 [매장 추가]로 같은 번호에 다시 보낼 수 있어요. 다시 보내면 만료 줄은 사라져요.</HqNotice>
           ) : null}
           <HqNotice>수락 전에는 매장 이름이 보이지 않아요. 점주가 매장과 공개 수준을 골라 수락하면 그때 보여요.</HqNotice>
+          </HqCard>
         </Appear>
       )}
 

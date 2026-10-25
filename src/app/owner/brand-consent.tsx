@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 // /owner/brand-consent?invite= — 본사 연결 요청 동의 화면(정본 §3-5 B · §5-3: 관측 경계표를 **첫 화면**에).
 //
 //   본사명·사업자번호 → 본사가 보게 되는 것(공개 수준 3단 표 + 어느 수준에도 없는 것) → 연결할 내 매장 선택
@@ -11,7 +12,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { ScreenLoading } from '@/components/ScreenLoading';
-import { SectionLabel } from '@/components/SectionLabel';
 import { useOwnerBrandStore } from '@/lib/store/useOwnerBrandStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { respondBrandInvite, ackBrandConsent, type BrandVisibility, type MyBrandViewRow } from '@/lib/brand/brandDb';
@@ -117,8 +117,7 @@ export default function BrandConsentScreen() {
           </View>
 
           {/* 2) 본사가 보게 되는 것 — 첫 화면(§5-3). 고른 수준이 곧 동의 범위다. */}
-          <View style={styles.labeled}>
-          <SectionLabel icon="eye-outline" title="본사가 보게 되는 것" hint="수준은 내가 고르고, 언제든 바꿀 수 있어요" />
+          <SectionGroup icon="eye-outline" title="본사가 보게 되는 것" description="수준은 내가 고르고, 언제든 바꿀 수 있어요">
           <View style={styles.levels}>
             {VISIBILITY_LEVELS.map((l) => {
               const on = level === l.key;
@@ -127,7 +126,7 @@ export default function BrandConsentScreen() {
                   key={l.key}
                   testID={`brand-level-${l.key}`}
                   accessibilityRole="radio"
-                  accessibilityState={{ checked: on }}
+                  accessibilityState={{ checked: on }} aria-checked={on}
                   accessibilityLabel={l.label}
                   onPress={() => setLevel(l.key)}
                   style={[styles.level, on && styles.levelOn]}
@@ -144,23 +143,22 @@ export default function BrandConsentScreen() {
               );
             })}
           </View>
-          </View>
+
           <View style={styles.never}>
             <Text style={styles.neverTitle}>어느 수준에서도 본사에 가지 않는 것</Text>
             <Text style={styles.neverBody}>{NEVER_SHARED.join(' · ')}</Text>
           </View>
           {/* 소인원 고지(정본 §4-A Q9: 전 매장 같은 표시). */}
-          <Text style={styles.note}>직원이 1~2명인 매장은 매장 단위 숫자만으로도 누구인지 짐작될 수 있어요.</Text>
+          <Text style={styles.note}>직원이 1~2명인 매장은 매장 단위 숫자만으로도 누구인지 짐작될 수 있어요.</Text></SectionGroup>
 
           {/* 3) 어느 매장을 */}
-          <View style={styles.labeled}>
-          <SectionLabel icon="storefront-outline" title="연결할 내 매장" hint="고른 매장만 본사에 보여요" />
+          <SectionGroup icon="storefront-outline" title="연결할 내 매장" description="고른 매장만 본사에 보여요">
           {candidates.length === 0 ? (
-            <View style={styles.card}>
+            <View>
               <Text style={styles.cardText}>연결할 수 있는 매장이 없어요. 내가 사장인 매장 중 아직 다른 본사와 연결되지 않은 매장만 고를 수 있어요.</Text>
             </View>
           ) : (
-            <View style={styles.card}>
+            <View>
               {candidates.map((s, i) => {
                 const on = picked.has(s.unit_id);
                 return (
@@ -168,20 +166,20 @@ export default function BrandConsentScreen() {
                     key={s.unit_id}
                     testID={`brand-pick-${s.unit_id}`}
                     accessibilityRole="checkbox"
-                    accessibilityState={{ checked: on }}
+                    accessibilityState={{ checked: on }} aria-checked={on}
                     accessibilityLabel={s.store_name}
                     onPress={() => toggle(s.unit_id)}
                     style={[styles.pickRow, i > 0 && styles.pickBorder]}
                   >
                     <Ionicons name={on ? 'checkbox' : 'square-outline'} size={20} color={on ? InkColors.ink : InkColors.ink3} />
-                    <Text style={styles.pickName} numberOfLines={1}>{s.store_name}</Text>
+                    <Text style={styles.pickName}>{s.store_name}</Text>
                     {s.industry ? <Text style={styles.pickSub}>{s.industry}</Text> : null}
                   </Pressable>
                 );
               })}
             </View>
           )}
-          </View>
+
 
           {/* 4) 답 */}
           <Text style={styles.note}>수락한 뒤에도 설정 &gt; 본사 연결에서 공개 수준을 바꾸거나 연결을 끝낼 수 있어요. 본사가 해제해도 받은 노하우는 매장에 남아요.</Text>
@@ -196,7 +194,7 @@ export default function BrandConsentScreen() {
           </Pressable>
           <Pressable testID="brand-decline" accessibilityRole="button" disabled={busy} onPress={() => void respond(false)} style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.7 }]}>
             <Text style={styles.secondaryText}>거절</Text>
-          </Pressable>
+          </Pressable></SectionGroup>
         </ScrollView>
       )}
     </SafeAreaView>
@@ -246,23 +244,20 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
         </Text>
       </View>
 
-      <View style={styles.labeled}>
-      <SectionLabel
-        icon={notice ? 'megaphone-outline' : 'shield-checkmark-outline'}
+      <SectionGroup icon={notice ? 'megaphone-outline' : 'shield-checkmark-outline'}
         title={notice ? '본사가 보는 범위를 알려드려요' : '공개 범위에 다시 동의해 주세요'}
-        hint={notice ? '직영점이라 본사가 정해요' : '관계가 바뀌어 근거가 달라졌어요'}
-      />
-      <View style={styles.card}>
+        description={notice ? '직영점이라 본사가 정해요' : '관계가 바뀌어 근거가 달라졌어요'}>
+      <View>
         <Text style={styles.cardText}>
           {notice
             ? '본사가 이 매장을 직영으로 전환했어요. 직영점은 공개 범위의 최소선을 본사가 정하고, 점장님은 그 위로만 조정할 수 있어요.'
             : '이 매장이 가맹으로 바뀌었어요. 이제 공개 범위를 사장님이 직접 정하고, 연결도 언제든 끊을 수 있어요.'}
         </Text>
       </View>
-      </View>
+
 
       {/* 지금 실제로 무엇이 보이나 — 추상적인 표보다 이 한 줄이 먼저다. */}
-      <View style={styles.card}>
+      <View>
         <View style={styles.pickRow}>
           <Ionicons name="eye-outline" size={18} color={InkColors.ink3} />
           <Text style={styles.pickName}>지금 공개 수준</Text>
@@ -275,11 +270,10 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
             <Text style={styles.pickSub}>{visibilityLabel(link.visibility_floor)}</Text>
           </View>
         ) : null}
-      </View>
+      </View></SectionGroup>
 
-      <View style={styles.labeled}>
-      <SectionLabel icon="list-outline" title={`${relationLabel(link.relation)}점에서는 이렇게 달라져요`} />
-      <View style={styles.card}>
+      <SectionGroup icon="list-outline" title={`${relationLabel(link.relation)}점에서는 이렇게 달라져요`}>
+      <View>
         {RELATION_RULES.map((r, i) => (
           <View key={r.label} style={[styles.pickRow, styles.ruleRow, i > 0 && styles.pickBorder]}>
             <Text style={styles.pickName}>{r.label}</Text>
@@ -287,7 +281,7 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
           </View>
         ))}
       </View>
-      </View>
+
 
       <View style={styles.never}>
         <Text style={styles.neverTitle}>관계와 상관없이 본사에 가지 않는 것</Text>
@@ -322,7 +316,7 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
         >
           <Text style={styles.secondaryText}>동의하지 않기(연결 끝내기)</Text>
         </Pressable>
-      )}
+      )}</SectionGroup>
     </ScrollView>
   );
 }
@@ -339,8 +333,8 @@ const styles = StyleSheet.create({
   heroTitle: { fontSize: 20, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.4 },
   heroSub: { fontSize: 13, color: InkColors.ink2 },
   levels: { gap: Space.sm },
-  level: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: Space.md, backgroundColor: InkColors.bg, gap: 3, ...Elevation.e1 },
-  levelOn: { borderColor: InkColors.ink, backgroundColor: BrandColors.yellowSoft },
+  level: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: Space.md, backgroundColor: InkColors.bg, gap: 3 },
+  levelOn: { borderColor: InkColors.ink, backgroundColor: InkColors.bgSoft },
   levelHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: 4 },
   levelName: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
   // flexShrink — 글자가 커지면 짧은 설명이 카드 밖으로 넘치지 않고 안에서 줄바꿈된다.
@@ -359,8 +353,8 @@ const styles = StyleSheet.create({
   // 재동의 표 — 설명(pickSub)이 줄어들지 않으면 항목명(flex 1)이 남는 폭 0이 되어 사라진다. 설명에 상한을 두고 줄바꿈한다.
   ruleRow: { paddingVertical: Space.sm },
   ruleVal: { flexShrink: 1, maxWidth: '55%', textAlign: 'right' },
-  primary: { ...ButtonStyles.primary, marginTop: Space.sm, backgroundColor: BrandColors.brand },
-  primaryText: { fontSize: 15, fontWeight: '800', color: InkColors.bubbleText },
+  primary: { ...ButtonStyles.brand, marginTop: Space.sm },
+  primaryText: ButtonStyles.brandText,
   secondary: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
 });

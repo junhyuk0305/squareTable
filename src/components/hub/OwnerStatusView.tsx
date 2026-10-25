@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 // 사장 허브 '현황' 탭 본문 — 대시보드 본체 4블록(기획 v2 §03).
 //  1) 오늘 스냅샷: 매장별 근무중/예정 카운트(카운트까지만 — 명단은 매장 출퇴근 화면)
 //  2) 확인 필요: 합류 신청·받은질문·검토할 제안·확인 필요 노하우(행 탭 = 해당 매장 화면)
@@ -20,7 +21,6 @@ import { starterGraduated } from '@/lib/utils/starterProgress';
 import { PlanUpgradeNotice } from '@/components/PlanUpgradeNotice';
 import { StarterChecklist } from '@/components/hub/StarterChecklist';
 import { StorePickerSheet, type StorePickerRow } from '@/components/hub/StorePickerSheet';
-import { SectionLabel } from '@/components/SectionLabel';
 import { BottomSheet } from '@/components/BottomSheet';
 import { SheetHead } from '@/components/owner/quiz/kit';
 import { AlertRow } from '@/components/blocks/AlertRow';
@@ -208,7 +208,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
           <Ionicons name={icon} size={15} color={InkColors.ink2} />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.rowTitle} numberOfLines={1}>{title}</Text>
+          <Text style={styles.rowTitle}>{title}</Text>
           {!!sub && <Text style={styles.rowSub} numberOfLines={1}>{sub}</Text>}
         </View>
         <ProgressPill text={String(count)} tone="neutral" />
@@ -302,7 +302,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
       {header}
       {/* 카드↔카드 = md(12). 제목 달린 섹션 앞의 추가 여백은 SectionLabel 자신이 든다(2026-09-03). */}
-      <View style={{ gap: Space.md }}>
+      <View style={{ gap: Space.xl }}>
       {/* ── 0) 본사 연결 요청(P3, 정본 §4-E ①) — 요청이 없으면 카드 자체가 없다(미연결 매장 diff 0). ── */}
       <BrandInviteCard />
       {starterRow && (
@@ -334,7 +334,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
           다점포에서만 '어느 매장이 비었나'가 새 정보가 된다. */}
       {multi && (
       <Appear delay={stagger(2)}>
-        <View style={styles.card}>
+        <SectionGroup title="매장별 오늘 근무">
           {overview.map((r) => {
             const t = todayByUnit[r.unit_id];
             return (
@@ -348,7 +348,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
                 style={({ pressed }) => [styles.row, styles.rowTop, pressed && { opacity: 0.85 }]}
               >
                 <View style={[styles.dot, { backgroundColor: colorOf(r.unit_id) }]} />
-                <Text style={styles.rowTitle} numberOfLines={1}>{labelOf(r.unit_id)}</Text>
+                <Text style={styles.rowTitle}>{labelOf(r.unit_id)}</Text>
                 <Text style={[styles.rowSub, (t?.working_now ?? 0) > 0 && styles.onair]}>
                   {`${(t?.working_now ?? 0) > 0 ? `${t!.working_now}명 근무중` : '출근 전'} · 예정 ${t?.scheduled ?? 0}${(t?.forgot_now ?? 0) > 0 ? ` · 퇴근 안 찍음 ${t!.forgot_now}` : ''}`}
                 </Text>
@@ -356,7 +356,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
               </Pressable>
             );
           })}
-        </View>
+        </SectionGroup>
       </Appear>
       )}
 
@@ -366,18 +366,18 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
              '직원이 아는 노하우' 칸은 **읽기 진입**(D6 확정: 현황엔 지표 칸만, 관리는 노하우 탭).
              받은질문은 맨 위 AlertRow(2026-08-06) — 여기서 다시 세지 않는다. ── */}
       <Appear delay={stagger(3)}>
-        <SectionLabel title="매장 상태" />
-        <View style={{ marginTop: Space.sm }}>
-          <StatCardGrid items={gridItems} />
-        </View>
+        <SectionGroup title="매장 상태" >
+
+          <StatCardGrid grouped items={gridItems} />
+        </SectionGroup>
       </Appear>
 
       {/* ── 3) 매장 비교(다점포) / 단일 매장 요약 ── */}
       {multi && (
         <Appear delay={stagger(4)}>
-          <SectionLabel title="매장 비교" />
+          <SectionGroup title="매장 비교">
           {canUseMultistore(plan, freeMode) ? (
-            <View style={styles.card}>
+            <View>
               <View style={styles.thRow}>
                 <Text style={[styles.th, styles.thName]}>매장</Text>
                 <SortTh label="질문" k="pending_q" cur={sortKey} onPress={setSortKey} />
@@ -409,24 +409,25 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
           ) : (
             <PlanUpgradeNotice description="전체 매장을 지표로 비교하는 표는 다점포 요금제 기능이에요." />
           )}
+        </SectionGroup>
         </Appear>
       )}
 
       {/* ── 4) 이번달 매장별 내역 — 다점포에서만. 합계는 위 그리드 칸(인건비)이 말한다. ── */}
       {multi && (
       <Appear delay={stagger(5)}>
-        <SectionLabel title="이번달 매장별" />
-          <View style={[styles.card, { marginTop: Space.sm }]}>
+        <SectionGroup title="이번달 매장별" contentStyle={styles.cardGroup}>
+
             {overview.map((r) => (
               <View key={r.unit_id} style={[styles.row, styles.rowTop]}>
                 <View style={[styles.dot, { backgroundColor: colorOf(r.unit_id) }]} />
-                <Text style={styles.rowTitle} numberOfLines={1}>{labelOf(r.unit_id)}</Text>
+                <Text style={styles.rowTitle}>{labelOf(r.unit_id)}</Text>
                 <Text style={styles.rowSub}>
                   {`${laborLoadError ? '—' : `${(labor[r.unit_id] ?? 0).toLocaleString()}원`} · AI ${r.ai_used.toLocaleString()}${aiCap != null ? `/${aiCap.toLocaleString()}` : ''}`}
                 </Text>
               </View>
             ))}
-          </View>
+          </SectionGroup>
       </Appear>
       )}
 
@@ -478,6 +479,7 @@ function SortTh({ label, k, cur, onPress }: { label: string; k: SortKey; cur: So
 const styles = StyleSheet.create({
   loading: { minHeight: LOADING_MIN_HEIGHT, paddingVertical: Space.xl * 2, alignItems: 'center', justifyContent: 'center' },
   card: { ...CardStyles.list, marginTop: Space.sm },
+  cardGroup: {  },
   statRow: { flexDirection: 'row', paddingVertical: Space.xs },
   statCell: { flex: 1, alignItems: 'center', gap: 2 },
   statDivider: { borderLeftWidth: 1, borderLeftColor: InkColors.line },
@@ -492,7 +494,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   rowTitle: { flex: 1, fontSize: 13.5, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
-  rowSub: { fontSize: 12, color: InkColors.ink3 },
+  rowSub: { fontSize: 14, lineHeight: 21, color: InkColors.ink2, flexShrink: 1 },
   onair: { color: BrandColors.goodText, fontWeight: '800' },
   dot: { width: 8, height: 8, borderRadius: 4 },
   emptyText: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', paddingVertical: Space.sm },

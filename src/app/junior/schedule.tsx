@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 import { useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
@@ -9,7 +10,6 @@ import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
-import { SectionLabel } from '@/components/SectionLabel';
 import { SegmentTabs } from '@/components/SegmentTabs';
 import { ScheduleWeek } from '@/components/schedule/ScheduleWeek';
 import { SwapRequestModal } from '@/components/schedule/SwapRequestModal';
@@ -298,7 +298,7 @@ export default function JuniorScheduleScreen() {
                   onPress={() => setShowHistory((v) => !v)}
                   accessibilityRole="button"
                   accessibilityLabel={`지난 요청 ${historyAll.length}건`}
-                  accessibilityState={{ expanded: showHistory }}
+                  accessibilityState={{ expanded: showHistory }} aria-expanded={showHistory}
                   style={({ pressed }) => [styles.disclosure, pressed && { opacity: 0.7 }]}
                 >
                   <Ionicons name="time-outline" size={15} color={InkColors.ink2} />
@@ -403,8 +403,8 @@ function Section({
 }) {
   return (
     <View style={{ gap: Space.sm }}>
-      <SectionLabel icon={icon} title={title} />
-      <View style={{ gap: 10 }}>{children}</View>
+      <SectionGroup icon={icon} title={title} contentStyle={{ gap: 10 }}>
+      {children}</SectionGroup>
     </View>
   );
 }

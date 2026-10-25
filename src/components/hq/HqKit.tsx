@@ -4,6 +4,7 @@
 // ★폰 프레임(460)·frameCapStyle 을 쓰지 않는다 — 본사 화면은 넓은 레이아웃 전용(정본 §5-1).
 // 색은 앱 토큰(InkColors·BrandColors)이 정본. 데모의 --y-deep 는 BrandColors.yellowDeep 로.
 import { useState, type ReactNode } from 'react';
+import { SectionGroup } from '@/components/SectionGroup';
 import { View, Text, Pressable, ScrollView, StyleSheet, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -213,6 +214,9 @@ export function HqCard({
   flush,
   style,
   testID,
+  action,
+  embedded = false,
+  more,
 }: {
   title?: string;
   sub?: string;
@@ -221,9 +225,17 @@ export function HqCard({
   flush?: boolean;
   style?: ViewStyle;
   testID?: string;
+  action?: ReactNode;
+  embedded?: boolean;
+  more?: { label: string; onPress: () => void };
 }) {
+  if (title && !embedded) return (
+    <View testID={testID} style={style}>
+      <SectionGroup title={title} description={sub} action={action ?? (more && <HqButton label={more.label} onPress={more.onPress} variant="plain" />)} flush={flush} style={{ marginBottom: Space.xl, flexGrow: 1 }}>{children}</SectionGroup>
+    </View>
+  );
   return (
-    <View style={[styles.card, flush && { padding: 0 }, style]} testID={testID}>
+    <View style={[!embedded && styles.card, flush && { padding: 0 }, style]} testID={testID}>
       {title ? (
         <View style={[styles.cardHead, flush && { paddingHorizontal: 22, paddingTop: 20 }]}>
           <Text style={styles.cardTitle}>{title}</Text>
@@ -257,7 +269,7 @@ export function HqSlab({ title, hint, more }: { title: string; hint?: string; mo
       <Text style={styles.slabTitle}>{title}</Text>
       {hint ? <Text style={styles.slabHint}>{hint}</Text> : null}
       {more ? (
-        <Pressable onPress={more.onPress} accessibilityRole="button" style={{ marginLeft: 'auto', flexShrink: 0 }}>
+        <Pressable onPress={more.onPress} accessibilityRole="button" style={{ marginLeft: 'auto', flexShrink: 0, minHeight: 48, justifyContent: 'center' }}>
           <Text style={styles.slabMore}>{more.label}</Text>
         </Pressable>
       ) : null}
@@ -328,7 +340,7 @@ export function HqSegment<T extends string>({
             onPress={() => onChange(it.key)}
             disabled={disabled}
             accessibilityRole="button"
-            accessibilityState={{ selected: on }}
+            accessibilityState={{ selected: on }} aria-pressed={on}
             accessibilityLabel={it.label}
             style={[styles.segItem, on && styles.segOn, disabled && { opacity: 0.5 }]}
           >

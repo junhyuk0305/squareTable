@@ -462,7 +462,7 @@ function LinkQuizBody({
                   {ask ? <Text style={st.ask}>{ask}</Text> : null}
                   <Renderer
                     payload={it.payload ?? {}}
-                    disabled={false}
+                    disabled={!on}
                     result={null}
                     onAnswer={(res) => setAnswers((prev) => prev.map((v, j) => (j === i ? res : v)))}
                   />
@@ -554,7 +554,7 @@ const st = StyleSheet.create({
   qHeadStore: { fontSize: 12, fontWeight: '800', color: InkColors.ink3 },
   // 지금 문항이 아닌 것은 자리도 차지하지 않는다(마운트는 유지 — 고른 답을 들고 있어야 한다).
   hidden: { display: 'none' },
-  ask: { fontSize: 17, fontWeight: '800', color: InkColors.ink, lineHeight: 25, marginBottom: Space.sm },
+  ask: { fontSize: 23, fontWeight: '800', color: InkColors.ink, lineHeight: 33, marginBottom: Space.md },
   doneNote: { fontSize: 13, fontWeight: '700', color: BrandColors.warnText, textAlign: 'center', lineHeight: 19 },
 
   foot: { paddingHorizontal: Space.gutter, paddingTop: Space.sm, paddingBottom: Space.lg, borderTopWidth: 1, borderTopColor: InkColors.line },
@@ -567,6 +567,6 @@ const st = StyleSheet.create({
   },
   navBackText: { fontSize: 16, fontWeight: '800', color: InkColors.ink2 },
   navNext: { flex: 1 },
-  cta: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
-  ctaText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  cta: ButtonStyles.brand,
+  ctaText: ButtonStyles.brandText,
 });

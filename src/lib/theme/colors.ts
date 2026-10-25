@@ -36,6 +36,7 @@ export const InkColors = {
   ink3:   '#a4a29b',   // 흐린 메타 · 비활성 · 플레이스홀더 (--faint)
   line:   '#EAECEF',   // 보더 — 쿨·라이트(토스식). 흰 배경에서 존재감↓, 리프트는 그림자가 담당. (옛 #E7E5DE)
   lineStrong: '#CDD1D7', // 입력칸 테두리 — 회색 배경 위에서도 칸이 보여야 하는 자리(검색창).
+  controlBorder: '#7C838D', // Interactive boundary on white; decorative line remains unchanged.
   bg:     '#FFFFFF',
   bgSoft: '#F4F5F7',   // 소프트 표면 틴트(칩·게이지트랙·안내박스) = 쿨 그레이. (옛 웜 페이퍼 #F1EFE9)
   paper:  '#F4F5F7',   // 명시적 별칭(= bgSoft)
@@ -88,6 +89,10 @@ export const BrandColors = {
   heat2: '#8EE3BD',
   heat3: '#2ECB8E',
   heat4: '#04794B',
+  queryHeat1: '#E9F3FF',
+  queryHeat2: '#A5CEF7',
+  queryHeat3: '#4D9BE7',
+  queryHeat4: '#1667D6',
   // 주의/확인필요 표면 — 브랜드 노랑(긍정 액센트)과 **색상(hue)** 을 벌려
   // '미검증·확인 필요' 배너/뱃지가 노랑 CTA로 오인되지 않게 한다. (2026-07-07 의도 유지)
   // 오인 방지는 채도가 아니라 hue가 담당한다: warnSoft=주황 계열, yellowSoft=레몬크림.

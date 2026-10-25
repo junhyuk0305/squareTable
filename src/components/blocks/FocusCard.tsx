@@ -19,6 +19,7 @@ export function FocusCard({
   quote,
   meta,
   cta,
+  embedded = false,
 }: {
   /** 맥락 한 줄 — "가장 급한 것 — 직원 질문 12건 중 제일 오래됨". */
   kicker: string;
@@ -27,11 +28,12 @@ export function FocusCard({
   /** 누가·얼마나 — "박지영 · 6일째 기다리는 중". */
   meta?: string;
   cta: { label: string; onPress: () => void };
+  embedded?: boolean;
 }) {
   return (
-    <View style={styles.card}>
+    <View style={!embedded && styles.card}>
       <Text style={styles.kicker} numberOfLines={2}>{kicker}</Text>
-      <Text style={styles.quote} numberOfLines={4}>“{quote}”</Text>
+      <Text style={styles.quote}>“{quote}”</Text>
       {meta ? <Text style={styles.meta} numberOfLines={1}>{meta}</Text> : null}
       <Pressable
         accessibilityRole="button"

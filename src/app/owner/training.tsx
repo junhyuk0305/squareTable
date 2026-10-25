@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { RoleTabBar } from '@/components/RoleTabBar';
@@ -29,7 +30,6 @@ import { Appear, stagger } from '@/components/Appear';
 import { EmptyState } from '@/components/EmptyState';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Collapse } from '@/components/Collapse';
-import { SectionLabel } from '@/components/SectionLabel';
 import { SegmentTabs } from '@/components/SegmentTabs';
 import { AlertRow } from '@/components/blocks/AlertRow';
 import { ConfirmModal } from '@/components/ConfirmModal';
@@ -340,8 +340,8 @@ export default function OwnerTrainingScreen() {
               </Appear>
               <Appear delay={stagger(1)}>
                 <View style={st.group}>
-                  <SectionLabel title="먼저 물어볼 만한 것" hint={`노하우 ${usable}개`} />
-                  <PickRow
+                  <SectionGroup title="먼저 물어볼 만한 것" description={`노하우 ${usable}개`}>
+                  <PickRow embedded
                     rows={pickPool.map((e) => ({
                       key: e.id,
                       title: e.title,
@@ -351,9 +351,6 @@ export default function OwnerTrainingScreen() {
                     }))}
                     more={usable > pickPool.length ? { label: `${usable - pickPool.length}개 더 보기`, onPress: goMake } : undefined}
                   />
-                </View>
-              </Appear>
-              <Appear delay={stagger(2)}>
                 <View style={st.actions}>
                   <PrimaryButton
                     label={picked.length > 0 ? `고른 ${picked.length}개로 퀴즈 만들기` : '노하우를 골라 주세요'}
@@ -363,7 +360,10 @@ export default function OwnerTrainingScreen() {
                   {/* 글자만 있던 링크 → 흰 버튼(GhostButton). 2026-09-03: 글씨만 있는 버튼 금지. */}
                   <GhostButton icon="list-outline" label="직접 고르기" onPress={goMake} />
                 </View>
+              </SectionGroup>
+</View>
               </Appear>
+
             </>
           )
         ) : (
@@ -436,18 +436,16 @@ export default function OwnerTrainingScreen() {
                 ★2026-09-13: 목록에 **제목**을 달았다(사장 요청) — 히트맵 바로 밑에 흰 카드만 있으면
                 그것이 무엇의 목록인지 읽히지 않았다. */}
             <Appear key={tab} delay={stagger(2)} style={{ gap: Space.sm }}>
-              <SectionLabel
-                title={tab === 'running' ? '응시 중인 퀴즈' : '응시 완료'}
-                hint={tab === 'running' ? `${running.length}건` : `${finished.length}건`}
-              />
-              <View style={st.group}>
+              <SectionGroup title={tab === 'running' ? '응시 중인 퀴즈' : '응시 완료'}
+                description={tab === 'running' ? `${running.length}건` : `${finished.length}건`} contentStyle={st.groupGroup}>
+
                 {tab === 'running' ? (
                   running.length === 0 && guests.length === 0 ? (
-                    <View style={st.listCard}>
+                    <View>
                       <Text style={st.tabEmpty}>지금 나가 있는 퀴즈가 없어요.</Text>
                     </View>
                   ) : (
-                    <View style={st.listCard}>
+                    <View>
                       {running.map((q, i) => (
                         <QuizRowView
                           key={q.course.id}
@@ -479,11 +477,11 @@ export default function OwnerTrainingScreen() {
                     </View>
                   )
                 ) : finished.length === 0 ? (
-                  <View style={st.listCard}>
+                  <View>
                     <Text style={st.tabEmpty}>아직 전원이 푼 퀴즈가 없어요.</Text>
                   </View>
                 ) : (
-                  <View style={st.listCard}>
+                  <View>
                     {finished.map((q, i) => (
                       <QuizRowView
                         key={q.course.id}
@@ -497,7 +495,7 @@ export default function OwnerTrainingScreen() {
                     ))}
                   </View>
                 )}
-              </View>
+              </SectionGroup>
             </Appear>
 
             {/* 만들던 퀴즈 · 낡은 문항 롤업은 **목록 아래**다(2026-09-13) — 위쪽 순서는
@@ -514,7 +512,7 @@ export default function OwnerTrainingScreen() {
                     onPress={() => setDraftOpen((v) => !v)}
                     style={({ pressed }) => [st.foldRow, pressed && { opacity: 0.6 }]}
                     accessibilityRole="button"
-                    accessibilityState={{ expanded: draftOpen }}
+                    accessibilityState={{ expanded: draftOpen }} aria-expanded={draftOpen}
                     accessibilityLabel={`만들던 퀴즈 ${drafts.length}건 ${draftOpen ? '접기' : '펼치기'}`}
                   >
                     <Text style={st.foldText}>만들던 퀴즈 {drafts.length}건</Text>
@@ -582,11 +580,11 @@ export default function OwnerTrainingScreen() {
           <ScrollView style={st.sheetScroll} showsVerticalScrollIndicator={false}>
             {fix.staleLive.length > 0 && (
               <View style={st.group}>
-                <SectionLabel title="옛 정답 나가는 퀴즈" hint={`${fix.staleLive.length}건`} />
+                <SectionGroup title="옛 정답 나가는 퀴즈" description={`${fix.staleLive.length}건`}>
                 <Text style={st.missIntro}>
                   근거가 된 노하우를 고친 뒤 문항을 다시 안 만들었어요. 퀴즈를 열어 새로 만들어 주세요.
                 </Text>
-                <View style={st.listCard}>
+                <View>
                   {fix.staleLive.map((r, i) => (
                     <Pressable
                       key={r.course.id}
@@ -606,16 +604,17 @@ export default function OwnerTrainingScreen() {
                     </Pressable>
                   ))}
                 </View>
-              </View>
+              </SectionGroup>
+</View>
             )}
 
             {fix.missLive.length > 0 && (
               <View style={st.group}>
-                <SectionLabel title="높은 오답률" hint={`${fix.missLive.length}건`} />
+                <SectionGroup title="높은 오답률" description={`${fix.missLive.length}건`}>
                 <Text style={st.missIntro}>
                   직원이 못 외운 게 아니라 노하우 글이 헷갈릴 수 있어요. 아래 노하우를 다시 보세요.
                 </Text>
-                <View style={st.listCard}>
+                <View>
                   {fix.missLive.map((r, i) => (
                     <Pressable
                       key={r.entryId}
@@ -637,7 +636,8 @@ export default function OwnerTrainingScreen() {
                     </Pressable>
                   ))}
                 </View>
-              </View>
+              </SectionGroup>
+</View>
             )}
           </ScrollView>
         </BottomSheet>
@@ -972,6 +972,7 @@ const st = StyleSheet.create({
 
   // 섹션 제목은 카드 밖 — 라벨과 카드를 한 덩어리로 묶는 wrap(제목만 따로 떠 보이지 않게).
   group: { gap: Space.sm },
+  groupGroup: { gap: Space.sm },
   // D 가로 스크롤 — 옆 카드를 잘라서 노출(배치규칙④). 거터를 뚫고 나가 프레임 끝까지 흐른다.
   hscroll: { marginHorizontal: -Space.gutter },
   hscrollInner: { paddingHorizontal: Space.gutter, gap: Space.sm, paddingBottom: Space.xs },

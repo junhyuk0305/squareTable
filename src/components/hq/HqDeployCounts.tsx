@@ -31,6 +31,7 @@ export function HqDeployCounts({
   statusOf,
   kind,
   testID,
+  embedded = false,
 }: {
   rows: Row[];
   /** 연결 매장 전부 — 상태별 수의 합 = 이 수. */
@@ -39,6 +40,7 @@ export function HqDeployCounts({
   /** 첫 열 머리글·목록 제목 — '노하우' · '퀴즈'. */
   kind: string;
   testID?: string;
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState<{ row: Row; status: DeployStatus } | null>(null);
@@ -84,7 +86,7 @@ export function HqDeployCounts({
 
   return (
     <>
-      <HqTable columns={columns} rows={rows} rowKey={(r) => r.id} footer={`연결 매장 ${units.length}곳 기준`} testID={testID} />
+      <HqTable embedded={embedded} columns={columns} rows={rows} rowKey={(r) => r.id} footer={`연결 매장 ${units.length}곳 기준`} testID={testID} />
 
       <HqModal
         open={!!open}

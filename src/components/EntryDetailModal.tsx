@@ -79,7 +79,7 @@ export function EntryDetailModal({
             </View>
 
             {/* 본문 — 상황 · 할 일 · 금지 */}
-            <KnowhowRows rows={rows} />
+            <KnowhowRows rows={rows} variant="grouped" />
 
             {/* 정도 기준 게이지 — 표로 못 담는 도형이라 행 밖에 따로 그린다. */}
             {std && stdPct !== null ? (
@@ -106,6 +106,7 @@ export function EntryDetailModal({
             {/* 출처 — 본문과 같은 행 형태. 게이지·사진 뒤라 위 구분선을 래퍼가 낸다. */}
             <View style={s.sourceGroup}>
               <KnowhowRows
+                variant="grouped"
                 rows={[{
                   kind: 'source',
                   text: `${knowhowSourceLabel(entry)} 가이드`,

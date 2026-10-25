@@ -3,13 +3,13 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
 import { ChachakSwitch } from '@/components/ChachakSwitch';
-import { SectionLabel } from '@/components/SectionLabel';
+import { SectionGroup } from '@/components/SectionGroup';
+import { Gap } from '@/lib/theme/layout';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
-// 섹션 제목은 카드 '밖'(위) 라벨로 — 앱 전반 공용 SectionLabel과 통일.
+// The title and its settings rows share one surface.
 export function SettingsSection({
   icon,
   title,
@@ -20,10 +20,7 @@ export function SettingsSection({
   children: React.ReactNode;
 }) {
   return (
-    <View style={styles.section}>
-      {title ? <SectionLabel icon={icon} title={title} /> : null}
-      <View style={styles.card}>{children}</View>
-    </View>
+    <SectionGroup title={title} icon={icon} flush style={styles.section}>{children}</SectionGroup>
   );
 }
 
@@ -97,19 +94,12 @@ export function SettingsToggle({
 
 const styles = StyleSheet.create({
   // 섹션 사이 = 이 12 + SectionLabel 의 위 여백 12 = 24(앱 공통, 2026-09-03). 옛 18은 라벨 여백이 없던 때 값.
-  section: { gap: 8, marginBottom: 12 },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    overflow: 'hidden',
-  },
+  section: { marginBottom: Gap.group, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 15, minHeight: 52 },
   rowBorder: { borderTopWidth: 1, borderTopColor: InkColors.line },
   rowIcon: { width: 22, textAlign: 'center' },
-  rowLabelWrap: { flex: 1 },
+  rowLabelWrap: { flex: 1, minWidth: 0 },
   rowLabelText: { fontSize: 15, fontWeight: '600', color: InkColors.ink },
-  rowHint: { fontSize: 12, color: InkColors.ink3, marginTop: 2, fontWeight: '400' },
-  rowValue: { fontSize: 14, color: InkColors.ink3, marginRight: 2 },
+  rowHint: { fontSize: 15, lineHeight: 23, color: InkColors.ink2, marginTop: 4, fontWeight: '400' },
+  rowValue: { fontSize: 15, lineHeight: 23, color: InkColors.ink, flexShrink: 1, maxWidth: '45%' },
 });

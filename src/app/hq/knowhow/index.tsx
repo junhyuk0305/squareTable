@@ -8,7 +8,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { HqPage, HqButton, HqNotice, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
+import { HqCard, HqPage, HqButton, HqNotice, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
 import { HqTable, Cell, type HqColumn } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -176,6 +176,7 @@ export default function HqKnowhowScreen() {
     <HqPage {...head}>
       {/* 등장은 섹션 단위로(ui.md ⑤) — 노하우 표 → 배포 상태 순서로. */}
       <Appear>
+        <HqCard title="노하우 목록">
         <View style={styles.bar}>
           <Pressable
             onPress={() => setPicked(allPicked ? new Set() : new Set(list.map((r) => r.id)))}
@@ -201,7 +202,7 @@ export default function HqKnowhowScreen() {
           </Text>
         </View>
 
-        <HqTable
+        <HqTable embedded
           columns={columns}
           rows={list}
           rowKey={(r) => r.id}
@@ -214,6 +215,7 @@ export default function HqKnowhowScreen() {
           }
           testID="hq-knowhow-table"
         />
+        </HqCard>
       </Appear>
 
 
@@ -270,7 +272,7 @@ export default function HqKnowhowScreen() {
                     })
                   }
                   accessibilityRole="checkbox"
-                  accessibilityState={{ checked: targets.has(u.unit_id) }}
+                  accessibilityState={{ checked: targets.has(u.unit_id) }} aria-checked={targets.has(u.unit_id)}
                   accessibilityLabel={u.store_name}
                   style={({ pressed }) => [styles.unitRow, pressed && { backgroundColor: InkColors.paper }]}
                 >
@@ -287,7 +289,7 @@ export default function HqKnowhowScreen() {
               <Pressable
                 onPress={() => setRequired((v) => !v)}
                 accessibilityRole="checkbox"
-                accessibilityState={{ checked: required }}
+                accessibilityState={{ checked: required }} aria-checked={required}
                 accessibilityLabel="필수로 내리기"
                 testID="hq-deploy-required"
                 style={({ pressed }) => [styles.reqRow, pressed && { opacity: 0.8 }]}
@@ -326,7 +328,7 @@ function Check({ on, onPress, label }: { on: boolean; onPress: () => void; label
     <Pressable
       onPress={onPress}
       accessibilityRole="checkbox"
-      accessibilityState={{ checked: on }}
+      accessibilityState={{ checked: on }} aria-checked={on}
       accessibilityLabel={label}
       style={({ pressed }) => [styles.boxHit, pressed && { opacity: 0.7 }]}
     >

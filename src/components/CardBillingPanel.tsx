@@ -1,3 +1,5 @@
+import { SectionGroup } from '@/components/SectionGroup';
+import { ButtonStyles } from '@/lib/theme/button';
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -80,7 +82,7 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
   // 카드는 매장 CARD_MAX_STORES 개까지(토스 계약 1회 10만 원 · 서버 0342 card_store_limit). 넘으면 결제·변경 버튼 대신 도입 문의.
   const overLimit = paidPlan === 'multi' && count > CARD_MAX_STORES;
   const limitNotice = (
-    <View style={styles.card}>
+    <View style={styles.groupBody}>
       <Text style={styles.body}>{cardErrorText('card_store_limit')}</Text>
       <Pressable
         onPress={() => router.push('/inquiry')}
@@ -173,8 +175,7 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
     };
 
     return (
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>카드 자동결제</Text>
+      <SectionGroup title="카드 자동결제" contentStyle={styles.section}>
 
         {pastDue && (
           <View style={[styles.card, styles.warnCard]}>
@@ -191,7 +192,7 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
           </View>
         )}
 
-        <View style={styles.card}>
+        <View style={styles.groupBody}>
           <Row label="요금제" value={planLabel(sub.plan, sub.store_count)} />
           <Row label="월 결제 금액" value={formatKrw(sub.amount_krw)} strong />
           <Row label="이용 기간" value={`${fmtDay(sub.current_period_start)} ~ ${fmtDay(sub.current_period_end)}`} />
@@ -220,7 +221,7 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
 
         {active && differs && need > 0 && (
           /* 줄이기 — 다음 결제일에 닫을 매장을 사장이 고른다(서버가 오래된 순으로 대신 고르지 않는다). */
-          <View style={styles.card}>
+          <View style={styles.groupBody}>
             <Text style={styles.body}>
               {fmtDay(sub.current_period_end)}에 닫을 매장 {need}곳을 골라 주세요.
             </Text>
@@ -233,7 +234,7 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
                   disabled={full || busy}
                   onPress={() => toggleRelease(s.unit_id)}
                   accessibilityRole="checkbox"
-                  accessibilityState={{ checked: on, disabled: full }}
+                  accessibilityState={{ checked: on, disabled: full }} aria-checked={on} aria-disabled={full}
                   accessibilityLabel={`${s.store_name} 닫기`}
                   style={({ pressed }) => [styles.storeRow, on && styles.storeRowOn, full && { opacity: 0.4 }, pressed && { opacity: 0.7 }]}
                 >
@@ -268,7 +269,7 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
               accessibilityRole="button"
             >
               {busy ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <ActivityIndicator color={InkColors.ink} />
               ) : (
                 <Text style={styles.primaryText}>
                   {increase ? '지금 바로 변경하기' : '다음 결제일부터 변경하기'} · {planLabel(paidPlan as 'single' | 'multi', count)}
@@ -293,7 +294,7 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
             style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}
             accessibilityRole="button"
           >
-            {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>해지 취소하기</Text>}
+            {busy ? <ActivityIndicator color={InkColors.ink} /> : <Text style={styles.primaryText}>해지 취소하기</Text>}
           </Pressable>
         )}
 
@@ -314,7 +315,7 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
               <Text style={styles.linkMuted}>자동결제 해지</Text>
             </Pressable>
           ) : (
-            <View style={styles.card}>
+            <View style={styles.groupBody}>
               <Text style={styles.body}>
                 {pastDue
                   ? '해지하면 다시 결제하지 않고 무료 요금제로 바뀌어요.'
@@ -335,7 +336,7 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
               </View>
             </View>
           ))}
-      </View>
+      </SectionGroup>
     );
   }
 
@@ -343,10 +344,9 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
   if (!paidPlan) return null;
   if (overLimit) {
     return (
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>카드 자동결제</Text>
+      <SectionGroup title="카드 자동결제" contentStyle={styles.section}>
         {limitNotice}
-      </View>
+      </SectionGroup>
     );
   }
   const supply = supplyPrice(monthly);
@@ -365,9 +365,8 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
   };
 
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionLabel}>카드 자동결제</Text>
-      <View style={styles.card}>
+    <SectionGroup title="카드 자동결제" contentStyle={styles.section}>
+      <View style={styles.groupBody}>
         <Row label="오늘 결제" value={formatKrw(monthly)} strong />
         <Text style={styles.hint}>
           공급가액 {formatKrw(supply)} + 부가세 {formatKrw(monthly - supply)}이에요.
@@ -385,7 +384,7 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
         onPress={() => setAgreed((v) => !v)}
         style={({ pressed }) => [styles.consentRow, pressed && { opacity: 0.7 }]}
         accessibilityRole="checkbox"
-        accessibilityState={{ checked: agreed }}
+        accessibilityState={{ checked: agreed }} aria-checked={agreed}
         accessibilityLabel="카드 자동결제 조건 동의"
       >
         <Ionicons name={agreed ? 'checkbox' : 'square-outline'} size={22} color={agreed ? InkColors.ink : InkColors.ink3} />
@@ -400,9 +399,9 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
         style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}
         accessibilityRole="button"
       >
-        {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>카드 등록하고 결제하기</Text>}
+        {busy ? <ActivityIndicator color={InkColors.ink} /> : <Text style={styles.primaryText}>카드 등록하고 결제하기</Text>}
       </Pressable>
-    </View>
+    </SectionGroup>
   );
 }
 
@@ -416,6 +415,7 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
 }
 
 const styles = StyleSheet.create({
+  groupBody: { gap: Space.md },
   section: { gap: Space.md },
   sectionLabel: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, marginLeft: 2 },
   card: {
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   headTitle: { fontSize: 14, fontWeight: '900', color: InkColors.ink },
   body: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
-  hint: { fontSize: 12, color: InkColors.ink3, lineHeight: 18 },
+  hint: { fontSize: 14, color: InkColors.ink2, lineHeight: 21 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.md },
   rowLabel: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
   rowValue: { flexShrink: 1, textAlign: 'right', fontSize: 14, color: InkColors.ink, fontWeight: '700' },
@@ -447,8 +447,8 @@ const styles = StyleSheet.create({
   storeName: { flex: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink },
   consentRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingHorizontal: 2 },
   consentText: { flex: 1, fontSize: 15, lineHeight: 22, color: InkColors.ink2, fontWeight: '600' },
-  primary: { backgroundColor: BrandColors.brand, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center' },
-  primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  primary: ButtonStyles.brand,
+  primaryText: ButtonStyles.brandText,
   ghost: { paddingVertical: 13, borderRadius: Radius.md, alignItems: 'center', backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
   ghostText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
   danger: { paddingVertical: 13, borderRadius: Radius.md, alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: BrandColors.warn },

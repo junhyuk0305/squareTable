@@ -25,7 +25,7 @@ import { HubTopBar } from '@/components/hub/HubTopBar';
 import { HubTabBar } from '@/components/HubTabBar';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
-import { SectionLabel } from '@/components/SectionLabel';
+import { SectionGroup } from '@/components/SectionGroup';
 import { TwoPane, Pane } from '@/components/shell/TwoPane';
 import { useStoreEntryStore } from '@/lib/store/useStoreEntryStore';
 
@@ -258,10 +258,11 @@ export default function StoresHub() {
                 {/* 역할은 매장별(0093)이라 목록 전체를 한 단어로 부를 수 없다 — 전 매장이 같은 역할일
                     때만 표기하고, 섞여 있으면(사장 매장 + 매니저 매장) 각 매장 줄에서 말한다.
                     예전엔 "매니저 매장이 하나라도 있으면 매니저"라 사장 매장까지 매니저로 불렀다. */}
-                <SectionLabel title={`매장 ${storeCount}곳`} hint={uniformRole ? roleNoun(uniformRole) : undefined} />
+
                 {/* 넓은 웹에서만 두 단 — 왼쪽 목록 / 오른쪽 '매장 추가'. 폰 폭에서는 지금 순서 그대로 한 줄씩이다. */}
                 <TwoPane gap={Space.md}>
                 <Pane side="main">
+                <SectionGroup title={`매장 ${storeCount}곳`} description={uniformRole ? roleNoun(uniformRole) : undefined} flush>
                 {visibleStores.map((s, i) => {
                   const ov = overview[s.unit_id];
                   const isActive = s.unit_id === unitId;
@@ -271,20 +272,20 @@ export default function StoresHub() {
                     <Appear key={s.unit_id} delay={stagger(i)}>
                     <Pressable
                       onPress={() => enterStore(s)}
-                      style={({ pressed }) => [styles.card, isActive && styles.cardActive, pressed && styles.pressed]}
+                      style={({ pressed }) => [styles.card, i > 0 && styles.cardDivider, isActive && styles.cardActive, pressed && styles.pressed]}
                     >
                       <View style={[styles.cardIcon, { backgroundColor: color + '22' }]}>
                         <Ionicons name={industryIcon(s.industry)} size={20} color={color} />
                       </View>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={styles.cardTitleRow}>
-                          <Text style={styles.storeName} numberOfLines={1}>{pref.nickname || s.store_name}</Text>
+                          <Text style={styles.storeName}>{pref.nickname || s.store_name}</Text>
                           {/* ★0196: 잠긴 매장은 이 목록에 없다(이전 매장) — '잠김' 배지는 사라졌다. */}
                           {isActive && <Text style={styles.recentBadge}>최근</Text>}
                         </View>
                         {/* 역할이 섞인 사람에겐 이 줄이 "이 매장에서 나는 누구인가"를 말한다.
                             전 매장이 같은 역할이면 위 섹션 라벨이 이미 말했으므로 반복하지 않는다. */}
-                        <Text style={styles.storeMeta} numberOfLines={1}>
+                        <Text style={styles.storeMeta}>
                           {(uniformRole ? '' : `${roleNoun(s.role)} · `) +
                             (s.role === 'owner' && ov
                               ? `직원 ${ov.staff} · 노하우 ${ov.knowhow}`
@@ -308,6 +309,7 @@ export default function StoresHub() {
                   );
                 })}
 
+                </SectionGroup>
                 </Pane>
 
                 {/* 매장 추가(사장) / 매장 합류(직원) */}
@@ -345,7 +347,7 @@ function industryIcon(industry: string | null): keyof typeof Ionicons.glyphMap {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
+  safe: { flex: 1, backgroundColor: InkColors.bgSoft },
   scroll: { padding: Space.gutter, gap: Space.xl, paddingBottom: 40 },
 
   titleBlock: { gap: 4 },
@@ -355,25 +357,15 @@ const styles = StyleSheet.create({
   section: { gap: Space.sm },
 
   // 카드 문법은 블록 v2(PickRow·RollupRows)와 같다 — Radius.md · 1px line · e1 · 좌우 lg/상하 md · 눌림 0.7.
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.md,
-    ...Elevation.e1,
-  },
+  card: { flexDirection: 'row', alignItems: 'center', gap: Space.md, padding: Space.lg, minHeight: 72 },
+  cardDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   pressed: { opacity: 0.7 },
-  cardActive: { borderColor: BrandColors.yellowDeep },
+  cardActive: { backgroundColor: InkColors.bgSoft },
   cardIcon: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  storeName: { flexShrink: 1, fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
+  storeName: { flexShrink: 1, fontSize: 16, lineHeight: 24, fontWeight: '800', color: InkColors.ink },
   recentBadge: { fontSize: 10, fontWeight: '900', color: '#7a5f10', backgroundColor: BrandColors.yellow, paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.pill, overflow: 'hidden' },
-  storeMeta: { fontSize: 13, color: InkColors.ink2, marginTop: 2 },
+  storeMeta: { fontSize: 14, color: InkColors.ink2, marginTop: 2 },
   cardRight: { alignItems: 'flex-end', gap: Space.sm },
   needChip: {
     fontSize: 11, fontWeight: '900', color: '#8a5a12',
@@ -395,13 +387,13 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.ink3,
-    borderStyle: 'dashed',
+    borderStyle: 'solid',
     paddingHorizontal: Space.lg,
     paddingVertical: Space.md,
   },
   addIcon: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
   addTitle: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
-  addSub: { fontSize: 12, color: InkColors.ink2, marginTop: 2 },
+  addSub: { fontSize: 14, color: InkColors.ink2, marginTop: 2 },
 
   empty: { alignItems: 'center', paddingVertical: Space.xl, gap: Space.md },
   emptyIcon: { width: 64, height: 64, borderRadius: Radius.lg, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },

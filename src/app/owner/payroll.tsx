@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 import { View, Text, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { KeyboardShift } from '@/components/KeyboardShift';
@@ -11,7 +12,6 @@ import { LoadErrorState } from '@/components/LoadErrorState';
 import { payPeriodFor, payLabelOf, paydayAfter, fmtPeriodRange, PAY_PERIOD_FROM } from '@/lib/utils/payPeriod';
 import { todayStr } from '@/lib/utils/attendance';
 import { ChachakSwitch } from '@/components/ChachakSwitch';
-import { SectionLabel } from '@/components/SectionLabel';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -49,8 +49,8 @@ export default function OwnerPayrollScreen() {
       <KeyboardShift>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.block}>
-          <SectionLabel title="수당·공제" />
-          <View style={styles.card}>
+          <SectionGroup title="수당·공제">
+          <View>
             <ToggleRow label="휴게시간 공제" hint="4시간 이상 30분 · 8시간 이상 1시간(무급)" value={settings.breakDeduction} onToggle={(v) => setSetting('breakDeduction', v)} />
             <ToggleRow label="야간수당" hint="22~06시 0.5배 가산 (5인 이상 의무)" value={settings.nightAllowance} onToggle={(v) => setSetting('nightAllowance', v)} />
             <ToggleRow label="연장수당" hint="1일 8시간 초과분 1.5배 (5인 이상)" value={settings.overtimeAllowance} onToggle={(v) => setSetting('overtimeAllowance', v)} />
@@ -73,13 +73,14 @@ export default function OwnerPayrollScreen() {
               계산 로직이 아니라 문구가 틀렸으므로 문구를 사실로 바꾼다. */}
           <Text style={styles.note}>* 켠 항목은 바로 급여 계산에 반영돼요.</Text>
           <Text style={styles.note}>* 주휴수당은 그 주 일요일이 있는 달에 들어가요.</Text>
-        </View>
+        </SectionGroup>
+</View>
 
         <View style={styles.block}>
-          <SectionLabel title="정산 기준" />
+          <SectionGroup title="정산 기준">
           {/* 카드가 아니다 — 상하 헤어라인만 두른 행 묶음(MiniStats와 같은 '카드 아님' 신호).
               값은 여기서 그대로 고친다. 요약만 보여주고 편집을 시트로 빼면 되돌릴 수단이 한 겹 멀어진다. */}
-          <View style={styles.rows}>
+          <View>
             <NumberRow label="정산 시작일" suffix="일" value={settings.periodStartDay} onChange={(n) => setSetting('periodStartDay', clampDay(n))} />
             <NumberRow label="급여 지급일" suffix="일" value={settings.payday} onChange={(n) => setSetting('payday', clampDay(n))} last />
           </View>
@@ -88,7 +89,8 @@ export default function OwnerPayrollScreen() {
             이번 정산 기간 {fmtPeriodRange(period)}{period.kind === 'transition' ? '(전환 기간)' : ''} · {fmtDay(paydayAfter(period.to, settings.payday))} 지급 예정
           </Text>
           <Text style={styles.note}>* 정산 시작일을 바꾸면 지난 기간 금액도 새 시작일로 다시 계산돼요. {fmtDay(PAY_PERIOD_FROM)} 전 기간은 바뀌지 않아요.</Text>
-        </View>
+        </SectionGroup>
+</View>
         <View style={{ height: 12 }} />
       </ScrollView>
       </KeyboardShift>
@@ -174,12 +176,14 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   rowLast: { borderBottomWidth: 0 },
   rowLabel: { fontSize: 15, fontWeight: '600', color: InkColors.ink },
-  rowHint: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
+  rowHint: { fontSize: 14, lineHeight: 21, color: InkColors.ink2, marginTop: 2 },
   numInput: {
-    minWidth: 64,
+    width: 112,
+    maxWidth: '45%',
+    minHeight: 48,
     textAlign: 'right',
     borderWidth: 1,
-    borderColor: InkColors.line,
+    borderColor: InkColors.controlBorder,
     borderRadius: Radius.sm,
     paddingHorizontal: 10,
     paddingVertical: 7,

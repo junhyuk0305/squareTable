@@ -103,9 +103,9 @@ export function FlipMatch({ payload, disabled, onAnswer }: QuizRendererProps) {
               ]}
               accessibilityRole="button"
               accessibilityLabel={shown ? card.text : `${i + 1}번 카드 · 덮여 있어요`}
-              accessibilityState={{ selected: shown, disabled: disabled || shown }}
+              accessibilityState={{ selected: shown, disabled: disabled || shown }} aria-pressed={shown} aria-disabled={disabled || shown}
             >
-              <Text style={[st.cardText, !shown && st.cardBack]} numberOfLines={3}>
+              <Text style={[st.cardText, !shown && st.cardBack]}>
                 {shown ? card.text : '?'}
               </Text>
             </Pressable>
@@ -123,19 +123,19 @@ export function FlipMatch({ payload, disabled, onAnswer }: QuizRendererProps) {
 const st = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   card: {
-    width: '31%',
-    minHeight: 88,
-    aspectRatio: 1,
+    width: '47%',
+    flexGrow: 1,
+    minHeight: 96,
     borderWidth: 1,
-    borderColor: InkColors.line,
+    borderColor: InkColors.controlBorder,
     borderRadius: Radius.md,
     backgroundColor: InkColors.bgSoft,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Space.xs,
+    padding: Space.md,
   },
   cardOpen: { borderColor: InkColors.ink, backgroundColor: InkColors.bg },
-  cardLocked: { borderColor: BrandColors.good, backgroundColor: '#E6F1EA' },
+  cardLocked: { borderColor: BrandColors.good, backgroundColor: BrandColors.goodSoft },
   cardText: { fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 20, textAlign: 'center' },
   cardBack: { fontSize: 22, color: InkColors.ink3 },
 });

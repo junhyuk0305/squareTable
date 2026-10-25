@@ -34,9 +34,10 @@ export function ChachakSwitch({
     <Pressable
       onPress={() => onValueChange(!value)}
       accessibilityRole="switch"
-      accessibilityState={{ checked: value }}
+      accessibilityState={{ checked: value }} aria-checked={value}
       accessibilityLabel={accessibilityLabel}
       hitSlop={8}
+      style={styles.hit}
     >
       <Animated.View style={[styles.track, { backgroundColor: trackColor }]}>
         <Animated.View style={[styles.knob, { backgroundColor: knobColor, transform: [{ translateX: knobX }] }]} />
@@ -46,6 +47,7 @@ export function ChachakSwitch({
 }
 
 const styles = StyleSheet.create({
+  hit: { minWidth: 50, minHeight: 48, justifyContent: 'center' },
   track: {
     width: W,
     height: H,

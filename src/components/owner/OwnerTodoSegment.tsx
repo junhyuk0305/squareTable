@@ -1,10 +1,10 @@
+import { SectionGroup } from '@/components/SectionGroup';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { Appear, stagger } from '@/components/Appear';
 import { EmptyState } from '@/components/EmptyState';
-import { SectionLabel } from '@/components/SectionLabel';
 import { SimilarGroupRow } from '@/components/SimilarGroupRow';
 import { AiAnswerRow } from '@/components/AiAnswerRow';
 import { FocusCard, RollupRows, type RollupRow } from '@/components/blocks';
@@ -203,24 +203,25 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
           300건 매장에서도 "50건"이라고 했다 — 그건 거짓이고, 51번째부터는 앱 어디에도 없다. */}
       {badOpen && badAnswers.length > 0 && (
         <View style={styles.group}>
-          <SectionLabel title="답이 틀렸대요" hint={`${badAnswers.length}건`} />
+          <SectionGroup title="답이 틀렸대요" description={`${badAnswers.length}건`}>
           <Text style={styles.groupHint}>노하우를 눌러 고치면 다음부터 제대로 답해요.</Text>
           <PagedList
             items={badAnswers}
             render={(r, i) => (
               <Appear key={r.id} delay={stagger(i)}>
-                <AiAnswerRow row={r} titleOf={entryTitleOf} onOpenEntry={goEntry} />
+                <AiAnswerRow embedded row={r} titleOf={entryTitleOf} onOpenEntry={goEntry} />
               </Appear>
             )}
           />
-        </View>
+        </SectionGroup>
+</View>
       )}
 
       {restPending.length > 0 && (
         <View style={styles.group}>
           {/* ★수는 서버 집계(pendingTotal)를 쓴다 — 목록은 상한까지만 오므로 길이로 세면 거짓이 된다.
               히어로 1건을 뺀 '남은' 수로 말한다. */}
-          <SectionLabel title="답할 질문" hint={`남은 ${Math.max(0, (pendingTotal ?? pending.length) - 1)}건`} />
+          <SectionGroup title="답할 질문" description={`남은 ${Math.max(0, (pendingTotal ?? pending.length) - 1)}건`}>
           <PagedList
             items={restPending}
             render={(uq, i) => (
@@ -229,37 +230,38 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
               </Appear>
             )}
           />
-        </View>
+        </SectionGroup>
+</View>
       )}
 
       {/* ★AI 답변 목록 읽기 실패를 "없음"으로 위장하지 않는다(#27) — 이 축이 사라지면
           👎 교정 루프가 통째로 안 보이고 **틀린 답이 그대로 노하우로 굳는다.** */}
       {aiError && (
         <View style={styles.group}>
-          <SectionLabel title="AI가 답한 질문" />
+          <SectionGroup title="AI가 답한 질문">
           <Text style={styles.aiErr}>목록을 불러오지 못했어요. 연결을 확인하고 다시 들어와 주세요.</Text>
-        </View>
+        </SectionGroup>
+</View>
       )}
       {!aiError && okAnswers.length > 0 && (
         <View style={styles.group}>
-          <SectionLabel
-            title="AI가 답한 질문"
-            hint={aiAnswers.length >= AI_ANSWER_LIMIT ? `최근 ${okAnswers.length}건` : `${okAnswers.length}건`}
-          />
+          <SectionGroup title="AI가 답한 질문"
+            description={aiAnswers.length >= AI_ANSWER_LIMIT ? `최근 ${okAnswers.length}건` : `${okAnswers.length}건`}>
           <PagedList
             items={okAnswers}
             render={(r, i) => (
               <Appear key={r.id} delay={stagger(i)}>
-                <AiAnswerRow row={r} titleOf={entryTitleOf} onOpenEntry={goEntry} />
+                <AiAnswerRow embedded row={r} titleOf={entryTitleOf} onOpenEntry={goEntry} />
               </Appear>
             )}
           />
-        </View>
+        </SectionGroup>
+</View>
       )}
 
       {peerAnswers.length > 0 && (
         <View style={styles.group}>
-          <SectionLabel title="동료가 답한 질문" hint={`최근 30일 ${peerAnswers.length}건`} />
+          <SectionGroup title="동료가 답한 질문" description={`최근 30일 ${peerAnswers.length}건`}>
           <PagedList
             items={peerAnswers}
             render={(r, i) => (
@@ -273,7 +275,8 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
               </Appear>
             )}
           />
-        </View>
+        </SectionGroup>
+</View>
       )}
     </View>
   );

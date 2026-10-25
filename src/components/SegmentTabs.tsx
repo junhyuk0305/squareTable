@@ -77,6 +77,7 @@ export function SegmentTabs({
             onPress={() => onChange(it.key)}
             accessibilityRole="tab"
             accessibilityState={{ selected: isOn }}
+            aria-selected={isOn}
             accessibilityLabel={it.label}
             style={styles.seg}
           >
@@ -109,7 +110,7 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bgSoft,
     borderRadius: Radius.md,
   },
-  seg: { flex: 1, paddingVertical: 9, borderRadius: Radius.sm, alignItems: 'center' },
+  seg: { flex: 1, minHeight: 48, justifyContent: 'center', paddingVertical: 9, borderRadius: Radius.sm, alignItems: 'center' },
   // 슬라이드 알약 — wrap 패딩(4)에 맞춰 상하 4, 활성 세그먼트 위에 겹친다(text는 그 위로 렌더).
   pill: {
     position: 'absolute',

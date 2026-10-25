@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 import { useEffect, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { fetchMyIapSubscription, fetchMyPreviousUnits, fetchMyMarketingConsent, rpcSetMyMarketingConsent } from '@/lib/db';
@@ -16,7 +17,6 @@ import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
-import { SectionLabel } from '@/components/SectionLabel';
 import { PricingTable } from '@/components/PricingTable';
 import { SHOW_BILLING, showIapSurface, showPaymentSurface } from '@/lib/config/store-policy';
 import { deleteConfirmText, deleteNotice } from '@/lib/account/copy';
@@ -246,11 +246,9 @@ export default function AccountSettings() {
             </SettingsSection>
           ) : (
             <View style={styles.billingSection}>
-              <SectionLabel
-                icon="card-outline"
+              <SectionGroup icon="card-outline"
                 title="구독 및 결제"
-                hint={multiOwner && storeName ? `${storeName} 기준` : undefined}
-              />
+                description={multiOwner && storeName ? `${storeName} 기준` : undefined}>
               <PricingTable currentPlan={plan} footNote={null} />
               <Pressable
                 onPress={() => router.push('/billing' as never)}
@@ -261,7 +259,8 @@ export default function AccountSettings() {
                 <Text style={styles.billingCtaText}>요금제 보기 · 바꾸기</Text>
                 <Ionicons name="chevron-forward" size={16} color={InkColors.bubbleText} />
               </Pressable>
-            </View>
+            </SectionGroup>
+</View>
           ))}
 
         {/* 이전 매장(0196) — 구독 및 결제 바로 아래. 닫힌 매장이 있을 때만(대다수 사장에겐 안 보인다). */}
@@ -292,7 +291,7 @@ export default function AccountSettings() {
           <SettingsRow icon="information-circle-outline" label="버전 정보" value={`v${version}`} />
         </SettingsSection>
 
-        <SettingsSection>
+        <SettingsSection title="계정 관리">
           {/* 무해한 액션(로그아웃) 먼저, 되돌리기 어려운 액션(탈퇴)은 아래로 — 오탭 방지. */}
           <SettingsRow first icon="log-out-outline" label="로그아웃" onPress={onLogout} />
           {isOwnerAccount && (
@@ -311,7 +310,7 @@ export default function AccountSettings() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
+  safe: { flex: 1, backgroundColor: InkColors.bgSoft },
   scroll: { padding: 20, paddingTop: 16 },
   profile: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, marginBottom: 20 },
   avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: BrandColors.brandSoft, alignItems: 'center', justifyContent: 'center' },

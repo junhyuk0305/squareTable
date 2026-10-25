@@ -21,6 +21,8 @@ import { readFileSync } from 'node:fs';
 //   블록을 추가·삭제하면 **여기도 같이 고친다** — ui.md가 "쓰이지 않으면 삭제"를 규정하므로
 //   드리프트가 실제로 생긴다(H1·H2·I2·L4가 08-06에 삭제된 선례).
 const BLOCK_LEAF = new Set([
+  // A v2 category is one block; its title, actions and rows are internal atoms.
+  'SectionGroup',
   // src/components/blocks/ 8종 — ui.md와 정확히 같아야 한다
   'ProgressRing', 'StepProgress', 'ActionRow', 'MiniStats', 'AlertRow',
   // 2026-08-07 추가 3종 — 화면에서 '한 덩어리'로 서는 것만 여기 넣는다.

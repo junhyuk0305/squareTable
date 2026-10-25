@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
@@ -483,7 +484,7 @@ export default function QuizDetailScreen() {
                      "개인 오답 저장 금지"를 뒤집은 자리이므로, 되돌릴 땐 0190 과 같이 본다. */}
               {/* 링크 손님 결과(N10) — 손님만 풀었어도 결과 탭이 비지 않는다. 제출별 결과는 설정 탭 링크 섹션에 있다. */}
               {guestCount > 0 ? (
-                <View style={st.listCard}>
+                <SectionGroup title="외부 응시 결과" flush>
                   <Pressable
                     onPress={() => setSeg('settings')}
                     style={({ pressed }) => [st.row, pressed && { opacity: 0.6 }]}
@@ -496,10 +497,10 @@ export default function QuizDetailScreen() {
                     </View>
                     <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
                   </Pressable>
-                </View>
+                </SectionGroup>
               ) : null}
               {people.length > 0 ? (
-              <View style={st.listCard}>
+              <SectionGroup title="직원 응시 결과" flush>
                 {people.map((p, i) => {
                   const mine = p.mine;
                   const done = mine.length > 0;
@@ -524,7 +525,7 @@ export default function QuizDetailScreen() {
                     </Pressable>
                   );
                 })}
-              </View>
+              </SectionGroup>
               ) : null}
               {/* '다시 알리기'는 설정 탭(배포 섹션)으로 옮겼다 — 결과 탭은 결과만 본다(2026-09-13).
                   판정(누가 안 풀었나)은 여기 `notDone` 그대로이고, 버튼만 그쪽에서 그린다. */}
@@ -550,7 +551,7 @@ export default function QuizDetailScreen() {
           />
         ) : (
           <>
-            <View style={st.listCard}>
+            <SectionGroup title="문항 목록" flush>
               {items.map((q, i) => {
                 const s = itemAnswers(quizAnswers, q.id);
                 const stale = staleItems.some((x) => x.id === q.id);
@@ -582,7 +583,7 @@ export default function QuizDetailScreen() {
                   </Appear>
                 );
               })}
-            </View>
+            </SectionGroup>
 
             {/* C2 되먹임 — 우리만의 차별점. 오답률을 직원 평가가 아니라 **노하우 결함 신호**로 뒤집는다. */}
             {items

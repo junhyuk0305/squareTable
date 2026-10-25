@@ -37,11 +37,11 @@ export type RollupRow = {
  * ★행 자체가 Pressable 이고 안에 다른 버튼을 두지 않는다(RN-web 중첩 button 금지).
  * 표시 전용: 건수·대상 문구는 호출부가 정한다.
  */
-export function RollupRows({ rows }: { rows: RollupRow[] }) {
+export function RollupRows({ rows, embedded = false }: { rows: RollupRow[]; embedded?: boolean }) {
   if (rows.length === 0) return null;
 
   return (
-    <View style={styles.card}>
+    <View style={!embedded && styles.card}>
       {rows.map((r, i) => (
         <Pressable
           key={r.key}
@@ -51,8 +51,8 @@ export function RollupRows({ rows }: { rows: RollupRow[] }) {
           style={({ pressed }) => [styles.row, i > 0 && styles.divider, pressed && styles.pressed]}
         >
           <View style={styles.text}>
-            <Text style={styles.title} numberOfLines={1}>{r.title}</Text>
-            {r.target ? <Text style={styles.target} numberOfLines={1}>{r.target}</Text> : null}
+            <Text style={styles.title}>{r.title}</Text>
+            {r.target ? <Text style={styles.target}>{r.target}</Text> : null}
           </View>
           <ProgressPill text={String(r.count)} tone="neutral" />
           <Ionicons name="chevron-forward" size={14} color={InkColors.ink3} />
@@ -78,5 +78,5 @@ const styles = StyleSheet.create({
   title: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
   // 대상 줄은 꼬리표(보조)라 본문 15sp 하한 대상이 아니다.
   // 제목 바로 아래 붙인다(2px) — xs(4)면 제목·대상이 따로 노는 두 줄로 읽혔다(2026-08-27 실측).
-  target: { marginTop: 2, fontSize: 12, lineHeight: 16, color: InkColors.ink3 },
+  target: { marginTop: Space.xs, fontSize: 15, lineHeight: 23, color: InkColors.ink2 },
 });

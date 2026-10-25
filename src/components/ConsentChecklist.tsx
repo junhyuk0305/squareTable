@@ -2,6 +2,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { consentRows, type ConsentChecked, type ConsentKey } from '@/lib/config/consent';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { SectionGroup } from '@/components/SectionGroup';
 
 /**
  * 가입 동의 체크리스트(J12). 가입 화면과 프로필 완성(구글 가입) 화면이 같이 쓴다.
@@ -27,8 +28,8 @@ export function ConsentChecklist({
   const toggleOne = (k: ConsentKey) => onChange({ ...checked, [k]: !checked[k] });
 
   return (
-    <View style={styles.consentBox}>
-      <Pressable onPress={toggleAll} style={styles.consentAll}>
+    <SectionGroup title="이용약관" contentStyle={{ gap: 4 }}>
+      <Pressable onPress={toggleAll} style={styles.consentAll} accessibilityRole="checkbox" accessibilityState={{ checked: all }} aria-checked={all}>
         <View style={[styles.checkbox, all && styles.checkboxOn]}>
           {all && <Text style={styles.checkmark}>✓</Text>}
         </View>
@@ -36,7 +37,7 @@ export function ConsentChecklist({
       </Pressable>
       <View style={styles.consentDivider} />
       {rows.map((r) => (
-        <Pressable key={r.key} onPress={() => toggleOne(r.key)} style={styles.consentRow}>
+        <Pressable key={r.key} onPress={() => toggleOne(r.key)} style={styles.consentRow} accessibilityRole="checkbox" accessibilityState={{ checked: !!checked[r.key] }} aria-checked={!!checked[r.key]}>
           <View style={[styles.checkboxSm, checked[r.key] && styles.checkboxOn]}>
             {checked[r.key] && <Text style={styles.checkmarkSm}>✓</Text>}
           </View>
@@ -51,16 +52,15 @@ export function ConsentChecklist({
           )}
         </Pressable>
       ))}
-    </View>
+    </SectionGroup>
   );
 }
 
 const styles = StyleSheet.create({
-  consentBox: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: InkColors.line, borderRadius: 14, padding: 14, marginTop: 8, gap: 4 },
-  consentAll: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 2 },
+  consentAll: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingVertical: 2 },
   consentAllText: { flex: 1, fontSize: 14, fontWeight: '800', color: InkColors.ink },
   consentDivider: { height: 1, backgroundColor: InkColors.line, marginVertical: 6 },
-  consentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
+  consentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingVertical: 5 },
   checkbox: {
     width: 22,
     height: 22,

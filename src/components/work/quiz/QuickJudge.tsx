@@ -27,6 +27,7 @@ export function QuickJudge({ payload, disabled, result, onAnswer }: QuizRenderer
   const [at, setAt] = useState(0);
   const [picks, setPicks] = useState<number[]>([]);
   const [leftMs, setLeftMs] = useState(limitMs);
+  const remainingMs = useRef(limitMs);
 
   const done = at >= cards.length;
   // 서버는 맞았을 때 answer 를 null 로 준다(정답은 틀렸을 때만) → 그때는 내가 고른 것이 곧 정답.
@@ -43,6 +44,7 @@ export function QuickJudge({ payload, disabled, result, onAnswer }: QuizRenderer
     const next = [...picks, v];
     setPicks(next);
     setAt(at + 1);
+    remainingMs.current = limitMs;
     setLeftMs(limitMs); // 다음 카드의 시계는 여기서 되감는다(이펙트 본문에서 setState 하지 않기 위해)
     if (next.length === cards.length) onAnswer(next);
   };
@@ -54,10 +56,12 @@ export function QuickJudge({ payload, disabled, result, onAnswer }: QuizRenderer
   });
 
   useEffect(() => {
-    if (done || result) return;
+    if (disabled || done || result) return;
     const started = Date.now();
+    const remaining = remainingMs.current;
     const id = setInterval(() => {
-      const rem = limitMs - (Date.now() - started);
+      const rem = remaining - (Date.now() - started);
+      remainingMs.current = Math.max(0, rem);
       if (rem <= 0) {
         clearInterval(id);
         setLeftMs(0);
@@ -67,7 +71,7 @@ export function QuickJudge({ payload, disabled, result, onAnswer }: QuizRenderer
       }
     }, 100);
     return () => clearInterval(id);
-  }, [at, done, result, limitMs]);
+  }, [at, disabled, done, result, limitMs]);
 
   // 판정 뒤에는 카드별로 무엇이 맞는 답이었는지 되짚어 준다.
   if (result) {

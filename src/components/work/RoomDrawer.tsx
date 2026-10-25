@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 import { useMemo, useState, type ReactNode } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -5,7 +6,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { StoredImage } from '@/components/StoredImage';
 import { Appear } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
-import { SectionLabel } from '@/components/SectionLabel';
 import { ChachakSwitch } from '@/components/ChachakSwitch';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
@@ -263,17 +263,15 @@ function Block({
 }) {
   return (
     <Appear style={s.block}>
-      <SectionLabel
-        title={title}
-        trailing={
+      <SectionGroup title={title}
+        action={
           moreLabel && onMore ? (
             <Pressable onPress={onMore} accessibilityRole="button" accessibilityLabel={`${title} ${moreLabel}`} style={({ pressed }) => [s.tapBox, pressed && { opacity: 0.6 }]}>
               <Text style={s.blockMore}>{moreLabel}</Text>
             </Pressable>
           ) : undefined
-        }
-      />
-      <View style={s.card}>{children}</View>
+        } contentStyle={s.card}>
+      {children}</SectionGroup>
     </Appear>
   );
 }

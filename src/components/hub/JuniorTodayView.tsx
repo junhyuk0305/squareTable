@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 // 직원 허브 '오늘' 탭 본문 — 3블록(기획 v2 §04): 오늘 근무 · 오늘 할 일 · 이번달 근무/예상 급여.
 // 전부 본인 데이터(my_cross_summary 는 본인 행만, 할일은 0077 원시 행 + isPendingAssignment SSOT).
 // 사장 지표는 이 화면에 없다(시장 표준: 직원에게 관리자 위젯 숨김 — When I Work 명문화).
@@ -20,7 +21,6 @@ import { useForegroundRefresh } from '@/lib/app/useForegroundRefresh';
 import { storeColor } from '@/lib/utils/storeColor';
 import { todayStr } from '@/lib/utils/attendance';
 import { isPendingAssignment, isUnreadMention } from '@/lib/utils/notifications';
-import { SectionLabel } from '@/components/SectionLabel';
 import { FocusCard } from '@/components/blocks/FocusCard';
 import { StatCardGrid } from '@/components/blocks/StatCardGrid';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -168,7 +168,7 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
     <>
       {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
       {header}
-      <View style={{ gap: Space.md }}>
+      <View style={{ gap: Space.xl }}>
       {/* ── 0) 히어로 — 가장 급한 1건(§7-4 A). 없으면 안 그린다. ── */}
       {hero && (
         <Appear delay={stagger(0)}>
@@ -186,8 +186,8 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
 
       {/* ── 1) 오늘 근무 ── */}
       <Appear delay={stagger(1)}>
-        <SectionLabel title="오늘 근무" />
-        <View style={styles.card}>
+        <SectionGroup title="오늘 근무" contentStyle={styles.cardGroup}>
+
           {todayShifts.length > 0 ? (
             todayShifts.map((s) => (
               <Pressable
@@ -219,7 +219,7 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
             </View>
           )}
           <Text style={styles.caption}>바뀐 교대는 매장 근무표에서 확인해요</Text>
-        </View>
+        </SectionGroup>
       </Appear>
 
       {/* ── 2) 남은 할 일 — 히어로로 올라간 1건은 여기서 뺀다(같은 것을 두 번 그리지 않는다).
@@ -227,11 +227,9 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
                바로 위 히어로와 정면으로 모순된다. ── */}
       {(!hero || restTodos.length > 0) && (
       <Appear delay={stagger(2)}>
-        <SectionLabel
-          title={hero ? '남은 할 일' : '오늘 할 일'}
-          hint={restTodos.length > 0 ? `${restTodos.length}건` : undefined}
-        />
-        <View style={styles.card}>
+        <SectionGroup title={hero ? '남은 할 일' : '오늘 할 일'}
+          description={restTodos.length > 0 ? `${restTodos.length}건` : undefined} contentStyle={styles.cardGroup}>
+
           {restTodos.length === 0 ? (
             <Text style={styles.emptyText}>오늘 처리할 일이 없어요</Text>
           ) : (
@@ -256,7 +254,7 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
                     />
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={styles.todoText} numberOfLines={2}>{it.text}</Text>
+                    <Text style={styles.todoText}>{it.text}</Text>
                     <View style={styles.subLine}>
                       <View style={[styles.subDot, { backgroundColor: colorOf(it.uid) }]} />
                       <Text style={styles.shiftSub} numberOfLines={1}>
@@ -280,7 +278,7 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
               )}
             </>
           )}
-        </View>
+        </SectionGroup>
       </Appear>
       )}
 
@@ -290,8 +288,8 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
                일별 원장은 매장 앱 출퇴근 화면이 갖고 있으므로 그쪽으로 보낸다(보조줄).
                매장이 2곳↑이면 매장별 분해가 실제 구성이지만 그건 바로 아래 카드가 이미 말한다. ── */}
       <Appear delay={stagger(3)} style={{ gap: Space.sm }}>
-        <SectionLabel title="이번달" />
-        <StatCardGrid
+        <SectionGroup title="이번달">
+        <StatCardGrid grouped
           items={[
             {
               key: 'hours',
@@ -313,8 +311,9 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
               : []),
           ]}
         />
+
         {myCross.length > 1 && (
-          <View style={styles.card}>
+          <View>
             {month.perStore.map((s) => (
               <View key={s.uid} style={styles.storeRow}>
                 <View style={[styles.dot, { backgroundColor: colorOf(s.uid) }]} />
@@ -327,6 +326,7 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
             ))}
           </View>
         )}
+      </SectionGroup>
       </Appear>
       </View>
     </>
@@ -336,6 +336,7 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
 const styles = StyleSheet.create({
   loading: { paddingVertical: Space.xl * 2, alignItems: 'center' },
   card: { ...CardStyles.list, marginTop: Space.sm },
+  cardGroup: {  },
 
   shiftRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.sm },
   shiftIcon: { width: 40, height: 40, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },

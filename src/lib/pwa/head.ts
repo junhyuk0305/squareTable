@@ -128,7 +128,9 @@ export function injectPwaHead(): void {
     font.textContent =
       "html,body,#root{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont," +
       "system-ui,'Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',sans-serif;" +
-      '-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-synthesis:none;}';
+      '-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-synthesis:none;}' +
+      // RN-Web Text와 body에 붙는 모달도 한글 글꼴을 상속한다. 인라인 아이콘 글꼴은 유지한다.
+      'body [dir="auto"],body button,body input,body textarea{font-family:inherit;}';
     document.head.appendChild(font);
   }
   // Pretendard 가변폰트(CDN). 이미 링크가 있으면(+html/static 모드) 중복 주입을 건너뛴다.

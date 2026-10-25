@@ -1,3 +1,4 @@
+import { SectionGroup } from '@/components/SectionGroup';
 import { useEffect, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, TextInput, StyleSheet, ScrollView, Platform } from 'react-native';
@@ -9,7 +10,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
-import { SectionLabel } from '@/components/SectionLabel';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
@@ -137,7 +137,7 @@ function StoreConfigForm() {
       {/* 운영시간 — 이 화면의 최우선. 2026-08-06: 카드 껍데기를 벗겨 시각 자체가 화면에서 가장 큰
           요소가 되게 했다(세 섹션이 전부 '제목→카드'라 한 종류의 나열로 읽히던 것을 여기서 끊는다). */}
       <View style={styles.section}>
-        <SectionLabel title="운영시간" />
+        <SectionGroup title="운영시간">
         <View style={styles.timeRow}>
           <View style={styles.timeField}>
             <Text style={styles.timeLabel}>오픈</Text>
@@ -166,11 +166,12 @@ function StoreConfigForm() {
           </View>
         </View>
         {!valid && <Text style={styles.warn}>HH:MM 형식으로, 오픈이 마감보다 빠르게 입력해 주세요.</Text>}
-      </View>
+      </SectionGroup>
+</View>
 
       {/* 정기 휴무 — 카드 없이 칩 줄. 선택 상태 요약(연중무휴·월·화)은 라벨 우측 hint 로 올렸다. */}
       <View style={styles.section}>
-        <SectionLabel title="정기 휴무" hint={closedDaysLabel(closedDays)} />
+        <SectionGroup title="정기 휴무" description={closedDaysLabel(closedDays)}>
         <View style={styles.dows}>
           {WEEKDAY_ORDER.map((wd) => {
             const on = closedDays.includes(wd);
@@ -186,12 +187,13 @@ function StoreConfigForm() {
           })}
         </View>
         <Text style={styles.hint}>쉬는 요일을 누르세요. 연중무휴면 모두 끄면 돼요.</Text>
-      </View>
+      </SectionGroup>
+</View>
 
       {/* 비고 — 이 화면에서 유일하게 카드로 남긴 블록(배치규칙⑤: 화면당 카드 1~2개는 남긴다).
           여러 줄 자유 입력이라 경계면이 있어야 어디까지 쓰는 칸인지 보인다. */}
       <View style={styles.section}>
-        <SectionLabel title="비고" />
+        <SectionGroup title="비고">
         <View style={styles.card}>
           <TextInput
             value={note}
@@ -202,7 +204,8 @@ function StoreConfigForm() {
             multiline
           />
         </View>
-      </View>
+      </SectionGroup>
+</View>
 
       <Pressable onPress={() => { void save(); }} disabled={!valid || saving} style={({ pressed }) => [styles.saveBtn, (!valid || saving) && { opacity: 0.4 }, pressed && valid && !saving && { opacity: 0.85 }]}>
         <Text style={styles.saveText}>{saved ? '저장됐어요 ✓' : saving ? '저장 중이에요' : '저장'}</Text>
@@ -283,7 +286,7 @@ function BizNoSection() {
 
   return (
     <View style={styles.section}>
-      <SectionLabel title="사업자등록번호" />
+      <SectionGroup title="사업자등록번호">
       <TextInput
         value={bizNo}
         onChangeText={(v) => { setErr(null); setBizNo(formatBizNo(v)); }}
@@ -313,7 +316,8 @@ function BizNoSection() {
       >
         <Text style={styles.bizBtnText}>{saving ? '저장 중이에요' : '번호 저장'}</Text>
       </Pressable>
-    </View>
+    </SectionGroup>
+</View>
   );
 }
 

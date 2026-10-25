@@ -7,7 +7,7 @@ import { useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 
-import { HqPage, HqPill, HqCard, HqField, HqSlab, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
+import { HqPage, HqPill, HqCard, HqField, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
 import { HqTable, Cell } from '@/components/hq/HqTable';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { useBrandStore } from '@/lib/store/useBrandStore';
@@ -82,8 +82,8 @@ export default function HqSettingsBillingScreen() {
     <HqPage title="결제" sub={SUB} testID="hq-settings-billing">
 
       {/* 요약 — 섹션 제목은 카드 밖, 칸은 라벨 위·값 아래(레퍼런스 개편). */}
-      <HqSlab title="이번 달" hint="월 선불 · 계좌이체와 세금계산서 · 자동결제 없음(계약 제6조)" />
-      <HqCard testID="hq-billing-summary">
+      <HqCard title="이번 달" sub="월 선불 · 계좌이체와 세금계산서 · 자동결제 없음(계약 제6조)">
+      <HqCard embedded testID="hq-billing-summary">
         <View style={styles.split}>
           <HqField label="매장당 월 계약가" hint="부가세 별도">{krw(price)}</HqField>
           <View style={styles.vline} />
@@ -96,14 +96,15 @@ export default function HqSettingsBillingScreen() {
           <HqField label="이용 기간">{brand?.paid_until ? `${brand.paid_until}까지` : '아직 결제 전'}</HqField>
         </View>
       </HqCard>
+</HqCard>
 
-      <HqSlab title="이번 달 청구 대상" hint={`${current.length}곳`} />
+      <HqCard title="이번 달 청구 대상" sub={`${current.length}곳`}>
       {current.length === 0 ? (
-        <HqCard>
+        <HqCard embedded>
           <HqEmpty text="본사 부담 매장이 아직 없어요. 매장 상세에서 요금 부담을 바꾸자고 제안할 수 있어요." />
         </HqCard>
       ) : (
-        <HqTable
+        <HqTable embedded
           columns={[
             { key: 'name', label: '매장', render: (r) => <Cell kind="name">{r.store_name}</Cell> },
             {
@@ -123,14 +124,15 @@ export default function HqSettingsBillingScreen() {
           testID="hq-billing-current"
         />
       )}
+</HqCard>
 
-      <HqSlab title="청구서" hint="발행과 입금 확인은 스퀘어테이블이 해요" />
+      <HqCard title="청구서" sub="발행과 입금 확인은 스퀘어테이블이 해요">
       {invoices.length === 0 ? (
-        <HqCard>
+        <HqCard embedded>
           <HqEmpty text="아직 발행된 청구서가 없어요." />
         </HqCard>
       ) : (
-        <HqTable
+        <HqTable embedded
           columns={[
             { key: 'period', label: '기간', width: 130, render: (r) => <Cell kind="name">{periodLabel(r.period)}</Cell> },
             { key: 'units', label: '매장', width: 90, align: 'right', render: (r) => <Cell kind="num">{r.unit_count}곳</Cell> },
@@ -142,9 +144,10 @@ export default function HqSettingsBillingScreen() {
           rowKey={(r) => r.id}
         />
       )}
+</HqCard>
 
-      <HqSlab title="정산 규칙" />
-      <HqCard>
+      <HqCard title="정산 규칙">
+      <HqCard embedded>
         <View style={styles.rules}>
           {BILLING_RULES.map((r) => (
             <Text key={r} style={styles.ruleItem}>· {r}</Text>
@@ -152,6 +155,7 @@ export default function HqSettingsBillingScreen() {
         </View>
         <Text style={styles.src}>가맹점주에게 이 요금을 월 회수하지 않아요(가맹사업법 제12조). 매장 부담 매장은 점주가 고른 요금제 그대로예요.</Text>
       </HqCard>
+</HqCard>
     </HqPage>
   );
 }

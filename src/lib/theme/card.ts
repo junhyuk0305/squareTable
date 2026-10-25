@@ -18,6 +18,13 @@ const base: ViewStyle = {
 };
 
 export const CardStyles = {
+  /** v2 category surface. Its title and rows share this single boundary. */
+  group: {
+    backgroundColor: InkColors.bg,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+  } as ViewStyle,
   /** 내용 카드 — 사방 16. */
   list: { ...base, padding: Space.lg } as ViewStyle,
   /** 행 목록 카드 — 좌우 16만. 위아래는 각 행이 자기 여백을 갖는다. */

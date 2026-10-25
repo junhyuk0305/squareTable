@@ -1,7 +1,7 @@
 import { View, Text, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { BrandColors } from '@/lib/theme/colors';
+import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { qs } from './quizStyles';
 
 /**
@@ -42,8 +42,8 @@ export function ChoiceList({
               pressed && { opacity: 0.7 },
             ]}
             accessibilityRole="button"
-            accessibilityLabel={c}
-            accessibilityState={{ selected: isPicked, disabled }}
+            accessibilityLabel={`${c}${showRight ? ', 정답' : ''}${isPicked ? ', 내 답' : ''}`}
+            accessibilityState={{ selected: isPicked, disabled }} aria-pressed={isPicked}
           >
             <Text style={qs.choiceText}>{c}</Text>
             {showRight || showWrong ? (
@@ -55,10 +55,10 @@ export function ChoiceList({
                 />
                 {/* 색만으로 상태를 구분하지 않는다 — 라벨 병기 */}
                 <Text style={[qs.choiceMark, { color: showRight ? BrandColors.goodText : BrandColors.badText }]}>
-                  {showRight ? '이게 맞아요' : '고른 답'}
+                  {showRight ? (isPicked ? '내 답 · 정답' : '정답') : '내 답 · 오답'}
                 </Text>
               </>
-            ) : null}
+            ) : isPicked ? <Ionicons name="checkmark-circle" size={22} color={InkColors.ink} /> : null}
           </Pressable>
         );
       })}
