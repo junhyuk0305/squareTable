@@ -5,17 +5,20 @@
 //   npm run qa:crawl -- --routes=/owner/dashboard,/junior/home --role=owner   (부분 재실행)
 //   ★Git Bash 에서는 `MSYS_NO_PATHCONV=1` 을 앞에 붙인다 — "/owner/…" 가 C:/Program Files/Git/owner/… 로 바뀐다.
 //
-// 무엇을 하나: 사장·직원 고정 계정 두 세션으로 src/app 의 라우트를 **전부** 열고, 화면마다 같은 규칙 R1~R11
+// 무엇을 하나: 사장·직원 고정 계정 두 세션으로 src/app 의 라우트를 **전부** 열고, 화면마다 같은 규칙 R1~R12
 // (scripts/lib/qa-oracles.mjs)만 검사한다. 케이스별 기대값은 적지 않는다 — 그건 여정 하니스(qa-journey-*) 몫.
 //   · 라우트 목록은 scripts/ia-snapshot.mjs 와 같은 방식으로 src/app 을 걸어 뽑는다(그 파일은 import 하면 바로 실행되므로 같은 코드를 쓴다).
 //   · 역할: /owner/* = 사장 · /junior/* = 직원 · 나머지 = 공용(두 세션 다). 다른 역할의 전용 화면은 R10(역할 경계)만 잰다.
 //   · 동적 [id] 는 그 계정이 가진 실제 id(사장 권한 읽기)로 채운다. 없으면 "표본 없음" 으로 적고 건너뛴다(센다).
 //   · 쓰기 유발 버튼은 누르지 않는다. 누르는 것은 헤더 '뒤로' 하나(R7). 브라우저 로컬 저장소 플래그만 심는다.
 //   · 기준선: 지난 FAIL 은 "알려진" 으로 세고 **새로 생긴 FAIL 만** 앞에 낸다. 새 FAIL 이 있으면 exit 1.
+//     규칙을 새로 넣으면(10-26 R12 내부 값 노출) 그 규칙의 FAIL 은 전부 '새 FAIL' 이다 — 고치거나, 오탐이 아님을 본 뒤 기준선을 갱신한다.
 //
 // 포트 9373(사장)·9374(직원) — 다른 하니스와 겹치지 않게(join 9333~ · task 9343~ · quiz 9353~ · ai 9363~).
 // 나눠 돌리기(10-26): --routes 로 묶음을 나누고 묶음마다 --port-base=9400·9402… --tag=a·b… 를 준다(결과 tmp/qa-crawl-last-<tag>.json).
 //   기준선 갱신(--update-baseline)은 나눠 돌린 결과로 하지 않는다 — 한 묶음의 FAIL 만 남는다.
+//   --tag 가 있으면 끝날 때 활성 매장을 되돌리지 않는다 — 먼저 끝난 묶음이 되돌리면 아직 도는 묶음이 다른 매장을 본다.
+//   원래 활성 매장이 store_001 이 아니었으면 그 값을 찍어 둔다(손으로 되돌린다).
 // 뷰포트 460×900(여정 하니스와 같음 · R11 의 460px 프레임).
 import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
@@ -235,8 +238,12 @@ console.log(`표본: ${Object.entries(SAMPLE).map(([k, v]) => `${k}=${Object.val
 try {
   await Promise.all((ONLY_ROLE ? [ONLY_ROLE] : ['owner', 'junior']).map(runRole));
 } finally {
-  await restoreActive(clients.owner, prevActive.owner);
-  await restoreActive(clients.junior, prevActive.junior);
+  if (TAG) {
+    if (prevActive.owner || prevActive.junior) console.log(`나눠 돌리기: 활성 매장을 되돌리지 않았다(원래 값 owner=${prevActive.owner ?? '-'} junior=${prevActive.junior ?? '-'})`);
+  } else {
+    await restoreActive(clients.owner, prevActive.owner);
+    await restoreActive(clients.junior, prevActive.junior);
+  }
 }
 
 // ── 집계 · 기준선 ───────────────────────────────────────────────────────────
