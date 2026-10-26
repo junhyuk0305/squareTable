@@ -13,6 +13,7 @@
 // ★ 삭제는 되돌릴 수 없다. 그래서 기본이 DRY-RUN 이고, 아래 TARGETS 밖의 이메일은 코드로 차단한다.
 // ★ 앱에서 가입할 땐 SMS 인증(signup.tsx:109)을 통과해야 하므로 **실제로 문자를 받는 번호**가 필요하다.
 //   0157 이후 번호 unique 스코프가 (번호, 가입역할)이라 같은 실번호로 사장 1개 + 직원 1개를 만들 수 있다.
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 
 const TARGETS = ['test.owner.0812@example.com', 'test.staff.0812@example.com'];
 const GUARD = /^test\.(owner|staff)\.0812@example\.com$/; // TARGETS 오타/확장으로 실계정을 건드리는 사고 차단

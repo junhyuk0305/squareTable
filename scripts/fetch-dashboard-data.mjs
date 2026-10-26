@@ -11,6 +11,7 @@
 //
 // 출력:  ../운영_대시보드_data.js   (대시보드 HTML 옆, 역시 로컬 전용)
 
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';

@@ -31,6 +31,7 @@
 //   service_role 키로 RLS 우회 → 절대 깃/클라 노출 금지(backfill 과 동일 주의).
 //   --fix 없이는 어떤 쓰기/외부호출도 하지 않는다(읽기 전용 점검이 기본).
 
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';

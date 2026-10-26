@@ -35,6 +35,7 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
+import { guardResolvedUrls } from './lib/local-target-guard.mjs';
 
 const here = (r) => fileURLToPath(new URL(r, import.meta.url));
 function pe(f){const o={};try{for(const l of readFileSync(f,'utf8').split(/\r?\n/)){const m=l.match(/^([A-Z_]+)=(.*)$/);if(m)o[m[1]]=m[2].trim();}}catch{}return o;}
@@ -50,6 +51,7 @@ if (LOCAL) {
   URL_ = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
   ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
   SRV = env.SUPABASE_SERVICE_ROLE_KEY;
+  guardResolvedUrls([URL_]); // 접속 대상 가드 — .env 가 원격이면 --allow-remote 없이 멈춘다
 }
 if (!URL_ || !ANON || !SRV) { console.error('FAIL: URL/ANON/SERVICE_ROLE 필요(.env + .env.seed 또는 --local)'); process.exit(2); }
 console.log(`— 대상 ${LOCAL ? '로컬' : '원격(.env)'} ${URL_} —`);

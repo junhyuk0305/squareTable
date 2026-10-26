@@ -62,7 +62,19 @@ export function guardLocalTarget({ filesFirst }) {
       : (shell ? [shell] : fromFiles);
     for (const u of picked) if (u) urls.add(u);
   }
-  const remote = [...urls].filter((u) => !isLocal(u));
+  stopIfRemote([...urls], filesFirst
+    ? ' 이 스크립트는 .env 파일 값을 먼저 쓴다. 로컬은 --local(지원 스크립트) 또는 키 파일 없는 worktree 에서 돌린다.'
+    : ' 로컬은 셸에 EXPO_PUBLIC_SUPABASE_URL·SUPABASE_URL=http://127.0.0.1:54321 을 준다.');
+}
+
+/** 위 두 이름 밖에서 주소를 고르는 스크립트용(예: QA_SUPABASE_URL 을 먼저 쓰는 qa-card-billing).
+ *  스크립트가 실제로 고른 주소를 넘긴다. 규칙은 guardLocalTarget 과 같다. */
+export function guardResolvedUrls(urls) {
+  stopIfRemote(urls.filter(Boolean), ' 로컬은 이 스크립트가 고르는 주소 변수에 http://127.0.0.1 주소를 준다.');
+}
+
+function stopIfRemote(urls, hint) {
+  const remote = urls.filter((u) => !isLocal(u));
   if (remote.length === 0) return;
   if (process.argv.includes('--allow-remote')) {
     console.error(`[대상] 원격 허용(--allow-remote): ${remote.join(' · ')}`);
@@ -70,10 +82,7 @@ export function guardLocalTarget({ filesFirst }) {
   }
   console.error(
     `중단: 접속 대상이 로컬이 아니다 — ${remote.join(' · ')}\n` +
-    `라이브를 치려면 --allow-remote 를 명시한다.` +
-    (filesFirst
-      ? ' 이 스크립트는 .env 파일 값을 먼저 쓴다. 로컬은 --local(지원 스크립트) 또는 키 파일 없는 worktree 에서 돌린다.'
-      : ' 로컬은 셸에 EXPO_PUBLIC_SUPABASE_URL·SUPABASE_URL=http://127.0.0.1:54321 을 준다.'),
+    `라이브를 치려면 --allow-remote 를 명시한다.` + hint,
   );
   process.exit(2);
 }

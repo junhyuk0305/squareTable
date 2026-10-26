@@ -16,6 +16,7 @@
 // 넘어 있으면 즉시 402로 잠기므로, free 로 전환할 땐 함께 실행):
 //   node scripts/activate-store.mjs --reset-ai <unit_id>
 
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 
 const URL = process.env.SUPABASE_URL;

@@ -20,6 +20,7 @@
 //   슬롯 표식 = paid_until 의 밀리초 .777 (소비 전에 죽은 실행의 슬롯을 다음 실행이 알아본다).
 // ★건너뛴 단언은 통과로 세지 않는다 — 준비가 안 서서 못 돈 단언은 ✗ 로 센다.
 // ★콘솔 에러 = cdp.mjs 의 page.errors. ≥400 응답 = 페이지의 fetch 를 감싸 센다(웹소켓·이미지는 안 센다).
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

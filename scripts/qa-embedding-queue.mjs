@@ -11,6 +11,7 @@
 // 실행: SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... node scripts/qa-embedding-queue.mjs
 // ★수정 전 RED 확인용: 0181 적용 전에 돌리면 ①②③이 전부 실패해야 한다(실측: 통과 0 / 실패 5).
 
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';

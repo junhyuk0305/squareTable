@@ -8,6 +8,7 @@
 //   (d) QA 전용 도메인 계정(auth.users 하드삭제, live/soft 무관).
 // 보호(절대 삭제 안 함): PROTECT_UNITS(eval 픽스처 등) + 실사용자 이메일(naver/gmail/daum/kakao 등).
 //   실사용자 소유 매장은 REAL_EMAIL 로 항상 보호(멤버 0이어도 유지) → QA_EMAIL 확장이 실매장을 건드릴 수 없다.
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 
 const U = process.env.SUPABASE_URL, K = process.env.SUPABASE_SERVICE_ROLE_KEY;

@@ -23,6 +23,7 @@
 //   로그인이 만드는 세션 하나이고, 끝에 signOut 으로 닫는다.
 // 종료 코드: 실패 1건이라도 있으면 1(= Actions 가 빨간불). SKIP 은 실패가 아니다.
 
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 
 const URL_  = process.env.EXPO_PUBLIC_SUPABASE_URL;

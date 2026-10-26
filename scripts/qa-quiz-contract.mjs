@@ -8,6 +8,7 @@ import {createRequire} from 'node:module';
 import {createClient} from '@supabase/supabase-js';
 import {FIXED,UNIT as FIXED_UNIT,login,rolePrecondition} from './lib/qa-fixed-accounts.mjs';
 import {seedVerifiedPhones,cleanupSeededPhones} from './qa-otp-seed.mjs';
+import {guardResolvedUrls} from './lib/local-target-guard.mjs';
 // P0(0327) 문구 표 순수 함수 — 서버 코드가 사람 말로 바뀌는지. 백엔드 전에 돌린다.
 {const dir=mkdtempSync(join(tmpdir(),'quiz-errors-'));
  execFileSync(process.execPath,['node_modules/typescript/bin/tsc','src/lib/quiz/errors.ts','--outDir',dir,'--module','commonjs','--target','es2020','--skipLibCheck','--ignoreConfig'],{stdio:'pipe'});
@@ -27,7 +28,8 @@ if(LOCAL){const st=Object.fromEntries(execFileSync('npx',['supabase','status','-
  if(!url||!/^http:\/\/127\.0\.0\.1:/.test(url)){console.error('중단: 로컬 도커 주소가 아니다 —',url);process.exit(2);}
 }else{const env={...process.env};
  for(const f of ['.env','.env.seed']) for(const line of readFileSync(new URL('../'+f,import.meta.url),'utf8').split(/\r?\n/)){const m=line.match(/^([A-Z0-9_]+)=(.*)$/);if(m&&!env[m[1]])env[m[1]]=m[2].trim();}
- url=env.EXPO_PUBLIC_SUPABASE_URL;key=env.EXPO_PUBLIC_SUPABASE_ANON_KEY;srvKey=env.SUPABASE_SERVICE_ROLE_KEY;}
+ url=env.EXPO_PUBLIC_SUPABASE_URL;key=env.EXPO_PUBLIC_SUPABASE_ANON_KEY;srvKey=env.SUPABASE_SERVICE_ROLE_KEY;
+ guardResolvedUrls([url]);} // 접속 대상 가드 — 원격이면 --allow-remote 없이 멈춘다
 console.log('TARGET',LOCAL?'local':'remote(.env)',url);
 const opt={auth:{persistSession:false,autoRefreshToken:false}};
 const admin=createClient(url,srvKey,opt),anon=createClient(url,key,opt);

@@ -30,6 +30,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
+import { guardResolvedUrls } from './lib/local-target-guard.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 function loadEnv() {
@@ -49,6 +50,8 @@ const URL = env.QA_SUPABASE_URL || env.EXPO_PUBLIC_SUPABASE_URL;
 const ANON = env.QA_SUPABASE_ANON_KEY || env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE = env.QA_SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
 const FN = env.QA_CARD_FN_URL || `${URL}/functions/v1/card-billing`;
+// 접속 대상 가드 — 이 하니스는 QA_SUPABASE_URL 을 먼저 고르므로 실제로 고른 주소를 본다. 라이브는 --allow-remote.
+guardResolvedUrls([URL, FN]);
 
 let pass = 0, fail = 0, skip = 0;
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  PASS', n, extra)) : (fail++, console.log('  FAIL', n, extra)); };

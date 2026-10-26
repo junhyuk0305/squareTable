@@ -13,6 +13,7 @@
 //    진짜 중단은 스토어 콘솔에서 상품을 내리고 기존 구독을 취소·환불하는 일이다.
 // ⚠️ 전면 무료(billing_free_mode)와 다른 스위치다: 이건 "앱에서 파는가", 저건 "돈을 받는가".
 
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 
 const URL = process.env.SUPABASE_URL;

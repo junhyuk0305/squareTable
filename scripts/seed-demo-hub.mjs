@@ -16,7 +16,7 @@
 //
 // 실행:  node scripts/seed-demo-hub.mjs           (.env.seed 자동 로드, 멱등 — 재실행 안전)
 // ★ 임베딩은 생략한다(대시보드 QA 범위 밖). 신규 노하우로 AI 검색까지 볼 거면:
-//    node --env-file=.env.seed scripts/backfill-embeddings.mjs
+//    node --env-file=.env.seed scripts/reconcile-embeddings.mjs --fix --allow-remote   (빠진 색인만 채운다)
 // ★ 삭제 방지: cleanup-orphan-stores.mjs 의 PROTECT_UNITS 에 store_002_demo·store_starter_demo,
 //    PROTECT_EMAIL 에 /hubdemo\./ 가 등록돼 있어야 한다(이 시드와 같은 커밋에서 등록됨 — 지우지 말 것).
 

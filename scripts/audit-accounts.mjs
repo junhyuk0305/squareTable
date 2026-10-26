@@ -1,6 +1,7 @@
 // audit-accounts.mjs — 실 Supabase 계정 감사 (읽기 전용, service_role)
 // 실행: cd SquareTable && node --env-file=.env.seed scripts/audit-accounts.mjs
 // 출력: 콘솔 + ../계정_감사_스냅샷.json (로컬 전용, gitignore 권장)
+import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
