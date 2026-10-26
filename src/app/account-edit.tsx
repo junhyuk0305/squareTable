@@ -19,7 +19,7 @@ import { passwordChangeError } from '@/lib/account/copy';
 import { EMAIL_CHANGE_PENDING_TEXT } from '@/lib/account/findEmail';
 import { usePhoneOtp } from '@/lib/otp';
 import { BottomSheet } from '@/components/BottomSheet';
-import { INDUSTRIES } from '@/lib/config/industry';
+import { INDUSTRIES, industryLabel } from '@/lib/config/industry';
 import { PasswordInput } from '@/components/PasswordInput';
 import { SectionLabel } from '@/components/SectionLabel';
 import { Appear, stagger } from '@/components/Appear';
@@ -84,6 +84,11 @@ function AccountEditForm() {
 
   const nameChanged = store.trim() !== storeName;
   const bizChanged = !!biz && biz !== industry;
+  // 칩은 화면 이름으로 비교한다 — 옛 영문 코드(cafe)는 '카페·디저트' 칩이 켜진다. 그 칩을 누르면 한글 값으로 바뀌어 저장된다.
+  // 옛 한글 값(한식·백반)은 2개 목록에 없으니 맨 앞 칩으로 같이 보여 준다 — 안 보이면 선택이 빈 것처럼 보인다.
+  const savedLabel = industryLabel(industry);
+  const bizLabel = industryLabel(biz);
+  const chips: readonly string[] = !savedLabel || (INDUSTRIES as readonly string[]).includes(savedLabel) ? INDUSTRIES : [savedLabel, ...INDUSTRIES];
 
   const saveStoreInfo = async () => {
     if (!store.trim()) return showToast('매장 이름을 입력해주세요.', 'warn');
@@ -236,10 +241,9 @@ function AccountEditForm() {
 
               <Text style={styles.label}>업종<Text style={styles.req}> *</Text></Text>
               <View style={styles.chipWrap}>
-                {/* 옛 업종(지금 목록에 없는 값)으로 저장된 매장은 그 값도 보여 준다 — 안 보이면 선택이 빈 것처럼 보인다. */}
-                {(!industry || (INDUSTRIES as readonly string[]).includes(industry) ? INDUSTRIES : [industry, ...INDUSTRIES]).map((it) => (
-                  <Pressable key={it} onPress={() => setBiz(it)} style={[styles.chip, biz === it && styles.chipOn]}>
-                    <Text style={[styles.chipText, biz === it && styles.chipTextOn]}>{it}</Text>
+                {chips.map((it) => (
+                  <Pressable key={it} onPress={() => setBiz(it)} style={[styles.chip, bizLabel === it && styles.chipOn]}>
+                    <Text style={[styles.chipText, bizLabel === it && styles.chipTextOn]}>{it}</Text>
                   </Pressable>
                 ))}
               </View>

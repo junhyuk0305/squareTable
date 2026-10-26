@@ -16,6 +16,7 @@ import {
   type PlaybookTemplate,
 } from '@/data/knowhowPacks';
 import { getCategoryMeta } from '@/lib/utils/category';
+import { industryLabel } from '@/lib/config/industry';
 import { notifyAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -135,8 +136,6 @@ function TemplateCard({
  * 펼침 카드 리스트. 각 카드는 탭하면 아래로 펼쳐지고 '내 노하우로 추가'로 매장에 fork한다.
  * (크롬리스 본문 — SafeArea/헤더/탭바는 상위 owner/templates 가 소유)
  */
-// 옛 업종 코드(팩 매칭 키 'fnb')가 저장된 매장은 표시명으로 — 신규 매장은 INDUSTRIES 한글값이라 그대로 통과.
-const INDUSTRY_LABEL: Record<string, string> = { fnb: '음식점·식당' };
 
 export function TemplateLibrary() {
   const entries = usePlaybookStore((s) => s.entries);
@@ -284,7 +283,7 @@ export function TemplateLibrary() {
             style={[styles.scopeChip, scope === 'mine' && styles.scopeChipOn]}
           >
             <Text style={[styles.scopeText, scope === 'mine' && styles.scopeTextOn]}>
-              우리 업종{industry ? ` · ${INDUSTRY_LABEL[industry] ?? industry}` : ''}
+              우리 업종{industryLabel(industry) ? ` · ${industryLabel(industry)}` : ''}
             </Text>
           </Pressable>
           <Pressable
