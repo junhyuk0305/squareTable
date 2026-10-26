@@ -292,9 +292,14 @@ export function r10({ forbidden, frames, finalPath }) {
  *  하니스가 QA 매장에 심은 행의 꼬리표("[UIQA link_match] …")는 그 부분만 지우고 나머지 글자는 그대로 본다(10-26 첫 전수 실측).
  *  ★ 새 오탐이 나오면 규칙을 넓히지 말고 그 낱말을 R12_ALLOW 에 근거와 함께 더한다. */
 const R12_ALLOW = new Set([]);
+// 소문자로 쓰는 단위는 코드값이 아니다("500 ml 넣기" · 칸을 나눠 그린 "ml"). 숫자 바로 뒤의 낱말도 단위로 본다.
+const R12_UNITS = new Set(['ml', 'l', 'cc', 'g', 'kg', 'mg', 'mm', 'cm', 'm', 'km', 'oz', 'am', 'pm', 'ea', 'x']);
+const isCodeWord = (w) => !R12_UNITS.has(w) && !R12_ALLOW.has(w);
 const R12_PATTERNS = [
-  ['영문 코드', /^[a-z][a-z0-9]*$/], // 글자 칸 전체가 소문자 낱말 하나 — 칩·배지·라벨에 코드값을 그대로 그린 모양('cafe' · 'owner')
-  ['영문 코드+한글', /(?:^|\s)[a-z][a-z0-9]{1,}\s+[가-힣]/], // 'cafe 매장에서' 처럼 코드값이 한글 문장 앞에 끼어든 모양
+  // 글자 칸 전체가 소문자 낱말 하나 — 칩·배지·라벨에 코드값을 그대로 그린 모양('cafe' · 'owner')
+  ['영문 코드', (t) => (/^[a-z][a-z0-9]*$/.test(t) && isCodeWord(t) ? t : null)],
+  // 'cafe 매장에서' 처럼 코드값이 한글 문장 앞에 끼어든 모양. 숫자 바로 뒤(500 ml 넣기)는 단위라 뺀다.
+  ['영문 코드+한글', (t) => [...t.matchAll(/(^|\s)([a-z][a-z0-9]{1,})\s+[가-힣]/g)].map((m) => m[2]).find((w) => isCodeWord(w) && !new RegExp(`\\d\\s*${w}\\s+[가-힣]`).test(t)) ?? null],
   ['밑줄 식별자', /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/i], // store_001 · rename_limit · owner_cannot_join
   ['오류 원문', /PGRST\d+|SQLSTATE|violates|duplicate key|permission denied|null value in column|relation "|function public\.|JWT|TypeError|Failed to fetch|Internal Server Error/i],
   ['빈 값 출력', /(?:^|[^A-Za-z])(undefined|null|NaN)(?:[^A-Za-z]|$)|\[object Object\]/],
@@ -305,9 +310,9 @@ export function r12(snap) {
   for (const raw of new Set(snap.leafTexts ?? [])) {
     const t = raw.replace(/\[(?:UI)?QA\b[^\]]*\]/g, ' ').replace(/\S+@\S+\.\S+/g, ' ').replace(/https?:\/\/\S+|\b[\w-]+\.(?:com|app|kr|net|io)\b\S*/g, ' ').trim();
     if (!t || R12_ALLOW.has(t)) continue;
-    for (const [name, re] of R12_PATTERNS) {
-      const m = t.match(re);
-      if (m && !R12_ALLOW.has(m[0].trim())) { d.push(`${name}: "${t.slice(0, 40)}"`); break; }
+    for (const [name, p] of R12_PATTERNS) {
+      const hit = typeof p === 'function' ? p(t) : t.match(p)?.[0];
+      if (hit && !R12_ALLOW.has(hit.trim())) { d.push(`${name}: "${t.slice(0, 40)}"`); break; }
     }
   }
   return res(d.length ? 'fail' : 'pass', d.slice(0, 8));
