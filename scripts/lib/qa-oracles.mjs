@@ -10,6 +10,9 @@
 // ★R2 '가려짐' 은 완전히 뷰포트 안에 든 요소만 잰다 — 반쯤 잘린 요소의 중심은 다른 요소를 찍는다(거짓 실패).
 // ★R3 는 getBoundingClientRect 만 본다 — RN-web 은 hitSlop 을 무시한다(메모리 project_squaretable_rnweb_hitslop).
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 export const RULES = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10', 'R11'];
 export const RULE_TITLES = {
   R1: '콘솔 에러 0 · ≥400 응답 0',
@@ -25,11 +28,12 @@ export const RULE_TITLES = {
   R11: '460px 프레임 가로 넘침 0',
 };
 
-const CLICKABLE_SEL = 'button,[role="button"],a[href],[role="link"],[role="tab"],[role="menuitem"],input[type="button"],input[type="submit"]';
+export const CLICKABLE_SEL = 'button,[role="button"],a[href],[role="link"],[role="tab"],[role="menuitem"],input[type="button"],input[type="submit"]';
 
-/** 브라우저에서 실행하는 스냅샷 수집기. 한 화면을 한 번 읽고 끝낸다(판정은 Node 쪽 순수 함수). */
-export const PROBE = `(() => {
-  const W = innerWidth, H = innerHeight, SEL = ${JSON.stringify(CLICKABLE_SEL)};
+/** 브라우저에서 실행하는 스냅샷 수집기. 한 화면을 한 번 읽고 끝낸다(판정은 Node 쪽 순수 함수).
+ *  sel = "누를 수 있는 요소" 선택자. role 없는 Pressable(칩 등)은 div[tabindex="0"] 로만 보인다 — 넣을지는 쓰는 쪽이 정한다. */
+export const probeFor = (sel) => `(() => {
+  const W = innerWidth, H = innerHeight, SEL = ${JSON.stringify(sel)};
   const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim();
   const hiddenByAncestor = (el) => { for (let a = el; a; a = a.parentElement) { const cs = getComputedStyle(a); if (cs.display === 'none' || cs.visibility === 'hidden' || a.getAttribute('aria-hidden') === 'true') return true; } return false; };
   const scrollerY = (el) => { for (let a = el.parentElement; a; a = a.parentElement) { const cs = getComputedStyle(a); if (/(auto|scroll)/.test(cs.overflowY) && a.scrollHeight > a.clientHeight + 1) return a; } return null; };
@@ -145,6 +149,22 @@ export const PROBE = `(() => {
     scrollWidth: Math.max(se.scrollWidth, document.body.scrollWidth, document.documentElement.scrollWidth),
   };
 })()`;
+export const PROBE = probeFor(CLICKABLE_SEL);
+
+/** 첫 사용 팝업을 미리 끄는 localStorage 문장(try 안에 넣어 쓴다). seedSession 이 문서마다 저장소를 비워 매 화면 다시 뜨고,
+ *  덮개가 버튼을 가리면 R2 가 전부 '가려짐' 이 된다(10-17 1차 실측). 키는 소스에서 읽는다(손으로 베끼지 않음).
+ *  · 직원 환영 코치 `sqt.juniorCoachSeen` · 화면 가이드 `sqt.tour.v1`(id = guideContent.ts) · 무료 기간 안내(키 = FreeUntilNotice.tsx — 로컬 DB 는 무료 모드라 뜬다) */
+export function firstRunSeedJs(root) {
+  const guideIds = [...new Set([...readFileSync(join(root, 'src/lib/guides/guideContent.ts'), 'utf8').matchAll(/'([a-z]+_[a-z_]+_v\d+)'/g)].map((m) => m[1]))];
+  const tourSeen = JSON.stringify(Object.fromEntries(guideIds.map((id) => [id, true])));
+  const noticeKey = readFileSync(join(root, 'src/components/FreeUntilNotice.tsx'), 'utf8').match(/NOTICE_KEY = '([^']+)'/)?.[1];
+  if (!noticeKey) throw new Error('FreeUntilNotice.tsx 에서 NOTICE_KEY 를 못 찾았다 — firstRunSeedJs 를 고친다');
+  return `localStorage.setItem('sqt.juniorCoachSeen','1');localStorage.setItem('sqt.tour.v1',${JSON.stringify(tourSeen)});localStorage.setItem(${JSON.stringify(noticeKey)},'1');`;
+}
+
+/** 안정 = 글자가 있고 · ScreenLoading(progressbar) 없음 · 진입 스플래시(SplashAnimation: '매장의 정석'+'우리 매장 운영의 기준' 덮개) 걷힘.
+ *  쓰는 곳: qa-crawl · qa-layout-stress. page.waitFor(SETTLED) 로 쓴다. */
+export const SETTLED = `(()=>{const b=document.body;if(!b)return false;const t=(b.innerText||'').trim();if(!t.length)return false;if(document.querySelector('[role="progressbar"]'))return false;if(/우리 매장 운영의 기준/.test(t)||t.replace(/\\s+/g,'')==='매장의정석')return false;return true;})()`;
 
 /** 가벼운 프레임 샘플 — R9(스친 빈 문구)·R10(역할 경계) 용. 자주 부르므로 싸게. */
 export const FRAME_PROBE = `(() => {

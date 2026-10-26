@@ -21,7 +21,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launch, sleep, storageKeyFor } from './lib/cdp.mjs';
 import { FIXED, PW, UNIT, login, ensureActive, restoreActive, rolePrecondition } from './lib/qa-fixed-accounts.mjs';
-import { RULES, RULE_TITLES, PROBE, FRAME_PROBE, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11 } from './lib/qa-oracles.mjs';
+import { RULES, RULE_TITLES, PROBE, FRAME_PROBE, SETTLED, firstRunSeedJs, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11 } from './lib/qa-oracles.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const env = { ...process.env };
@@ -112,12 +112,8 @@ function resolvePath(route) {
 
 // ── 브라우저 ─────────────────────────────────────────────────────────────────
 // fetch 를 감싸 ≥400 응답을 모은다(여정 하니스와 같은 방식 — cdp.mjs 는 응답 상태를 노출하지 않는다).
-// 첫 사용 안내(직원 환영 코치 `sqt.juniorCoachSeen` · 화면 가이드 팝업 `sqt.tour.v1`)는 로컬 플래그라 미리 심는다 —
-// seedSession 이 문서마다 localStorage 를 비워 매 화면 다시 뜨고, 덮개가 버튼을 가리면 R2 가 전부 '가려짐' 이 된다(10-17 1차 실측).
-// 가이드 id 는 src/lib/guides/guideContent.ts 에서 읽는다(손으로 베끼지 않음).
-const GUIDE_IDS = [...new Set([...readFileSync(join(ROOT, 'src/lib/guides/guideContent.ts'), 'utf8').matchAll(/'([a-z]+_[a-z_]+_v\d+)'/g)].map((m) => m[1]))];
-const TOUR_SEEN = JSON.stringify(Object.fromEntries(GUIDE_IDS.map((id) => [id, true])));
-const INJECT = `(()=>{try{localStorage.setItem('sqt.juniorCoachSeen','1');localStorage.setItem('sqt.tour.v1',${JSON.stringify(TOUR_SEEN)});
+// 첫 사용 팝업(환영 코치·화면 가이드·무료 기간 안내)은 로컬 플래그라 미리 심는다 — 이유·키 = qa-oracles firstRunSeedJs.
+const INJECT = `(()=>{try{${firstRunSeedJs(ROOT)}
 window.__qaPop=0;window.addEventListener('popstate',()=>{window.__qaPop++;});
 const of=window.fetch;window.__qaBad=[];window.fetch=async(...a)=>{const r=await of(...a);try{if(r.status>=400)window.__qaBad.push(r.status+' '+String(a[0]&&a[0].url||a[0]).replace(/\\?.*/,'').slice(-70));}catch(e){}return r;};}catch(e){}})()`;
 async function open(role) {
@@ -127,8 +123,6 @@ async function open(role) {
   w.page.errSeen = 0;
   return w;
 }
-// 안정 = 글자가 있고 · ScreenLoading(progressbar) 없음 · 진입 스플래시(SplashAnimation: '매장의 정석'+'우리 매장 운영의 기준' 덮개) 걷힘.
-const SETTLED = `(()=>{const b=document.body;if(!b)return false;const t=(b.innerText||'').trim();if(!t.length)return false;if(document.querySelector('[role="progressbar"]'))return false;if(/우리 매장 운영의 기준/.test(t)||t.replace(/\\s+/g,'')==='매장의정석')return false;return true;})()`;
 const frame = (page) => page.eval(FRAME_PROBE).catch(() => null);
 async function drain(page) {
   const errs = page.errors.slice(page.errSeen);

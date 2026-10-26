@@ -220,6 +220,47 @@ for (const f of files) {
   }
 }
 
+// ── 🟡 입력칸이 있는데 키보드 회피가 없는 화면 (2026-10-26) ──
+//    Android 15 edge-to-edge 는 adjustResize 를 무시한다 → KeyboardShift(또는 그걸 품은 BottomSheet) 밖의 입력칸은
+//    키보드가 그대로 덮는다. 웹엔 키보드가 없어 안 보인다. 화면 위쪽 입력칸(검색창)은 안 닿을 수 있어 🟡.
+//    판정: 라우트 파일에서 src/app·src/components 의 .tsx import 를 따라가며 <TextInput 이 있는 파일을 모은다.
+//    <KeyboardShift·<BottomSheet 를 그리는 파일에서 멈춘다(그 아래는 보호됨으로 본다 — 근사).
+//    import 했다고 다 그리는 건 아니다(조건부·다른 탭) → 목록을 보고 실제로 그 화면에 뜨는지 판정한다.
+{
+  const tsx = new Map(files.filter((f) => f.endsWith('.tsx')).map((f) => [path.resolve(f), stripComments(readFileSync(f, 'utf8'))]));
+  const resolve = (from, spec) => {
+    const base = spec.startsWith('@/') ? path.join(SRC, spec.slice(2)) : spec.startsWith('.') ? path.resolve(path.dirname(from), spec) : null;
+    if (!base) return null;
+    for (const c of [base + '.tsx', path.join(base, 'index.tsx')]) if (tsx.has(path.resolve(c))) return path.resolve(c);
+    return null;
+  };
+  const shielded = (src) => /<(KeyboardShift|BottomSheet)[\s/>]/.test(src);
+  const hasInput = (src) => /<TextInput[\s/>]/.test(src);
+  for (const [f, src] of tsx) {
+    const r = rel(f);
+    // 본사 화면(src/app/hq)은 스토어 앱에 없다(hq/_layout.tsx 의 store-policy 판정) — 웹 전용이라 키보드 대상이 아니다.
+    if (!r.startsWith('src/app/') || r.startsWith('src/app/hq/') || /\/(_layout|\+html)\.tsx$/.test(r) || shielded(src)) continue;
+    const bare = [];
+    const seen = new Set([f]);
+    const stack = [f];
+    while (stack.length) {
+      const cur = stack.pop();
+      const s = tsx.get(cur);
+      if (cur !== f && shielded(s)) continue;
+      if (hasInput(s)) bare.push(rel(cur));
+      for (const m of s.matchAll(/from\s+['"]([^'"]+)['"]/g)) {
+        const next = resolve(cur, m[1]);
+        if (next && !seen.has(next) && /[\\/]src[\\/](components|app)[\\/]/.test(next)) { seen.add(next); stack.push(next); }
+      }
+    }
+    if (!bare.length) continue;
+    const rawLines = readFileSync(f, 'utf8').split('\n');
+    if (rawLines.slice(0, 15).some((l) => l.includes('native-audit: ok'))) continue; // 파일 머리 15줄 안의 ok 주석
+    findings.push({ level: 1, loc: `${r}:1`, rule: 'kb-no-shift',
+      msg: `입력칸이 KeyboardShift 밖에 있다(${bare.join(', ')}) — Android 에선 adjustResize 가 무시돼 화면 아래쪽 입력칸·버튼을 키보드가 덮는다. 감싸거나, 입력칸이 화면 위쪽뿐이면 파일 머리에 ok 주석` });
+  }
+}
+
 // ── 🔴 헤더 깜빡임: 레이아웃은 헤더를 켠 채 선언하고 화면이 마운트 후에 끈다 (2026-09-07 실기기) ──
 //    `_layout` 의 Stack.Screen 에 headerShown 이 없으면 기본값 true 로 먼저 서고, 화면의
 //    `<Stack.Screen options={{headerShown:false}}/>` 는 **마운트 뒤에야** 반영된다.

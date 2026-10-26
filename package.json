@@ -213,6 +213,7 @@
     "qa:hq": "node scripts/qa-hq-browser.mjs --allow-remote",
     "qa:hq-structure": "node scripts/qa-hq-structure.mjs --allow-remote",
     "qa:crawl": "node scripts/qa-crawl.mjs --allow-remote",
+    "qa:layout-stress": "node scripts/qa-layout-stress.mjs --allow-remote",
     "qa:brand": "node scripts/qa-brand.mjs --allow-remote",
     "qa:brand-boundary": "node scripts/qa-brand-boundary.mjs --allow-remote",
     "qa:brand-deploy": "node scripts/qa-brand-deploy.mjs --allow-remote",

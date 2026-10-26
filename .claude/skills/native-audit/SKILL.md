@@ -34,12 +34,14 @@ node .claude/skills/native-audit/scripts/scan.mjs
 
 🔴(기기에서 깨짐)·🟡(눈에 보이는 결함 가능)·ℹ️(확인 권장)으로 나온다.
 **🔴은 전건 열어 본다.** 🟡은 파일을 열어 맥락으로 판정한다(스캐너는 휴리스틱이라 오탐이 있다 —
-오탐이면 그 줄에 `// native-audit: ok <이유>` 를 달면 다음 스캔부터 제외된다).
+오탐이면 그 줄에 `// native-audit: ok <이유>` 를 달면 다음 스캔부터 제외된다.
+`kb-no-shift` 만 화면 단위라 그 화면 파일의 머리 15줄 안에 단다).
 
-규칙 목록(2026-09-13 기준 14종): modal-back · kav-behavior · fixed · web-alert · double-inset ·
+규칙 목록(2026-10-26 기준 15종): modal-back · kav-behavior · fixed · web-alert · double-inset ·
 mouse-only · modal-autofocus · overflow · hover-only · persist-taps · fade-elevation ·
-replace-slide · header-flash · **kb-inset-double**(신설). fade-elevation·replace-slide 의 근거는
-`references/case_2026-09-03_android_fade_shadow.md`.
+replace-slide · header-flash · kb-inset-double · **kb-no-shift**(10-26 신설 · 입력칸이 KeyboardShift 밖에 있는 화면).
+fade-elevation·replace-slide 의 근거는 `references/case_2026-09-03_android_fade_shadow.md`.
+화면 배치(칩 줄바꿈·글씨 확대·좁은 폭)는 이 스캐너가 아니라 `layout-check` 스킬이 맡는다.
 
 **kb-inset-double(2026-09-13 신설)** — 손으로 세운 Modal 시트가 `insets.bottom` 을 깔면서 **키보드 상태를
 안 본다**. 기존 `double-inset` 은 탭바 화면만 봤고, 이건 그 **반대 방향 결손**이다: 여백이 모자라는 게
