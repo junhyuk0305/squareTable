@@ -90,7 +90,7 @@ function kstNowMin() {
 const hhmm = (min) => { const x = ((min % 1440) + 1440) % 1440; return `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`; };
 
 // 0088 게이트 라이브 — 아래 signUp 이 쓰는 번호(ph 51~53) 전부를 '인증됨'으로 선등록.
-const qaPhones = ['51', '52', '53'].map((tag) => `010${tag}${s.slice(0, 6)}`);
+const qaPhones = ['51', '52', '53', '54'].map((tag) => `010${tag}${s.slice(0, 6)}`);
 const seededRes = await seedVerifiedPhones(URL, SERVICE, qaPhones);
 if (seededRes.skipped) console.log(`  (phone_otps 시드 스킵: ${seededRes.skipped})`);
 
@@ -118,26 +118,51 @@ try {
   await staffA2.rpc('join_by_invite', { p_code: codeA });
   await ownerA.rpc('approve_member', { p_uid: staffA2Id });
 
-  console.log(`\n[셋업 완료] staffA1=${staffA1Id.slice(0, 8)} staffA2=${staffA2Id.slice(0, 8)} (KST now=${hhmm(kstNowMin())})\n`);
+  // ★0324: push 는 DB 에 실제 사건이 있어야 보낸다(사건 없는 호출은 아무에게도 안 감). 그래서 직원 A3 이 질문을 올리고
+  //   '동료 질문'(tag=question · audience=staff) 사건으로 보낸다. 보낸 사람은 수신자에서 빠지므로 수신자는 A1·A2 그대로다.
+  //   같은 사건은 한 번만 나가므로 단계마다 새 질문을 만든다.
+  const staffA3 = mk();
+  const staffA3Id = await signUpSession(staffA3, `qa_np_sa3_${s}@example.com`, { name: 'NPStaffA3', role: 'junior', phone: ph('54') });
+  cleanup.push(staffA3);
+  await staffA3.rpc('join_by_invite', { p_code: codeA });
+  await ownerA.rpc('approve_member', { p_uid: staffA3Id });
+  const unitRow = (Array.isArray(csA) ? csA[0] : csA).unit_id;
+  let qn = 0;
+  const askAndPush = async () => {
+    const id = `uq_np_${s}_${++qn}`;
+    const { error } = await staffA3.from('unknown_queries').insert({
+      id, unit_id: unitRow, junior_id: staffA3Id, junior_name: 'NPStaffA3', query_text: `QA 질문 ${qn}`, asked_at: new Date().toISOString(),
+      presumed_category: 'Routine', presumed_subcategory: '', match_attempted: false, best_match_confidence: 0, best_match_entry_id: null,
+      status: 'pending_owner_answer', similar_queries_count: 0, ai_general_answer: null,
+    });
+    if (error) return { status: 0, json: { setup_error: error.message } };
+    return invokePush(staffA3, { audience: 'staff', tag: 'question', itemId: id, title: '질문' });
+  };
+
+  console.log(`\n[셋업 완료] staffA1=${staffA1Id.slice(0, 8)} staffA2=${staffA2Id.slice(0, 8)} 질문자 staffA3=${staffA3Id.slice(0, 8)} (KST now=${hhmm(kstNowMin())})\n`);
 
   // 선행 확인: RPC 존재(0050 적용 여부). 없으면 전체가 "미적용" 이므로 명확히 알린다.
   const probe = await savePrefs(staffA1, { push: true });
   check('T0 save_notification_prefs RPC 존재(0050 적용)', !probe.error, probe.error?.message ?? '');
   if (probe.error) throw new Error('0050 미적용 — 마이그레이션/엣지 배포 후 재실행');
 
-  // ── T1 기본: 선호 미설정(staffA2) 포함, 둘 다 켜짐 → ownerA→staff recipients=2 ──
-  const t1 = await invokePush(ownerA, { audience: 'staff', title: '공지' });
-  check('T1 기본(둘 다 켜짐): ownerA→staff recipients=2', t1.status === 200 && t1.json?.recipients === 2, JSON.stringify(t1.json));
+  // ── T1x 사건이 없으면 아무에게도 안 간다(0324) — 옛 앱 모양(사건 없이 제목만) 그대로 ──
+  const t1x = await invokePush(ownerA, { audience: 'staff', title: '공지' });
+  check('T1x 사건 없는 발송은 recipients=0(0324)', t1x.status === 200 && t1x.json?.recipients === 0 && t1x.json?.ignored === 'missing', JSON.stringify(t1x.json));
+
+  // ── T1 기본: 선호 미설정(staffA2) 포함, 둘 다 켜짐 → staff recipients=2 ──
+  const t1 = await askAndPush();
+  check('T1 기본(둘 다 켜짐): 동료 질문 → staff recipients=2', t1.status === 200 && t1.json?.recipients === 2, JSON.stringify(t1.json));
 
   // ── T2 ★push off: staffA1 알림 끔 → recipients=1(staffA2만) ──────────────────
   const off = await savePrefs(staffA1, { push: false });
   check('T2a save push_enabled=false 성공', !off.error, off.error?.message ?? '');
-  const t2 = await invokePush(ownerA, { audience: 'staff', title: '공지' });
+  const t2 = await askAndPush();
   check('T2b ★push off: staffA1 억제 → recipients=1', t2.status === 200 && t2.json?.recipients === 1, JSON.stringify(t2.json));
 
   // ── T3 push 다시 켬 → recipients=2 복귀 ──────────────────────────────────────
   await savePrefs(staffA1, { push: true });
-  const t3 = await invokePush(ownerA, { audience: 'staff', title: '공지' });
+  const t3 = await askAndPush();
   check('T3 push 재개: recipients=2 복귀', t3.status === 200 && t3.json?.recipients === 2, JSON.stringify(t3.json));
 
   // ── T4 ★quiet 이관(0076): 전역 방해금지를 지금 포함 구간으로 켜도 push 는 억제하지 않는다 ──
@@ -147,7 +172,7 @@ try {
   const inStart = hhmm(now - 30), inEnd = hhmm(now + 30); // 지금을 감싸는 60분 창
   const q1 = await savePrefs(staffA1, { push: true, quiet: true, start: inStart, end: inEnd });
   check('T4a save 전역 quiet(지금 포함 구간) 성공', !q1.error, q1.error?.message ?? '');
-  const t4 = await invokePush(ownerA, { audience: 'staff', title: '공지' });
+  const t4 = await askAndPush();
   check(`T4b ★전역 quiet 지금 포함(${inStart}~${inEnd})이어도 발송 유지 → recipients=2(매장별로 이관됨)`, t4.status === 200 && t4.json?.recipients === 2, JSON.stringify(t4.json));
 
   // ── T6 격리: 남의 notification_prefs 는 RLS 로 못 본다 ────────────────────────

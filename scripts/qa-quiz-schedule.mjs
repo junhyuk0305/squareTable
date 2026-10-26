@@ -370,9 +370,19 @@ async function main() {
   const { data: notSent } = await jC.rpc('mark_quiz_opened', { p_id: PEND });
   check('안 나간 발송은 못 연다 false', notSent === false, `got=${notSent}`);
 
+  // ★0327·0332: 완료는 그 발송의 문항을 전부 푼 뒤에만이다(quiz_assignment_state = answered). 열기만 하고 끝냈다고 우기면 거부한다.
+  const { data: early } = await jC.rpc('mark_quiz_completed', { p_id: C1 });
+  const { data: earlyRow } = await admin.from('quiz_assignments').select('completed_at').eq('id', C1).maybeSingle();
+  check('문항을 안 풀었으면 완료 false · completed_at 비어 있음', early === false && !earlyRow?.completed_at, `got=${early} completed_at=${earlyRow?.completed_at}`);
+  const { data: qItems } = await admin.from('quiz_items').select('id').eq('course_id', QUIZ).eq('status', 'active');
+  const { error: subErr } = await jC.rpc('quiz_staff_record_v2', {
+    p_course_id: QUIZ, p_request_id: `qs_done_${s}`,
+    p_rows: (qItems ?? []).map((q, i) => ({ item_id: q.id, response: 1, ord: i })),
+  });
+  check('셋업: 제출 RPC 로 발송 문항 전부 풀기', !subErr && (qItems ?? []).length >= 1, subErr?.message ?? `items=${qItems?.length}`);
   const { data: done1 } = await jC.rpc('mark_quiz_completed', { p_id: C1 });
   const { data: doneRow } = await admin.from('quiz_assignments').select('opened_at, completed_at').eq('id', C1).maybeSingle();
-  check('본인 발송 완료 true', done1 === true, `got=${done1}`);
+  check('다 푼 뒤 본인 발송 완료 true', done1 === true, `got=${done1}`);
   check('completed_at 채워짐', !!doneRow?.completed_at);
 
   // ⑨ 완료가 자동 정지를 실제로 푸는가 — ④에서 막혔던 사람이 다시 대상이 되는지 본다.

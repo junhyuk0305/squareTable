@@ -2,7 +2,8 @@
 //
 // 서버 채점은 qa-training.mjs ⑦B 가 이미 본다. 여기서 보는 것은 그게 아니라 **손가락이 닿는 쪽**이다:
 //   · 렌더러가 실제로 그려지는가(레지스트리에 등록만 하고 화면이 빈 채로 나가는 사고 방지)
-//   · 탭이 실제로 먹고, 서버 채점 왕복 뒤 정답/오답 표시가 그려지는가
+//   · 탭이 실제로 먹고, 다 풀고 한 번에 낸 뒤(2026-09-14 5d624a8) 서버 채점 결과가 결과 화면 점수로 그려지는가
+//     (문항마다 채점 박스를 펴던 옛 판은 없어졌다 — 정답을 보면 앞 문항으로 돌아가는 의미가 없어서)
 //   · 콘솔 에러 0
 // 2026-08-05 메모리의 "브라우저 검증 0회로 배포" 전례를 반복하지 않기 위한 게이트다.
 //
@@ -170,16 +171,6 @@ async function main() {
     await el.waitFor({ state: 'visible', timeout: 12000 });
     await el.dispatchEvent('click');
   };
-  /**
-   * accessibilityLabel 이 없고 **글자로만** 식별되는 버튼용.
-   * ★ getByLabel 은 aria-label 만 본다 — 자식 Text 에서 유도된 접근명은 안 잡힌다.
-   *   /q/[token] 의 '다음 문제'·'결과 보기' CTA 가 그 경우다(라벨 없음).
-   */
-  const tapText = async (t) => {
-    const el = page.getByText(t, { exact: false }).last();
-    await el.waitFor({ state: 'visible', timeout: 12000 });
-    await el.dispatchEvent('click');
-  };
 
   /** 한 문항을 푼다. right=true 면 정답 경로로. 어떤 형태가 떠 있는지는 ask 로 알아본다. */
   const solve = async (right, tag) => {
@@ -201,7 +192,7 @@ async function main() {
     return null;
   };
 
-  /** 한 판을 끝까지 돈다. 각 문항이 실제로 그려지고 채점 결과까지 나오는지 본다. */
+  /** 한 판을 끝까지 돈다. 각 문항이 실제로 그려지고, 다 낸 뒤 결과 화면 점수가 서버 채점과 맞는지 본다. */
   const runOnce = async (right, tag) => {
     await page.goto(`${ORIGIN}/q/${TOKEN}`, { waitUntil: 'domcontentloaded' });
     const opened = await wait('시작');
@@ -210,7 +201,8 @@ async function main() {
     // 0160 — 전화번호가 식별키라 필수다. 안 채우면 시작 버튼이 안 열린다(인증은 선택이라 건너뛴다).
     await page.getByLabel('전화번호 입력', { exact: true }).first().pressSequentially('01044445555', { delay: 20 });
     await tapLabel('퀴즈 시작하기');
-    const started = await wait('문제 남았어요');
+    // 진행 표시(StepProgress '1 / 3')가 뜨면 문항 화면이다.
+    const started = await wait('1 / 3');
     check(`[${tag}] 응시 시작`, started, started ? '' : '문항 화면 안 뜸');
 
     const seen = [];
@@ -219,30 +211,31 @@ async function main() {
       check(`[${tag}] ${i + 1}번째 형태가 그려지고 탭이 먹는다`, !!kind, kind ?? '어떤 형태도 못 찾음');
       if (!kind) break;
       seen.push(kind);
-      const graded = (await wait('맞았어요', 15000)) || (await see('이건 이렇게 해요'));
-      check(`[${tag}] ${kind} 채점 결과가 화면에 뜬다`, graded, graded ? '' : '채점 박스 없음');
       await shot(`${tag}-${i + 1}-${kind}`);
       // ★ 실패를 삼키지 않는다. 여기서 조용히 넘어가면 다음 문항이 안 떠도 "형태를 못 찾음"으로만 보여
       //   원인이 CTA 인지 렌더러인지 구분이 안 된다(첫 실행에서 실제로 그렇게 헤맸다).
       const last = i === 2;
-      const moved = await tapText(last ? '결과 보기' : '다음 문제').then(() => true).catch(() => false);
-      check(`[${tag}] ${kind} 다음으로 넘어가는 버튼이 눌린다`, moved, moved ? '' : 'CTA 못 찾음');
+      const moved = await tapLabel(last ? '답 제출하기' : '다음 문제').then(() => true).catch(() => false);
+      check(`[${tag}] ${kind} ${last ? '제출' : '다음 문제'} 버튼이 눌린다`, moved, moved ? '' : 'CTA 못 찾음');
       await page.waitForTimeout(500);
     }
     check(`[${tag}] 세 형태가 모두 나왔다`, new Set(seen).size === 3, seen.join(' · '));
 
     // 0160 — 마지막 CTA 는 제출까지 태운다. 여기까지 와야 새 배선(이름·전화번호·응답 원문 →
     // 서버 재채점)이 **브라우저에서** 산 것이 증명된다. 서버 단독 검증은 qa:training ⑩ 이 한다.
-    check(`[${tag}] 결과 화면까지 도달`, await wait('개 맞았어요', 25000), '');
+    // 점수는 서버 채점 결과로 그려진다 — 정답 경로 3/3 · 오답 경로 0/3 이 아니면 렌더러가 답을 잘못 보냈거나 채점이 틀렸다.
+    const score = right ? '3문제 중 3개 맞았어요' : '3문제 중 0개 맞았어요';
+    const scored = await wait(score, 25000);
+    check(`[${tag}] 결과 화면 점수 = ${score}`, scored, scored ? '' : (await see('개 맞았어요')) ? '점수가 다르다' : '결과 화면 안 뜸');
     const sent = await see('결과는 사장님께 전달됐어요');
-    check(`[${tag}] ★결과가 실제로 저장됐다(제출 RPC 성공)`, sent, sent ? '' : '"보내지 못했어요" 상태');
+    check(`[${tag}] ★결과가 실제로 저장됐다(제출 RPC 성공)`, sent, sent ? '' : '"전달됐어요" 문구 없음');
     check(`[${tag}] 직원 가입 CTA 가 뜬다`, await see('직원으로 가입하고 점수 보기'), '');
     await shot(`${tag}-done`);
   };
 
   console.log('\n━━ ① 정답 경로 ━━');
   await runOnce(true, 'right');
-  console.log('\n━━ ② 오답 경로(정답 표시가 그려지는가) ━━');
+  console.log('\n━━ ② 오답 경로(틀린 답이 0점으로 그려지는가) ━━');
   await runOnce(false, 'wrong');
 
   // 화면이 "전달됐어요"라고 말한 것과 **실제로 적힌 것**을 따로 본다 — 화면 문구만 믿으면

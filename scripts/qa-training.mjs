@@ -37,8 +37,12 @@ const admin = createClient(URL_, SRV, { auth: { persistSession: false, autoRefre
 const guest = () => createClient(URL_, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
 const s = String(Date.now()).slice(-9);
 const PW = 'Test1234!qa';
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, skip = 0, aiCalls = 0;
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  ✓', n, extra)) : (fail++, console.log('  ✗', n, extra)); };
+// 건너뛴 단언은 통과로 세지 않는다 — 최종 줄에 수와 이유를 찍는다.
+const skipped = (n, why) => { skip++; console.log('  - SKIP', n, why); };
+// AI 출제는 원격에서만 돈다(2026-10-26 사용자 결정 — 로컬엔 AI 키가 없고, 원격 실행은 사용자 승인 뒤). 쓴 횟수를 최종 줄에 찍는다.
+const AI_SKIP_WHY = '(로컬: AI 출제는 원격 전용)';
 
 async function signUpSession(client, email, meta) {
   const { data, error } = await client.auth.signUp({ email, password: PW, options: { data: { birth_date: '1994-03-03', ...meta } } });
@@ -48,6 +52,7 @@ async function signUpSession(client, email, meta) {
 }
 
 async function edgeAi(token, task, payload) {
+  aiCalls++;
   const res = await fetch(`${URL_}/functions/v1/ai`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${token}` },
@@ -309,9 +314,12 @@ async function main() {
 
   // ── ④ 직원 통과·재확인(0111 knowhow_understanding) ───────────────────────
   console.log('\n━━ ④ 통과·재확인(노하우 단위) ━━');
-  const token = (await jA.auth.getSession()).data.session?.access_token;
-  const r = await edgeAi(token, 'quiz', { taskText: names[0], sops: [{ title: names[0], situation: HOW[0], steps: [], donts: [] }] });
-  check('④-1 quiz 엣지 200 · 문항 ≥1', r.ok && (r.body?.questions?.length ?? 0) >= 1, `status=${r.status} n=${r.body?.questions?.length}`);
+  if (IS_LOCAL) skipped('④-1 quiz 엣지 200 · 문항 ≥1', AI_SKIP_WHY);
+  else {
+    const token = (await jA.auth.getSession()).data.session?.access_token;
+    const r = await edgeAi(token, 'quiz', { taskText: names[0], sops: [{ title: names[0], situation: HOW[0], steps: [], donts: [] }] });
+    check('④-1 quiz 엣지 200 · 문항 ≥1', r.ok && (r.body?.questions?.length ?? 0) >= 1, `status=${r.status} n=${r.body?.questions?.length}`);
+  }
   // 0333: 이해 기록은 서버가 제출(quiz_staff_record_v2) 안에서 쓴다. 그 노하우 문항이 전부 정답일 때만이다.
   //   앱의 직접 upsert·update 는 오류 없이 무시된다. 그래서 통과는 제출 RPC 로, 과거 시각은 service role 로 심는다.
   //   이 절 전용 퀴즈(CQ)와 문항은 ⑥ 뒤에 지운다. ⑦ 이 E[0] 문항 수(2개)를 센다.
@@ -912,7 +920,7 @@ async function main() {
     check('⑬-8 직원이 남의 매장 노하우 직접 조회 0행(기존 격리 회귀 없음)', (data ?? []).length === 0, `n=${data?.length}`); }
 
   await cleanupSeededPhones(URL_, SRV, qaPhones);
-  console.log(`\n${fail === 0 ? '✅ PASS' : '❌ FAIL'} — 퀴즈 노하우축(0107~0114) QA · 통과 ${pass} / 실패 ${fail}`);
+  console.log(`\n${fail === 0 ? '✅ PASS' : '❌ FAIL'} — 퀴즈 노하우축(0107~0114) QA · 통과 ${pass} / 실패 ${fail} / skip ${skip}${skip ? ' ' + AI_SKIP_WHY : ''} · AI 호출 ${aiCalls}회`);
   process.exit(fail === 0 ? 0 : 1);
 }
 

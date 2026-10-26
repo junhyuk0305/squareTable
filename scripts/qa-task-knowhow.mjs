@@ -23,8 +23,12 @@ const mk = () => createClient(URL_, ANON, { auth: { persistSession: false, autoR
 const admin = createClient(URL_, SRV, { auth: { persistSession: false, autoRefreshToken: false } });
 const s = String(Date.now()).slice(-9);
 const PW = 'Test1234!qa';
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, skip = 0, aiCalls = 0;
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  ✓', n, extra)) : (fail++, console.log('  ✗', n, extra)); };
+// 건너뛴 단언은 통과로 세지 않는다 — 최종 줄에 수와 이유를 찍는다.
+const skipped = (n, why) => { skip++; console.log('  - SKIP', n, why); };
+// AI 출제는 원격에서만 돈다(2026-10-26 사용자 결정 — 로컬엔 AI 키가 없고, 원격 실행은 사용자 승인 뒤). 쓴 횟수를 최종 줄에 찍는다.
+const AI_SKIP_WHY = '(로컬: AI 출제는 원격 전용)';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function signUpSession(client, email, meta) {
@@ -35,6 +39,7 @@ async function signUpSession(client, email, meta) {
 }
 
 async function edgeAi(token, task, payload) {
+  aiCalls++;
   const res = await fetch(`${URL_}/functions/v1/ai`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${token}` },
@@ -126,7 +131,7 @@ async function main() {
   await flow7(ctx3); // #3 broadcast_notice + read_status
 
   await cleanupSeededPhones(URL_, SRV, qaPhones);
-  console.log(`\n${fail === 0 ? '✅ PASS' : '❌ FAIL'} — S1+S3 업무↔노하우 QA · 통과 ${pass} / 실패 ${fail}`);
+  console.log(`\n${fail === 0 ? '✅ PASS' : '❌ FAIL'} — S1+S3 업무↔노하우 QA · 통과 ${pass} / 실패 ${fail} / skip ${skip}${skip ? ' ' + AI_SKIP_WHY : ''} · AI 호출 ${aiCalls}회`);
   process.exit(fail === 0 ? 0 : 1);
 }
 
@@ -218,19 +223,23 @@ async function flow3({ owner, ownerId, jA, jAId, jB, jBId, UNIT, ENTRY }) {
 async function flow4({ owner, ownerId, jA, jAId, UNIT, TMPL, entryRow }) {
   console.log('\n━━ ④ 이해 확인 퀴즈 ━━');
   // 트리거 조건: 알바 + 첨부 노하우 있음(①에서 첨부됨) → quiz 엣지 호출(실 AI)
-  const sops = [{ id: entryRow.id, title: entryRow.title, situation: entryRow.square.situation, steps: entryRow.square.action.steps, donts: [entryRow.square.extract.dont].filter(Boolean) }];
-  const token = await tokenOf(jA);
-  const r = await edgeAi(token, 'quiz', { taskText: '아이스 아메리카노 만들기', sops });
-  check('④-1 quiz 엣지 200', r.ok, `status=${r.status} ${JSON.stringify(r.body).slice(0, 160)}`);
-  const qs = r.body?.questions ?? [];
-  check('④-2 문항 생성(≥1, 객관식 정상)', qs.length >= 1 && qs.every((q) => Array.isArray(q.choices) && q.choices.length >= 2 && q.answer_index >= 0 && q.answer_index < q.choices.length), `n=${qs.length}`);
-  // 0103 문항 귀속 — 노하우 1개짜리 퀴즈는 모든 문항이 그 노하우를 근거로 가져야 한다(엣지 폴백 포함).
-  check('④-1b 문항 entry_id 귀속(0103)', qs.length >= 1 && qs.every((q) => q.entry_id === entryRow.id), qs.map((q) => q.entry_id).join(','));
-  // 자동채점(클라 재현): 각 문항 정답 인덱스를 pick → correctCount===문항수면 통과
-  const picks = qs.map((q) => q.answer_index);
-  const correct = picks.filter((p, i) => p === qs[i].answer_index).length;
-  const passed = qs.length >= 1 && correct === qs.length;
-  check('④-3 전부 정답 채점=통과', passed, `${correct}/${qs.length}`);
+  if (IS_LOCAL) {
+    for (const n of ['④-1 quiz 엣지 200', '④-2 문항 생성(≥1, 객관식 정상)', '④-1b 문항 entry_id 귀속(0103)', '④-3 전부 정답 채점=통과']) skipped(n, AI_SKIP_WHY);
+  } else {
+    const sops = [{ id: entryRow.id, title: entryRow.title, situation: entryRow.square.situation, steps: entryRow.square.action.steps, donts: [entryRow.square.extract.dont].filter(Boolean) }];
+    const token = await tokenOf(jA);
+    const r = await edgeAi(token, 'quiz', { taskText: '아이스 아메리카노 만들기', sops });
+    check('④-1 quiz 엣지 200', r.ok, `status=${r.status} ${JSON.stringify(r.body).slice(0, 160)}`);
+    const qs = r.body?.questions ?? [];
+    check('④-2 문항 생성(≥1, 객관식 정상)', qs.length >= 1 && qs.every((q) => Array.isArray(q.choices) && q.choices.length >= 2 && q.answer_index >= 0 && q.answer_index < q.choices.length), `n=${qs.length}`);
+    // 0103 문항 귀속 — 노하우 1개짜리 퀴즈는 모든 문항이 그 노하우를 근거로 가져야 한다(엣지 폴백 포함).
+    check('④-1b 문항 entry_id 귀속(0103)', qs.length >= 1 && qs.every((q) => q.entry_id === entryRow.id), qs.map((q) => q.entry_id).join(','));
+    // 자동채점(클라 재현): 각 문항 정답 인덱스를 pick → correctCount===문항수면 통과
+    const picks = qs.map((q) => q.answer_index);
+    const correct = picks.filter((p, i) => p === qs[i].answer_index).length;
+    const passed = qs.length >= 1 && correct === qs.length;
+    check('④-3 전부 정답 채점=통과', passed, `${correct}/${qs.length}`);
+  }
   // 0333: 이해 기록은 서버가 제출(quiz_attempt_items) 안에서 쓴다. 그 노하우 문항이 전부 정답일 때만이다.
   //   앱이 직접 보내는 upsert 는 오류 없이 무시된다(행 0). 그래서 사장이 서버 문항을 만들고 직원이 제출 RPC 로 맞힌다.
   const ENTRY_ID = ENTRY_OF(entryRow);
@@ -282,18 +291,32 @@ async function flow4({ owner, ownerId, jA, jAId, UNIT, TMPL, entryRow }) {
   check('④-7 staff_id 위조 기록 안 생김(오류 없음 · 행 0)', !forge && (forgeData ?? []).length === 0 && (forged ?? []).length === 0, forge?.message ?? `n=${forged?.length}`);
 
   // ── 0103 오답 집계(record_quiz_stats) — 문항 귀속·개인 비저장·사장만 열람 ──
-  const { error: rqe } = await jA.rpc('record_quiz_stats', { p_stats: [{ entry_id: ENTRY_OF(entryRow), attempts: 2, misses: 1 }] });
-  check('④-8 직원 채점 집계 RPC 성공', !rqe, rqe?.message ?? '');
-  const { data: qsRow } = await admin.from('knowhow_quiz_stats').select('attempt_count, miss_count, unit_id').eq('entry_id', ENTRY_OF(entryRow)).maybeSingle();
-  check('④-9 집계 합산(attempts=2·misses=1·개인 컬럼 없음)', qsRow?.attempt_count === 2 && qsRow?.miss_count === 1 && qsRow?.unit_id === UNIT, JSON.stringify(qsRow));
+  // ★0321(정본 0326): 집계 근거는 서버 채점 기록(quiz_grade_log)이다. 앱이 보낸 attempts·misses 는 버린다.
+  //   그래서 서버 채점(grade_quiz) 정답 1·오답 1 을 먼저 남기고, 앱은 터무니없는 숫자(99·0)를 보낸다 → 2·1 이어야 한다.
+  const gradeRound = async () => {
+    const g1 = await jA.rpc('grade_quiz', { p_item_id: itemOf(ENTRY_ID), p_response: 0 });
+    const g2 = await jA.rpc('grade_quiz', { p_item_id: itemOf(ENTRY_ID), p_response: 1 });
+    return g1.error ?? g2.error ?? (g1.data?.[0]?.correct === true && g2.data?.[0]?.correct === false ? null : { message: `채점 결과 ${JSON.stringify([g1.data, g2.data])}` });
+  };
+  const claim = [{ entry_id: ENTRY_ID, attempts: 99, misses: 0 }];
+  const ge1 = await gradeRound();
+  const { error: rqe } = await jA.rpc('record_quiz_stats', { p_stats: claim });
+  check('④-8 서버 채점 2회(정답·오답) 뒤 직원 집계 RPC 성공', !ge1 && !rqe, (ge1 ?? rqe)?.message ?? '');
+  const { data: qsRow } = await admin.from('knowhow_quiz_stats').select('attempt_count, miss_count, unit_id').eq('entry_id', ENTRY_ID).maybeSingle();
+  check('④-9 ★집계 = 서버 채점 기록(2·1) · 앱이 보낸 99·0 무시 · 개인 컬럼 없음', qsRow?.attempt_count === 2 && qsRow?.miss_count === 1 && qsRow?.unit_id === UNIT, JSON.stringify(qsRow));
+  // 같은 기록을 두 번 세지 않는다 — 새 채점 없이 다시 부르면 그대로다.
+  await jA.rpc('record_quiz_stats', { p_stats: claim });
+  const { data: qsSame } = await admin.from('knowhow_quiz_stats').select('attempt_count, miss_count').eq('entry_id', ENTRY_ID).maybeSingle();
+  check('④-9a 새 채점 없이 다시 부르면 그대로(2·1 · 기록 재사용 없음)', qsSame?.attempt_count === 2 && qsSame?.miss_count === 1, JSON.stringify(qsSame));
   // 두 번째 채점 = on conflict 누적 경로(실서비스의 지배 경로) — insert가 아니라 합산이어야 한다.
-  const { error: rqe2 } = await jA.rpc('record_quiz_stats', { p_stats: [{ entry_id: ENTRY_OF(entryRow), attempts: 2, misses: 1 }] });
-  const { data: qsRow2 } = await admin.from('knowhow_quiz_stats').select('attempt_count, miss_count').eq('entry_id', ENTRY_OF(entryRow)).maybeSingle();
-  check('④-9b 재채점 누적(on conflict: 4·2)', !rqe2 && qsRow2?.attempt_count === 4 && qsRow2?.miss_count === 2, rqe2?.message ?? JSON.stringify(qsRow2));
-  const { data: jaRead } = await jA.from('knowhow_quiz_stats').select('entry_id').eq('entry_id', ENTRY_OF(entryRow));
+  const ge2 = await gradeRound();
+  const { error: rqe2 } = await jA.rpc('record_quiz_stats', { p_stats: claim });
+  const { data: qsRow2 } = await admin.from('knowhow_quiz_stats').select('attempt_count, miss_count').eq('entry_id', ENTRY_ID).maybeSingle();
+  check('④-9b 재채점 누적(on conflict: 4·2)', !ge2 && !rqe2 && qsRow2?.attempt_count === 4 && qsRow2?.miss_count === 2, (ge2 ?? rqe2)?.message ?? JSON.stringify(qsRow2));
+  const { data: jaRead } = await jA.from('knowhow_quiz_stats').select('entry_id').eq('entry_id', ENTRY_ID);
   check('④-10 직원은 집계 열람 불가(RLS)', (jaRead ?? []).length === 0, `rows=${jaRead?.length}`);
-  const { data: ownerRead } = await owner.from('knowhow_quiz_stats').select('entry_id, miss_count').eq('entry_id', ENTRY_OF(entryRow));
-  check('④-11 사장은 집계 열람 가능(RLS)', (ownerRead ?? []).some((x) => x.entry_id === ENTRY_OF(entryRow) && x.miss_count === 2), `rows=${ownerRead?.length}`);
+  const { data: ownerRead } = await owner.from('knowhow_quiz_stats').select('entry_id, miss_count').eq('entry_id', ENTRY_ID);
+  check('④-11 사장은 집계 열람 가능(RLS)', (ownerRead ?? []).some((x) => x.entry_id === ENTRY_ID && x.miss_count === 2), `rows=${ownerRead?.length}`);
   const { error: fkRpc } = await jA.rpc('record_quiz_stats', { p_stats: [{ entry_id: 'pb_qa_nonexistent', attempts: 1, misses: 1 }] });
   const { data: fkRow } = await admin.from('knowhow_quiz_stats').select('entry_id').eq('entry_id', 'pb_qa_nonexistent').maybeSingle();
   check('④-12 남의/없는 entry는 무시(0행)', !fkRpc && !fkRow, fkRpc?.message ?? '');
