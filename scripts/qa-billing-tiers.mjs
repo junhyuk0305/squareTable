@@ -290,7 +290,7 @@ async function main() {
   // ── 5) 가입 체험 폐지(2026-09-18) — 지금 규칙: 첫 매장은 무료, 2호점은 슬롯이 있어야 한다 ─────────
   // 라이브 정본 = app_config signup_trial_days=0(09-18 실측). 옛 검사(0134·0141: 가입 매장 = multi/30일 체험)는
   //   폐지된 약속을 기대해 늘 RED 였다. 라이브 값 0 으로 고정하고 지금 규칙을 본다.
-  //   ★status 는 보지 않는다 — 폐지 뒤에도 첫 매장이 trialing 으로 저장된다(별건 미결 · 메모리 free_signup_status_todo).
+  //   ★0343: 첫 매장은 무료 이용 중(active · free · 종료일 없음)으로 저장된다 — status 와 종료일까지 본다.
   await setSignupTrialDays(0);
   // 위 2) 의 finally 가 스위치를 이미 원복했다 — 무료 모드면 2호점 차단을 볼 수 없으므로 이 구간도 false 로 고정한다.
   await setFreeMode(false);
@@ -302,6 +302,10 @@ async function main() {
     check('가입 첫 매장 생성 OK', !te1 && !!tUnit, tUnit ?? te1?.message);
     const { data: tsub } = await T.c.from('unit_subscriptions').select('plan, status, trial_ends_at').eq('unit_id', tUnit).maybeSingle();
     check('★가입 첫 매장 = free(체험 폐지 · 다점포 체험 없음)', tsub?.plan === 'free', `plan=${tsub?.plan} status=${tsub?.status}`);
+    check('★0343 가입 첫 매장은 체험으로 저장되지 않는다(active · 종료일 없음)',
+      tsub?.status === 'active' && tsub?.trial_ends_at == null, `status=${tsub?.status} trial_ends_at=${tsub?.trial_ends_at}`);
+    const { data: tsig } = await T.c.rpc('is_signup_trial', { p_unit: tUnit });
+    check('★0343 가입 체험 판정도 false', tsig === false, `is_signup_trial=${tsig}`);
     const { data: tep } = await T.c.rpc('effective_plan', { p_unit: tUnit });
     check('★서버 유효 플랜도 free', tep === 'free', `ep=${tep}`);
     const { error: te2 } = await T.c.rpc('create_store', { p_store_name: 'QA 가입 2호점(불가)', p_industry: '카페·디저트', p_biz_no: null });

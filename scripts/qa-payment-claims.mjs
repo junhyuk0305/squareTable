@@ -190,7 +190,9 @@ async function main() {
 
   // ── 5) 승인 → 실제 활성화 + 사장에게 결과 도달 ─────────────────────────────
   const subBefore = await svcSelect(`unit_subscriptions?unit_id=eq.${unitA}&select=status,plan,paid_until`);
-  check('⑤ 승인 전 구독은 미활성(trialing)', subBefore?.[0]?.status !== 'active', `status=${subBefore?.[0]?.status}`);
+  // ★0343: 무료 첫 매장은 status='active'·plan='free' 로 저장된다 — status 로는 결제 여부를 못 가린다. 결제 기간으로 본다.
+  check('⑤ 승인 전 구독은 결제 전(paid_until 없음)', !!subBefore?.[0] && !subBefore[0].paid_until,
+    `status=${subBefore?.[0]?.status} plan=${subBefore?.[0]?.plan} paid_until=${subBefore?.[0]?.paid_until}`);
 
   const approve = await svcRpc('review_payment_claim', { p_id: claim1, p_approve: true, p_reason: null, p_reviewer: 'qa@team-roundtable.com' });
   check('⑤ service_role 승인 성공', approve.ok && approve.body?.status === 'approved', `${approve.status} ${JSON.stringify(approve.body).slice(0, 80)}`);

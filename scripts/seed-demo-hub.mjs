@@ -522,11 +522,11 @@ async function main() {
     id: `room_main_${STARTER}`, unit_id: STARTER, name: '전체', is_default: true, created_by: HANJH,
   }));
   {
-    // 구독 행이 없으면 free/trialing 생성(create_store 경로 모사). 있으면 손대지 않는다.
+    // 구독 행이 없으면 free/active 생성(create_store 경로 모사 · 0343). 있으면 손대지 않는다.
     const { data: sub } = await db.from('unit_subscriptions').select('unit_id').eq('unit_id', STARTER).maybeSingle();
     if (!sub) {
-      await step('unit_subscriptions(free/trialing)', db.from('unit_subscriptions').insert({
-        unit_id: STARTER, plan: 'free', status: 'trialing', trial_ends_at: addDays(30).toISOString(),
+      await step('unit_subscriptions(free/active)', db.from('unit_subscriptions').insert({
+        unit_id: STARTER, plan: 'free', status: 'active',
       }));
     } else console.log('  · 구독 행 이미 있음 → 유지');
   }

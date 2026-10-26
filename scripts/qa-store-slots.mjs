@@ -239,7 +239,8 @@ async function main() {
   // ★2026-09-18 가입 체험 폐지 — 라이브 정본 signup_trial_days=0. 옛 ⑨-a(0141: 체험 1호점 = multi ·
   //   체험 중 슬롯 없이 2호점 · 2호점이 종료일 승계)는 폐지된 약속을 기대해 늘 RED 였다. 라이브 값으로 고정하고
   //   지금 규칙(첫 매장 = 무료 · 2호점은 슬롯 필요)을 본다. ⑨-b(체험 상태 매장도 슬롯을 먹는다)는 그대로 둔다 —
-  //   폐지 뒤에도 첫 매장이 trialing 으로 저장되므로(메모리 free_signup_status_todo) 그 회귀 가드는 아직 유효하다.
+  //   콘솔이 가입 창구를 다시 열면 첫 매장이 trialing·multi 로 저장되므로 그 회귀 가드는 아직 유효하다.
+  //   (★0343: 창구가 닫힌 첫 매장은 더 이상 trialing 이 아니다 — active·free·종료일 없음.)
   await setSignupTrialDays(0);
   try {
     // ── ⑨-a 가입 첫 매장 = 무료 · 2호점은 슬롯 필요 ─────────────────────────────
@@ -273,6 +274,11 @@ async function main() {
     const { data: p1 } = await P.c.rpc('create_store', { p_store_name: 'QA체험결제 1호점', p_industry: '카페·디저트', p_biz_no: null });
     const PS1 = p1?.[0]?.unit_id;
     check('⑨-b 셋업: 체험 1호점', !!PS1, PS1);
+    // ★0343: 창구가 닫힌 첫 매장은 active·free 다. 여기서 창구(signup_trial_days·until)를 열면 라이브의 실제 가입자도
+    //   그 몇 초 동안 체험을 받는다. 그래서 이 매장 한 곳만 창구가 연 체험의 모양(trialing·multi·종료일 남음)으로 만든다.
+    if (PS1) await svcPatch(`unit_subscriptions?unit_id=eq.${PS1}`, {
+      status: 'trialing', plan: 'multi', paid_until: null, trial_ends_at: new Date(Date.now() + 14 * 86400000).toISOString(),
+    });
     check('⑨-b 이 매장은 가입 체험이다(무료가 아니다 — 그래서 빠뜨리기 쉽다)',
       (await svcRpc('is_signup_trial', { p_unit: PS1 })).data === true, '');
 
