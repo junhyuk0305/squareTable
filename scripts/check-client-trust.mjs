@@ -43,8 +43,11 @@ const IDENTITY_EXEMPT = {
   'payment_claims.reviewed_by': 'insert 정책이 null 을 강제하고 update 정책이 없다(검토는 내부 콘솔 service_role)',
 };
 
-const policies = psql(`select tablename, cmd, translate(coalesce(qual,''), E'\\n\\t', '  '), translate(coalesce(with_check,''), E'\\n\\t', '  '), array_to_string(roles, ',') from pg_policies where schemaname = 'public'`)
-  .split('\n').filter(Boolean).map((l) => { const [t, cmd, qual, wc, roles] = l.split('\t'); return { t, cmd, qual, wc, roles }; });
+const policies = psql(`select tablename, cmd, translate(coalesce(qual,''), E'\\n\\t', '  '), translate(coalesce(with_check,''), E'\\n\\t', '  '), array_to_string(roles, ','), permissive from pg_policies where schemaname = 'public'`)
+  .split('\n').filter(Boolean).map((l) => { const [t, cmd, qual, wc, roles, permissive] = l.split('\t'); return { t, cmd, qual, wc, roles, permissive }; });
+// 쓰기를 "여는" 것은 PERMISSIVE 정책뿐이다. RESTRICTIVE 는 이미 열린 것을 더 좁히기만 한다
+// (0335 account_access_allowed 가 모든 테이블에 ALL 로 붙어 있다). ①·④ 는 여는 정책만 센다. ②는 둘 다 본다.
+const opens = (p) => p.permissive === 'PERMISSIVE';
 const cols = new Map();
 for (const l of psql(`select table_name, column_name from information_schema.columns where table_schema = 'public'`).split('\n').filter(Boolean)) {
   const [t, c] = l.split('\t'); if (!cols.has(t)) cols.set(t, new Set()); cols.get(t).add(c);
@@ -60,7 +63,7 @@ const writable = new Set(psql(`select c.relname from pg_class c where c.relnames
 
 // ── ① 신원 열 ────────────────────────────────────────────────────────────────
 for (const t of writable) {
-  const ps = policies.filter((p) => p.t === t && ['INSERT', 'UPDATE', 'ALL'].includes(p.cmd) && /authenticated|public/.test(p.roles));
+  const ps = policies.filter((p) => p.t === t && opens(p) && ['INSERT', 'UPDATE', 'ALL'].includes(p.cmd) && /authenticated|public/.test(p.roles));
   if (!ps.length) continue;
   const body = trig.get(t) ?? '';
   for (const c of IDENTITY_COLS) {
@@ -113,7 +116,7 @@ const fullUpdate = psql(`select c.relname from pg_class c where c.relnamespace =
 const colGranted = new Set(psql(`select table_name from information_schema.role_table_grants where table_schema = 'public' and grantee = 'authenticated' and privilege_type = 'UPDATE'`).split('\n').filter(Boolean));
 for (const t of fullUpdate) {
   if (!colGranted.has(t)) continue; // 컬럼 단위 grant 만 있는 테이블(전체 권한 없음)
-  const hasPolicy = policies.some((p) => p.t === t && ['UPDATE', 'ALL'].includes(p.cmd));
+  const hasPolicy = policies.some((p) => p.t === t && opens(p) && ['UPDATE', 'ALL'].includes(p.cmd));
   if (!hasPolicy) continue; // 정책이 없으면 RLS 가 막는다
   check(`④ ${t} 전체 UPDATE 를 검토했다`, !!FULL_UPDATE_REVIEWED[t], `${t}: authenticated 가 모든 열을 update 할 수 있다 → 컬럼 grant 로 내용 열만 열거나 FULL_UPDATE_REVIEWED 에 이유를 적는다`);
 }

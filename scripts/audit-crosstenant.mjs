@@ -28,8 +28,11 @@ if (!URL || !ANON) { console.error('env 없음'); process.exit(2); }
 
 const mk = () => createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
 const rid = Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, skip = 0;
 const ok = (c, m, x='') => { console.log(`  ${c?'PASS':'FAIL'} ${m} ${x}`); c ? pass++ : fail++; };
+// anon 차단은 0행 또는 실행 권한 거부(42501)다. 0316 이후 anon 실행 권한을 회수한 함수가 있어 42501 이 더 강한 차단이다.
+// 다른 오류(함수 없음·서버 오류)는 차단이 증명된 게 아니므로 FAIL 로 센다.
+const anonBlocked = (error, data) => (error ? error.code === '42501' : (data?.length || 0) === 0);
 
 const seededPhones = [];
 
@@ -51,7 +54,7 @@ async function makeOwner(tag, phone) {
 }
 
 // unit_id 컬럼을 가진 모든 테넌트 테이블
-const TENANT_TABLES = ['playbook_entries','chat_queries','unknown_queries','work_rooms','work_room_members',
+const TENANT_TABLES = ['playbook_entries','chat_queries','unknown_queries','work_rooms',
   'work_templates','work_done','work_feed','attendance','wages','schedule_config','shift_templates',
   'swap_requests','playbook_suggestions','playbook_embeddings','former_staff','push_subscriptions',
   'unit_subscriptions','app_events','client_errors','work_template_knowhow','task_understanding'];
@@ -71,9 +74,22 @@ const TENANT_TABLES = ['playbook_entries','chat_queries','unknown_queries','work
 
   for (const t of TENANT_TABLES) {
     const r = await rd(A.c, t, 'unit_id', B.unit);
-    if (r.n === -1 && /does not exist|find the table|column .* does not exist/.test(r.error||'')) { console.log(`  skip ${t} (${r.error?.slice(0,45)})`); continue; }
+    if (r.n === -1 && /does not exist|find the table|column .* does not exist/.test(r.error||'')) { skip++; console.log(`  SKIP ${t} (${r.error?.slice(0,45)})`); continue; }
     ok(r.n === 0, `A→B.${t} 0행 격리`, r.n===-1?`(err ${r.code})`:`rows=${r.n}`);
   }
+  // work_room_members 는 unit_id 열이 없어 위 목록에 넣지 않는다. B 매장 방에 멤버 1행을 심고 방 id 로 본다.
+  // 기본 방에는 멤버 행이 없어서, 심지 않으면 0행이 당연하게 나와 아무것도 증명하지 못한다.
+  if (SRV) {
+    const admin = createClient(URL, SRV, { auth:{persistSession:false} });
+    const room = `xt_room_${rid}`;
+    const seedErr = (await admin.from('work_rooms').insert({ id: room, unit_id: B.unit, name: 'XT 방', is_default: false })).error
+      ?? (await admin.from('work_room_members').insert({ room_id: room, user_id: B.uid })).error;
+    { const { data } = await B.c.from('work_room_members').select('user_id').eq('room_id', room);
+      ok((data?.length||0) === 1, `B 자기 방 멤버 보임(양성 대조)`, seedErr ? `(심기 실패 ${seedErr.message.slice(0,40)})` : `rows=${data?.length}`); }
+    { const { data, error } = await A.c.from('work_room_members').select('user_id').eq('room_id', room);
+      ok(!error && (data?.length||0) === 0, `A→B 방 멤버 0행 격리`, error?`(err ${error.code})`:`rows=${data?.length}`); }
+    await admin.from('work_rooms').delete().eq('id', room);
+  } else { skip++; console.log('  SKIP work_room_members (service role 키 없음 — 방 멤버를 심을 수 없다)'); }
 
   // units 전체 나열 → 본인만
   { const { data } = await A.c.from('units').select('id'); const leaked=(data||[]).filter(u=>u.id!==A.unit); ok(leaked.length===0, `A units 전체나열 → 본인만`, `본인외 ${leaked.length}`); }
@@ -122,7 +138,7 @@ const TENANT_TABLES = ['playbook_entries','chat_queries','unknown_queries','work
     const leaked=(data||[]).filter(r=>r.unit_id===B.unit);
     ok(!error && leaked.length===0, `A→my_units_notif_data B매장 행 0(비소속 격리)`, error?`(err ${error.message.slice(0,40)})`:`B행 ${leaked.length}`); }
   { const { data, error } = await mk().rpc('my_units_notif_data');
-    ok(!error && (data?.length||0)===0, `anon→my_units_notif_data 0행`, error?`(err ${error.message.slice(0,40)})`:`rows=${data?.length}`); }
+    ok(anonBlocked(error, data), `anon→my_units_notif_data 0행 또는 권한 거부`, error?`(err ${error.code} ${error.message.slice(0,40)})`:`rows=${data?.length}`); }
 
   // ── 허브 대시보드 RPC (0081) — owner_overview 확장·owner_today·my_cross_summary 격리 ──
   { const { data, error } = await A.c.rpc('owner_overview');
@@ -134,7 +150,7 @@ const TENANT_TABLES = ['playbook_entries','chat_queries','unknown_queries','work
     const leaked=(data||[]).filter(r=>r.unit_id===B.unit);
     ok(!error && mine.length===1 && leaked.length===0, `A→owner_today 자기매장만(양성 대조+B 격리)`, error?`(err ${error.message.slice(0,40)})`:`mine=${mine.length} B행=${leaked.length}`); }
   { const { data, error } = await mk().rpc('owner_today');
-    ok(!error && (data?.length||0)===0, `anon→owner_today 0행`, error?`(err ${error.message.slice(0,40)})`:`rows=${data?.length}`); }
+    ok(anonBlocked(error, data), `anon→owner_today 0행 또는 권한 거부`, error?`(err ${error.code} ${error.message.slice(0,40)})`:`rows=${data?.length}`); }
   { const { data, error } = await B.c.rpc('my_cross_summary');
     const mine=(data||[]).filter(r=>r.unit_id===B.unit);
     ok(!error && mine.length===1 && mine[0].shifts!==undefined && mine[0].month_minutes!==undefined
@@ -158,7 +174,7 @@ const TENANT_TABLES = ['playbook_entries','chat_queries','unknown_queries','work
     const leaked=(data||[]).filter(r=>r.unit_id===B.unit);
     ok(!error && leaked.length===0, `A→my_cross_summary B매장 행 0(비소속 격리)`, error?`(err ${error.message.slice(0,40)})`:`B행 ${leaked.length}`); }
   { const { data, error } = await mk().rpc('my_cross_summary');
-    ok(!error && (data?.length||0)===0, `anon→my_cross_summary 0행`, error?`(err ${error.message.slice(0,40)})`:`rows=${data?.length}`); }
+    ok(anonBlocked(error, data), `anon→my_cross_summary 0행 또는 권한 거부`, error?`(err ${error.code} ${error.message.slice(0,40)})`:`rows=${data?.length}`); }
 
   // ── 정리: 본인 세션으로 삭제 (await, no .catch) ──
   try { await A.c.rpc('delete_my_account'); } catch(e){ console.log('  ! A cleanup', e.message); }
@@ -179,6 +195,6 @@ const TENANT_TABLES = ['playbook_entries','chat_queries','unknown_queries','work
   }
   await cleanupSeededPhones(URL, SRV, seededPhones);
 
-  console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
+  console.log(`\nRESULT: ${pass} passed, ${fail} failed, ${skip} skipped`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('✗', e.message); process.exit(2); });
