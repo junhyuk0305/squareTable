@@ -15,6 +15,8 @@
   네이티브 헤더·세그먼트 아래에 놓이면 **그 높이만큼 덜 올라가** 입력창이 가려진다(09-03 실기기: 노하우 추가·물어보기).
   헤더 없는 업무 채팅만 정상이었고, iOS 하드코딩 64 가 바로 이 보정이었다. `KeyboardShift` 는 창 기준 y 를 재서 뺀다.
 - ✂️ KAV `behavior` 미지정·'height' — Android 15 edge-to-edge에서 adjustResize 무시 → 입력창이 키보드에 덮임.
+- ✂️ `kb-no-shift`(10-26) — 입력칸이 `KeyboardShift`·`BottomSheet` 밖에 있는 화면. 같은 이유로 키보드가 그대로 덮는다.
+  import 를 따라가 찾으므로 "그 화면에 실제로 뜨는지"와 "화면 아래쪽인지"는 사람이 판정한다(위쪽 검색창은 ok 주석).
 - ✂️ TextInput 있는 파일의 ScrollView에 `keyboardShouldPersistTaps` 없음 — 키보드 연 채 버튼을 누르면
   **첫 탭이 키보드만 닫고** 버튼은 두 번째 탭에야 눌린다(웹은 한 번에 됨).
 - Modal 안 `autoFocus` — Android에서 키보드가 안 올라오는 기종이 있다. 열림 애니 후 `focus()` 지연 호출이 안전.

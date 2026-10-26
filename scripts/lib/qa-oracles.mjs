@@ -10,7 +10,10 @@
 // ★R2 '가려짐' 은 완전히 뷰포트 안에 든 요소만 잰다 — 반쯤 잘린 요소의 중심은 다른 요소를 찍는다(거짓 실패).
 // ★R3 는 getBoundingClientRect 만 본다 — RN-web 은 hitSlop 을 무시한다(메모리 project_squaretable_rnweb_hitslop).
 
-export const RULES = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10', 'R11'];
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+export const RULES = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10', 'R11', 'R12'];
 export const RULE_TITLES = {
   R1: '콘솔 에러 0 · ≥400 응답 0',
   R2: '누를 수 있는 요소가 전부 보인다(0크기·닿을 수 없음·가려짐 없음)',
@@ -23,13 +26,15 @@ export const RULE_TITLES = {
   R9: '로딩 중 빈 상태 문구가 스치지 않는다',
   R10: '역할 경계(다른 역할 화면이 한 프레임도 안 보인다)',
   R11: '460px 프레임 가로 넘침 0',
+  R12: '내부 값(영문 코드·밑줄 식별자·오류 원문·undefined·UUID)이 화면 글자에 없다',
 };
 
-const CLICKABLE_SEL = 'button,[role="button"],a[href],[role="link"],[role="tab"],[role="menuitem"],input[type="button"],input[type="submit"]';
+export const CLICKABLE_SEL = 'button,[role="button"],a[href],[role="link"],[role="tab"],[role="menuitem"],input[type="button"],input[type="submit"]';
 
-/** 브라우저에서 실행하는 스냅샷 수집기. 한 화면을 한 번 읽고 끝낸다(판정은 Node 쪽 순수 함수). */
-export const PROBE = `(() => {
-  const W = innerWidth, H = innerHeight, SEL = ${JSON.stringify(CLICKABLE_SEL)};
+/** 브라우저에서 실행하는 스냅샷 수집기. 한 화면을 한 번 읽고 끝낸다(판정은 Node 쪽 순수 함수).
+ *  sel = "누를 수 있는 요소" 선택자. role 없는 Pressable(칩 등)은 div[tabindex="0"] 로만 보인다 — 넣을지는 쓰는 쪽이 정한다. */
+export const probeFor = (sel) => `(() => {
+  const W = innerWidth, H = innerHeight, SEL = ${JSON.stringify(sel)};
   const norm = (s) => (s || '').replace(/\\s+/g, ' ').trim();
   const hiddenByAncestor = (el) => { for (let a = el; a; a = a.parentElement) { const cs = getComputedStyle(a); if (cs.display === 'none' || cs.visibility === 'hidden' || a.getAttribute('aria-hidden') === 'true') return true; } return false; };
   const scrollerY = (el) => { for (let a = el.parentElement; a; a = a.parentElement) { const cs = getComputedStyle(a); if (/(auto|scroll)/.test(cs.overflowY) && a.scrollHeight > a.clientHeight + 1) return a; } return null; };
@@ -145,6 +150,22 @@ export const PROBE = `(() => {
     scrollWidth: Math.max(se.scrollWidth, document.body.scrollWidth, document.documentElement.scrollWidth),
   };
 })()`;
+export const PROBE = probeFor(CLICKABLE_SEL);
+
+/** 첫 사용 팝업을 미리 끄는 localStorage 문장(try 안에 넣어 쓴다). seedSession 이 문서마다 저장소를 비워 매 화면 다시 뜨고,
+ *  덮개가 버튼을 가리면 R2 가 전부 '가려짐' 이 된다(10-17 1차 실측). 키는 소스에서 읽는다(손으로 베끼지 않음).
+ *  · 직원 환영 코치 `sqt.juniorCoachSeen` · 화면 가이드 `sqt.tour.v1`(id = guideContent.ts) · 무료 기간 안내(키 = FreeUntilNotice.tsx — 로컬 DB 는 무료 모드라 뜬다) */
+export function firstRunSeedJs(root) {
+  const guideIds = [...new Set([...readFileSync(join(root, 'src/lib/guides/guideContent.ts'), 'utf8').matchAll(/'([a-z]+_[a-z_]+_v\d+)'/g)].map((m) => m[1]))];
+  const tourSeen = JSON.stringify(Object.fromEntries(guideIds.map((id) => [id, true])));
+  const noticeKey = readFileSync(join(root, 'src/components/FreeUntilNotice.tsx'), 'utf8').match(/NOTICE_KEY = '([^']+)'/)?.[1];
+  if (!noticeKey) throw new Error('FreeUntilNotice.tsx 에서 NOTICE_KEY 를 못 찾았다 — firstRunSeedJs 를 고친다');
+  return `localStorage.setItem('sqt.juniorCoachSeen','1');localStorage.setItem('sqt.tour.v1',${JSON.stringify(tourSeen)});localStorage.setItem(${JSON.stringify(noticeKey)},'1');`;
+}
+
+/** 안정 = 글자가 있고 · ScreenLoading(progressbar) 없음 · 진입 스플래시(SplashAnimation: '매장의 정석'+'우리 매장 운영의 기준' 덮개) 걷힘.
+ *  쓰는 곳: qa-crawl · qa-layout-stress. page.waitFor(SETTLED) 로 쓴다. */
+export const SETTLED = `(()=>{const b=document.body;if(!b)return false;const t=(b.innerText||'').trim();if(!t.length)return false;if(document.querySelector('[role="progressbar"]'))return false;if(/우리 매장 운영의 기준/.test(t)||t.replace(/\\s+/g,'')==='매장의정석')return false;return true;})()`;
 
 /** 가벼운 프레임 샘플 — R9(스친 빈 문구)·R10(역할 경계) 용. 자주 부르므로 싸게. */
 export const FRAME_PROBE = `(() => {
@@ -263,6 +284,33 @@ export function r10({ forbidden, frames, finalPath }) {
   if (leaked.length) d.push(`${forbidden} 화면이 ${leaked.length}프레임 보임(버튼 ${Math.max(...leaked.map((f) => f.buttons))}개 · ${leaked[0].path})`);
   if (finalPath.startsWith(forbidden)) d.push(`최종 경로가 ${finalPath}`);
   return res(d.length ? 'fail' : 'pass', d.length ? d : [`→ ${finalPath}`]);
+}
+
+/** R12 — 내부 값 노출(2026-10-26 · 업종 영문 코드 'cafe' 가 칩·안내 문장에 그대로 나간 사고).
+ *  DB 코드값·식별자·오류 원문은 사용자 화면에 나가면 안 된다(AGENTS.md ⑨). 글자 잎(leafTexts) 단위로 본다.
+ *  이메일·주소는 지우고 본다(owner@pilot… 의 영문은 사용자 값이다). 사용자가 쓴 영문 이름("Local pilot")은 대문자·공백이 섞여 걸리지 않는다.
+ *  하니스가 QA 매장에 심은 행의 꼬리표("[UIQA link_match] …")는 그 부분만 지우고 나머지 글자는 그대로 본다(10-26 첫 전수 실측).
+ *  ★ 새 오탐이 나오면 규칙을 넓히지 말고 그 낱말을 R12_ALLOW 에 근거와 함께 더한다. */
+const R12_ALLOW = new Set([]);
+const R12_PATTERNS = [
+  ['영문 코드', /^[a-z][a-z0-9]*$/], // 글자 칸 전체가 소문자 낱말 하나 — 칩·배지·라벨에 코드값을 그대로 그린 모양('cafe' · 'owner')
+  ['영문 코드+한글', /(?:^|\s)[a-z][a-z0-9]{1,}\s+[가-힣]/], // 'cafe 매장에서' 처럼 코드값이 한글 문장 앞에 끼어든 모양
+  ['밑줄 식별자', /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/i], // store_001 · rename_limit · owner_cannot_join
+  ['오류 원문', /PGRST\d+|SQLSTATE|violates|duplicate key|permission denied|null value in column|relation "|function public\.|JWT|TypeError|Failed to fetch|Internal Server Error/i],
+  ['빈 값 출력', /(?:^|[^A-Za-z])(undefined|null|NaN)(?:[^A-Za-z]|$)|\[object Object\]/],
+  ['UUID', /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i],
+];
+export function r12(snap) {
+  const d = [];
+  for (const raw of new Set(snap.leafTexts ?? [])) {
+    const t = raw.replace(/\[(?:UI)?QA\b[^\]]*\]/g, ' ').replace(/\S+@\S+\.\S+/g, ' ').replace(/https?:\/\/\S+|\b[\w-]+\.(?:com|app|kr|net|io)\b\S*/g, ' ').trim();
+    if (!t || R12_ALLOW.has(t)) continue;
+    for (const [name, re] of R12_PATTERNS) {
+      const m = t.match(re);
+      if (m && !R12_ALLOW.has(m[0].trim())) { d.push(`${name}: "${t.slice(0, 40)}"`); break; }
+    }
+  }
+  return res(d.length ? 'fail' : 'pass', d.slice(0, 8));
 }
 
 /** R11 — 가로 넘침. */
