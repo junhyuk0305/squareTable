@@ -13,7 +13,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-export const RULES = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10', 'R11'];
+export const RULES = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10', 'R11', 'R12'];
 export const RULE_TITLES = {
   R1: '콘솔 에러 0 · ≥400 응답 0',
   R2: '누를 수 있는 요소가 전부 보인다(0크기·닿을 수 없음·가려짐 없음)',
@@ -26,6 +26,7 @@ export const RULE_TITLES = {
   R9: '로딩 중 빈 상태 문구가 스치지 않는다',
   R10: '역할 경계(다른 역할 화면이 한 프레임도 안 보인다)',
   R11: '460px 프레임 가로 넘침 0',
+  R12: '내부 값(영문 코드·밑줄 식별자·오류 원문·undefined·UUID)이 화면 글자에 없다',
 };
 
 export const CLICKABLE_SEL = 'button,[role="button"],a[href],[role="link"],[role="tab"],[role="menuitem"],input[type="button"],input[type="submit"]';
@@ -283,6 +284,33 @@ export function r10({ forbidden, frames, finalPath }) {
   if (leaked.length) d.push(`${forbidden} 화면이 ${leaked.length}프레임 보임(버튼 ${Math.max(...leaked.map((f) => f.buttons))}개 · ${leaked[0].path})`);
   if (finalPath.startsWith(forbidden)) d.push(`최종 경로가 ${finalPath}`);
   return res(d.length ? 'fail' : 'pass', d.length ? d : [`→ ${finalPath}`]);
+}
+
+/** R12 — 내부 값 노출(2026-10-26 · 업종 영문 코드 'cafe' 가 칩·안내 문장에 그대로 나간 사고).
+ *  DB 코드값·식별자·오류 원문은 사용자 화면에 나가면 안 된다(AGENTS.md ⑨). 글자 잎(leafTexts) 단위로 본다.
+ *  이메일·주소는 지우고 본다(owner@pilot… 의 영문은 사용자 값이다). 사용자가 쓴 영문 이름("Local pilot")은 대문자·공백이 섞여 걸리지 않는다.
+ *  하니스가 QA 매장에 심은 행의 꼬리표("[UIQA link_match] …")는 그 부분만 지우고 나머지 글자는 그대로 본다(10-26 첫 전수 실측).
+ *  ★ 새 오탐이 나오면 규칙을 넓히지 말고 그 낱말을 R12_ALLOW 에 근거와 함께 더한다. */
+const R12_ALLOW = new Set([]);
+const R12_PATTERNS = [
+  ['영문 코드', /^[a-z][a-z0-9]*$/], // 글자 칸 전체가 소문자 낱말 하나 — 칩·배지·라벨에 코드값을 그대로 그린 모양('cafe' · 'owner')
+  ['영문 코드+한글', /(?:^|\s)[a-z][a-z0-9]{1,}\s+[가-힣]/], // 'cafe 매장에서' 처럼 코드값이 한글 문장 앞에 끼어든 모양
+  ['밑줄 식별자', /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/i], // store_001 · rename_limit · owner_cannot_join
+  ['오류 원문', /PGRST\d+|SQLSTATE|violates|duplicate key|permission denied|null value in column|relation "|function public\.|JWT|TypeError|Failed to fetch|Internal Server Error/i],
+  ['빈 값 출력', /(?:^|[^A-Za-z])(undefined|null|NaN)(?:[^A-Za-z]|$)|\[object Object\]/],
+  ['UUID', /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i],
+];
+export function r12(snap) {
+  const d = [];
+  for (const raw of new Set(snap.leafTexts ?? [])) {
+    const t = raw.replace(/\[(?:UI)?QA\b[^\]]*\]/g, ' ').replace(/\S+@\S+\.\S+/g, ' ').replace(/https?:\/\/\S+|\b[\w-]+\.(?:com|app|kr|net|io)\b\S*/g, ' ').trim();
+    if (!t || R12_ALLOW.has(t)) continue;
+    for (const [name, re] of R12_PATTERNS) {
+      const m = t.match(re);
+      if (m && !R12_ALLOW.has(m[0].trim())) { d.push(`${name}: "${t.slice(0, 40)}"`); break; }
+    }
+  }
+  return res(d.length ? 'fail' : 'pass', d.slice(0, 8));
 }
 
 /** R11 — 가로 넘침. */

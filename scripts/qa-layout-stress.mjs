@@ -15,7 +15,7 @@
 //   ★한계 3: 키보드는 웹에 없다. 키보드 가림은 native-audit 스캐너의 kb-no-shift·kav-* 규칙이 맡는다.
 // 판정(어떤 화면이든 참이어야 하는 것만 · 케이스별 기대값 없음):
 //   S1 가로 넘침 0(r11) · S2 글자가 부모 밖으로 잘리지 않는다 · S3 글자끼리 겹치지 않는다
-//   S4 누를 것이 보이고 닿는다(r2) · S5 누를 것 44×44 이상(r3) · S6 16자 이하 글자가 접히지 않는다(r4)
+//   S4 누를 것이 보이고 닿는다(r2) · S5 누를 것 44×44 이상(r3) · S6 16자 이하 글자가 접히지 않는다(r4) · S7 내부 값이 화면에 없다(r12)
 //   등급: 폭 ≥360 이고 배율 ≤1.3 이면 실패, 그 밖(320 폭·1.5 배)은 경고. 실패가 있으면 exit 1.
 // 스크린샷: tmp/layout-stress/<화면>/<폭>x<배율>.png — 숫자가 통과여도 감긴 칩 모양은 눈으로 한 번 본다.
 //
@@ -26,7 +26,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launch, sleep, storageKeyFor } from './lib/cdp.mjs';
 import { FIXED, PW } from './lib/qa-fixed-accounts.mjs';
-import { CLICKABLE_SEL, firstRunSeedJs, probeFor, SETTLED, r2, r3, r4, r11 } from './lib/qa-oracles.mjs';
+import { CLICKABLE_SEL, firstRunSeedJs, probeFor, SETTLED, r2, r3, r4, r11, r12 } from './lib/qa-oracles.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const env = { ...process.env };
@@ -144,8 +144,8 @@ const s2 = (lp) => {
   return res(lp.clipped.some((c) => c.why !== '말줄임') ? 'fail' : d.length ? 'warn' : 'pass', d);
 };
 const s3 = (lp) => res(lp.overlaps.length ? 'fail' : 'pass', lp.overlaps);
-const CHECKS = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'];
-const TITLES = { S1: '가로 넘침', S2: '글자 잘림', S3: '글자 겹침', S4: '가려짐·닿지 않음', S5: '터치 44', S6: '짧은 글자 접힘' };
+const CHECKS = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7'];
+const TITLES = { S1: '가로 넘침', S2: '글자 잘림', S3: '글자 겹침', S4: '가려짐·닿지 않음', S5: '터치 44', S6: '짧은 글자 접힘', S7: '내부 값 노출' };
 
 async function sessionFor(role) {
   const r = await fetch(`${SB}/auth/v1/token?grant_type=password`, {
@@ -204,7 +204,7 @@ try {
         await page.shot(join(dir, `${w}x${k}.png`));
         await page.resize(w, HEIGHT);
         await sleep(300);
-        const cells = { S1: r11(snap), S2: s2(lp), S3: s3(lp), S4: r2(snap), S5: r3(full), S6: r4(snap) };
+        const cells = { S1: r11(snap), S2: s2(lp), S3: s3(lp), S4: r2(snap), S5: r3(full), S6: r4(snap), S7: r12(full) };
         const tier = tierOf(w, k);
         for (const c of CHECKS) {
           const st = cells[c].status;

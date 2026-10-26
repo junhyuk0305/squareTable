@@ -14,6 +14,8 @@
 //   · 기준선: 지난 FAIL 은 "알려진" 으로 세고 **새로 생긴 FAIL 만** 앞에 낸다. 새 FAIL 이 있으면 exit 1.
 //
 // 포트 9373(사장)·9374(직원) — 다른 하니스와 겹치지 않게(join 9333~ · task 9343~ · quiz 9353~ · ai 9363~).
+// 나눠 돌리기(10-26): --routes 로 묶음을 나누고 묶음마다 --port-base=9400·9402… --tag=a·b… 를 준다(결과 tmp/qa-crawl-last-<tag>.json).
+//   기준선 갱신(--update-baseline)은 나눠 돌린 결과로 하지 않는다 — 한 묶음의 FAIL 만 남는다.
 // 뷰포트 460×900(여정 하니스와 같음 · R11 의 460px 프레임).
 import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
@@ -21,7 +23,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launch, sleep, storageKeyFor } from './lib/cdp.mjs';
 import { FIXED, PW, UNIT, login, ensureActive, restoreActive, rolePrecondition } from './lib/qa-fixed-accounts.mjs';
-import { RULES, RULE_TITLES, PROBE, FRAME_PROBE, SETTLED, firstRunSeedJs, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11 } from './lib/qa-oracles.mjs';
+import { RULES, RULE_TITLES, PROBE, FRAME_PROBE, SETTLED, firstRunSeedJs, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12 } from './lib/qa-oracles.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const env = { ...process.env };
@@ -43,11 +45,13 @@ const args = Object.fromEntries(process.argv.slice(2).map((a) => { const m = a.m
 const UPDATE = !!args['update-baseline'];
 const ONLY_ROUTES = typeof args.routes === 'string' ? new Set(args.routes.split(',')) : null;
 const ONLY_ROLE = typeof args.role === 'string' ? args.role : null;
+const TAG = typeof args.tag === 'string' ? args.tag : '';
+const PORT_BASE = Number(args['port-base'] ?? 9373);
 const BASELINE = join(ROOT, 'scripts', 'qa-crawl-baseline.json');
 const TMP = join(ROOT, 'tmp');
 mkdirSync(TMP, { recursive: true });
 const STORAGE_KEY = storageKeyFor(SB);
-const PORT = { owner: 9373, junior: 9374 };
+const PORT = { owner: PORT_BASE, junior: PORT_BASE + 1 };
 const VIEW = { width: 460, height: 900 };
 const MAX_SHOTS = 20;
 
@@ -169,7 +173,7 @@ async function visit(page, role, route, mode) {
       for (const k of ['R2', 'R3', 'R4', 'R5', 'R6', 'R8', 'R11']) r.rules[k] = { status: 'fail', detail: [`스냅샷 실패: ${snap.error.slice(0, 80)}`] };
     } else {
       r.rules.R2 = r2(snap); r.rules.R3 = r3(snap); r.rules.R4 = r4(snap); r.rules.R5 = r5(snap.text);
-      r.rules.R6 = r6(snap); r.rules.R8 = r8(snap); r.rules.R11 = r11(snap);
+      r.rules.R6 = r6(snap); r.rules.R8 = r8(snap); r.rules.R11 = r11(snap); r.rules.R12 = r12(snap);
       r.rules.R9 = r9(frames, snap.text);
     }
     // R7 — 헤더 '뒤로' 가 보이면 그것, 아니면 브라우저 뒤로. 직전 방문 화면이 history 의 바로 앞 항목이다.
@@ -200,7 +204,7 @@ async function visit(page, role, route, mode) {
   const failed = RULES.some((k) => r.rules[k]?.status === 'fail');
   if (failed && shots < MAX_SHOTS) {
     shots++;
-    r.shot = `tmp/qa-crawl-${shots}.png`;
+    r.shot = `tmp/qa-crawl-${TAG ? TAG + "-" : ""}${shots}.png`;
     // R7 뒤에는 이미 다른 화면이다 — 실패 화면을 다시 열어 찍는다.
     try { await page.goto(path); await page.waitFor(SETTLED, 15000); await sleep(1500); await page.shot(join(ROOT, r.shot)); } catch { r.shot += '(실패)'; }
   }
@@ -257,10 +261,10 @@ console.log(`\n── FAIL 상위 ${Math.min(MAX_SHOTS, fails.length)}건 캡처
 for (const r of full.filter((x) => x.shot)) console.log(`  ${r.shot}  ${r.route} · ${r.role} · ${RULES.filter((k) => r.rules[k]?.status === 'fail').join(',')}`);
 if (noSample.length) console.log(`\n── 표본 없음: ${noSample.map((r) => `${r.route}(${r.role})`).join(', ')}`);
 
-writeFileSync(join(TMP, 'qa-crawl-last.json'), JSON.stringify({ at: new Date().toISOString(), results }, null, 1));
+writeFileSync(join(TMP, `qa-crawl-last${TAG ? '-' + TAG : ''}.json`), JSON.stringify({ at: new Date().toISOString(), results }, null, 1));
 if (UPDATE) {
   writeFileSync(BASELINE, JSON.stringify({ updatedAt: new Date().toISOString(), fails: fails.map(({ key, detail }) => ({ key, detail: detail.slice(0, 3) })) }, null, 1));
   console.log(`\n기준선 저장: scripts/qa-crawl-baseline.json (${fails.length}건)`);
 }
-console.log(`\n전체 결과: tmp/qa-crawl-last.json`);
+console.log(`\n전체 결과: tmp/qa-crawl-last${TAG ? '-' + TAG : ''}.json`);
 process.exit(fresh.length && !UPDATE ? 1 : 0);
