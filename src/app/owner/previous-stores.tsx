@@ -19,6 +19,7 @@ import { reopenStoreMessage } from '@/lib/account/storeCopy';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { industryLabel } from '@/lib/config/industry';
 
 function fmtDay(iso: string): string {
   const d = new Date(iso);
@@ -102,7 +103,7 @@ export default function PreviousStores() {
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={styles.name} numberOfLines={1}>{r.store_name}</Text>
                       <Text style={styles.meta} numberOfLines={1}>
-                        {r.industry ? `${r.industry} · ` : ''}닫힌 날 {fmtDay(r.closed_at)}
+                        {industryLabel(r.industry) ? `${industryLabel(r.industry)} · ` : ''}닫힌 날 {fmtDay(r.closed_at)}
                       </Text>
                     </View>
                   </View>

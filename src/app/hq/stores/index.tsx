@@ -23,6 +23,7 @@ import { visibilityLabel, payerLabel, relationLabel, RELATIONS, VISIBILITY_LEVEL
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { industryLabel } from '@/lib/config/industry';
 
 /** 표 바닥줄의 순서 이름 — [오름차순, 내림차순]. */
 const SORT_LABEL: Record<BrandOverviewSort, [string, string]> = {
@@ -110,7 +111,7 @@ export default function HqStoresScreen() {
       render: (r) => (
         <View>
           <Cell kind="name">{r.store_name}</Cell>
-          {r.industry ? <Text style={styles.sub} numberOfLines={1}>{r.industry}</Text> : null}
+          {industryLabel(r.industry) ? <Text style={styles.sub} numberOfLines={1}>{industryLabel(r.industry)}</Text> : null}
         </View>
       ),
       sortValue: (r) => r.store_name,

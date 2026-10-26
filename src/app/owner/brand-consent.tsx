@@ -23,6 +23,7 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, SCREEN_GUTTER } from '@/lib/theme/layout';
 import { ButtonStyles } from '@/lib/theme/button';
+import { industryLabel } from '@/lib/config/industry';
 
 const fmtBiz = (n: string | null) => (n && n.length === 10 ? `${n.slice(0, 3)}-${n.slice(3, 5)}-${n.slice(5)}` : n || '미등록');
 
@@ -175,7 +176,7 @@ export default function BrandConsentScreen() {
                   >
                     <Ionicons name={on ? 'checkbox' : 'square-outline'} size={20} color={on ? InkColors.ink : InkColors.ink3} />
                     <Text style={styles.pickName} numberOfLines={1}>{s.store_name}</Text>
-                    {s.industry ? <Text style={styles.pickSub}>{s.industry}</Text> : null}
+                    {industryLabel(s.industry) ? <Text style={styles.pickSub}>{industryLabel(s.industry)}</Text> : null}
                   </Pressable>
                 );
               })}

@@ -22,6 +22,7 @@ import { Radius, Elevation } from '@/lib/theme/elevation';
 import { PLANS, VAT_NOTE } from '@/lib/config/tiers';
 import { formatKrw } from '@/lib/config/billing';
 import { showBillingEntry, showPaymentSurface } from '@/lib/config/store-policy';
+import { industryLabel } from '@/lib/config/industry';
 
 // 사장 온보딩 — 업종 표준 노하우 팩에서 '선택 → 자동등록'. 빈 매장(노하우 0건) 죽음의 나선 차단.
 // 레이아웃: ① 추천 묶음 한 번에 담기(결정 최소화) → ② '직접 고르기' 접이식 카테고리 섹션(미세조정)
@@ -239,7 +240,7 @@ export default function OwnerOnboardingScreen() {
         <Appear delay={stagger(0)} style={styles.intro}>
           <Text style={styles.introTitle}>직원이 물어볼 걸,{'\n'}미리 답을 담아둘게요</Text>
           <Text style={styles.introBody}>
-            {industry ? `${industry} ` : ''}매장에서 자주 생기는 일을 모아뒀어요. 추천 묶음으로 바로 시작하거나,
+            {industryLabel(industry) ? `${industryLabel(industry)} ` : ''}매장에서 자주 생기는 일을 모아뒀어요. 추천 묶음으로 바로 시작하거나,
             직접 골라 담을 수 있어요.
           </Text>
         </Appear>

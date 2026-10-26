@@ -41,6 +41,7 @@ import { showToast } from '@/lib/store/useToastStore';
 import { confirmAction } from '@/lib/utils/confirm';
 import { InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
+import { industryLabel } from '@/lib/config/industry';
 
 const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('ko-KR');
 
@@ -132,7 +133,7 @@ export default function HqStoreDetailScreen() {
           <HqPill tone={VIS_TONE[row.visibility]} label={visibilityLabel(row.visibility)} />
         </>
       }
-      sub={[row.industry, `${fmtDay(row.accepted_at)} 연결`, payerLabel(row.payer)].filter(Boolean).join(' · ')}
+      sub={[industryLabel(row.industry), `${fmtDay(row.accepted_at)} 연결`, payerLabel(row.payer)].filter(Boolean).join(' · ')}
       back={backBtn}
       tabs={<HqTabs items={TABS} value={current} onChange={setTab} testID="hq-store-tabs" />}
       testID="hq-store-detail"
