@@ -214,7 +214,9 @@ async function main() {
   // 0133 은 "유료면 무조건 거부"였고, 0134 가 신규 매장에 가입 체험(single 30일)을 얹으면서
   // 그 규칙이 **모든 신규 매장의 코드를 막게** 됐다. 그래서 판정을 '나빠지느냐'로 바꿨다.
   // 여기가 그 회귀 가드다 — 이 두 줄이 없으면 규칙이 되돌아가도 아무도 모른다.
-  await setSignupTrialDays(30);
+  // ★2026-10-26: 창구를 열지 않는다. signup_trial_days 만 올리면 마감일(signup_trial_until · 라이브 2026-09-18)이 지나
+  //   창구가 안 열려 ⑧ 이 늘 RED 였다. 마감일까지 열면 라이브의 실제 가입자도 그 몇 초 동안 체험을 받는다.
+  //   그래서 이 매장 한 곳만 창구가 연 체험의 모양(trialing·multi·종료일 +30일)으로 심는다(qa-store-slots ⑨-b 와 같다).
   try {
     const C_SHORT = `QA${s}SHORT`; // single 7일 — 30일 체험보다 나쁘다
     // ★0141 이후 가입 체험 자체가 multi 라, '플랜이 올라간다' 가지는 체험 매장에서 더 이상
@@ -227,9 +229,12 @@ async function main() {
 
     const D = await signUp('owner', 'QA체험사장D'); cleanup.push(D.c);
     const storeD = await makeStore(D, 'QA 체험 D점');
+    await svcPatch(`unit_subscriptions?unit_id=eq.${storeD.unit_id}`, {
+      status: 'trialing', plan: 'multi', paid_until: null, trial_ends_at: new Date(Date.now() + 30 * 86400000).toISOString(),
+    });
     const { data: dep } = await D.c.rpc('effective_plan', { p_unit: storeD.unit_id });
     // ★0141(2026-08-12): 가입 체험이 single → **multi** 로 올라갔다(광고와 서버 일치).
-    check('⑧ 가입 매장이 체험 multi 로 열린다', dep === 'multi', `ep=${dep}`);
+    check('⑧ 셋업: 체험 매장(창구가 연 모양)의 유효 플랜 = multi', dep === 'multi', `ep=${dep}`);
 
     const { error: eShort } = await D.c.rpc('redeem_promo_code', { p_code: C_SHORT });
     check('⑧ 체험 30일 > 코드 7일 → 거부(already_paid)', /already_paid/.test(eShort?.message ?? ''), eShort?.message ?? '통과돼버림');
