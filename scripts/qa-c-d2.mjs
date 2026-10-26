@@ -7,7 +7,7 @@ if(!process.argv.includes('--local')) throw Error('--local required');
 const env={...process.env,...localEnv()};
 const dir=resolve('../산출물/서비스결함수정_2026-10-23/D2');
 mkdirSync(dir,{recursive:true});
-const files=['quiz-schedule','brand-deploy','brand-boundary','knowhow-archive','quiz-attempt-integrity','quiz-formats-browser','quiz-junior','quiz-gen','quiz-grading','quiz-link-live','quiz-ui-browser','training','training-browser','notify-prefs','task-knowhow'];
+const files=['quiz-schedule','brand-deploy','brand-boundary','knowhow-archive','quiz-attempt-integrity','quiz-formats-browser','quiz-junior','quiz-gen','quiz-grading','quiz-link-live','quiz-ui-browser','training','notify-prefs','task-knowhow'];
 const results=[];
 for(const name of files){
   console.log('START',name);
