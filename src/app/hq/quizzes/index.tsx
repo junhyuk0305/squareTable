@@ -9,7 +9,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { HqCard, HqPage, HqButton, HqNotice, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
+import { HqPage, HqButton, HqNotice, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
 import { HqTable, Cell, type HqColumn } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -211,7 +211,6 @@ export default function HqQuizzesScreen() {
     <HqPage {...head}>
       {/* 등장은 섹션 단위로(ui.md ⑤) — 퀴즈 표 → 배포 상태 순서로(노하우 화면과 같다). */}
       <Appear>
-        <HqCard title="퀴즈 목록">
         <View style={styles.bar}>
           <Pressable
             onPress={() => setPicked(allPicked ? new Set() : new Set(list.map((r) => r.id)))}
@@ -237,7 +236,7 @@ export default function HqQuizzesScreen() {
           </Text>
         </View>
 
-        <HqTable embedded
+        <HqTable
           columns={columns}
           rows={list}
           rowKey={(r) => r.id}
@@ -250,7 +249,6 @@ export default function HqQuizzesScreen() {
           }
           testID="hq-quizzes-table"
         />
-        </HqCard>
       </Appear>
 
 

@@ -10,7 +10,7 @@ import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { HqCard, HqPage, HqButton, HqPill, HqSegment, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
+import { HqPage, HqButton, HqPill, HqSegment, HqEmpty, HqLoadError, HqSlab } from '@/components/hq/HqKit';
 import { HqTable, Cell, type HqColumn, type HqSort } from '@/components/hq/HqTable';
 import { AddStoreModal } from '@/components/hq/AddStoreModal';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -174,7 +174,6 @@ export default function HqStoresScreen() {
       ) : (
         // ★쪽·정렬을 바꿀 때는 다시 재생하지 않는다 — Appear 는 마운트 1회이고 표는 같은 자리에서 행만 바뀐다.
         <Appear>
-          <HqCard title="연결된 매장">
           <View style={styles.tool}>
             <View style={styles.search}>
               <Ionicons name="search-outline" size={15} color={InkColors.ink3} />
@@ -199,7 +198,7 @@ export default function HqStoresScreen() {
             />
           </View>
 
-          <HqTable embedded
+          <HqTable
             columns={columns}
             rows={rows}
             rowKey={(r) => r.unit_id}
@@ -229,21 +228,18 @@ export default function HqStoresScreen() {
             매장 삭제와 직원 임면은 본사 화면에 없어요. 매장과 사람은 점주가 정해요.
           </Text>
 
-          </HqCard>
-
           {/* 연결 끝난 매장(0250 · Q28) — 점주가 해제 시트에서 고른 사유가 여기 온다. 끝난 뒤 운영 데이터는 서버가 주지 않는다. */}
           {endedError ? (
             <Text style={styles.note} testID="hq-stores-ended-error">연결 끝난 매장을 불러오지 못했어요.</Text>
           ) : ended && ended.length > 0 ? (
             <View style={styles.ended}>
-              <HqCard title="연결 끝난 매장" sub="끝난 날과 사유만 남아요. 끝난 뒤 매장 데이터는 보이지 않아요.">
-              <HqTable embedded
+              <HqSlab title="연결 끝난 매장" hint="끝난 날과 사유만 남아요. 끝난 뒤 매장 데이터는 보이지 않아요." />
+              <HqTable
                 columns={endedColumns}
                 rows={ended}
                 rowKey={(r) => r.unit_id}
                 testID="hq-stores-ended"
               />
-</HqCard>
             </View>
           ) : null}
         </Appear>
@@ -266,7 +262,7 @@ export default function HqStoresScreen() {
 
 const styles = StyleSheet.create({
   tool: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.md, flexWrap: 'wrap' },
-  search: { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 12, width: 260, maxWidth: '100%', minHeight: 48, backgroundColor: InkColors.bg },
+  search: { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 12, width: 260, minHeight: 48, backgroundColor: InkColors.bg },
   searchInput: { flex: 1, fontSize: 14.5, color: InkColors.ink, paddingVertical: 0, minWidth: 0 },
   sub: { fontSize: 13, color: InkColors.ink3, marginTop: 2 },
   pager: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.md, marginTop: -Space.sm, marginBottom: Space.xl },

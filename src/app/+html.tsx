@@ -64,7 +64,7 @@ export default function Root({ children }: PropsWithChildren) {
 
 // !important 를 쓰지 않는다 — 아이콘 폰트(@expo/vector-icons)는 인라인 font-family로
 // 지정되므로, important 없는 전역 규칙이면 인라인이 이겨 아이콘이 깨지지 않는다.
-// RN-Web Text의 기본 폰트 규칙보다 구체적인 선택자로 한글 폰트를 상속한다.
+// 본문 텍스트는 인라인 폰트가 없어 이 전역 규칙(Pretendard)을 그대로 상속한다.
 const FONT_CSS = `
 html, body, #root, #__next {
   font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
@@ -76,7 +76,6 @@ html, body, #root, #__next {
      흉내낸다(=이중 잔상). none 이면 흉내 대신 폴백 폰트의 실제 굵기를 써 항상 또렷하다. */
   font-synthesis: none;
 }
-body [dir="auto"], body button, body input, body textarea { font-family: inherit; }
 
 /* 전역 기본 배경 — 미지정 시 브라우저 흰색이 로딩 순간·오버스크롤 바운스·프레임 밖에서
    새어 나온다. 디자인시스템 페이퍼(#F1EFE9 = 앱 메인 배경, 스플래시와 동일)로 통일. */

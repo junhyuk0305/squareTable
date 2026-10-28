@@ -1,5 +1,3 @@
-import { SectionGroup } from '@/components/SectionGroup';
-import { ButtonStyles } from '@/lib/theme/button';
 import { useState, useEffect, useRef } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Linking, TextInput } from 'react-native';
@@ -653,7 +651,8 @@ function BillingBody() {
 
             {/* 요금제 선택(3티어, SSOT=tiers.ts). 선택에 따라 아래 금액이 계산된다. */}
             <Appear delay={stagger(2)}>
-            <SectionGroup title="요금제" contentStyle={styles.section}>
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>요금제</Text>
               <View style={styles.planList}>
                 {PLAN_ORDER.map((pid) => {
                   const def = PLANS[pid];
@@ -708,15 +707,16 @@ function BillingBody() {
                 })}
               </View>
               <Text style={[styles.hint, { marginLeft: 2 }]}>{VAT_NOTE_SENTENCE}</Text>
-            </SectionGroup>
+            </View>
             </Appear>
 
             {/* 몇 개분을 살지 — 이게 결제의 입력이다(0130 store_count). 카드·계좌이체·카드 요금 변경이 같은 값을 쓴다.
                 한 번에 여러 개를 사도 되고, 나중에 하나씩 더 사도 된다. */}
             {selectedPlan === 'multi' && !(iapSub && iapSub.status !== 'canceled') && (
               <Appear delay={stagger(3)}>
-              <SectionGroup title="매장 개수" contentStyle={styles.section}>
-                <View style={styles.groupBody}>
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>매장 개수</Text>
+                <View style={styles.card}>
                   <View style={styles.stepper}>
                     <Pressable
                       onPress={() => { storeTouched.current = true; setStoreCount((n) => Math.max(MULTI_MIN_STORES, n - 1)); }}
@@ -745,7 +745,7 @@ function BillingBody() {
                     {ownedCount > 0 ? ` 지금 매장 ${ownedCount}개를 갖고 계세요.` : ''}
                   </Text>
                 </View>
-              </SectionGroup>
+              </View>
               </Appear>
             )}
 
@@ -805,7 +805,8 @@ function BillingBody() {
                 {/* 결제 방법 — 카드 자동결제(0208)가 열린 웹에서만 고른다. 키가 없으면 계좌이체만(종전과 같다). */}
                 {SHOW_CARD_BILLING && !claimPending && (
                   <Appear delay={stagger(3)}>
-                  <SectionGroup title="결제 방법" contentStyle={styles.section}>
+                  <View style={styles.section}>
+                    <Text style={styles.sectionLabel}>결제 방법</Text>
                     <View style={styles.planList}>
                       {([
                         { id: 'card', name: '카드 자동결제', desc: '결제하면 바로 열리고, 한 달마다 자동으로 결제돼요. 언제든 해지할 수 있어요.' },
@@ -834,7 +835,7 @@ function BillingBody() {
                         );
                       })}
                     </View>
-                  </SectionGroup>
+                  </View>
                   </Appear>
                 )}
                 {payMethod === 'card' && !claimPending ? (
@@ -849,13 +850,13 @@ function BillingBody() {
                   </Appear>
                 ) : (
                 <>
-                <SectionGroup title="입금하기" contentStyle={styles.section}>
                 {/* ★2026-08-06: 안내 문구 · 입금 계좌 · 입금자명이 각각 카드라 **카드 3연속**이었다
                     (배치규칙① 위반 · 실브라우저 실측 카드런 3). 셋은 "입금하기" 한 동작이라
                     — 계좌를 보고 이체한 뒤 그 이름을 적는다 — 한 카드로 합친다. 행은 하나도 안 없앴다. */}
                 <Appear delay={stagger(3)}>
                 <View style={styles.section}>
-                  <View style={styles.groupBody}>
+                  <Text style={styles.sectionLabel}>입금하기</Text>
+                  <View style={styles.card}>
                     <Text style={styles.body}>
                       {lapsed
                         ? '아래 계좌로 이용료를 입금하시면, 확인 후 다시 열려요.'
@@ -910,7 +911,7 @@ function BillingBody() {
 
                 {/* 직전 신고 상태 — '냈는데 아무 반응 없다'를 없애는 자리. 승인은 폴링이 앱으로 넘긴다. */}
                 {latestClaim?.status === 'pending' && (
-                  <View style={[styles.groupBody, styles.inlineStatus]}>
+                  <View style={[styles.card, styles.claimPending]}>
                     <View style={styles.claimHead}>
                       <Ionicons name="time-outline" size={18} color={InkColors.ink2} />
                       <Text style={styles.claimTitle}>입금을 확인하고 있어요</Text>
@@ -923,7 +924,7 @@ function BillingBody() {
                   </View>
                 )}
                 {latestClaim?.status === 'rejected' && (
-                  <View style={[styles.groupBody, styles.inlineStatus]}>
+                  <View style={[styles.card, styles.claimRejected]}>
                     <View style={styles.claimHead}>
                       <Ionicons name="alert-circle-outline" size={18} color={BrandColors.warn} />
                       <Text style={styles.claimTitle}>입금 확인이 어려웠어요</Text>
@@ -942,9 +943,9 @@ function BillingBody() {
                 ) : (
                   // 펼침의 정본은 Collapse 다 — Appear(등장)로 펼치면 아래 내용이 순간이동한다.
                   <Collapse>
-                  <View style={styles.groupBody}>
+                  <View style={styles.section}>
                     <Text style={styles.sectionLabel}>세금계산서</Text>
-                    <View style={styles.groupBody}>
+                    <View style={styles.card}>
                       <TextInput
                         value={bizNo}
                         onChangeText={setBizNo}
@@ -1002,7 +1003,7 @@ function BillingBody() {
                   style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, claiming && { opacity: 0.6 }]}
                 >
                   {claiming ? (
-                    <ActivityIndicator color={InkColors.ink} />
+                    <ActivityIndicator color="#FFFFFF" />
                   ) : (
                     <Text style={styles.primaryText}>{latestClaim?.status === 'pending' ? '입금 정보 다시 보내기' : '입금 완료했어요'}</Text>
                   )}
@@ -1015,7 +1016,6 @@ function BillingBody() {
                   <Text style={styles.mailText}>메일로도 알리기 ({BILLING_INFO.contactValue})</Text>
                 </Pressable>
                 </Appear>
-                </SectionGroup>
                 </>
                 )}
               </>
@@ -1034,8 +1034,9 @@ function BillingBody() {
                 <Text style={styles.promoToggleText}>무료 이용 코드가 있으신가요?</Text>
               </Pressable>
             ) : (
-              <SectionGroup title="무료 이용 코드" contentStyle={styles.section}>
-                <View style={styles.groupBody}>
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>무료 이용 코드</Text>
+                <View style={styles.card}>
                   <TextInput
                     value={promoCode}
                     onChangeText={(t) => setPromoCode(t.toUpperCase())}
@@ -1057,7 +1058,7 @@ function BillingBody() {
                     {redeeming ? <ActivityIndicator color={InkColors.ink2} /> : <Text style={styles.ghostText}>코드 사용</Text>}
                   </Pressable>
                 </View>
-              </SectionGroup>
+              </View>
             )}
           </>
         )}
@@ -1098,9 +1099,7 @@ function Row({ label, value, strong, onCopy }: { label: string; value: string; s
 }
 
 const styles = StyleSheet.create({
-  inlineStatus: { borderTopWidth: 1, borderTopColor: InkColors.line, paddingVertical: Space.md },
-  groupBody: { gap: Space.md },
-  safe: { flex: 1, backgroundColor: InkColors.bgSoft },
+  safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: Space.gutter, gap: Space.xl, paddingBottom: 40, flexGrow: 1 },
 
   hero: { alignItems: 'center', gap: Space.sm, marginTop: Space.lg },
@@ -1138,7 +1137,7 @@ const styles = StyleSheet.create({
     ...Elevation.e1,
   },
   body: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
-  hint: { fontSize: 14, color: InkColors.ink2, lineHeight: 21 },
+  hint: { fontSize: 12, color: InkColors.ink3, lineHeight: 18 },
 
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.md },
   rowLabel: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
@@ -1148,17 +1147,25 @@ const styles = StyleSheet.create({
   copyBtn: { padding: 2 },
 
   // 요금제 선택 카드(라디오 리스트) — 선택 시 잉크 보더로 강조.
-  planList: { gap: 0 },
-  planCard: { borderTopWidth: 1, borderTopColor: InkColors.line, paddingVertical: Space.lg, paddingHorizontal: Space.sm, gap: Space.xs },
-  planCardSelected: { backgroundColor: InkColors.bgSoft },
-  planHead: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Space.sm },
+  planList: { gap: Space.sm },
+  planCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    padding: Space.lg,
+    gap: Space.xs,
+    ...Elevation.e1,
+  },
+  planCardSelected: { borderColor: InkColors.ink, borderWidth: 1.5 },
+  planHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   planName: { fontSize: 15, fontWeight: '900', color: InkColors.ink },
   planBadge: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: InkColors.line },
   planBadgeText: { fontSize: 10.5, fontWeight: '800', color: InkColors.ink2 },
   planPrice: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
   planPriceRegular: { fontSize: 12, fontWeight: '600', color: InkColors.ink3, textDecorationLine: 'line-through', marginRight: Space.xs },
-  planTagline: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, marginTop: 2 },
-  planFeatures: { fontSize: 14, color: InkColors.ink2, lineHeight: 21 },
+  planTagline: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink2, marginTop: 2 },
+  planFeatures: { fontSize: 11.5, fontWeight: '600', color: InkColors.ink3, lineHeight: 17 },
   // 단일 잠금(0342) — 내용만 흐리게 하고 이유 줄은 그대로 읽히게 둔다.
   planBody: { gap: Space.xs },
   planLocked: { opacity: 0.4 },
@@ -1209,8 +1216,8 @@ const styles = StyleSheet.create({
   promoToggle: { alignItems: 'center', paddingVertical: Space.sm },
   promoToggleText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3, textDecorationLine: 'underline' },
 
-  primary: ButtonStyles.brand,
-  primaryText: ButtonStyles.brandText,
+  primary: { backgroundColor: BrandColors.brand, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center' },
+  primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   ghost: { paddingVertical: 13, borderRadius: Radius.md, alignItems: 'center', backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
   ghostText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
   logoutRow: { alignItems: 'center', paddingVertical: 4 },

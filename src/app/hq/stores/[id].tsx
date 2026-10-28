@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { View, Text, StyleSheet } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 
-import { HqPage, HqButton, HqPill, HqRow, HqSegment, HqEmpty, HqLoadError, HqCard, HqTabs, HqField, HqNotice } from '@/components/hq/HqKit';
+import { HqPage, HqButton, HqPill, HqRow, HqSlab, HqSegment, HqEmpty, HqLoadError, HqCard, HqTabs, HqField, HqNotice } from '@/components/hq/HqKit';
 import { HqStrip } from '@/components/hq/HqStrip';
 import { HqTable, Cell } from '@/components/hq/HqTable';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -196,8 +196,8 @@ function Overview({ row, onTab }: { row: BrandOverviewRow; onTab: (t: Tab) => vo
         <StatusCard title="본사 퀴즈" status={quizStatus} onMore={() => onTab('quizzes')} testID="hq-store-quiz-status" />
       </View>
 
-      <HqCard title="매장 활동" sub="이 매장이 스스로 하는 일 · 사람 단위는 보이지 않아요">
-      <HqCard embedded>
+      <HqSlab title="매장 활동" hint="이 매장이 스스로 하는 일 · 사람 단위는 보이지 않아요" />
+      <HqCard>
         <View style={styles.fields}>
           <HqField label="자체 노하우">{`${row.knowhow_own}건`}</HqField>
           <HqField label="미해결 질문">{`${row.pending_q}건`}</HqField>
@@ -206,7 +206,6 @@ function Overview({ row, onTab }: { row: BrandOverviewRow; onTab: (t: Tab) => vo
           <HqField label="매장 퀴즈" hint={opsOnly(row.quiz_courses, '')}>{row.quiz_courses === null ? '—' : `${row.quiz_courses}개`}</HqField>
         </View>
       </HqCard>
-</HqCard>
     </>
   );
 }

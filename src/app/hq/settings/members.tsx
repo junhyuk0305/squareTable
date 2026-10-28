@@ -6,7 +6,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 
-import { HqCard, HqPage, HqButton, HqPill, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
+import { HqPage, HqButton, HqPill, HqSlab, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
 import { HqTable, Cell } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -83,8 +83,8 @@ export default function HqSettingsMembersScreen() {
         testID="hq-members-table"
       />
 
-      <HqCard title="아직 안 쓴 초대 링크" sub="7일이 지나면 만료돼요">
-      <HqTable embedded
+      <HqSlab title="아직 안 쓴 초대 링크" hint="7일이 지나면 만료돼요" />
+      <HqTable
         columns={[
           { key: 'made', label: '만든 날', width: 140, render: (i) => <Cell kind="muted">{fmtDay(i.created_at)}</Cell> },
           { key: 'exp', label: '만료', width: 140, render: (i) => <Cell kind="muted">{fmtDay(i.expires_at)}</Cell> },
@@ -105,7 +105,6 @@ export default function HqSettingsMembersScreen() {
         rowKey={(i) => i.id}
         empty={<HqEmpty text="기다리는 초대 링크가 없어요." />}
       />
-</HqCard>
 
       <HqModal open={!!link} title="초대 링크를 만들었어요" sub={link ? `${fmtDay(link.expires)}까지 쓸 수 있어요. 링크를 받은 사람이 가입하거나 로그인하면 이 브랜드 담당자가 돼요.` : undefined} onClose={() => setLink(null)}>
         {link ? (

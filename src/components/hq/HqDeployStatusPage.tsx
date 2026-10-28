@@ -73,13 +73,12 @@ export function HqDeployStatusPage<C extends { unit_id: string; status: Exclude<
     <HqPage {...head}>
       <Appear>
         <View testID={`${testID}-body`}>
-        <HqCard title={`${kind} 배포 현황`}>
         {overview.length === 0 || rows.length === 0 ? (
-          <HqCard embedded>
+          <HqCard>
             <HqEmpty text={overview.length === 0 ? '연결된 매장이 생기면 채워져요.' : `${kind}를 만들어 보내면 매장마다 상태가 여기에 모여요.`} />
           </HqCard>
         ) : (
-          <HqDeployCounts embedded rows={rows} units={overview} statusOf={statusOf} kind={kind} testID={`${testID}-xtable`} />
+          <HqDeployCounts rows={rows} units={overview} statusOf={statusOf} kind={kind} testID={`${testID}-xtable`} />
         )}
         <View style={styles.legend}>
           {ORDER.map((k) => (
@@ -89,7 +88,6 @@ export function HqDeployStatusPage<C extends { unit_id: string; status: Exclude<
             </View>
           ))}
         </View>
-        </HqCard>
         </View>
       </Appear>
     </HqPage>

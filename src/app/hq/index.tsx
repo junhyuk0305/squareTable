@@ -10,7 +10,7 @@ import { View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions } fr
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { HqPage, HqPill, HqSegment, HqLoadError, HqCard, HqEmpty, HqButton } from '@/components/hq/HqKit';
+import { HqPage, HqPill, HqSlab, HqSegment, HqLoadError, HqCard, HqEmpty, HqButton } from '@/components/hq/HqKit';
 import { HqStrip } from '@/components/hq/HqStrip';
 import { HqDeployCounts } from '@/components/hq/HqDeployCounts';
 import { HqModal } from '@/components/hq/HqModal';
@@ -217,18 +217,17 @@ export default function HqDashboardScreen() {
         </HqCard>
 
         <View style={twoCol ? styles.tableCol : undefined}>
-          <HqCard title="최근 배포 상태" sub="노하우 · 최근 수정순 · 숫자를 누르면 매장 목록" more={recent.length ? { label: '전체 보기', onPress: () => router.push('/hq/knowhow/status') } : undefined}>
+          <HqSlab title="최근 배포 상태" hint="노하우 · 최근 수정순 · 숫자를 누르면 매장 목록" more={recent.length ? { label: '전체 보기', onPress: () => router.push('/hq/knowhow/status') } : undefined} />
           {overview.length === 0 || recent.length === 0 ? (
-            <HqCard embedded testID="hq-dashboard-deploy-empty">
+            <HqCard testID="hq-dashboard-deploy-empty">
               <HqEmpty
                 text={overview.length === 0 ? '연결된 매장이 생기면 채워져요.' : '노하우를 보내면 매장마다 어디까지 갔는지 여기에 모여요.'}
                 action={overview.length === 0 ? undefined : <HqButton label="노하우로 가기" onPress={() => router.push('/hq/knowhow')} />}
               />
             </HqCard>
           ) : (
-            <HqDeployCounts embedded rows={recent} units={overview} statusOf={statusOf} kind="노하우" testID="hq-dashboard-deploy" />
+            <HqDeployCounts rows={recent} units={overview} statusOf={statusOf} kind="노하우" testID="hq-dashboard-deploy" />
           )}
-</HqCard>
         </View>
         </View>
       </Appear>

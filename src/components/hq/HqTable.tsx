@@ -41,7 +41,6 @@ export function HqTable<Row>({
   sort: sortProp,
   onSortChange,
   maxRows,
-  embedded = false,
 }: {
   columns: HqColumn<Row>[];
   rows: Row[];
@@ -59,7 +58,6 @@ export function HqTable<Row>({
   onSortChange?: (s: HqSort | null) => void;
   /** 앞 N행만 그린다 — **정렬한 뒤에** 자른다(요약 표: 전체를 받은 화면이 상위 N행만 보일 때). */
   maxRows?: number;
-  embedded?: boolean;
 }) {
   const [localSort, setLocalSort] = useState<HqSort | null>(null);
   const controlled = !!onSortChange;
@@ -84,7 +82,7 @@ export function HqTable<Row>({
   const sorted = maxRows === undefined ? allSorted : allSorted.slice(0, maxRows);
 
   return (
-    <View style={!embedded && styles.card} testID={testID}>
+    <View style={styles.card} testID={testID}>
       <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ minWidth: '100%' }}>
         <View style={{ flex: 1, minWidth: '100%' }}>
           <View style={styles.thead}>
