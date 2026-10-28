@@ -314,7 +314,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       {/* ── 1) 답 기다리는 질문(블록 X2) — 사장이 오늘 손대야 할 유일한 '막힌 것'.
              2026-08-06: '확인 필요' 카드 안 한 행이던 것을 맨 위 경고행으로 승격했다.
              0건이면 AlertRow가 스스로 숨는다. 아래 '확인 필요'에서는 뺐다(같은 사실 두 번 금지). ── */}
-      <Appear delay={stagger(1)}>
+      {inbox.questions > 0 && <Appear delay={stagger(1)}>
         <AlertRow
           label="답 기다리는 질문"
           count={inbox.questions}
@@ -325,7 +325,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
             else if (inbox.questionUnits[0]) void goStore(inbox.questionUnits[0].uid, '/owner/inbox');
           }}
         />
-      </Appear>
+      </Appear>}
 
       {/* ── 2) '오늘' 섹션(MiniStats 2칸)은 2026-08-27 §7-6 판정으로 아래 L4 첫 칸('오늘 근무')에 흡수했다.
              MiniStats 2칸이 바로 아래 그리드와 형태가 겹치고 숫자 옆에 대상이 없었다(R2). ── */}

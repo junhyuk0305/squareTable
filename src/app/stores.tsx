@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   section: { gap: Space.sm },
 
   // 카드 문법은 블록 v2(PickRow·RollupRows)와 같다 — Radius.md · 1px line · e1 · 좌우 lg/상하 md · 눌림 0.7.
-  card: { flexDirection: 'row', alignItems: 'center', gap: Space.md, padding: Space.lg, minHeight: 72 },
+  card: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingHorizontal: Space.lg, paddingVertical: Space.md, minHeight: 72 },
   cardDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   pressed: { opacity: 0.7 },
   cardActive: { backgroundColor: InkColors.bgSoft },

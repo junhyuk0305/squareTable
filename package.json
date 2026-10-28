@@ -203,6 +203,7 @@
     "qa:publish-sheet": "node scripts/qa-publish-sheet-browser.mjs",
     "ia": "node scripts/ia-snapshot.mjs",
     "qa:blocks": "node scripts/qa-blocks-browser.mjs --allow-remote",
+    "qa:design-group-audit": "node scripts/qa-design-group-audit.mjs",
     "qa:quiz-formats": "node scripts/qa-quiz-formats-browser.mjs --allow-remote",
     "qa:quiz-ui": "node scripts/qa-quiz-ui-browser.mjs --allow-remote",
     "qa:quiz-link": "node scripts/qa-quiz-link-live.mjs --allow-remote",

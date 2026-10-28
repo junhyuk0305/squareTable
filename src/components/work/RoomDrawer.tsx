@@ -8,7 +8,7 @@ import { Appear } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
 import { ChachakSwitch } from '@/components/ChachakSwitch';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
+import { Radius } from '@/lib/theme/elevation';
 import { HEADER_EDGE_GUTTER, Space } from '@/lib/theme/layout';
 import { confirmAction } from '@/lib/utils/confirm';
 import { roleNoun } from '@/lib/utils/roles';
@@ -270,7 +270,7 @@ function Block({
               <Text style={s.blockMore}>{moreLabel}</Text>
             </Pressable>
           ) : undefined
-        } contentStyle={s.card}>
+        } flush style={s.groupSurface}>
       {children}</SectionGroup>
     </Appear>
   );
@@ -330,11 +330,11 @@ const s = StyleSheet.create({
   roomMeta: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink3 },
 
   block: { gap: Space.sm },
-  card: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, overflow: 'hidden', ...Elevation.e1 },
+  groupSurface: { overflow: 'hidden' },
   blockMore: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3 },
   blockEmpty: { fontSize: 15, lineHeight: 21, color: InkColors.ink3, fontWeight: '600', paddingHorizontal: Space.lg, paddingVertical: Space.md },
 
-  row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingHorizontal: Space.lg, paddingVertical: 13, minHeight: 52 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingHorizontal: Space.lg, paddingVertical: Space.md, minHeight: 52 },
   rowBorder: { borderTopWidth: 1, borderTopColor: InkColors.line },
   rowIcon: { width: 22, textAlign: 'center' },
   rowTitle: { fontSize: 15, fontWeight: '700', color: InkColors.ink },

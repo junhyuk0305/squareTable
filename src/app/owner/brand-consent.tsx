@@ -21,7 +21,7 @@ import { showToast } from '@/lib/store/useToastStore';
 import { confirmAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space, SCREEN_GUTTER } from '@/lib/theme/layout';
+import { Gap, Space, SCREEN_GUTTER } from '@/lib/theme/layout';
 import { ButtonStyles } from '@/lib/theme/button';
 
 const fmtBiz = (n: string | null) => (n && n.length === 10 ? `${n.slice(0, 3)}-${n.slice(3, 5)}-${n.slice(5)}` : n || '미등록');
@@ -117,7 +117,7 @@ export default function BrandConsentScreen() {
           </View>
 
           {/* 2) 본사가 보게 되는 것 — 첫 화면(§5-3). 고른 수준이 곧 동의 범위다. */}
-          <SectionGroup icon="eye-outline" title="본사가 보게 되는 것" description="수준은 내가 고르고, 언제든 바꿀 수 있어요">
+          <SectionGroup icon="eye-outline" title="본사가 보게 되는 것" description="수준은 내가 고르고, 언제든 바꿀 수 있어요" contentStyle={styles.groupContent}>
           <View style={styles.levels}>
             {VISIBILITY_LEVELS.map((l) => {
               const on = level === l.key;
@@ -152,7 +152,7 @@ export default function BrandConsentScreen() {
           <Text style={styles.note}>직원이 1~2명인 매장은 매장 단위 숫자만으로도 누구인지 짐작될 수 있어요.</Text></SectionGroup>
 
           {/* 3) 어느 매장을 */}
-          <SectionGroup icon="storefront-outline" title="연결할 내 매장" description="고른 매장만 본사에 보여요">
+          <SectionGroup icon="storefront-outline" title="연결할 내 매장" description="고른 매장만 본사에 보여요" contentStyle={styles.groupContent}>
           {candidates.length === 0 ? (
             <View>
               <Text style={styles.cardText}>연결할 수 있는 매장이 없어요. 내가 사장인 매장 중 아직 다른 본사와 연결되지 않은 매장만 고를 수 있어요.</Text>
@@ -246,7 +246,7 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
 
       <SectionGroup icon={notice ? 'megaphone-outline' : 'shield-checkmark-outline'}
         title={notice ? '본사가 보는 범위를 알려드려요' : '공개 범위에 다시 동의해 주세요'}
-        description={notice ? '직영점이라 본사가 정해요' : '관계가 바뀌어 근거가 달라졌어요'}>
+        description={notice ? '직영점이라 본사가 정해요' : '관계가 바뀌어 근거가 달라졌어요'} contentStyle={styles.groupContent}>
       <View>
         <Text style={styles.cardText}>
           {notice
@@ -272,7 +272,7 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
         ) : null}
       </View></SectionGroup>
 
-      <SectionGroup icon="list-outline" title={`${relationLabel(link.relation)}점에서는 이렇게 달라져요`}>
+      <SectionGroup icon="list-outline" title={`${relationLabel(link.relation)}점에서는 이렇게 달라져요`} contentStyle={styles.groupContent}>
       <View>
         {RELATION_RULES.map((r, i) => (
           <View key={r.label} style={[styles.pickRow, styles.ruleRow, i > 0 && styles.pickBorder]}>
@@ -323,8 +323,9 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
-  body: { paddingHorizontal: SCREEN_GUTTER, paddingBottom: 48, gap: Space.md },
+  body: { paddingHorizontal: SCREEN_GUTTER, paddingBottom: 48, gap: Gap.group },
   labeled: { gap: Space.sm },
+  groupContent: { gap: Gap.item },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Space.xl, gap: Space.sm },
   emptyTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
   emptyBody: { fontSize: 13.5, lineHeight: 20, color: InkColors.ink2, textAlign: 'center' },
@@ -345,8 +346,8 @@ const styles = StyleSheet.create({
   neverBody: { fontSize: 12.5, lineHeight: 18, color: BrandColors.badText },
   note: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink3 },
   card: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, backgroundColor: InkColors.bg, overflow: 'hidden', ...Elevation.e1 },
-  cardText: { fontSize: 13.5, lineHeight: 20, color: InkColors.ink2, padding: Space.md },
-  pickRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingHorizontal: Space.md, minHeight: 52 },
+  cardText: { fontSize: 13.5, lineHeight: 20, color: InkColors.ink2 },
+  pickRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 52 },
   pickBorder: { borderTopWidth: 1, borderTopColor: InkColors.line },
   pickName: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink },
   pickSub: { fontSize: 12, color: InkColors.ink3 },

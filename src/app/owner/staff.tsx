@@ -621,7 +621,7 @@ const styles = StyleSheet.create({
   approveText: { fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
 
   list: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
-  listGroup: { paddingHorizontal: 14 },
+  listGroup: { paddingHorizontal: Space.lg },
   staffRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   // 직원 항목 컨테이너(0093) — 행 + (사장 전용) 매니저 지정 줄. 구분선은 여기 하나만.
   staffItem: { borderBottomWidth: 1, borderBottomColor: InkColors.line },

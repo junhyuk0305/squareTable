@@ -19,7 +19,7 @@ import { formatAsked } from '@/lib/utils/time';
 import { AI_ANSWER_LIMIT, fetchPeerAnswers, type AiAnswerRow as AiAnswer, type PeerAnswerRow } from '@/lib/db';
 
 import { InkColors } from '@/lib/theme/colors';
-import { Space } from '@/lib/theme/layout';
+import { Gap, Space } from '@/lib/theme/layout';
 import type { UnknownQuery } from '@/types';
 
 /**
@@ -323,14 +323,14 @@ function heroMeta(uq: UnknownQuery) {
 
 const styles = StyleSheet.create({
   aiErr: { fontSize: 15, color: InkColors.ink2, paddingVertical: 8 },
-  root: { gap: Space.lg },
+  root: { gap: Gap.group },
   group: { gap: Space.sm },
   groupHint: { fontSize: 13, color: InkColors.ink2, marginTop: -4 },
 
   // '더 보기' — 행들과 같은 좌우 인셋. 누를 수 있는 행이라 최소 터치 타깃 48.
   moreRow: {
     minHeight: 48, justifyContent: 'center',
-    paddingHorizontal: Space.lg, paddingVertical: Space.md,
+    paddingVertical: Space.md,
     borderBottomWidth: 1, borderBottomColor: InkColors.line,
   },
   moreText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
   // '동료가 답한 질문' 한 줄 — '더 보기'와 같은 인셋·구분선. 누르면 답으로 쓴 노하우를 연다.
   peerRow: {
     minHeight: 48, gap: 2,
-    paddingHorizontal: Space.lg, paddingVertical: Space.md,
+    paddingVertical: Space.md,
     borderBottomWidth: 1, borderBottomColor: InkColors.line,
   },
   peerQ: { fontSize: 15, color: InkColors.ink },

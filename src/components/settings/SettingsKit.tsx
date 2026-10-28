@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { ChachakSwitch } from '@/components/ChachakSwitch';
 import { SectionGroup } from '@/components/SectionGroup';
-import { Gap } from '@/lib/theme/layout';
+import { Gap, Space } from '@/lib/theme/layout';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -93,13 +93,13 @@ export function SettingsToggle({
 }
 
 const styles = StyleSheet.create({
-  // 섹션 사이 = 이 12 + SectionLabel 의 위 여백 12 = 24(앱 공통, 2026-09-03). 옛 18은 라벨 여백이 없던 때 값.
+  // 묶음 간격은 여기서만 둔다. 행의 안쪽 여백은 각 행이 소유한다.
   section: { marginBottom: Gap.group, overflow: 'hidden' },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 15, minHeight: 52 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingHorizontal: Space.lg, paddingVertical: Space.md, minHeight: 52 },
   rowBorder: { borderTopWidth: 1, borderTopColor: InkColors.line },
   rowIcon: { width: 22, textAlign: 'center' },
   rowLabelWrap: { flex: 1, minWidth: 0 },
   rowLabelText: { fontSize: 15, fontWeight: '600', color: InkColors.ink },
-  rowHint: { fontSize: 15, lineHeight: 23, color: InkColors.ink2, marginTop: 4, fontWeight: '400' },
+  rowHint: { fontSize: 15, lineHeight: 23, color: InkColors.ink2, marginTop: Gap.inline, fontWeight: '400' },
   rowValue: { fontSize: 15, lineHeight: 23, color: InkColors.ink, flexShrink: 1, maxWidth: '45%' },
 });

@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { CardStyles } from '@/lib/theme/card';
 import { InkColors } from '@/lib/theme/colors';
-import { Space } from '@/lib/theme/layout';
+import { Gap, Space } from '@/lib/theme/layout';
 
 /** A category owns its title, content and actions. Rows keep their own padding in flush mode. */
 export function SectionGroup({
@@ -28,7 +28,7 @@ export function SectionGroup({
   return (
     <View style={[styles.group, style]} testID={marker && `design-group-${marker}`}>
       {title && (
-        <View style={styles.header}>
+        <View style={[styles.header, flush && styles.flushHeader]}>
           <View style={styles.heading}>
             <View style={styles.titleRow}>
               {icon && <Ionicons name={icon} size={20} color={InkColors.ink2} />}
@@ -39,7 +39,7 @@ export function SectionGroup({
           {action && <View style={styles.action} testID={`design-group-action-${key}--header`}>{action}</View>}
         </View>
       )}
-      <View style={[!flush && styles.content, contentStyle]}>{children}</View>
+      <View style={[!flush && styles.content, !flush && !title && styles.untitledContent, contentStyle]}>{children}</View>
       {footer && (
         <View style={styles.footer} testID={marker && `design-group-action-${key}--footer`}>{footer}</View>
       )}
@@ -49,12 +49,15 @@ export function SectionGroup({
 
 const styles = StyleSheet.create({
   group: { ...CardStyles.group },
-  header: { padding: Space.lg, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Space.md },
+  header: { padding: Space.lg, paddingBottom: Gap.item, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Space.md },
+  // Flush rows own their top padding; do not add a second gap above them.
+  flushHeader: { paddingBottom: 0 },
   heading: { flexGrow: 1, flexShrink: 1, flexBasis: 140, minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   title: { flex: 1, minWidth: 0, fontSize: 18, lineHeight: 26, fontWeight: '800', color: InkColors.ink },
-  description: { fontSize: 15, lineHeight: 23, color: InkColors.ink2, marginTop: Space.xs },
+  description: { fontSize: 15, lineHeight: 23, color: InkColors.ink2, marginTop: Gap.inline },
   action: { minHeight: 48, justifyContent: 'center', flexShrink: 1, maxWidth: '100%' },
   content: { paddingHorizontal: Space.lg, paddingBottom: Space.lg },
+  untitledContent: { paddingTop: Space.lg },
   footer: { borderTopWidth: 1, borderTopColor: InkColors.line },
 });

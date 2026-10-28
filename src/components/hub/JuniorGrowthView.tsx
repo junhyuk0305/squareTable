@@ -25,7 +25,7 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { Appear, stagger } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { Gap, Space } from '@/lib/theme/layout';
 import type { PlaybookEntry } from '@/types';
 
 const ENTRY_LIST_FIRST = 5; // 리스트 첫 노출 5±2 — 넘치면 "나머지 보기"로 아래로 펼침
@@ -166,7 +166,7 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
     <>
     {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
     {header}
-    <View style={{ gap: Space.md }}>
+    <View style={{ gap: Gap.group }}>
       {/* ── 히어로(H3′ · 블록어휘 §7-2) — "우리 매장 노하우 중 내가 아는 것".
              ★2026-08-27 오밀조밀 확산 6-1 B안. 옛 판본은 노랑 '가르침' 카드가 맨 위였는데,
              taught 는 대부분 0이라 화면 첫인상이 "아직 없음"이었다. 히어로는 신입 첫날에도
@@ -338,7 +338,7 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
 
       {trainingError && (
         <Appear delay={stagger(3)}>
-          <SectionGroup title="퀴즈로 확인한 노하우" contentStyle={styles.cardGroup}>
+          <SectionGroup title="퀴즈로 확인한 노하우">
 
             <Text style={styles.emptyBody}>퀴즈 기록을 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.</Text>
           </SectionGroup>
@@ -349,7 +349,7 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
         <Appear delay={stagger(3)}>
           {/* 제목이 히어로와 같은 말을 쓴다 — 위 링의 분자가 곧 이 목록이다(되물음 테스트: "퀴즈"만으론
               뭘 통과했는지 안 읽힌다). */}
-          <SectionGroup title="퀴즈로 확인한 노하우" description={`${trainingHistory.length}개`} contentStyle={styles.cardGroup}>
+          <SectionGroup title="퀴즈로 확인한 노하우" description={`${trainingHistory.length}개`}>
 
             {(showAllTraining ? trainingHistory : trainingHistory.slice(0, ENTRY_LIST_FIRST)).map((h) => (
               <View key={`${h.unitId}_${h.entryId}`} style={styles.row}>
@@ -413,7 +413,6 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     ...Elevation.e2,
   },
-  cardGroup: { paddingHorizontal: Space.lg, paddingVertical: Space.md },
 
   // 빈 상태
   emptyTitle: { fontSize: 17, fontWeight: '900', color: InkColors.ink, paddingTop: Space.xs },

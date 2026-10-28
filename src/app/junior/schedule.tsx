@@ -32,7 +32,7 @@ import { mondayOf, fmtDateKo, closedDaysLabel, addDays, shiftAppliesOn } from '@
 import { formatAsked } from '@/lib/utils/time';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { Gap, Space } from '@/lib/theme/layout';
 import { EmptyStyles } from '@/lib/theme/empty';
 
 const STATUS_META: Record<
@@ -403,7 +403,7 @@ function Section({
 }) {
   return (
     <View style={{ gap: Space.sm }}>
-      <SectionGroup icon={icon} title={title} contentStyle={{ gap: 10 }}>
+      <SectionGroup icon={icon} title={title} contentStyle={{ gap: Gap.item }}>
       {children}</SectionGroup>
     </View>
   );

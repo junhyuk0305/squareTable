@@ -33,7 +33,7 @@ export function StarterChecklist({ row }: { row: OwnerOverviewRow }) {
 
   return (
     <View>
-      <SectionGroup title="시작하기" contentStyle={styles.cardGroup}>
+      <SectionGroup title="시작하기">
 
         <View style={styles.headRow}>
           <Text style={styles.headText}>매장이 채워지는 중이에요</Text>
@@ -85,7 +85,6 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     ...Elevation.e2,
   },
-  cardGroup: { paddingHorizontal: Space.lg, paddingVertical: Space.md },
   headRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: Space.xs },
   headText: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink },
   headCount: { fontSize: 13, fontWeight: '800', color: InkColors.ink3 },

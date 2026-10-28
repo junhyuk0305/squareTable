@@ -18,6 +18,7 @@ import { readFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
+import { collectDesignGroupSnapshot, auditDesignGroups } from './lib/design-group-audit.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -40,6 +41,8 @@ mkdirSync(SHOTS, { recursive: true });
 if (!URL_ || !ANON || !SRV) { console.error('FAIL: URL/ANON/SERVICE_ROLE 필요(.env + .env.seed)'); process.exit(2); }
 
 let chromium;
+// playwright는 선택 설치다. 없으면 아래 catch가 안내하고 종료한다.
+// eslint-disable-next-line import/no-unresolved
 try { ({ chromium } = await import('playwright')); }
 catch { console.error('playwright 미설치'); process.exit(2); }
 
@@ -47,8 +50,18 @@ const mk = () => createClient(URL_, ANON, { auth: { persistSession: false, autoR
 const admin = createClient(URL_, SRV, { auth: { persistSession: false, autoRefreshToken: false } });
 const s = String(Date.now()).slice(-9);
 const pw = 'Test1234!qa';
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, unverified = 0;
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  ✓', n)) : (fail++, console.log('  ✗', n, extra)); };
+const checkDesignGroups = async (page, name) => {
+  const result = auditDesignGroups(await page.evaluate(collectDesignGroupSnapshot));
+  if (result.status === 'unverified') {
+    unverified++;
+    console.log(`  ? ${name} — SectionGroup 마커 없음: 미이관/검증 안 됨 (통과에 포함하지 않음)`);
+    return;
+  }
+  check(`${name} — 카테고리 제목·동작·반복 행 (${result.groups}개 표시 그룹)`,
+    result.status === 'pass', result.errors.join('; '));
+};
 
 const projectRef = new URL(URL_).hostname.split('.')[0];
 async function passwordSession(email) {
@@ -627,10 +640,10 @@ async function main() {
     check('B5-11 ③ 펼치면 코드 입력이 열린다', await see(ph, '코드가 없으신가요'));
     await shot(ph, '07-junior-hub-3-joined');
 
-    // ═══════════ B10 카드 3연속 해체 6화면 — 형태를 DOM에서 실측 ═══════════
-    // "제목 → 카드" 반복이 이번 개편이 없애려던 증상이다. 배치 규칙 ①(같은 형태 연속 3회 이상 금지).
-    // 정적 grep으로는 판정 못 한다(형태는 렌더돼야 안다) → 형제 노드를 훑어 카드 런(run)을 잰다.
-    console.log('\n[B10] 카드 3연속 해체 — 6화면');
+    // ═══════════ B10 카테고리 묶음 v2 — 의미 마커로 소속을 확인 ═══════════
+    // 카테고리 박스는 3개 이상 연속 가능하다. 카드 런은 비교용 진단값이며 합격 기준이 아니다.
+    // SectionGroup 계약 = lib/design-group-audit.mjs. 마커가 없는 화면을 통과로 세지 않는다.
+    console.log('\n[B10] 카테고리 묶음 — 표시 그룹 계약 확인');
     /** 스크롤 컨테이너의 형제들 중 '카드'(흰 면+보더/그림자+라운드)가 몇 개나 연달아 있나. */
     const maxCardRun = (page) =>
       page.evaluate(() => {
@@ -644,12 +657,6 @@ async function main() {
             r.width > 260
           );
         };
-        // 카드를 가장 많이 품은 부모 = 화면 본문 컨테이너로 본다.
-        let best = null, bestN = 0;
-        for (const p of document.querySelectorAll('div')) {
-          const n = [...p.children].filter((c) => c.nodeType === 1 && isCard(c)).length;
-          if (n > bestN) { bestN = n; best = p; }
-        }
         // ★형제 인접만 보면 놓친다: SettingsSection처럼 <래퍼><제목/><카드/></래퍼> 구조면
         //   카드마다 부모가 달라 run이 늘 1로 나온다(2026-08-06 실측에서 /account-settings가 1로 오판).
         //   card-stack 증상은 DOM 중첩이 아니라 **세로로 쌓인 카드 수**다 → 문서 전체에서
@@ -688,21 +695,20 @@ async function main() {
       ['/owner/payroll', '급여 설정'],
       ['/junior/settings', '직원 설정'],
       ['/account-edit', '프로필 편집'],
-      // 2026-08-06: 섹션 6개(카드 6장·연속 4)를 4개로 합쳐 해체했다. 되돌아오면 여기서 잡힌다.
       ['/account-settings', '계정 설정'],
-      // 2026-08-06: 안내·계좌·입금자명 3연속 카드를 '입금하기' 한 카드로 합쳤다.
-      ['/billing', '요금제'],
+      // /billing 은 v2 이관 범위에서 뺐다(2026-10-28 사용자 결정 · 결제는 다른 작업 소유). B11에서 읽기만 한다.
     ]) {
       const pg = name === '직원 설정' ? pj : po;
       await pg.goto(`${ORIGIN}${path}`, { waitUntil: 'domcontentloaded' });
       await pg.waitForTimeout(2600);
       const { run, cards } = await maxCardRun(pg);
       const prim = await primaryCount(pg);
-      check(`B10 ${name} — 카드 연속 ≤2 (실측 ${run} · 카드 ${cards})`, run <= 2, `run=${run}`);
+      console.log(`    ${name} — 카드 연속 ${run} / 카드 ${cards} (진단값, 제한 없음)`);
+      await checkDesignGroups(pg, `B10 ${name}`);
       check(`B10 ${name} — Primary ≤1 (실측 ${prim})`, prim <= 1, `primary=${prim}`);
       await shot(pg, `11-cards-${path.split('/').pop()}`);
     }
-    // 직원 근무표는 세그먼트 안이라 따로 — '교대 요청' 탭에서 3연속이었다.
+    // 직원 근무표는 교대 세그먼트 안의 그룹을 따로 확인한다.
     await pj.goto(`${ORIGIN}/junior/schedule`, { waitUntil: 'domcontentloaded' });
     await pj.waitForTimeout(2400);
     const swapTab = pj.getByText('교대', { exact: false }).first();
@@ -711,7 +717,8 @@ async function main() {
       await pj.waitForTimeout(1600);
     }
     const sched = await maxCardRun(pj);
-    check(`B10 근무표(교대 요청) — 카드 연속 ≤2 (실측 ${sched.run})`, sched.run <= 2, `run=${sched.run}`);
+    console.log(`    근무표(교대 요청) — 카드 연속 ${sched.run} / 카드 ${sched.cards} (진단값, 제한 없음)`);
+    await checkDesignGroups(pj, 'B10 근무표(교대 요청)');
     await shot(pj, '11-cards-junior-schedule');
 
     // ═══════════ B11 예산 초과 후보 실측 — 정적 상한을 실화면으로 검증한다 ═══════════
@@ -742,11 +749,11 @@ async function main() {
     }
     console.log('    화면              카드런  카드수  Primary');
     for (const r of budgetRows) {
-      const flag = r.run >= 3 ? ' ← 카드 3연속' : r.primary > 1 ? ' ← Primary 다수' : '';
+      const flag = r.primary > 1 ? ' ← Primary 다수' : '';
       console.log(`    ${r.name.padEnd(16)}  ${String(r.run).padStart(4)}  ${String(r.cards).padStart(5)}  ${String(r.primary).padStart(6)}${flag}`);
     }
-    const budgetReal = budgetRows.filter((r) => r.run >= 3 || r.primary > 1);
-    console.log(`    → 실측으로 규칙 위반이 남은 화면: ${budgetReal.length ? budgetReal.map((r) => r.name).join(', ') : '없음'}`);
+    const budgetReal = budgetRows.filter((r) => r.primary > 1);
+    console.log(`    → Primary 다수인 화면: ${budgetReal.length ? budgetReal.map((r) => r.name).join(', ') : '없음'}. 카드 연속 수는 판정하지 않음.`);
 
     // ═══════════ B9 빈 화면 문구 대비 — ★데이터 0인 매장으로 따로 잰다 ═══════════
     // 이 하니스의 구조적 공백이었다: 위 시드가 노하우 3건·업무 4건·질문 2건을 넣고 돌기 때문에
@@ -823,7 +830,8 @@ try {
     }
     await cleanupSeededPhones(URL_, SRV, [`0107${s.slice(0, 7)}`, `0108${s.slice(0, 7)}`, `0109${s.slice(0, 7)}`, `0106${s.slice(0, 7)}`]);
   } catch (e) { console.log('  (정리 일부 실패:', e.message, ')'); }
-  console.log(`\n${fail === 0 ? '✅ PASS' : '❌ FAIL'} — 블록 어휘 실화면 QA · 통과 ${pass} / 실패 ${fail}`);
+  const outcome = fail ? '❌ FAIL' : unverified ? '⚠ INCOMPLETE' : '✅ PASS';
+  console.log(`\n${outcome} — 블록 어휘 실화면 QA · 통과 ${pass} / 실패 ${fail} / 미검증 ${unverified}`);
   console.log(`   스크린샷: ${SHOTS}/`);
-  process.exitCode = fail === 0 ? 0 : 1;
+  process.exitCode = fail ? 1 : unverified ? 2 : 0;
 }

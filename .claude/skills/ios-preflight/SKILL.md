@@ -49,7 +49,7 @@ description: iOS(아이폰)에서만 조용히 틀리는 지점을 실기기·�
 ### 2. 그림자가 프로퍼티부터 다르다 — `elevation` 은 iOS에서 아무 일도 안 한다
 Android는 `elevation`, iOS는 `shadowColor/shadowOffset/shadowOpacity/shadowRadius`.
 `elevation` 만 쓴 요소는 **iOS에서 그림자가 그냥 없다.** 크래시도 경고도 없다 — 그냥 평평해진다.
-디자인시스템이 "평면 금지"인 앱에서 이건 조용한 시각 결함이다.
+v2에서는 평면 그룹을 허용한다. 그림자가 필요한 시트·팝업에서 의도한 깊이가 사라지는지를 검사한다. 그림자 없는 카테고리 박스 자체는 결함이 아니다.
 → 공용 `Elevation` 토큰(`src/lib/theme/elevation.ts`)은 양쪽을 다 갖는다. **직접 `elevation:` 을
 쓴 곳만 위험**하다. 스캐너 `ios-shadow` 가 잡는다.
 

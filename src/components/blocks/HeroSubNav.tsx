@@ -2,7 +2,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { BrandColors, InkColors } from '@/lib/theme/colors';
-import { Space } from '@/lib/theme/layout';
+import { Gap, Space } from '@/lib/theme/layout';
 import { ButtonStyles } from '@/lib/theme/button';
 import { SectionGroup } from '@/components/SectionGroup';
 
@@ -100,6 +100,7 @@ export function HeroSubNav({
 
 const styles = StyleSheet.create({
   hero: {
+    paddingTop: Gap.item,
     paddingBottom: Space.lg,
     paddingHorizontal: Space.lg,
   },

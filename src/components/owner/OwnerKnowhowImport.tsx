@@ -14,7 +14,7 @@ import { notifyAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
-import { Space } from '@/lib/theme/layout';
+import { Gap, Space } from '@/lib/theme/layout';
 
 // RPC 예외 → 사장이 읽을 수 있는 문구. (definer RPC 의 raise 메시지 코드 매핑)
 const ERR_MSG: Record<string, string> = {
@@ -196,7 +196,7 @@ export function OwnerKnowhowImport() {
       <ScrollView keyboardShouldPersistTaps="handled" style={styles.flex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* ── 1단계 · 매장 고르기 ───────────────────────────────────────────────── */}
         {step === 1 ? (
-          <Appear delay={0} style={styles.block}>
+          <Appear delay={0} style={styles.groups}>
             <View style={styles.lead}>
               <Text style={styles.leadText}>한 매장의 노하우를 다른 매장으로 복사해요</Text>
               <InfoDot
@@ -279,7 +279,7 @@ export function OwnerKnowhowImport() {
                 </Pressable>
               </View>
             ) : (
-              <SectionGroup title="복사할 노하우" >
+              <SectionGroup title="복사할 노하우" contentStyle={styles.groupContent}>
                 {/* 찾기 — 8건 미만이면 안 그린다. 단, 검색어가 남아 있으면 강제로 띄운다(끌 수 없는 거르기 금지). */}
                 {(rows?.length ?? 0) >= FILTER_MIN || filtering ? (
                   <View style={SearchStyles.box}>
@@ -361,8 +361,8 @@ export function OwnerKnowhowImport() {
 
         {/* ── 3단계 · 복사 완료 ─────────────────────────────────────────────────── */}
         {step === 3 ? (
-          <Appear delay={0} style={styles.block}>
-<SectionGroup title="복사 완료">
+          <Appear delay={0} style={styles.groups}>
+<SectionGroup title="복사 완료" contentStyle={styles.groupContent}>
             <View style={styles.doneHead}>
               <Ionicons name="checkmark-circle" size={22} color={BrandColors.goodText} />
               <Text style={styles.doneTitle}>
@@ -474,7 +474,8 @@ const styles = StyleSheet.create({
   lead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   leadText: { flex: 1, fontSize: 15, color: InkColors.ink2, fontWeight: '600', lineHeight: 22 },
 
-  block: { gap: Space.sm },
+  groups: { gap: Gap.group },
+  groupContent: { gap: Gap.item },
 
   // 매장 칩(보내는 쪽·받는 쪽 같은 모양 — 다른 것은 위 라벨이 말한다)
   sourceWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
@@ -500,9 +501,9 @@ const styles = StyleSheet.create({
   selectAll: { fontSize: 13, fontWeight: '800', color: BrandColors.brand },
   list: { gap: 0 },
   row: {
-    flexDirection: 'row', alignItems: 'center', gap: 11,
+    flexDirection: 'row', alignItems: 'center', gap: Space.md,
     backgroundColor: InkColors.bg, borderBottomWidth: 1, borderColor: InkColors.line,
-    padding: 13,
+    paddingVertical: Space.md,
   },
   rowOn: { backgroundColor: InkColors.bgSoft },
   check: {
