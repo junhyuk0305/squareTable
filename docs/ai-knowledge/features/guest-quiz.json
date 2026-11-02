@@ -1,0 +1,542 @@
+{
+  "schemaVersion": 1,
+  "id": "guest-quiz",
+  "name": "게스트 퀴즈 링크",
+  "aliases": [
+    "게스트 퀴즈",
+    "퀴즈 링크",
+    "링크 응시",
+    "링크 회수",
+    "게스트 결과",
+    "quiz_link_submit_v2",
+    "quiz_link_open"
+  ],
+  "platforms": [
+    "web",
+    "android",
+    "ios"
+  ],
+  "summary": "관리자가 만든 만료/회수 가능한 링크를 익명 사용자가 열어 응시하고 서버가 재채점해 저장하는 흐름을 추적했다. 선택 전화번호 인증과 결과 확인/정리 경계까지 포함한다.",
+  "entrypoints": [
+    "/owner/quiz/[id] → QuizDeployPanel",
+    "/q/[token]",
+    "/owner/quiz/guest/[sub]"
+  ],
+  "depth": [
+    "대표 하위 흐름의 화면부터 데이터 경계까지 코드 추적",
+    "상태와 실패 및 권한 조건 확인",
+    "SQL 정의와 후속 변경 검색",
+    "관련 테스트 연결",
+    "실행 미검증"
+  ],
+  "unknowns": [
+    "로컬 HEAD f03eecd의 코드 관찰이다. 원격 마이그레이션 적용 상태와 배포 앱 버전은 확인하지 않았다.",
+    "DB, 네트워크, AI, 브라우저 및 Android/iOS 실기기 실행은 하지 않았다.",
+    "전화번호 OTP 공급자 호출과 인증 보안 전체, 가입 후 게스트 이력 연결, 모든 형태 렌더링, 실제 배포 도메인 링크 열기는 제외했다.",
+    "다중 탭/페이지 새로고침 후 제출 requestId 유지, 만료와 재시도의 경합, 개인정보 보존 삭제 실제 상태는 미검증이다."
+  ],
+  "findings": [
+    "quiz_link_open 0308을 읽는 것만으로 현재 조건을 알 수 없다. resolve와 servable의 0332 후속 정의가 링크 도달 가능성을 결정한다.",
+    "게스트 제출 재시도 ID는 화면 useRef다. 새로고침 이후 같은 ID 유지까지 보장한 코드는 이 화면에 없다."
+  ],
+  "evidence": [
+    {
+      "id": "deploy",
+      "file": "src/components/owner/quiz/QuizDeployPanel.tsx",
+      "symbol": "const confirmDay = async () => {",
+      "kind": "code"
+    },
+    {
+      "id": "route",
+      "file": "src/app/q/[token].tsx",
+      "symbol": "export default function QuizLinkScreen()",
+      "kind": "code"
+    },
+    {
+      "id": "submit-db",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function submitQuizLink(",
+      "kind": "code"
+    },
+    {
+      "id": "link",
+      "file": "src/lib/quiz/link.ts",
+      "symbol": "export async function copyQuizLink(",
+      "kind": "code"
+    },
+    {
+      "id": "share",
+      "file": "src/lib/utils/shareText.ts",
+      "symbol": "export async function shareText(",
+      "kind": "code"
+    },
+    {
+      "id": "policy",
+      "file": "supabase/migrations/0156_fix_ownership_rls_scope.sql",
+      "symbol": "create policy ql_insert on public.quiz_links",
+      "kind": "code"
+    },
+    {
+      "id": "read-policy",
+      "file": "supabase/migrations/0113_quiz_links.sql",
+      "symbol": "create policy ql_select on public.quiz_links",
+      "kind": "code"
+    },
+    {
+      "id": "manager",
+      "file": "supabase/migrations/0315_manager_permissions.sql",
+      "symbol": "create or replace function public.auth_can_manage()",
+      "kind": "code"
+    },
+    {
+      "id": "guard",
+      "file": "supabase/migrations/0327_quiz_zero_item_guard.sql",
+      "symbol": "create or replace function public.tg_quiz_link_no_items()",
+      "kind": "code"
+    },
+    {
+      "id": "resolve",
+      "file": "supabase/migrations/0332_quiz_single_judgment.sql",
+      "symbol": "create or replace function public.quiz_link_resolve(",
+      "kind": "code"
+    },
+    {
+      "id": "servable",
+      "file": "supabase/migrations/0332_quiz_single_judgment.sql",
+      "symbol": "create or replace function public.quiz_course_servable(",
+      "kind": "code"
+    },
+    {
+      "id": "open",
+      "file": "supabase/migrations/0308_quiz_link_open_course.sql",
+      "symbol": "create or replace function public.quiz_link_open(",
+      "kind": "code"
+    },
+    {
+      "id": "items",
+      "file": "supabase/migrations/0326_quiz_integrity.sql",
+      "symbol": "create or replace function public.quiz_link_items(",
+      "kind": "code"
+    },
+    {
+      "id": "grade",
+      "file": "supabase/migrations/0326_quiz_integrity.sql",
+      "symbol": "create or replace function public.quiz_link_grade(",
+      "kind": "code"
+    },
+    {
+      "id": "submit-sql",
+      "file": "supabase/migrations/0326_quiz_integrity.sql",
+      "symbol": "CREATE OR REPLACE FUNCTION public.quiz_link_submit_internal(",
+      "kind": "code"
+    },
+    {
+      "id": "v2",
+      "file": "supabase/migrations/0326_quiz_integrity.sql",
+      "symbol": "create or replace function public.quiz_link_submit_v2(",
+      "kind": "code"
+    },
+    {
+      "id": "result",
+      "file": "src/app/owner/quiz/guest/[sub].tsx",
+      "symbol": "export default function GuestQuizResultScreen()",
+      "kind": "code"
+    },
+    {
+      "id": "result-db",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function fetchGuestQuizSubmissions(",
+      "kind": "code"
+    },
+    {
+      "id": "mark",
+      "file": "supabase/migrations/0163_quiz_guest_review.sql",
+      "symbol": "create or replace function public.quiz_guest_mark(",
+      "kind": "code"
+    },
+    {
+      "id": "result-policy",
+      "file": "supabase/migrations/0160_quiz_guest_identity.sql",
+      "symbol": "create policy qai_select on public.quiz_attempt_items",
+      "kind": "code"
+    },
+    {
+      "id": "test",
+      "file": "scripts/qa-quiz-owner-state.mjs",
+      "symbol": "assert.equal(e.linkSubmitResultOf({ message: 'link_unavailable' }), 'link_closed');",
+      "kind": "test"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "deploy",
+      "type": "screen",
+      "name": "링크 생성/기간/회수",
+      "aliases": [],
+      "current": "QuizDeployPanel은 7일 기본과 날짜 말일 KST 만료시각을 사용한다. 저장 성공 뒤 목록을 재조회한다. 회수는 revokeQuizLink 성공 뒤에만 완료 안내한다.",
+      "evidence": [
+        "deploy"
+      ],
+      "changeKinds": [
+        "contract",
+        "field",
+        "copy"
+      ]
+    },
+    {
+      "id": "permission",
+      "type": "permission",
+      "name": "관리 링크 쓰기",
+      "aliases": [],
+      "current": "ql_insert/update는 활성 매장 관리권한과 같은 매장 코스를 확인한다. 0327 insert trigger는 유효 문항 없는 링크 생성을 거부한다. 잠긴 manager는 최신 auth_can_manage를 통과하지 못한다.",
+      "evidence": [
+        "policy",
+        "read-policy",
+        "manager",
+        "guard"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "share",
+      "type": "platform",
+      "name": "링크 복사",
+      "aliases": [],
+      "current": "quizLinkUrl은 siteOrigin의 /q/token 주소다. 네이티브는 expo-clipboard, 웹은 navigator.clipboard.writeText를 사용하며 실패를 failed로 돌린다. 복사가 실제 수신/열람을 증명하지 않는다.",
+      "evidence": [
+        "link",
+        "share"
+      ],
+      "changeKinds": [
+        "contract",
+        "copy"
+      ]
+    },
+    {
+      "id": "open",
+      "type": "rpc",
+      "name": "익명 링크 열기와 문항 조회",
+      "aliases": [],
+      "current": "anon/authenticated가 open/items를 호출할 수 있다. 현재 resolve는 토큰, 미회수, 미래 만료와 실제 코스 유효 문항 존재를 검사한다. items는 0326 wrapper에서 0332 course servable 판정을 사용하고 답을 제거/셔플한 payload를 준다.",
+      "evidence": [
+        "open",
+        "resolve",
+        "servable",
+        "items"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "screen",
+      "type": "state",
+      "name": "이름/문항/오류 단계",
+      "aliases": [],
+      "current": "토큰 없음/무효는 closed, 조회 실패는 failed다. 이름은 필수, 번호는 선택이며 번호를 적으면 형식을 확인한다. 문항 전체를 읽고 미지원 renderer가 하나라도 있으면 실패한다.",
+      "evidence": [
+        "route"
+      ],
+      "changeKinds": [
+        "contract",
+        "copy"
+      ]
+    },
+    {
+      "id": "submit",
+      "type": "state",
+      "name": "표시 채점과 제출 재시도",
+      "aliases": [],
+      "current": "마지막에 문항별 gradeQuizLink를 나눠 병렬 요청한 표시 결과와 답안 원문 제출을 분리한다. 같은 화면의 재시도는 useRef requestId를 재사용한다. 제출 0행은 성공이 아니라 network로 분류하고 closed/rate_limited는 재시도를 막는다.",
+      "evidence": [
+        "route",
+        "submit-db",
+        "grade"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "server-submit",
+      "type": "rpc",
+      "name": "링크 답안 서버 저장",
+      "aliases": [],
+      "current": "0326 v2는 내부 함수를 strict로 호출한다. 유효 링크 확인 뒤 requestId로 submission과 lock을 만든다. 기존 제출은 수를 반환한다. 이름/선택 번호를 검사한다. 같은 매장·코스의 비회원 제출을 최근 10분 동안 distinct submission_id로 세어, 개인 식별값별 10회 또는 코스 전체 300회부터 거부한다. 답안은 최대 500개다. 현재 유효 문항만 다시 채점하고 잘못된/사라진 문항은 건너뛴다. phoneVerified는 최근 서버 OTP 기록까지 있어야 true다.",
+      "evidence": [
+        "submit-sql",
+        "v2"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "result",
+      "type": "consumer",
+      "name": "관리자 응시 결과와 정리",
+      "aliases": [],
+      "current": "결과 화면은 guest submissions와 해당 attempt items를 병렬 strict 조회한다. 오류를 재시도로 구분한다. quiz_guest_mark는 활성 매장 관리권한으로 reviewed_at/cleared_at을 기록한다. 정리는 기록 삭제가 아니며 목록은 cleared_at 행을 제외한다.",
+      "evidence": [
+        "result",
+        "result-db",
+        "mark",
+        "result-policy"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "tests",
+      "type": "test",
+      "name": "링크 오류/기간 순수 검사",
+      "aliases": [],
+      "current": "qa-quiz-owner-state는 실제 함수 선언을 추출해 기간 경계와 linkSubmitResultOf 분류를 검사한다. anon SQL/브라우저/OTP 검증의 대체가 아니다.",
+      "evidence": [
+        "test"
+      ],
+      "changeKinds": [
+        "contract"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "deploy-permission",
+      "from": "deploy",
+      "to": "permission",
+      "relation": "writes-through",
+      "when": "링크 생성/수정",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "deploy",
+        "policy",
+        "guard"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "deploy-share",
+      "from": "deploy",
+      "to": "share",
+      "relation": "copies",
+      "when": "저장된 링크 복사 버튼",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "deploy",
+        "link"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "screen-open",
+      "from": "screen",
+      "to": "open",
+      "relation": "reads",
+      "when": "토큰 진입 및 시작 버튼",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "route",
+        "open",
+        "items"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "open-screen",
+      "from": "open",
+      "to": "screen",
+      "relation": "returns-state",
+      "when": "유효 문항/닫힘/조회 오류",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "route",
+        "resolve"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "screen-submit",
+      "from": "screen",
+      "to": "submit",
+      "relation": "finishes",
+      "when": "이름 입력 후 모든 응답 선택",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "route"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "submit-server-submit",
+      "from": "submit",
+      "to": "server-submit",
+      "relation": "submits-raw-answers",
+      "when": "같은 requestId로 RPC 호출",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "route",
+        "submit-db",
+        "v2"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "server-submit-result",
+      "from": "server-submit",
+      "to": "result",
+      "relation": "persists-for",
+      "when": "서버 재채점된 attempts/items 저장 후 관리 조회",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "submit-sql",
+        "result-db",
+        "result"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "tests-submit",
+      "from": "tests",
+      "to": "submit",
+      "relation": "checks",
+      "when": "오류를 closed/rate/bad input/network로 구분",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "test"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    }
+  ],
+  "flow": [
+    {
+      "node": "deploy",
+      "when": "관리자",
+      "result": "유효 문항 링크 생성"
+    },
+    {
+      "node": "screen",
+      "when": "익명 진입",
+      "result": "이름과 선택 번호 입력"
+    },
+    {
+      "node": "open",
+      "when": "시작",
+      "result": "정답 제거된 문항 조회"
+    },
+    {
+      "node": "submit",
+      "when": "마침",
+      "result": "표시 채점과 서버 제출 분리"
+    },
+    {
+      "node": "server-submit",
+      "when": "저장",
+      "result": "원문 답 재채점과 멱등 저장"
+    },
+    {
+      "node": "result",
+      "when": "관리자 확인",
+      "result": "확인/정리 시각 기록"
+    }
+  ],
+  "transitions": [
+    {
+      "from": "loading",
+      "to": "closed",
+      "when": "무효/만료/회수 또는 문항 없음",
+      "evidence": [
+        "route",
+        "resolve"
+      ]
+    },
+    {
+      "from": "loading",
+      "to": "failed",
+      "when": "조회 오류 또는 지원하지 않는 renderer",
+      "evidence": [
+        "route"
+      ]
+    },
+    {
+      "from": "quiz",
+      "to": "done with save failure",
+      "when": "제출 통신 실패, 링크 회수, 제한 또는 입력 오류",
+      "evidence": [
+        "route",
+        "submit-db"
+      ]
+    },
+    {
+      "from": "unreviewed result",
+      "to": "reviewed/cleared",
+      "when": "관리자 quiz_guest_mark 성공. 원본 기록 유지",
+      "evidence": [
+        "mark",
+        "result"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "file": "scripts/qa-quiz-owner-state.mjs",
+      "command": "node scripts/qa-quiz-owner-state.mjs",
+      "scope": "KST 링크 만료일과 제출 실패 분류 순수 함수",
+      "requires": "Node와 설치된 앱 의존성. DB/네트워크 없는 검사. 최신 runs의 코드 상태와 실제 결과를 확인.",
+      "execution": "see-runs",
+      "runName": "quiz-owner-state"
+    },
+    {
+      "file": "scripts/qa-quiz-contract.mjs",
+      "command": "node scripts/qa-quiz-contract.mjs --local",
+      "scope": "게스트 제출 멱등/문항 범위 계약",
+      "requires": "로컬 Supabase 필요",
+      "execution": "not-run"
+    },
+    {
+      "file": "scripts/qa-quiz-link-live.mjs",
+      "command": "node scripts/qa-quiz-link-live.mjs --local",
+      "scope": "게스트 링크 열기/문항/채점/회수 실호출 검사",
+      "requires": "로컬 DB/인증 세션 필요. --local 없는 배포 접속은 별도 경계. 실행하지 않음",
+      "execution": "not-run"
+    }
+  ],
+  "desired": {
+    "status": "unconfirmed",
+    "decisionsNeeded": [
+      "현재 동작을 제품 요구로 승인한 기록이 아니다. 변경 요청이 생기면 기존 제품 정본과 사용자 결정을 별도로 연결해야 한다."
+    ]
+  }
+}

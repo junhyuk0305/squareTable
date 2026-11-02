@@ -1,0 +1,530 @@
+{
+  "schemaVersion": 1,
+  "id": "hq-connection-consent",
+  "name": "본사 연결과 동의",
+  "aliases": [
+    "본사 연결",
+    "본사 동의",
+    "본사 초대 수락",
+    "respond_brand_invite",
+    "ack_brand_consent"
+  ],
+  "platforms": [
+    "web",
+    "android",
+    "ios"
+  ],
+  "summary": "점주가 자신의 번호로 온 본사 초대를 확인하고 소유 매장을 연결한다. 연결 후 공개 수준, 관계 전환 재동의, 해제는 각 서버 규칙을 따른다. 본사 담당자 링크 합류는 별도 토큰 경로다.",
+  "entrypoints": [
+    "/owner/brand-link",
+    "/owner/brand-consent",
+    "/hq/join?token="
+  ],
+  "depth": [
+    "대표 흐름 코드 추적",
+    "상태 및 실패 분기 확인",
+    "최신 SQL 정의와 권한 근거 연결",
+    "테스트 연결. 실행 범위는 tests와 runs 참조"
+  ],
+  "unknowns": [
+    "로컬 코드의 대표 흐름 분석이다. 운영 DB 적용 상태, 배포 버전, 웹 브라우저와 Android/iOS 실기기 동작은 실행 검증하지 않았다.",
+    "본사 발신 초대/구성원 관리/대시보드와 콘텐츠 배포는 별도 HQ 기록 참조.",
+    "공개 수준별 실제 응답 열과 해제 뒤 콘텐츠 잔존, 본사 부담 기간 계산을 이번 연결 기록만으로 모두 검증하지 않았다.",
+    "브라우저 저장 불가/로그인 전후 토큰 복귀와 동시 수락 경쟁은 코드 추적만 했고 실제 DB 동시 요청을 실행하지 않았다."
+  ],
+  "findings": [
+    "수락/거절/취소 최신 초대 잠금은 0331이다. 만료 분기의 UPDATE 뒤 예외는 같은 트랜잭션에서 롤백될 수 있으므로 expired 상태가 저장된다고 단정하지 않는다.",
+    "useOwnerBrandStore는 초대/연결/이력을 병렬 조회하며 실패한 축의 이전 값을 유지한다. loaded는 성공을 뜻하지 않는다.",
+    "가맹/직영 구분은 법률 해석이 아닌 현재 DB 제약과 제품 규칙 관찰로 기록했다."
+  ],
+  "evidence": [
+    {
+      "id": "consent",
+      "file": "src/app/owner/brand-consent.tsx",
+      "symbol": "export default function BrandConsentScreen()",
+      "kind": "code"
+    },
+    {
+      "id": "link",
+      "file": "src/app/owner/brand-link.tsx",
+      "symbol": "export default function BrandLinkScreen()",
+      "kind": "code"
+    },
+    {
+      "id": "state",
+      "file": "src/lib/store/useOwnerBrandStore.ts",
+      "symbol": "export const useOwnerBrandStore",
+      "kind": "code"
+    },
+    {
+      "id": "db",
+      "file": "src/lib/brand/brandDb.ts",
+      "symbol": "export const respondBrandInvite",
+      "kind": "code"
+    },
+    {
+      "id": "invites",
+      "file": "supabase/migrations/0210_brand_invites.sql",
+      "symbol": "create or replace function public.my_brand_invites()",
+      "kind": "code"
+    },
+    {
+      "id": "respond",
+      "file": "supabase/migrations/0331_brand_invite_single_use.sql",
+      "symbol": "create or replace function public.respond_brand_invite(",
+      "kind": "code"
+    },
+    {
+      "id": "constraint",
+      "file": "supabase/migrations/0224_brand_relation_rules.sql",
+      "symbol": "brand_units_franchise_limits",
+      "kind": "code"
+    },
+    {
+      "id": "visibility",
+      "file": "supabase/migrations/0224_brand_relation_rules.sql",
+      "symbol": "create or replace function public.set_brand_visibility(",
+      "kind": "code"
+    },
+    {
+      "id": "reconsent",
+      "file": "supabase/migrations/0224_brand_relation_rules.sql",
+      "symbol": "create or replace function public.ack_brand_consent(",
+      "kind": "code"
+    },
+    {
+      "id": "end",
+      "file": "supabase/migrations/0224_brand_relation_rules.sql",
+      "symbol": "create or replace function public.end_brand_unit(",
+      "kind": "code"
+    },
+    {
+      "id": "join",
+      "file": "src/app/hq/join.tsx",
+      "symbol": "export default function HqJoinScreen()",
+      "kind": "code"
+    },
+    {
+      "id": "pending",
+      "file": "src/lib/brand/usePendingBrandJoin.ts",
+      "symbol": "export async function acceptPendingBrandJoin(",
+      "kind": "code"
+    },
+    {
+      "id": "member",
+      "file": "supabase/migrations/0331_brand_invite_single_use.sql",
+      "symbol": "create or replace function public.accept_brand_member_invite(",
+      "kind": "code"
+    },
+    {
+      "id": "owns",
+      "file": "supabase/migrations/0215_brand_workspace_member.sql",
+      "symbol": "create or replace function public.auth_owns_unit(",
+      "kind": "code"
+    },
+    {
+      "id": "test",
+      "file": "scripts/qa-brand-relation.mjs",
+      "symbol": "ack_brand_consent",
+      "kind": "test"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "screen",
+      "type": "screen",
+      "name": "점주 연결/동의 화면",
+      "current": "초대, 선택 매장, 공개 수준, 요금 부담을 표시한다. 수락/거절 확인 뒤 RPC 오류는 안내하고 성공하면 재조회한다. 재동의와 신규 초대는 다른 분기다.",
+      "evidence": [
+        "consent",
+        "link"
+      ],
+      "aliases": [],
+      "changeKinds": [
+        "copy",
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "cache",
+      "type": "state",
+      "name": "점주 본사 연결 캐시",
+      "current": "초대/active 연결/종료 이력을 함께 조회한다. tenant epoch가 바뀌면 버리고 실패한 축은 이전 값 보존. loaded는 시도 종료다.",
+      "evidence": [
+        "state"
+      ],
+      "aliases": [],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "invites",
+      "type": "api",
+      "name": "내 번호에 온 초대",
+      "current": "my_brand_invites는 활성 브랜드의 pending/미만료 store 초대 중 profiles.phone_norm이 본인과 같은 것만 반환한다.",
+      "evidence": [
+        "invites"
+      ],
+      "aliases": [
+        "my_brand_invites"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "respond",
+      "type": "api",
+      "name": "초대 수락과 거절",
+      "current": "0331은 초대 행 잠금 후 kind/status/만료/본인 번호를 검사한다. 수락은 각 매장 소유, kind=store, 미삭제, 기존 active 연결 없음을 검사하고 brand_units 및 로그를 기록한다. 거절은 초대 상태와 로그만 기록한다.",
+      "evidence": [
+        "respond",
+        "db"
+      ],
+      "aliases": [
+        "respond_brand_invite"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "boundary",
+      "type": "permission",
+      "name": "소유와 관계 제약",
+      "current": "auth_owns_unit을 서버에서 확인한다. 0224 CHECK는 가맹에 직영 전용 하한/해제 제한/필수 배포 값을 막는다. UI 선택만으로 이 경계를 넓힐 수 없다.",
+      "evidence": [
+        "owns",
+        "constraint"
+      ],
+      "aliases": [],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "visibility",
+      "type": "write",
+      "name": "공개 수준 변경",
+      "current": "소유자만 허용한다. 활성 연결과 유효 수준을 요구하고 visibility_floor 미만을 거부한다. 변경하면 상향 요청을 지우고 감사 로그를 남긴다.",
+      "evidence": [
+        "visibility",
+        "link"
+      ],
+      "aliases": [
+        "set_brand_visibility"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "reconsent",
+      "type": "write",
+      "name": "관계 전환 재동의",
+      "current": "소유자, active 연결, consent_pending을 요구한다. 수락은 pending 해제와 버전/로그 기록. notice는 거절 불가, consent 거절은 연결 해제 함수를 부른다.",
+      "evidence": [
+        "reconsent",
+        "consent"
+      ],
+      "aliases": [
+        "ack_brand_consent"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "end",
+      "type": "write",
+      "name": "연결 종료",
+      "current": "소유자 또는 해당 본사 담당자 권한을 검사한다. 점주 owner_can_end=false면 거부한다. ended 상태와 이유/로그를 저장하고 요청을 지운다. 본사 해제 또는 부담 종료에 따라 owner_alerts를 만든다.",
+      "evidence": [
+        "end",
+        "link"
+      ],
+      "aliases": [
+        "end_brand_unit"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "join",
+      "type": "platform",
+      "name": "담당자 토큰 링크 복귀",
+      "current": "본사 UI는 웹 대상. 토큰은 브라우저 저장소에 두고 로그인 후 수락한다. 성공/실패 모두 토큰을 지우며 성공 후 세션을 갱신한다. 저장 불가 브라우저는 로그인 전 복귀 보장이 없다.",
+      "evidence": [
+        "join",
+        "pending"
+      ],
+      "aliases": [
+        "acceptPendingBrandJoin"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "member",
+      "type": "api",
+      "name": "담당자 초대 수락",
+      "current": "0331은 member 초대 토큰 행을 잠그고 로그인/pending/만료를 검사한다. brand_members에 추가하고 초대를 accepted로 바꾸며 감사 로그를 남긴다.",
+      "evidence": [
+        "member"
+      ],
+      "aliases": [
+        "accept_brand_member_invite"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "screen-cache",
+      "from": "screen",
+      "to": "cache",
+      "relation": "hydrates",
+      "when": "화면 진입 또는 변경 성공",
+      "evidence": [
+        "consent",
+        "link",
+        "state"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "cache-invites",
+      "from": "cache",
+      "to": "invites",
+      "relation": "calls",
+      "when": "본인 초대 조회",
+      "evidence": [
+        "state"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "screen-respond",
+      "from": "screen",
+      "to": "respond",
+      "relation": "calls",
+      "when": "선택 매장 수락 또는 거절",
+      "evidence": [
+        "consent",
+        "db"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "respond-boundary",
+      "from": "respond",
+      "to": "boundary",
+      "relation": "enforces",
+      "when": "각 선택 매장의 소유와 DB 제약",
+      "evidence": [
+        "respond",
+        "constraint"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "screen-visibility",
+      "from": "screen",
+      "to": "visibility",
+      "relation": "calls",
+      "when": "공개 수준 선택",
+      "evidence": [
+        "link"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "screen-reconsent",
+      "from": "screen",
+      "to": "reconsent",
+      "relation": "calls",
+      "when": "관계 전환 응답",
+      "evidence": [
+        "consent"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "reconsent-end",
+      "from": "reconsent",
+      "to": "end",
+      "relation": "calls",
+      "when": "consent 거절",
+      "evidence": [
+        "reconsent"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "screen-end",
+      "from": "screen",
+      "to": "end",
+      "relation": "calls",
+      "when": "해제 확인",
+      "evidence": [
+        "link"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "join-member",
+      "from": "join",
+      "to": "member",
+      "relation": "calls",
+      "when": "로그인 뒤 토큰 수락",
+      "evidence": [
+        "pending",
+        "member"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    }
+  ],
+  "flow": [
+    {
+      "node": "invites",
+      "when": "화면 조회",
+      "result": "본인 번호에 온 유효 초대"
+    },
+    {
+      "node": "respond",
+      "when": "수락",
+      "result": "선택 매장 검증과 원자적 연결"
+    },
+    {
+      "node": "visibility",
+      "when": "수준 변경",
+      "result": "하한을 지키며 서버 저장"
+    },
+    {
+      "node": "reconsent",
+      "when": "관계 변경 응답",
+      "result": "수락 또는 허용된 거절/해제"
+    },
+    {
+      "node": "join",
+      "when": "담당자 링크 진입",
+      "result": "로그인 후 토큰 수락과 세션 재조회"
+    }
+  ],
+  "transitions": [
+    {
+      "from": "pending-invite",
+      "to": "accepted",
+      "when": "잠금/번호/소유/연결 검사 통과",
+      "evidence": [
+        "respond"
+      ]
+    },
+    {
+      "from": "pending-invite",
+      "to": "declined",
+      "when": "본인 초대 거절",
+      "evidence": [
+        "respond"
+      ]
+    },
+    {
+      "from": "consent-pending",
+      "to": "active-consented",
+      "when": "재동의 수락",
+      "evidence": [
+        "reconsent"
+      ]
+    },
+    {
+      "from": "active-link",
+      "to": "ended",
+      "when": "해제 권한과 owner_can_end 검사 통과",
+      "evidence": [
+        "end"
+      ]
+    },
+    {
+      "from": "member-token",
+      "to": "consumed",
+      "when": "담당자 수락 응답 뒤 로컬 토큰 삭제",
+      "evidence": [
+        "pending",
+        "member"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "file": "scripts/qa-brand-relation.mjs",
+      "command": "node scripts/qa-brand-relation.mjs",
+      "scope": "관계별 공개 수준/해제/재동의 DB 계약. 실행하지 않음.",
+      "execution": "not-run",
+      "requires": "이번에 실행하지 않았다. 스크립트의 접속 대상과 의존성을 먼저 읽고 DB 사용 검사는 격리한 로컬 환경에서만 실행."
+    },
+    {
+      "file": "scripts/qa-brand-boundary.mjs",
+      "command": "node scripts/qa-brand-boundary.mjs",
+      "scope": "본사 개인 정보/교차 매장 경계. 실행하지 않음.",
+      "execution": "not-run",
+      "requires": "이번에 실행하지 않았다. 스크립트의 접속 대상과 의존성을 먼저 읽고 DB 사용 검사는 격리한 로컬 환경에서만 실행."
+    }
+  ],
+  "desired": {
+    "status": "unconfirmed",
+    "decisionsNeeded": [
+      "제품 변경 요구는 확정하지 않았다. 이 기록은 현재 코드 관찰이며 변경 승인이 아니다."
+    ]
+  }
+}

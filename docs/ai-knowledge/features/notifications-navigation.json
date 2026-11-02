@@ -1,0 +1,536 @@
+{
+  "schemaVersion": 1,
+  "id": "notifications-navigation",
+  "name": "알림 확인과 화면 이동",
+  "aliases": [
+    "통합 알림",
+    "알림 읽음",
+    "푸시 경로",
+    "my_units_notif_data",
+    "알림 화면"
+  ],
+  "platforms": [
+    "web",
+    "android",
+    "ios"
+  ],
+  "summary": "매장별 원시 데이터를 받아 역할별 목록과 배지를 계산한다. 계정 허브 알림은 매장 전환 뒤 이동한다. 읽음 시각 저장과 개별 feed 읽음 저장은 별도 경로다.",
+  "entrypoints": [
+    "/notifications",
+    "/owner/notifications",
+    "/junior/notifications",
+    "푸시 탭 → pushTap"
+  ],
+  "depth": [
+    "대표 흐름 코드 추적",
+    "상태 및 실패 분기 확인",
+    "최신 SQL 정의와 권한 근거 연결",
+    "테스트 연결. 실행 범위는 tests와 runs 참조"
+  ],
+  "unknowns": [
+    "로컬 코드의 대표 흐름 분석이다. 운영 DB 적용 상태, 배포 버전, 웹 브라우저와 Android/iOS 실기기 동작은 실행 검증하지 않았다.",
+    "각 알림 종류의 생성 트리거는 관련 기능 기록을 함께 읽어야 한다. 이 기록이 모든 발송 원인을 추적한 것은 아니다.",
+    "서버 푸시 수신자 선택과 큐/크론의 모든 분기는 knowhow-suggestion 및 후속 서버 작업 분석 대상이다.",
+    "실제 푸시 공급자 수락, 기기 도착, 권한 팝업, cold-start 딥링크를 실행하지 않았다.",
+    "통합 모두 읽기 토스트는 저장 Promise 완료를 기다리지 않는다. 실패 시 guardWrite의 롤백/배너와 어떻게 함께 보이는지는 실행 미검증이다."
+  ],
+  "findings": [
+    "my_units_notif_data는 0338이 최신이며 일부 종류는 매장별 50행 및 최근 30일로 제한한다. 전체 알림 원장으로 취급하지 않는다.",
+    "알림 읽음은 업무 완료/제안 승인과 다르다. ack 기준 이전 행은 남아 있으면서 강조만 줄어든다.",
+    "WEB_PUSH_ENABLED=false의 적용 범위는 자동 웹 구독 분기다. 탭 라우팅 전체를 이 플래그가 차단한다고 연결하면 틀린다."
+  ],
+  "evidence": [
+    {
+      "id": "screen",
+      "file": "src/app/notifications.tsx",
+      "symbol": "useCrossNotifRows",
+      "kind": "code"
+    },
+    {
+      "id": "owner",
+      "file": "src/app/owner/notifications.tsx",
+      "symbol": "buildManagerNotifications",
+      "kind": "code"
+    },
+    {
+      "id": "junior",
+      "file": "src/app/junior/notifications.tsx",
+      "symbol": "buildJuniorNotifications",
+      "kind": "code"
+    },
+    {
+      "id": "cache",
+      "file": "src/lib/store/useCrossNotifStore.ts",
+      "symbol": "HYDRATE_TTL_MS = 5_000",
+      "kind": "code"
+    },
+    {
+      "id": "hook",
+      "file": "src/lib/hooks/useCrossNotifRows.ts",
+      "symbol": "export function useCrossNotifRows()",
+      "kind": "code"
+    },
+    {
+      "id": "mapper",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function fetchCrossStoreNotifData()",
+      "kind": "code"
+    },
+    {
+      "id": "rpc",
+      "file": "supabase/migrations/0338_legacy_quiz_hub.sql",
+      "symbol": "create or replace function public.my_units_notif_data()",
+      "kind": "code"
+    },
+    {
+      "id": "prefs",
+      "file": "src/lib/store/useMemberPrefsStore.ts",
+      "symbol": "ackNotifs: async",
+      "kind": "code"
+    },
+    {
+      "id": "ack",
+      "file": "supabase/migrations/0078_notif_ack.sql",
+      "symbol": "create or replace function public.ack_notifications(",
+      "kind": "code"
+    },
+    {
+      "id": "read",
+      "file": "supabase/migrations/0176_work_feed_atomic_meta.sql",
+      "symbol": "create or replace function public.mark_feed_read(",
+      "kind": "code"
+    },
+    {
+      "id": "builders",
+      "file": "src/lib/utils/notifications.ts",
+      "symbol": "buildManagerNotifications",
+      "kind": "code"
+    },
+    {
+      "id": "merge",
+      "file": "src/lib/utils/crossStoreNotifs.ts",
+      "symbol": "mergeCrossNotifs",
+      "kind": "code"
+    },
+    {
+      "id": "tap",
+      "file": "src/lib/push/pushTap.ts",
+      "symbol": "pushTapPlan",
+      "kind": "code"
+    },
+    {
+      "id": "native",
+      "file": "src/lib/push/nativepush.ts",
+      "symbol": "pushTapPlan",
+      "kind": "code"
+    },
+    {
+      "id": "bootstrap",
+      "file": "src/lib/push/usePushBootstrap.ts",
+      "symbol": "WEB_PUSH_ENABLED",
+      "kind": "code"
+    },
+    {
+      "id": "registry",
+      "file": "src/lib/notif/registry.ts",
+      "symbol": "PUSH_ROUTE_ROOTS",
+      "kind": "code"
+    },
+    {
+      "id": "policy",
+      "file": "src/lib/config/store-policy.ts",
+      "symbol": "export const WEB_PUSH_ENABLED = false;",
+      "kind": "config"
+    },
+    {
+      "id": "qa",
+      "file": "scripts/qa-push-route.mjs",
+      "symbol": "installNotifHooks",
+      "kind": "test"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "screen",
+      "type": "screen",
+      "name": "알림 화면",
+      "current": "루트는 전 매장 병합, 매장 벨은 현재 매장과 통합 탭을 제공한다. 공통 NotificationList를 사용한다.",
+      "evidence": [
+        "screen",
+        "owner",
+        "junior"
+      ],
+      "aliases": [],
+      "changeKinds": [
+        "copy",
+        "contract"
+      ]
+    },
+    {
+      "id": "cache",
+      "type": "state",
+      "name": "전 매장 알림 캐시",
+      "current": "5초 TTL, 계정 epoch 가드, 실패 시 이전 데이터 유지 및 loadError를 사용한다. retry는 TTL을 지운다. 합류/폐점 부가 조회 오류와 본 RPC 오류는 같은 실패 취급이 아니다.",
+      "evidence": [
+        "cache"
+      ],
+      "aliases": [],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "rpc",
+      "type": "api",
+      "name": "my_units_notif_data",
+      "current": "본인 멤버십만 읽고 잠긴 매장 직원/매니저는 제외한다. 공지/멘션은 방 가시성, 담당 업무는 배정자, 제안/질문 등은 역할별 조건을 사용한다. 0338은 옛 퀴즈 집계도 반환한다.",
+      "evidence": [
+        "mapper",
+        "rpc"
+      ],
+      "aliases": [
+        "my_units_notif_data"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "derive",
+      "type": "rule",
+      "name": "매장 역할별 목록과 배지",
+      "current": "sessionStores가 없으면 계산을 기다린다. 매장별 역할을 적용하며 모르는 매장은 junior로 취급한다. ack와 같은 입력으로 읽지 않은 개수를 계산하고 잘린 행 수를 따로 반환한다.",
+      "evidence": [
+        "hook",
+        "builders",
+        "merge"
+      ],
+      "aliases": [],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "ack",
+      "type": "write",
+      "name": "모두 읽음 시각",
+      "current": "매장별 ackNotifs는 낙관적 시각 갱신 후 실패 롤백. 서버는 auth.uid와 해당 멤버십을 검사하고 unit_member_prefs.notif_ack_at을 갱신한다. 허브는 소속 매장 전부를 호출한다.",
+      "evidence": [
+        "prefs",
+        "ack",
+        "hook"
+      ],
+      "aliases": [
+        "ack_notifications",
+        "notif_ack_at"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "feed-read",
+      "type": "write",
+      "name": "개별 공지 및 멘션 읽음",
+      "current": "현재 매장으로 전환한 뒤 read_by에 본인 추가. RPC는 feed_row_for_write를 통과한 행의 read_by만 갱신한다. 캐시는 낙관적 반영 후 실패 롤백한다.",
+      "evidence": [
+        "read",
+        "cache",
+        "hook"
+      ],
+      "aliases": [
+        "mark_feed_read",
+        "read_by"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "open",
+      "type": "navigation",
+      "name": "통합 행 열기",
+      "current": "폐점 알림은 안내만 한다. 다른 매장은 switchUnit 성공 후 읽음 기록과 이동. 전환 실패는 토스트 후 종료한다.",
+      "evidence": [
+        "hook"
+      ],
+      "aliases": [
+        "openRow"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "tap",
+      "type": "navigation",
+      "name": "푸시 경로 판정",
+      "current": "pushTapPlan은 허용 루트와 경로 형식을 검사한다. 다른 매장 owner/junior 경로는 enter로 보내 전환 뒤 역할 보정한다. 같은 매장은 현재 역할로 보정한다.",
+      "evidence": [
+        "tap",
+        "native",
+        "registry"
+      ],
+      "aliases": [
+        "pushTapPlan",
+        "PUSH_ROUTE_ROOTS"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "platform",
+      "type": "config",
+      "name": "푸시 플랫폼 표면",
+      "current": "WEB_PUSH_ENABLED=false는 bootstrap의 웹 자동 구독 ensurePushSubscribed를 건너뛰게 한다. 서비스워커 등록/메시지 라우팅과 네이티브 탭 리스너 등록 전체를 끄는 플래그는 아니다.",
+      "evidence": [
+        "policy"
+      ],
+      "aliases": [],
+      "changeKinds": [
+        "contract"
+      ]
+    },
+    {
+      "id": "tests",
+      "type": "test",
+      "name": "푸시 및 알림 순수 검사",
+      "current": "수리한 push-route는 실제 pure loader와 서버 route 생성 코드를 오프라인 검사한다. 실기기 전달 검사는 아니다.",
+      "evidence": [
+        "qa"
+      ],
+      "aliases": [],
+      "changeKinds": [
+        "contract"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "screen-cache",
+      "from": "screen",
+      "to": "cache",
+      "relation": "hydrates",
+      "when": "알림 진입과 복귀",
+      "evidence": [
+        "screen",
+        "cache"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "cache-rpc",
+      "from": "cache",
+      "to": "rpc",
+      "relation": "calls",
+      "when": "TTL 밖 조회",
+      "evidence": [
+        "cache",
+        "mapper"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "screen-derive",
+      "from": "screen",
+      "to": "derive",
+      "relation": "renders",
+      "when": "역할별 목록과 배지",
+      "evidence": [
+        "screen",
+        "owner",
+        "junior",
+        "hook"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "derive-cache",
+      "from": "derive",
+      "to": "cache",
+      "relation": "consumes",
+      "when": "원시 데이터와 읽음 상태",
+      "evidence": [
+        "hook"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "derive-ack",
+      "from": "derive",
+      "to": "ack",
+      "relation": "calls",
+      "when": "허브 모두 읽기",
+      "evidence": [
+        "hook",
+        "prefs"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "derive-open",
+      "from": "derive",
+      "to": "open",
+      "relation": "dispatches",
+      "when": "통합 행 탭",
+      "evidence": [
+        "hook"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "open-feed-read",
+      "from": "open",
+      "to": "feed-read",
+      "relation": "calls",
+      "when": "전환 성공 또는 활성 매장 행",
+      "evidence": [
+        "hook"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "tap-tests",
+      "from": "tap",
+      "to": "tests",
+      "relation": "covered-by",
+      "when": "경로 계약 변경 검증",
+      "evidence": [
+        "qa"
+      ],
+      "kinds": [
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    }
+  ],
+  "flow": [
+    {
+      "node": "cache",
+      "when": "알림 진입",
+      "result": "본인 전 매장 원시 데이터 조회"
+    },
+    {
+      "node": "derive",
+      "when": "역할과 데이터 도착",
+      "result": "읽음 기준을 적용해 목록 및 배지 생성"
+    },
+    {
+      "node": "ack",
+      "when": "모두 읽기",
+      "result": "즉시 UI 반영 후 서버 저장, 실패 롤백"
+    },
+    {
+      "node": "open",
+      "when": "행 탭",
+      "result": "필요 시 매장 전환 성공 후 이동"
+    },
+    {
+      "node": "tap",
+      "when": "푸시 탭",
+      "result": "허용 경로와 세션 매장을 검사"
+    }
+  ],
+  "transitions": [
+    {
+      "from": "loading",
+      "to": "error-with-cache",
+      "when": "본 RPC 실패",
+      "evidence": [
+        "cache"
+      ]
+    },
+    {
+      "from": "unread",
+      "to": "optimistic-read",
+      "when": "모두 읽기 누름",
+      "evidence": [
+        "prefs",
+        "hook"
+      ]
+    },
+    {
+      "from": "optimistic-read",
+      "to": "rolled-back",
+      "when": "저장 실패와 같은 계정 epoch",
+      "evidence": [
+        "prefs"
+      ]
+    },
+    {
+      "from": "switching",
+      "to": "navigation-stopped",
+      "when": "switchUnit 오류",
+      "evidence": [
+        "hook"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "file": "scripts/qa-push-route.mjs",
+      "command": "node scripts/qa-push-route.mjs",
+      "scope": "오프라인 경로/서버 payload 계약, route-sync 포함.",
+      "execution": "see-runs",
+      "runName": "push-route",
+      "requires": "최신 runs의 sameCodeState와 결과를 확인. 오프라인 검사."
+    },
+    {
+      "file": "scripts/qa-notif-axis.mjs",
+      "command": "node scripts/qa-notif-axis.mjs",
+      "scope": "사장/매니저/직원별 알림 파생 순수 검사.",
+      "execution": "see-runs",
+      "runName": "notif-axis",
+      "requires": "최신 runs의 sameCodeState와 결과를 확인. 오프라인 검사."
+    },
+    {
+      "file": "scripts/qa-notif-ack.mjs",
+      "command": "node scripts/qa-notif-ack.mjs",
+      "scope": "실제 RPC의 본인 ack와 비멤버 거부. 실행하지 않음.",
+      "execution": "not-run",
+      "requires": "이번에 실행하지 않았다. 스크립트의 접속 대상과 의존성을 먼저 읽고 DB 사용 검사는 격리한 로컬 환경에서만 실행."
+    }
+  ],
+  "desired": {
+    "status": "unconfirmed",
+    "decisionsNeeded": [
+      "제품 변경 요구는 확정하지 않았다. 이 기록은 현재 코드 관찰이며 변경 승인이 아니다."
+    ]
+  }
+}

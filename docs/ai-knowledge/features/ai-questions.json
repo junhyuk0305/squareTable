@@ -1,0 +1,897 @@
+{
+  "schemaVersion": 1,
+  "id": "ai-questions",
+  "name": "AI 질문과 답변",
+  "aliases": [
+    "AI 질문",
+    "물어보기",
+    "AI 답변",
+    "사장에게 질문 등록",
+    "답변 대기 질문",
+    "registerToOwner",
+    "generateAnswer",
+    "answer_unknown_query"
+  ],
+  "platforms": [
+    "web",
+    "android",
+    "ios"
+  ],
+  "summary": "질문 입력부터 검색/답변 분기, 대화 기록, 명시적 사장 질문 등록 및 새 노하우 답변 저장을 추적했다. 모델 품질과 운영 정확도를 입증한 기록은 아니다.",
+  "entrypoints": [
+    "/owner/ask",
+    "/junior/chat",
+    "/owner/inbox → /owner/categories?seg=todo",
+    "/owner/coach?uqId=…"
+  ],
+  "depth": [
+    "대표 하위 흐름의 화면부터 데이터 경계까지 코드 추적",
+    "상태와 실패 및 권한 조건 확인",
+    "SQL 정의와 후속 변경 검색",
+    "관련 테스트 연결",
+    "실행 미검증"
+  ],
+  "unknowns": [
+    "로컬 HEAD f03eecd의 코드 관찰이다. 원격 마이그레이션 적용 상태와 배포 앱 버전은 확인하지 않았다.",
+    "DB, 네트워크, AI, 브라우저 및 Android/iOS 실기기 실행은 하지 않았다.",
+    "OwnerCoachChat의 구조화 편집 전체, 음성 입력, 동료 기존 노하우 답변 UI, 답변 완료 알림 전체는 제외했다.",
+    "AI 인증/라우팅과 handleAnswer 검사는 읽었지만 모든 task 핸들러와 모델 프롬프트를 심층 검토하지 않았다.",
+    "검색 점수/폴백의 실제 정답률, 쿼터 동시 요청 경쟁과 실제 과금은 미실행이다.",
+    "신규 질문 알림의 코드상 수신자/설정/세션 필터를 추적했지만 OS 전달·열람·다점포 탭 전환은 실행하지 않았다. 질문 저장 후 앱 종료, audience별 부분 실패, 전달 전 24시간 사건 선점으로 인한 재시도 손실은 실측하지 않았다.",
+    "이번 인앱 추적은 활성 매장의 직원/사장/매니저 질문행이다. /notifications 허브와 전체 매장 탭의 cross 집계/RPC, 모든 읽지 않음 배지 소비자, 조회 실패 후 실제 화면 표시는 별도 검증이 필요하다."
+  ],
+  "findings": [
+    "사장 질문 등록은 답변 실패 때 자동 실행되지 않는다. 사용자 선택 registerToOwner가 저장을 시작한다.",
+    "was_deflected 값만으로 화면 답변 여부를 해석하면 틀린다. served/generated도 true를 기록하고 실제 답변 모드는 response_block에 있다.",
+    "handleAnswer의 출처 검증은 요청으로 받은 후보 ID 집합에 대한 검증이다. DB 원문 재검증이나 실제 정답률의 증거가 아니다.",
+    "화면의 사장에게 질문 등록이라는 표현과 푸시 범위는 다르다. 새 pending 저장 뒤에는 owners(owner+manager)와 staff(junior) 요청을 보내고, 서버와 전달 필터가 최종 대상을 좁힌다. 같은 pending 텍스트의 횟수 증가에는 새 알림을 요청하지 않는다.",
+    "질문 푸시와 인앱 목록은 별도 경로다. 인앱 직원/매니저는 본인 및 pending 답변 제안에 연결된 질문을 제외하지만 사장 pending 목록은 이 제외를 하지 않는다. 푸시 수신자를 바꿔도 이 표시 조건이 자동 변경되지 않는다."
+  ],
+  "evidence": [
+    {
+      "id": "owner-route",
+      "file": "src/app/owner/ask.tsx",
+      "symbol": "<JuniorAsk suggestEntry={false} seed={seed} />",
+      "kind": "code"
+    },
+    {
+      "id": "junior-route",
+      "file": "src/app/junior/chat.tsx",
+      "symbol": "ask={<JuniorAsk seed={seed} focusId={focusTurnId} />}",
+      "kind": "code"
+    },
+    {
+      "id": "submit",
+      "file": "src/lib/store/useChatStore.ts",
+      "symbol": "submit: async (text) => {",
+      "kind": "code"
+    },
+    {
+      "id": "register",
+      "file": "src/lib/store/useChatStore.ts",
+      "symbol": "registerToOwner: async (queryId) => {",
+      "kind": "code"
+    },
+    {
+      "id": "search",
+      "file": "src/lib/ai/searchClient.ts",
+      "symbol": "export async function hybridSearch(",
+      "kind": "code"
+    },
+    {
+      "id": "client",
+      "file": "src/lib/ai/client.ts",
+      "symbol": "export async function generateAnswer(",
+      "kind": "code"
+    },
+    {
+      "id": "edge",
+      "file": "supabase/functions/ai/index.ts",
+      "symbol": "async function handleAnswer(payload: any)",
+      "kind": "code"
+    },
+    {
+      "id": "auth",
+      "file": "supabase/functions/ai/index.ts",
+      "symbol": "async function authUser(req: Request)",
+      "kind": "code"
+    },
+    {
+      "id": "history",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function fetchChatQueries(",
+      "kind": "code"
+    },
+    {
+      "id": "history-policy",
+      "file": "supabase/migrations/0246_member_tenures.sql",
+      "symbol": "alter policy cq_select on public.chat_queries",
+      "kind": "code"
+    },
+    {
+      "id": "queue",
+      "file": "src/lib/store/useUnknownQueueStore.ts",
+      "symbol": "enqueue: async (uq) => {",
+      "kind": "code"
+    },
+    {
+      "id": "queue-guard",
+      "file": "supabase/migrations/0320_client_trust_questions.sql",
+      "symbol": "create or replace function public.guard_unknown_query_write()",
+      "kind": "code"
+    },
+    {
+      "id": "queue-policy",
+      "file": "supabase/migrations/0239_query_rls.sql",
+      "symbol": "create policy uq_select on public.unknown_queries",
+      "kind": "code"
+    },
+    {
+      "id": "inbox",
+      "file": "src/app/owner/inbox.tsx",
+      "symbol": "return <Redirect href=\"/owner/categories?seg=todo\" />;",
+      "kind": "code"
+    },
+    {
+      "id": "coach",
+      "file": "src/app/owner/coach.tsx",
+      "symbol": "const d = await answer(realUq.id, answerEntry);",
+      "kind": "code"
+    },
+    {
+      "id": "answer-rpc",
+      "file": "supabase/migrations/0311_answer_unknown_atomic.sql",
+      "symbol": "create or replace function public.answer_unknown_query(",
+      "kind": "code"
+    },
+    {
+      "id": "tenant",
+      "file": "supabase/migrations/0303_closed_store_server_block.sql",
+      "symbol": "create or replace function public.auth_member_unit_id()",
+      "kind": "code"
+    },
+    {
+      "id": "test",
+      "file": "scripts/qa-audit-ai-answer.cjs",
+      "symbol": "assert.ok(live, 'network disabled');",
+      "kind": "test"
+    },
+    {
+      "id": "queue-insert",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function insertUnknown(uq: UnknownQuery)",
+      "kind": "code"
+    },
+    {
+      "id": "queue-author",
+      "file": "supabase/migrations/0007_security_rls_hardening.sql",
+      "symbol": "create or replace function public.stamp_author()",
+      "kind": "code"
+    },
+    {
+      "id": "notify-question",
+      "file": "src/lib/push/notify.ts",
+      "symbol": "export const notifyStoreQuestion = (q: string, uqId?: string) => {",
+      "kind": "code"
+    },
+    {
+      "id": "notify-request",
+      "file": "src/lib/push/notify.ts",
+      "symbol": "async function attemptNotify(args: PushBody, attempt: number)",
+      "kind": "code"
+    },
+    {
+      "id": "push-event",
+      "file": "supabase/migrations/0339_work_assignment_server_push.sql",
+      "symbol": "create or replace function public.push_client_event(",
+      "kind": "code"
+    },
+    {
+      "id": "push-roles",
+      "file": "supabase/functions/push/index.ts",
+      "symbol": "function audienceRoles(audience: string | undefined, ownerOnly = false)",
+      "kind": "code"
+    },
+    {
+      "id": "push-recipients",
+      "file": "supabase/functions/push/index.ts",
+      "symbol": ".from('unit_members').select('user_id, role').eq('unit_id', callerUnit).in('role', audienceRoles(audience, ownerOnly) ?? [])",
+      "kind": "code"
+    },
+    {
+      "id": "seat-rule",
+      "file": "supabase/migrations/0336_free_staff_cap_two.sql",
+      "symbol": "create or replace function public.seat_locked_for(p_unit text, p_uid uuid)",
+      "kind": "code"
+    },
+    {
+      "id": "push-delivery",
+      "file": "supabase/functions/push/index.ts",
+      "symbol": "async function deliver(",
+      "kind": "code"
+    },
+    {
+      "id": "push-targets",
+      "file": "supabase/migrations/0255_push_legacy_keep.sql",
+      "symbol": "create or replace function public.push_device_targets(p_user_ids uuid[])",
+      "kind": "code"
+    },
+    {
+      "id": "web-policy",
+      "file": "src/lib/config/store-policy.ts",
+      "symbol": "export const WEB_PUSH_ENABLED = false;",
+      "kind": "config"
+    },
+    {
+      "id": "web-subscribe",
+      "file": "src/lib/push/usePushBootstrap.ts",
+      "symbol": "if (WEB_PUSH_ENABLED) void ensurePushSubscribed(userId, unitId || null);",
+      "kind": "code"
+    },
+    {
+      "id": "inapp-read",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function fetchUnknownQueue()",
+      "kind": "code"
+    },
+    {
+      "id": "inapp-hydrate",
+      "file": "src/lib/store/useUnknownQueueStore.ts",
+      "symbol": "const [{ data, error }, total] = await Promise.all([fetchUnknownQueue(), fetchPendingQuestionCount()]);",
+      "kind": "code"
+    },
+    {
+      "id": "inapp-answerable",
+      "file": "src/lib/store/useUnknownQueueStore.ts",
+      "symbol": "export function answerableQuestions(",
+      "kind": "code"
+    },
+    {
+      "id": "inapp-junior-rows",
+      "file": "src/lib/utils/notifications.ts",
+      "symbol": "for (const u of answerableQuestions(queue, me, suggestions)) {",
+      "kind": "code"
+    },
+    {
+      "id": "inapp-owner-rows",
+      "file": "src/lib/utils/notifications.ts",
+      "symbol": "function ownerRows(args: {",
+      "kind": "code"
+    },
+    {
+      "id": "inapp-manager-rows",
+      "file": "src/lib/utils/notifications.ts",
+      "symbol": "function managerOwnerRows(ownerArgs: Parameters<typeof ownerRows>[0]): ManagerNotif[] {",
+      "kind": "code"
+    },
+    {
+      "id": "inapp-registry",
+      "file": "src/lib/notif/registry.ts",
+      "symbol": "pushTag: 'question', badgeUnit: '답할 질문', audience: ['owners', 'staff'],",
+      "kind": "code"
+    },
+    {
+      "id": "inapp-owner-screen",
+      "file": "src/app/owner/notifications.tsx",
+      "symbol": "if (role !== 'manager') return buildOwnerNotifications(ownerArgs, received);",
+      "kind": "code"
+    },
+    {
+      "id": "inapp-junior-screen",
+      "file": "src/app/junior/notifications.tsx",
+      "symbol": "buildJuniorNotifications({",
+      "kind": "code"
+    },
+    {
+      "id": "inapp-owner-gate",
+      "file": "src/app/owner/_layout.tsx",
+      "symbol": "if (HAS_SUPABASE && status === 'signed_in' && unitId && role === 'manager' && unitLocked) return <StoreClosedScreen />;",
+      "kind": "code"
+    },
+    {
+      "id": "inapp-junior-gate",
+      "file": "src/app/junior/_layout.tsx",
+      "symbol": "if (HAS_SUPABASE && status === 'signed_in' && unitId && unitLocked) return <StoreClosedScreen />;",
+      "kind": "code"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "entry",
+      "type": "screen",
+      "name": "사장/직원 물어보기",
+      "aliases": [],
+      "current": "두 화면은 JuniorAsk를 재사용한다. 사장 화면은 제안 진입을 끈다. 직원 화면은 playbook 읽기 실패 시 질문 본문 대신 재시도 상태를 표시한다.",
+      "evidence": [
+        "owner-route",
+        "junior-route"
+      ],
+      "changeKinds": [
+        "contract",
+        "copy"
+      ]
+    },
+    {
+      "id": "submit",
+      "type": "store",
+      "name": "질문 분기",
+      "aliases": [],
+      "current": "servable 노하우만 입력으로 사용한다. 분류와 검색을 병렬 실행한다. chat/vague는 smalltalk, 강한 검색 일치는 원문 served, 후보 충분 시 generated, 길고 매칭 실패한 질문은 의도 재작성 후 재검색한다. 끝까지 답이 없으면 null response와 후보를 남긴다. epoch가 지난 응답은 폐기한다.",
+      "evidence": [
+        "submit"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "search",
+      "type": "external",
+      "name": "hybridSearch와 답변 클라이언트",
+      "aliases": [],
+      "current": "벡터 search 오류는 lexical 결과로 떨어진다. generateAnswer는 402 쿼터를 별도 반환하고 일반 오류는 mock 기반 degraded 답변으로 반환한다. 실제 AI 호출과 폴백을 같은 결과로 읽지 않는다.",
+      "evidence": [
+        "search",
+        "client"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "edge",
+      "type": "external",
+      "name": "AI 인증 및 근거 검사",
+      "aliases": [],
+      "current": "Edge는 Bearer getUser와 auth_unit_id를 확인한다. handleAnswer는 받은 SOP 최대 범위에서 출처 ID를 검증하며 다중 SOP의 일관성을 먼저 검사한다. 검증 실패/불확실 또는 응답 지시 누출이면 답을 보류한다. SOP 내용은 요청 payload이며 이 handler에서 DB 원문을 다시 읽지는 않는다.",
+      "evidence": [
+        "edge",
+        "auth",
+        "tenant"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "history",
+      "type": "data",
+      "name": "대화 기록 보존",
+      "aliases": [],
+      "current": "화면 답변을 먼저 반영한 뒤 chat_queries 저장을 별도로 시도한다. 실패해도 답은 보존하고 unsynced 기록을 hydrate에 다시 얹는다. CQ RLS는 활성 매장과 본인/관리자 읽기, 본인 insert 및 archived_tenure_id null을 적용한다.",
+      "evidence": [
+        "submit",
+        "history",
+        "history-policy"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "register",
+      "type": "state",
+      "name": "사장에게 명시적 등록",
+      "aliases": [],
+      "current": "smalltalk 외 답변 경로에서 pendingDeflect를 준비하지만 자동 등록하지 않는다. registerToOwner를 누르면 enqueue하고 실패하면 registered 표시를 해제한다. 같은 pending 질문 텍스트는 유사 질문 수만 올리고 반환하므로 신규 질문 알림을 호출하지 않는다.",
+      "evidence": [
+        "register",
+        "queue"
+      ],
+      "changeKinds": [
+        "contract",
+        "field",
+        "recipient"
+      ]
+    },
+    {
+      "id": "question-data",
+      "type": "permission",
+      "name": "unknown_queries 공유와 변경 제한",
+      "aliases": [],
+      "current": "insertUnknown은 입력 unit_id 또는 활성 _unitId로 unknown_queries를 insert하고 Decision을 반환한다. Supabase 미구성 데모에서는 쓰기 없이 ok다. 활성 매장 RLS와 stamp_author가 질문 매장/질문자를 정하고, 0320 guard는 초기 상태를 pending/auto_answered로 제한하며 저장된 id/unit_id/junior_id 변경을 막는다. 이 식별값과 pending 상태는 푸시 사건 검증의 입력이다. 타인 답변은 pending→resolved 및 같은 매장 비보관/비숨김 노하우 연결로 제한하고 peer_answer_log를 쓴다.",
+      "evidence": [
+        "queue-policy",
+        "queue-guard",
+        "queue-insert",
+        "queue-author"
+      ],
+      "changeKinds": [
+        "contract",
+        "field",
+        "recipient"
+      ]
+    },
+    {
+      "id": "question-notify",
+      "type": "async",
+      "name": "신규 대기 질문의 두 알림 요청",
+      "aliases": [],
+      "current": "enqueue의 새 행 insertUnknown 결과가 ok이고 입력 status가 pending_owner_answer일 때만 notifyStoreQuestion을 호출한다. 함수는 owners와 staff에 question 태그/같은 uqId로 각각 요청하며 ownerOnly를 설정하지 않는다. 반환은 void이고 저장 성공과 발송 성공은 분리된다. 세션/endpoint가 없으면 발송하지 않고, 요청은 오류 종류에 따라 최대 3회 시도한다.",
+      "evidence": [
+        "queue",
+        "queue-insert",
+        "notify-question",
+        "notify-request"
+      ],
+      "changeKinds": [
+        "contract",
+        "recipient",
+        "copy"
+      ]
+    },
+    {
+      "id": "question-recipients",
+      "type": "permission",
+      "name": "질문 사건 검증과 수신자 선택",
+      "aliases": [],
+      "current": "최신 push_client_event 0339는 호출자의 매장 멤버십/매장 잠금/좌석 잠금을 검사하고 같은 unit의 본인 junior_id와 pending인 질문만 인정한다. audience별 question 키를 전달 전에 선점하고 24시간 중복을 막는다. Edge는 클라이언트 unit이 아닌 auth_unit_id 매장의 owner+manager(owners), junior(staff)를 선택하고 호출자를 제외한다. owners 후보의 manager는 최신 0336 seat_locked_for가 오류 없이 true인 경우만 제외한다. 잠금 조회 오류는 이 필터에서 제외하지 않는다.",
+      "evidence": [
+        "push-event",
+        "push-roles",
+        "push-recipients",
+        "seat-rule"
+      ],
+      "changeKinds": [
+        "contract",
+        "recipient"
+      ]
+    },
+    {
+      "id": "question-delivery",
+      "type": "external",
+      "name": "알림 설정과 세션 대상 및 착지",
+      "aliases": [],
+      "current": "deliver는 계정 push_enabled, 매장 muted/방해금지 설정으로 후보를 걸러낸다. 설정 조회 오류는 fail-open이고 대상 RPC 오류는 발송을 중단한다. 최신 0255 web/device targets는 탈퇴자와 유효 세션 없는 토큰을 제외하며 session_id 없는 옛 토큰은 갱신 이전 생성된 유효 세션이 있어야 한다. question 착지는 owners가 /owner/coach?uqId, staff가 /junior/chat?uqId다. 웹 자동 구독은 WEB_PUSH_ENABLED=false로 건너뛰지만 잔존 웹 대상 발송을 없애는 조건은 아니다.",
+      "evidence": [
+        "push-delivery",
+        "push-targets",
+        "push-recipients",
+        "web-policy",
+        "web-subscribe"
+      ],
+      "changeKinds": [
+        "contract",
+        "recipient"
+      ]
+    },
+    {
+      "id": "question-inapp-data",
+      "type": "store",
+      "name": "활성 매장 인앱 질문 입력",
+      "aliases": [],
+      "current": "인앱 목록은 푸시 발송 이력 대신 unknown_queries 스토어를 읽는다. fetchUnknownQueue는 pending/그외를 따로 PAGE_LIMIT까지 조회하며 매장 범위는 활성 매장 RLS에 의존한다. hydrate는 tenant epoch가 지난 응답을 버리고 queue/loaded/loadError를 갱신한다. 조회 실패는 data=[]와 loadError=true다. 직원/매니저 화면 진입에는 세션 소속과 매장/좌석 잠금 가드가 추가된다. 푸시의 전송 성공이나 push_enabled를 이 질문 입력 조건으로 사용하지 않는다.",
+      "evidence": [
+        "inapp-read",
+        "inapp-hydrate",
+        "queue-policy",
+        "tenant",
+        "inapp-owner-gate",
+        "inapp-junior-gate"
+      ],
+      "changeKinds": [
+        "contract",
+        "recipient"
+      ]
+    },
+    {
+      "id": "question-inapp-rows",
+      "type": "consumer",
+      "name": "직원·사장·매니저 인앱 질문 표시",
+      "aliases": [],
+      "current": "직원 builder는 answerableQuestions를 사용해 pending 중 본인 질문과 source_uq_id가 있는 pending 제안에 연결된 질문을 제외한다. 사장 ownerRows는 pending 상태만 검사하므로 이 두 제외를 적용하지 않는다. 매니저는 ownerRows의 질문 중 answerableQuestions에 남은 행만 표시한다. owner 화면은 session.role=manager일 때 매니저 builder를 선택한다. 질문 unread는 asked_at과 매장 ackAt 비교이며 읽음 처리는 행 자체를 제거하지 않는다. 목록 전체는 최신순 최대 50개다. NOTIF.question은 제목/route/tag/audience 메타데이터이고 표시대상 필터 자체는 builder에 있다. 직원 질문행은 junior/chat, 사장·매니저 질문행은 ownerRows에서 만든 owner/coach 경로를 사용한다.",
+      "evidence": [
+        "inapp-answerable",
+        "inapp-junior-rows",
+        "inapp-owner-rows",
+        "inapp-manager-rows",
+        "inapp-owner-screen",
+        "inapp-junior-screen",
+        "inapp-registry"
+      ],
+      "changeKinds": [
+        "contract",
+        "recipient"
+      ]
+    },
+    {
+      "id": "answer",
+      "type": "rpc",
+      "name": "대기 질문의 새 노하우 답변",
+      "aliases": [],
+      "current": "inbox는 categories todo로 redirect한다. coach는 새 답변에서 queue.answer를 호출한다. answer_unknown_query는 security invoker로 pending 행을 잠그고 노하우 insert와 resolved 갱신을 같은 트랜잭션에 둔다. 실패는 부분 발행 성공으로 취급하지 않는다.",
+      "evidence": [
+        "inbox",
+        "coach",
+        "answer-rpc",
+        "queue"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "tests",
+      "type": "test",
+      "name": "실제 handler의 모델 대체 검사",
+      "aliases": [],
+      "current": "qa-audit-ai-answer 기본 모드는 TypeScript AST로 실제 handleAnswer를 추출하고 모델만 대체한다. 네트워크 호출은 assert로 차단한다. --live는 실제 모델 호출이므로 별도다.",
+      "evidence": [
+        "test"
+      ],
+      "changeKinds": [
+        "contract"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "entry-submit",
+      "from": "entry",
+      "to": "submit",
+      "relation": "calls",
+      "when": "질문 전송",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "owner-route",
+        "junior-route",
+        "submit"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "submit-search",
+      "from": "submit",
+      "to": "search",
+      "relation": "searches-and-generates",
+      "when": "검색 및 후보 기반 답변 시도",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "submit",
+        "search",
+        "client"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "search-edge",
+      "from": "search",
+      "to": "edge",
+      "relation": "requests",
+      "when": "설정된 AI endpoint와 세션 토큰이 있을 때",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "search",
+        "client",
+        "auth"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "submit-history",
+      "from": "submit",
+      "to": "history",
+      "relation": "persists-after-display",
+      "when": "답 또는 답변 없음 상태 생성 뒤",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "submit",
+        "history"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "submit-register",
+      "from": "submit",
+      "to": "register",
+      "relation": "prepares",
+      "when": "smalltalk 외 답변/없음 경로",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "submit",
+        "register"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "register-question-data",
+      "from": "register",
+      "to": "question-data",
+      "relation": "writes",
+      "when": "명시적 등록의 enqueue가 새 질문 INSERT 또는 같은 pending 질문 횟수 증가를 시도할 때",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "register",
+        "queue",
+        "queue-guard",
+        "queue-insert",
+        "queue-author"
+      ],
+      "kinds": [
+        "contract",
+        "field",
+        "recipient"
+      ]
+    },
+    {
+      "id": "question-data-answer",
+      "from": "question-data",
+      "to": "answer",
+      "relation": "consumed-by",
+      "when": "사장 대기 질문 선택 후 새 답 저장",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "coach",
+        "answer-rpc"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "tests-edge",
+      "from": "tests",
+      "to": "edge",
+      "relation": "checks",
+      "when": "기본 mocked model 모드 실행 시",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "test"
+      ],
+      "kinds": [
+        "contract"
+      ]
+    },
+    {
+      "id": "question-data-question-notify",
+      "from": "question-data",
+      "to": "question-notify",
+      "relation": "starts-after-success",
+      "when": "새 질문 insertUnknown=ok이고 입력 status=pending_owner_answer인 경우만. 중복 bump와 저장 실패는 이 경로를 호출하지 않음",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "queue",
+        "queue-insert",
+        "notify-question"
+      ],
+      "kinds": [
+        "contract",
+        "recipient"
+      ]
+    },
+    {
+      "id": "question-notify-question-recipients",
+      "from": "question-notify",
+      "to": "question-recipients",
+      "relation": "requests-verified-audiences",
+      "when": "owners/staff 두 question 요청에 대해 서버가 실제 질문 행과 caller tenant를 확인할 때",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "notify-question",
+        "notify-request",
+        "push-event",
+        "push-roles",
+        "push-recipients"
+      ],
+      "kinds": [
+        "contract",
+        "recipient"
+      ]
+    },
+    {
+      "id": "question-recipients-question-delivery",
+      "from": "question-recipients",
+      "to": "question-delivery",
+      "relation": "delivers-filtered-candidates",
+      "when": "검증된 사건이며 역할/잠금/본인 제외 후 후보가 남았을 때. 24시간 선점은 전달 성공 확인보다 앞섬",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "push-event",
+        "push-recipients",
+        "push-delivery",
+        "push-targets"
+      ],
+      "kinds": [
+        "contract",
+        "recipient"
+      ]
+    },
+    {
+      "id": "question-data-question-inapp-data",
+      "from": "question-data",
+      "to": "question-inapp-data",
+      "relation": "read-for-inapp",
+      "when": "활성 매장 질문 스토어를 조회/구독 갱신할 때. 새 푸시 요청 또는 발송 성공은 필요조건이 아님",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "queue-policy",
+        "inapp-read",
+        "inapp-hydrate"
+      ],
+      "kinds": [
+        "contract",
+        "recipient"
+      ]
+    },
+    {
+      "id": "question-inapp-data-question-inapp-rows",
+      "from": "question-inapp-data",
+      "to": "question-inapp-rows",
+      "relation": "derives-visible-questions",
+      "when": "해당 역할 화면이 queue/suggestions/userId/매장 ackAt을 builder에 전달할 때",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "inapp-hydrate",
+        "inapp-answerable",
+        "inapp-junior-rows",
+        "inapp-owner-rows",
+        "inapp-manager-rows",
+        "inapp-owner-screen",
+        "inapp-junior-screen"
+      ],
+      "kinds": [
+        "contract",
+        "recipient"
+      ]
+    },
+    {
+      "id": "question-inapp-rows-answer",
+      "from": "question-inapp-rows",
+      "to": "answer",
+      "relation": "opens-answer-context",
+      "when": "사장·매니저 질문행이 NOTIF.question의 owner/coach?uqId 경로로 열릴 때. 직원 행은 junior/chat이며 새 노하우 답변 전체와 구분",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "inapp-owner-rows",
+        "inapp-manager-rows",
+        "inapp-registry",
+        "coach"
+      ],
+      "kinds": [
+        "contract",
+        "recipient"
+      ]
+    }
+  ],
+  "flow": [
+    {
+      "node": "submit",
+      "when": "질문",
+      "result": "분류와 검색"
+    },
+    {
+      "node": "search",
+      "when": "후보 존재",
+      "result": "원문/AI/폴백 답변 선택"
+    },
+    {
+      "node": "history",
+      "when": "표시 뒤",
+      "result": "저장 실패는 답변 표시와 분리"
+    },
+    {
+      "node": "register",
+      "when": "사용자 선택",
+      "result": "사장 대기 질문 생성"
+    },
+    {
+      "node": "question-notify",
+      "when": "새 대기 질문 저장 성공",
+      "result": "owners와 staff에 별도 푸시 요청. 중복 횟수 증가는 발송하지 않음"
+    },
+    {
+      "node": "question-recipients",
+      "when": "서버 사건 검증 통과",
+      "result": "같은 매장 역할과 잠금/본인 제외를 적용"
+    },
+    {
+      "node": "question-delivery",
+      "when": "수신 후보 존재",
+      "result": "설정과 세션 대상을 거쳐 발송. 실제 기기 수신은 미검증"
+    },
+    {
+      "node": "answer",
+      "when": "대기 질문 답변",
+      "result": "새 노하우와 해결 상태 원자 저장"
+    },
+    {
+      "node": "question-inapp-data",
+      "when": "활성 매장 질문 조회",
+      "result": "푸시 이력과 별도로 인앱 목록 입력 갱신"
+    },
+    {
+      "node": "question-inapp-rows",
+      "when": "역할별 알림 화면",
+      "result": "질문 상태·본인·제안대기 조건으로 행을 구성하고 ackAt으로 읽음 강조 판정"
+    }
+  ],
+  "transitions": [
+    {
+      "from": "question submitted",
+      "to": "served/generated/smalltalk/no answer",
+      "when": "분류, 매칭, 후보와 생성 결과에 따라 분기",
+      "evidence": [
+        "submit"
+      ]
+    },
+    {
+      "from": "deflect prepared",
+      "to": "registered",
+      "when": "사용자의 registerToOwner 선택 후 enqueue 성공",
+      "evidence": [
+        "register",
+        "queue"
+      ]
+    },
+    {
+      "from": "pending_owner_answer",
+      "to": "resolved_with_entry",
+      "when": "answer_unknown_query가 노하우와 질문 상태 저장을 함께 성공",
+      "evidence": [
+        "answer-rpc"
+      ]
+    },
+    {
+      "from": "new pending question saved",
+      "to": "notification requested",
+      "when": "insertUnknown=ok 뒤 notifyStoreQuestion. 요청 성공이나 기기 수신은 등록 성공의 조건이 아님",
+      "evidence": [
+        "queue",
+        "queue-insert",
+        "notify-question"
+      ]
+    },
+    {
+      "from": "same pending question found",
+      "to": "similar count increased",
+      "when": "기존 질문 count 쓰기 뒤 반환하므로 새 질문 알림을 요청하지 않음",
+      "evidence": [
+        "queue"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "file": "scripts/qa-audit-ai-answer.cjs",
+      "command": "node scripts/qa-audit-ai-answer.cjs",
+      "scope": "실제 handler의 출처 ID/충돌/검증 실패/시간 제한 분기. 모델 대체",
+      "requires": "Node, TypeScript; --live 없이 네트워크/DB 없음",
+      "execution": "not-run"
+    },
+    {
+      "file": "scripts/qa-ai-core.mjs",
+      "command": "node scripts/qa-ai-core.mjs --local",
+      "scope": "노하우/AI 통합 하니스 존재. 상세 실행 범위는 별도 확인",
+      "requires": "로컬 DB/Edge 필요. AI 호출 분기는 실행하지 않음",
+      "execution": "not-run"
+    }
+  ],
+  "desired": {
+    "status": "unconfirmed",
+    "decisionsNeeded": [
+      "현재 동작을 제품 요구로 승인한 기록이 아니다. 변경 요청이 생기면 기존 제품 정본과 사용자 결정을 별도로 연결해야 한다.",
+      "알림 대상 변경은 푸시, 인앱 질문 목록/읽지 않음 배지, 또는 둘 다 중 어느 채널에 적용할지 확정해야 한다. 활성 매장 목록과 전체 매장/허브 집계의 포함 범위도 별도로 정해야 한다."
+    ]
+  }
+}

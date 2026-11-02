@@ -1,0 +1,544 @@
+{
+  "schemaVersion": 1,
+  "id": "account-settings",
+  "name": "계정 정보와 설정",
+  "aliases": [
+    "계정 설정",
+    "프로필 편집",
+    "전화번호 변경",
+    "비밀번호 변경",
+    "회원탈퇴",
+    "신고"
+  ],
+  "platforms": [
+    "web",
+    "android",
+    "ios"
+  ],
+  "summary": "프로필 편집, 로그인 상태의 비밀번호 변경, 회원탈퇴, 매장 구성원 신고를 대표 흐름으로 추적한다.",
+  "entrypoints": [
+    "/account-settings",
+    "/account-edit",
+    "/report"
+  ],
+  "depth": [
+    "대표 흐름 진입점 추적",
+    "대표 흐름 상태와 실패 확인",
+    "대표 흐름 데이터와 권한 연결",
+    "최신 SQL 정의와 후속 변경 검색",
+    "관련 검사 연결. 실행은 별도"
+  ],
+  "unknowns": [
+    "로컬 HEAD f03eecd의 코드 관찰이다. 원격 DB 적용, 배포 버전, 실제 데이터, 기기 실행은 확인하지 않았다.",
+    "알림/마케팅 설정, 매장 이름/업종 편집, 전체 타기기 로그아웃 및 이메일 변경 반환은 일부 호출 지점만 확인했다.",
+    "탈퇴 뒤 30일 파기 예약의 실제 실행과 관리자 신고 처리, 구독 해지는 이 기록에서 검증하지 않았다.",
+    "번호 바꾸기 Edge 전체의 충돌 복구는 미추적이다. auth 기록의 문자 복구와 공유 경계만 확인했다."
+  ],
+  "findings": [
+    "updateProfile은 profiles 쓰기 뒤 Auth 이메일 변경을 호출한다. 뒤 단계 실패는 앞 단계 저장을 되돌리지 않는다.",
+    "회원탈퇴는 0335 이후 열린 소유 매장에 재직 직원/매니저가 있으면 owner_has_staff로 막는다.",
+    "신고는 활성 매장 하나에 묶이지 않고 선택한 매장의 실제 멤버십을 확인한다. 공유 테이블이라는 이유로 모든 매장 흐름이 직접 수정 대상은 아니다."
+  ],
+  "evidence": [
+    {
+      "id": "settings",
+      "file": "src/app/account-settings.tsx",
+      "symbol": "const onDelete = async () =>",
+      "kind": "code"
+    },
+    {
+      "id": "edit",
+      "file": "src/app/account-edit.tsx",
+      "symbol": "const saveProfile = async () =>",
+      "kind": "code"
+    },
+    {
+      "id": "profile-store",
+      "file": "src/lib/store/useSessionStore.ts",
+      "symbol": "updateProfile: async (patch) =>",
+      "kind": "code"
+    },
+    {
+      "id": "profile-db",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function updateProfileFields(",
+      "kind": "code"
+    },
+    {
+      "id": "profile-rls",
+      "file": "supabase/migrations/0055_multistore_foundation.sql",
+      "symbol": "create policy profiles_update",
+      "kind": "code"
+    },
+    {
+      "id": "profile-grant",
+      "file": "supabase/migrations/0065_gen_exchange.sql",
+      "symbol": "grant update (name, phone, phone_last4, avatar, bio, meta)",
+      "kind": "code"
+    },
+    {
+      "id": "phone-guard",
+      "file": "supabase/migrations/0238_account_security.sql",
+      "symbol": "create or replace function public.guard_profile_phone_change()",
+      "kind": "code"
+    },
+    {
+      "id": "password-store",
+      "file": "src/lib/store/useSessionStore.ts",
+      "symbol": "changePassword: async (currentPw, newPw) =>",
+      "kind": "code"
+    },
+    {
+      "id": "password-sql",
+      "file": "supabase/migrations/0253_password_keep_sessions.sql",
+      "symbol": "create or replace function public.change_my_password(",
+      "kind": "code"
+    },
+    {
+      "id": "delete-store",
+      "file": "src/lib/store/useSessionStore.ts",
+      "symbol": "deleteAccount: async () =>",
+      "kind": "code"
+    },
+    {
+      "id": "delete-db",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function rpcDeleteMyAccount()",
+      "kind": "code"
+    },
+    {
+      "id": "delete-sql",
+      "file": "supabase/migrations/0335_deleted_account_access.sql",
+      "symbol": "create or replace function public.delete_my_account()",
+      "kind": "code"
+    },
+    {
+      "id": "restrict",
+      "file": "supabase/migrations/0335_deleted_account_access.sql",
+      "symbol": "create or replace function public.account_access_allowed()",
+      "kind": "code"
+    },
+    {
+      "id": "report",
+      "file": "src/app/report.tsx",
+      "symbol": "const submit = async () =>",
+      "kind": "code"
+    },
+    {
+      "id": "report-db",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function submitUserReport(",
+      "kind": "code"
+    },
+    {
+      "id": "report-sql",
+      "file": "supabase/migrations/0241_user_reports.sql",
+      "symbol": "create or replace function public.submit_user_report(",
+      "kind": "code"
+    },
+    {
+      "id": "targets",
+      "file": "supabase/migrations/0241_user_reports.sql",
+      "symbol": "create or replace function public.report_targets(",
+      "kind": "code"
+    },
+    {
+      "id": "report-table",
+      "file": "supabase/migrations/0241_user_reports.sql",
+      "symbol": "create table if not exists public.user_reports",
+      "kind": "code"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "edit",
+      "type": "screen",
+      "name": "프로필 편집 화면",
+      "aliases": [
+        "/account-edit"
+      ],
+      "current": "saveProfile이 세션 updateProfile을 호출한다. savePw는 현재 비밀번호와 새 비밀번호를 세션 action에 전달한다. 화면은 공유 TSX다.",
+      "evidence": [
+        "edit"
+      ],
+      "changeKinds": [
+        "copy"
+      ]
+    },
+    {
+      "id": "profile",
+      "type": "client",
+      "name": "프로필 및 이메일 저장",
+      "aliases": [
+        "updateProfile",
+        "updateProfileFields"
+      ],
+      "current": "이름/번호/bio를 profiles에 쓰고 이메일이 바뀌면 Auth updateUser를 호출한다. 이메일 확인 대기이면 기존 세션 이메일을 유지한다. 프로필 저장 후 이메일 변경 실패는 부분 성공 상태일 수 있다.",
+      "evidence": [
+        "profile-store",
+        "profile-db"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "profile-policy",
+      "type": "permission",
+      "name": "본인 프로필 수정 정책",
+      "aliases": [
+        "profiles_update",
+        "profiles.phone"
+      ],
+      "current": "0055 profiles_update가 본인 행과 동결 필드를 제한한다. 0065 컬럼 grant는 name/phone/phone_last4/avatar/bio/meta만 연다. 번호 변경에는 0238 최근 인증 검사와 last4 서버 계산이 추가된다.",
+      "evidence": [
+        "profile-rls",
+        "profile-grant",
+        "phone-guard"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "password",
+      "type": "api",
+      "name": "현재 비밀번호 확인 후 변경",
+      "aliases": [
+        "changePassword",
+        "change_my_password"
+      ],
+      "current": "클라이언트는 RPC 결과 코드별 안내를 한다. 0253은 auth.uid 본인 hash를 대조하고 15분 내 실패 5회에서 제한한다. 실패를 문자열로 반환해 실패 기록을 보존한다. 새 hash만 바꾸며 세션 삭제는 하지 않는다.",
+      "evidence": [
+        "password-store",
+        "password-sql"
+      ],
+      "changeKinds": [
+        "contract"
+      ]
+    },
+    {
+      "id": "settings",
+      "type": "screen",
+      "name": "탈퇴 확인과 다음 이동",
+      "aliases": [
+        "/account-settings",
+        "onDelete"
+      ],
+      "current": "네이티브에서는 실제 IAP 구독 platform을 조회해 확인 문구를 고른다. 탈퇴 오류의 toStaff가 참이면 직원 관리로 이동을 제안한다. 성공일 때만 /로 이동한다.",
+      "evidence": [
+        "settings"
+      ],
+      "changeKinds": [
+        "copy"
+      ]
+    },
+    {
+      "id": "delete",
+      "type": "state",
+      "name": "회원탈퇴 요청과 로컬 세션 종료",
+      "aliases": [
+        "deleteAccount",
+        "rpcDeleteMyAccount"
+      ],
+      "current": "delete_my_account 오류는 안내로 반환한다. 성공하면 합류 기기 마커를 지우고 global signOut을 시도한다. signOut 예외가 나도 세대 증가와 로컬 signed_out을 적용한다.",
+      "evidence": [
+        "delete-store",
+        "delete-db"
+      ],
+      "changeKinds": [
+        "contract"
+      ]
+    },
+    {
+      "id": "delete-rpc",
+      "type": "api",
+      "name": "탈퇴 DB 트랜잭션",
+      "aliases": [
+        "delete_my_account"
+      ],
+      "current": "0335는 소유 매장을 잠그고 열린 매장 재직 직원/매니저가 있으면 차단한다. 타 매장 직원 근속은 close_member_tenure로 닫는다. 푸시 등록과 auth.sessions를 지우고 units/profiles.deleted_at 및 Auth 100년 ban을 설정한다. 즉시 모든 보존 자료를 물리 삭제하는 함수가 아니다.",
+      "evidence": [
+        "delete-sql"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "access",
+      "type": "permission",
+      "name": "탈퇴 후 기존 토큰 제한",
+      "aliases": [
+        "account_access_allowed",
+        "require_active_account"
+      ],
+      "current": "0335는 REST pre-request와 public RLS/Storage restrictive 정책을 추가한다. 보존 멤버십을 남기는 것과 접근 허용은 다른 상태다. 운영 설치와 기존 토큰 실증은 미확인이다.",
+      "evidence": [
+        "restrict"
+      ],
+      "changeKinds": [
+        "contract"
+      ]
+    },
+    {
+      "id": "report",
+      "type": "screen",
+      "name": "매장별 신고 제출",
+      "aliases": [
+        "/report",
+        "submitUserReport"
+      ],
+      "current": "세션 stores에서 매장을 고르고 report_targets를 읽는다. 목록 실패에 재시도를 제공한다. prepareReport 성공 payload를 제출하고 RPC 오류가 없을 때만 done으로 전환한다.",
+      "evidence": [
+        "report",
+        "report-db"
+      ],
+      "changeKinds": [
+        "copy",
+        "contract"
+      ]
+    },
+    {
+      "id": "report-rpc",
+      "type": "api",
+      "name": "신고 대상과 신고 저장",
+      "aliases": [
+        "submit_user_report",
+        "report_targets"
+      ],
+      "current": "로그인, 선택 매장 멤버십, store kind, 대상 동일 매장/본인 제외를 검사한다. ai_answer만 대상 생략 가능하다. 본문 5~1000자, 미래 시각, 24시간 5건, 같은 대상 1시간 중복을 제한한다. 신고자 advisory lock으로 제한 검사를 직렬화한다.",
+      "evidence": [
+        "report-sql",
+        "targets"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "reports",
+      "type": "data",
+      "name": "신고 스냅샷과 운영 처리 경계",
+      "aliases": [
+        "user_reports"
+      ],
+      "current": "RPC는 매장명, 신고자/대상의 이름과 역할 스냅샷을 저장한다. 테이블의 클라이언트 직접 권한은 닫혀 있다. 별도 관리자 콘솔의 실제 읽기/상태변경은 이 기록에서 미추적이다.",
+      "evidence": [
+        "report-table",
+        "report-sql"
+      ],
+      "changeKinds": [
+        "field"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "edit-profile",
+      "from": "edit",
+      "to": "profile",
+      "relation": "calls",
+      "when": "프로필 제출",
+      "evidence": [
+        "edit",
+        "profile-store"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "profile-profile-policy",
+      "from": "profile",
+      "to": "profile-policy",
+      "relation": "writes",
+      "when": "profiles update",
+      "evidence": [
+        "profile-db",
+        "profile-rls",
+        "phone-guard"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "edit-password",
+      "from": "edit",
+      "to": "password",
+      "relation": "calls",
+      "when": "비밀번호 제출",
+      "evidence": [
+        "edit",
+        "password-store"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "settings-delete",
+      "from": "settings",
+      "to": "delete",
+      "relation": "calls",
+      "when": "탈퇴 확인 뒤",
+      "evidence": [
+        "settings"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "delete-delete-rpc",
+      "from": "delete",
+      "to": "delete-rpc",
+      "relation": "calls",
+      "when": "rpcDeleteMyAccount",
+      "evidence": [
+        "delete-db"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "delete-rpc-access",
+      "from": "delete-rpc",
+      "to": "access",
+      "relation": "depends-on",
+      "when": "탈퇴 표시 뒤 후속 요청 차단",
+      "evidence": [
+        "restrict",
+        "delete-sql"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "report-report-rpc",
+      "from": "report",
+      "to": "report-rpc",
+      "relation": "calls",
+      "when": "대상 조회와 제출",
+      "evidence": [
+        "report",
+        "report-db"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "report-rpc-reports",
+      "from": "report-rpc",
+      "to": "reports",
+      "relation": "writes",
+      "when": "검사 통과 뒤 스냅샷 insert",
+      "evidence": [
+        "report-sql"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    }
+  ],
+  "flow": [
+    {
+      "node": "edit",
+      "when": "프로필 제출",
+      "result": "profiles 저장 후 별도 Auth 이메일 갱신을 시도한다."
+    },
+    {
+      "node": "password",
+      "when": "현재/새 비밀번호 제출",
+      "result": "서버가 현재 hash와 실패 횟수를 확인한다."
+    },
+    {
+      "node": "delete",
+      "when": "탈퇴 확인",
+      "result": "DB가 탈퇴 처리한 다음 로컬 세션을 종료한다."
+    },
+    {
+      "node": "report",
+      "when": "선택 매장 신고",
+      "result": "대상 조회 후 검증한 payload를 RPC에 전달한다."
+    },
+    {
+      "node": "reports",
+      "when": "신고 RPC 성공",
+      "result": "운영자 처리를 위한 스냅샷 행이 남는다."
+    }
+  ],
+  "transitions": [
+    {
+      "from": "profile-written",
+      "to": "email-pending",
+      "when": "Auth updateUser가 확인 대기 반환",
+      "evidence": [
+        "profile-store"
+      ]
+    },
+    {
+      "from": "active",
+      "to": "deleted-access-blocked",
+      "when": "delete_my_account 성공 뒤 restrictive/REST 경계 적용",
+      "evidence": [
+        "delete-sql",
+        "restrict"
+      ]
+    },
+    {
+      "from": "report-draft",
+      "to": "report-received",
+      "when": "RPC가 오류 없이 반환",
+      "evidence": [
+        "report"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "file": "scripts/qa-account-ui.mjs",
+      "command": "node scripts/qa-account-ui.mjs",
+      "scope": "계정 변경/탈퇴 안내의 순수 함수와 소스 계약 검사. 실제 Auth/DB 동작 아님.",
+      "execution": "not-run",
+      "requires": "Node 타입 스트립 및 앱 의존성. fetch 대역. 미실행."
+    },
+    {
+      "file": "scripts/qa-report-form.mjs",
+      "command": "node scripts/qa-report-form.mjs",
+      "scope": "신고 폼 prepareReport와 오류 문구 순수 검사. 실제 제출 권한/운영 처리 검증 아님.",
+      "execution": "not-run",
+      "requires": "Node 타입 스트립 지원. 네트워크 없는 검사. 미실행."
+    }
+  ],
+  "desired": {
+    "status": "unconfirmed",
+    "decisionsNeeded": [
+      "현재 코드는 확정 요구사항의 근거가 아니다. 이 기능의 변경 목표와 허용할 동작 차이는 제품 정본 및 사용자 결정과 대조해야 한다."
+    ]
+  }
+}
