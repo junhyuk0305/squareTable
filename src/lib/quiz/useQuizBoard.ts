@@ -23,7 +23,7 @@ import { useHubStore } from '@/lib/store/useHubStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { getSectionMeta } from '@/lib/utils/category';
 import type { HeatCell, HeatGroup, HeatLevel } from '@/components/blocks/Heatmap';
-import { cycleLabel } from '@/lib/quiz/schedule';
+import { cycleLabel, linkLastDayLabel } from '@/lib/quiz/schedule';
 import { itemsOfCourse } from '@/lib/quiz/courseItems';
 import { latestQuizAssignments } from '@/lib/quiz/courseStats';
 import type { QuizAssignment, QuizItem, TrainingCourse } from '@/lib/quiz/types';
@@ -402,8 +402,7 @@ export function useQuizBoard() {
       } else if (status === 'link_open') {
         // 링크만 열린 퀴즈의 일정 = 열린 링크 중 가장 늦은 만료일(한국 날짜).
         const until = Math.max(...courseLinks.filter((l) => !l.revokedAt && Date.parse(l.expiresAt) > now).map((l) => Date.parse(l.expiresAt)));
-        const kst = new Date(until + 9 * 3600_000);
-        caption = `${kst.getUTCMonth() + 1}월 ${kst.getUTCDate()}일까지 링크`;
+        caption = `${linkLastDayLabel(new Date(until).toISOString())}까지 링크`;
       } else if (status === 'scheduled') {
         caption = `${dayLabel(c.start_at)}에 보내요`;
       } else {

@@ -52,13 +52,14 @@ import { Radius } from '@/lib/theme/elevation';
 import { Space, screenScrollStyle } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
-import { ButtonStyles, ButtonTextStyles, hitTrim } from '@/lib/theme/button';
+import { ButtonStyles, ButtonTextStyles, TouchSize, hitTrim } from '@/lib/theme/button';
 import { EmptyStyles } from '@/lib/theme/empty';
 
 /** 알림으로 들어온 요청 카드로 스크롤하기 전 등장 애니메이션이 가라앉는 시간(NoticePanel · TodoScreen 과 같다). */
 const FOCUS_SETTLE_MS = 520;
 /** '되돌리기' 알약의 보이는 높이. 누르는 상자(44)는 바깥 Pressable 이 든다. */
 const EXC_BTN_H = 34;
+const TODAY_LINE = 18;
 
 export default function OwnerScheduleScreen() {
   const router = useRouter();
@@ -273,7 +274,7 @@ export default function OwnerScheduleScreen() {
             <View style={styles.weekNavCenter}>
               <Text style={styles.weekRange}>{fmtWeekRange(monday)}</Text>
               {selected !== today && (
-                <Pressable onPress={() => setSelected(today)} hitSlop={6} accessibilityRole="button">
+                <Pressable onPress={() => setSelected(today)} accessibilityRole="button" style={styles.todayHit}>
                   <Text style={styles.todayText}>오늘로</Text>
                 </Pressable>
               )}
@@ -592,9 +593,12 @@ const styles = StyleSheet.create({
   // 주 이동 = 흰 원 버튼(ButtonStyles.iconCircle · 2026-11-02 결정). 누르는 상자 48(RN-web 은 hitSlop 을 무시한다).
   navBtn: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   navCircle: { ...ButtonStyles.iconCircle },
-  weekNavCenter: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+  // 높이 44 = "오늘로" 누르는 상자가 부모 안에 든다(Android 는 부모 밖 터치를 안 받는다). 줄 높이는 navBtn 48 이 정한다.
+  weekNavCenter: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: TouchSize.inline },
   weekRange: { ...Type.body, lineHeight: 21, fontWeight: '800' },
-  todayText: { ...Type.tag, fontWeight: '800', color: BrandColors.warnText },
+  todayText: { ...Type.tag, lineHeight: TODAY_LINE, fontWeight: '800', color: BrandColors.warnText },
+  // 글자 링크 = 누르는 44(2026-11-02 요소별 누르는 영역). RN-web 은 hitSlop 을 무시해 상자로 키운다(2026-11-03 QA F3).
+  todayHit: { ...ButtonStyles.inlineHit, minWidth: TouchSize.inline, alignItems: 'center', marginVertical: hitTrim(TODAY_LINE) },
 
   // 하루 타임라인
   total: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },

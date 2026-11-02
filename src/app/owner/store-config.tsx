@@ -324,8 +324,9 @@ const styles = StyleSheet.create({
   warn: { ...Type.body, color: BrandColors.badText, fontWeight: '700', textAlign: 'center' },
 
   dows: { flexDirection: 'row', justifyContent: 'space-between' },
-  // 요일 원 = 보이는 38 그대로 · 누르는 40×40(2026-11-02 사용자 결정 · 칩·요일 원). 7개가 한 줄에 서야 해서 44 대신 40.
-  dowHit: { width: TouchSize.chip, height: TouchSize.chip, alignItems: 'center', justifyContent: 'center' },
+  // 요일 원 = 보이는 38 그대로 · 누르는 높이 40(2026-11-02 사용자 결정 · 칩·요일 원). 7개가 한 줄에 서야 해서 44 대신 40.
+  // 너비는 한 칸(1/7) 전체 — 원 사이를 눌러도 가까운 요일이 켜진다(2026-11-03 QA F2).
+  dowHit: { flex: 1, height: TouchSize.chip, alignItems: 'center', justifyContent: 'center' },
   dow: { width: 38, height: 38, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, alignItems: 'center', justifyContent: 'center' },
   dowOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   dowSun: { backgroundColor: BrandColors.badSolid, borderColor: BrandColors.bad },

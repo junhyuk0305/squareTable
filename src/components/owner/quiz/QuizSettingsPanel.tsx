@@ -367,7 +367,8 @@ const s = StyleSheet.create({
   // '다시 확인' 주기 선택도 받는 사람 선택과 같은 노랑(2026-11-02 사용자 결정). kit 의 qst.chipOn(검정)은 본사도 써서 여기서만 덮는다.
   cycleOn: { backgroundColor: BrandColors.yellow, borderColor: BrandColors.yellow },
   cycleTextOn: { color: InkColors.ink },
-  personLocked: { backgroundColor: InkColors.bgSoft },
+  // 이미 받은 사람 = 회색 면 + 기본 선. personOn 의 노랑 선이 남지 않게 선 색도 덮는다(2026-11-03 QA F1).
+  personLocked: { backgroundColor: InkColors.bgSoft, borderColor: InkColors.line },
   check: {
     width: 22, height: 22, borderRadius: Radius.sm, borderWidth: 1.5, borderColor: InkColors.line,
     alignItems: 'center', justifyContent: 'center', backgroundColor: InkColors.paper,

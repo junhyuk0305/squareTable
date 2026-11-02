@@ -32,7 +32,7 @@ import {
 } from '@/lib/db';
 import { maskTail4, scoreText, takenDayLabel } from '@/lib/quiz/guestResult';
 import { guestSubmissionsLabel } from '@/lib/quiz/metrics';
-import { addDaysKst as addDays, dayLabelKst } from '@/lib/quiz/schedule';
+import { addDaysKst as addDays, linkLastDayLabel } from '@/lib/quiz/schedule';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { genId } from '@/lib/utils/id';
@@ -74,11 +74,7 @@ function endOfDayIso(day: string): string {
   return new Date(`${addDays(day, 1)}T00:00:00+09:00`).toISOString();
 }
 
-function shortDate(iso: string): string {
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return '';
-  return dayLabelKst(kstDay(t - 1));
-}
+const shortDate = linkLastDayLabel;
 
 /** 달력 시트가 무엇을 하는 중인가 — 새로 만드는 중이거나, 열려 있는 링크의 기간을 미는 중이거나. */
 type DayPick = { mode: 'create' } | { mode: 'extend'; link: QuizLinkRow };

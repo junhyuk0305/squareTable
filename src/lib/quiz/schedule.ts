@@ -201,7 +201,18 @@ export function dayLabelKst(ymd: string | null | undefined): string {
 }
 
 /**
- * 재확인 주기 라벨 — 사장이 직접 정한 값(due_days)만 말한다. 맡긴 경우는 날짜를 주장하지 않는다(null).
+ * 링크 만료 시각 → 마지막으로 열린 한국 날짜("11월 10일"). 만료는 고른 날의 끝(다음 날 0시)이라 1ms 앞을 읽는다.
+ * 퀴즈 목록(useQuizBoard)과 상세(QuizDeployPanel)가 같은 값을 써야 하루 어긋나지 않는다(2026-11-03 QA F4).
+ */
+export function linkLastDayLabel(expiresAt: string): string {
+  const t = Date.parse(expiresAt);
+  if (!Number.isFinite(t)) return '';
+  const d = new Date(t - 1 + 9 * 3600_000);
+  return `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`;
+}
+
+/**
+ * 재확인 주기 라벨 —사장이 직접 정한 값(due_days)만 말한다. 맡긴 경우는 날짜를 주장하지 않는다(null).
  * 퀴즈 목록(useQuizBoard)과 상세 기본정보가 같은 값을 써야 화면끼리 어긋나지 않는다.
  */
 export function cycleLabel(dueDays: number | null | undefined): string | null {
