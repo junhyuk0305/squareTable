@@ -1,7 +1,8 @@
 import { StyleSheet, Platform } from 'react-native';
-import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { BrandColors, InkColors, TextColor } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { Gap, Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 import { COMPOSER_BAR_H } from '@/components/ChatComposerBar';
 
 /** '물어보기'(JuniorAsk) 챗 UI 스타일. */
@@ -42,19 +43,21 @@ export const styles = StyleSheet.create({
   },
   emptySub: {
     fontSize: 14,
-    color: InkColors.ink3,
+    color: TextColor.secondary, // 읽는 회색(2026-11-02) — ink3 는 아이콘·비활성·placeholder 에만
     lineHeight: 20,
     marginBottom: 8,
   },
   // 근거 한 줄 — 추천 칩이 어디서 나왔는지("우리 매장 노하우 n개")를 칩 바로 위에 붙인다.
   // 본문 하한 15sp 를 지킨다: 이 문장은 장식이 아니라 답변의 출처 고지다.
+  // 뒤따르는 보충 문장은 설명(Type.desc) 한 줄로 내린다 — 본문 15 두 줄 연속 금지(2026-11-02).
+  grounding: { gap: Gap.inline, marginBottom: 2 },
   groundingText: {
     fontSize: 15,
     lineHeight: 21,
     fontWeight: '700',
     color: InkColors.ink2,
-    marginBottom: 2,
   },
+  groundingNote: Type.desc,
   suggestList: { gap: 10 },
   suggest: {
     flexDirection: 'row',
@@ -138,5 +141,5 @@ export const styles = StyleSheet.create({
   mi: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 11, borderRadius: Radius.sm },
   miIc: { width: 30, height: 30, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
   miLabel: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
-  miSub: { fontSize: 10.5, color: InkColors.ink3 },
+  miSub: { fontSize: 10.5, color: TextColor.secondary },
 });

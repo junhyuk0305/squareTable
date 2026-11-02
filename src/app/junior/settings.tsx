@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
+import { Screen } from '@/components/Screen';
 import { useRouter } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore, DEFAULT_MEMBER_PREF } from '@/lib/store/useMemberPrefsStore';
@@ -12,11 +12,10 @@ import { notifyAction } from '@/lib/utils/confirm';
 import { storeColor } from '@/lib/utils/storeColor';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
-import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
+import { SettingsSection, SettingsRow, SettingsToggle, SettingsStoreHead } from '@/components/settings/SettingsKit';
 import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
 import { PersonalizeSheet } from '@/components/settings/PersonalizeSheet';
 import { ConfirmModal } from '@/components/ConfirmModal';
-import { RoleTabBar } from '@/components/RoleTabBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 
@@ -94,11 +93,11 @@ export default function StoreSettings() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={[]}>
-      {/* 상단은 직접 그린다 — 왼쪽 정렬 평문 제목은 네이티브 헤더로 못 낸다(ScreenTitleHeader 주석).
+    <>
+      {/* 바탕·스크롤(첫 여백 16 · 좌우 20 · 섹션 사이 20)·탭바는 <Screen> 이 든다(2026-11-02).
+          상단은 직접 그린다 — 왼쪽 정렬 평문 제목은 네이티브 헤더로 못 낸다(ScreenTitleHeader 주석).
           헤더를 끄는 선언은 junior/_layout 에 있다(마운트 뒤에 끄면 한 프레임 깜빡인다). */}
-      <ScreenTitleHeader title="설정" storeLine />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <Screen tabBar="junior" header={<ScreenTitleHeader variant="tab" title="설정" />}>
         {/* 매장 헤더 + '이 매장' 두 행을 한 카드로 합쳤다 — 원래 헤더 카드와 '이 매장' 카드가 따로였고
             그래서 흰 카드 면이 4연속이었다(배치규칙① 위반, 2026-08-06). 매장명이 곧 이 묶음의 제목이라
             '이 매장' 라벨은 없애도 방향을 잃지 않는다. 카드는 SettingsSection(=SettingsKit) 것을 그대로 쓴다. */}
@@ -113,21 +112,13 @@ export default function StoreSettings() {
         ) : (
           <>
         <SettingsSection>
-          {/* 색 점 + 매장명 + (있으면) 내 별칭. 탭하면 개인화 시트.
-              카드 안 첫 행이므로 카드 크롬(배경·보더·라운드)은 SettingsSection이 이고 여기는 여백만 갖는다. */}
-          <Pressable
+          {/* 색 점 + 매장명 + (있으면) 내 별칭. 탭하면 개인화 시트. 사장 설정과 같은 부품(SettingsStoreHead). */}
+          <SettingsStoreHead
+            name={pref.nickname || storeName}
+            sub={pref.nickname ? storeName : '탭해서 내가 보는 매장 이름·색을 바꿔요 (나만 보여요)'}
+            color={color}
             onPress={openPersonalize}
-            style={({ pressed }) => [styles.storeHead, pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-            accessibilityLabel="내가 보는 매장 이름·색 설정"
-          >
-            <View style={[styles.colorDot, { backgroundColor: color }]} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.storeName}>{pref.nickname || storeName}</Text>
-              <Text style={styles.storeSub}>{pref.nickname ? storeName : '탭해서 내가 보는 매장 이름·색을 바꿔요 (나만 보여요)'}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={InkColors.ink3} />
-          </Pressable>
+          />
           {/* 내 이름 = 매장에서 다른 사람에게 보이는 이름(프로필 이름, 전역) — 수정은 프로필 편집에서. */}
           <SettingsRow icon="person-outline" label="내 이름" value={userName || ''} onPress={() => router.push('/account-edit')} />
           {/* 매니저만 — 사장 화면으로 가는 진입은 이 행 하나뿐(허용 목록 = roles.ts MANAGER_OWNER_ROUTES). */}
@@ -164,53 +155,33 @@ export default function StoreSettings() {
           </>
         )}
 
-        {/* 카드 밖 행 — 위 두 카드와 형태를 갈라 흰 카드 연속을 끊는다(배치규칙①).
-            둘 다 '이 매장' 설정이 아니라 화면을 떠나는 동작이라, 카드에서 내려도 위계가 맞다.
+        {/* 화면을 떠나는 두 행 — 사장 설정처럼 카드 안 행으로 둔다(2026-11-02 사용자 결정. 옛 카드 밖 행).
             ★게이트 밖에 둔다 — 원격 값에 기대지 않는 이동 수단이라, 설정이 안 와도 나갈 길은 열려 있어야 한다. */}
-        <Pressable
-          onPress={() => router.push('/account-settings')}
-          style={({ pressed }) => [styles.outRow, pressed && { opacity: 0.6 }]}
-          accessibilityRole="button"
-          accessibilityLabel="전체 계정 설정"
-        >
-          <Ionicons name="settings-outline" size={19} color={InkColors.ink2} style={styles.outIcon} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.outLabel}>전체 계정 설정</Text>
-            <Text style={styles.outHint}>프로필·글자 크기·약관·로그아웃</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={17} color={InkColors.ink3} />
-        </Pressable>
-        {/* 한 번 건너뛴 안내는 이것 말고는 다시 볼 방법이 없다(기기 저장소를 직접 지워야 한다). */}
-        <Pressable
-          onPress={() => {
-            replayGuidesFor('junior');
-            showToast('사용 안내를 다시 켰어요. 각 화면에 들어가면 나와요.');
-          }}
-          style={({ pressed }) => [styles.outRow, pressed && { opacity: 0.6 }]}
-          accessibilityRole="button"
-          accessibilityLabel="사용 안내 다시 보기"
-        >
-          <Ionicons name="help-circle-outline" size={19} color={InkColors.ink2} style={styles.outIcon} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.outLabel}>사용 안내 다시 보기</Text>
-            <Text style={styles.outHint}>화면에 처음 들어갈 때 뜨는 안내를 다시 켜요</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={17} color={InkColors.ink3} />
-        </Pressable>
-        {/* 되돌리기 어려운 동작이라 위 행과 붙지 않게 한 칸 띄운다(오탭 방지). */}
+        <SettingsSection>
+          <SettingsRow first icon="settings-outline" label="전체 계정 설정" hint="프로필·글자 크기·약관·로그아웃" onPress={() => router.push('/account-settings')} />
+          {/* 한 번 건너뛴 안내는 이것 말고는 다시 볼 방법이 없다(기기 저장소를 직접 지워야 한다). */}
+          <SettingsRow
+            icon="help-circle-outline"
+            label="사용 안내 다시 보기"
+            hint="화면에 처음 들어갈 때 뜨는 안내를 다시 켜요"
+            onPress={() => {
+              replayGuidesFor('junior');
+              showToast('사용 안내를 다시 켰어요. 각 화면에 들어가면 나와요.');
+            }}
+          />
+        </SettingsSection>
+        {/* 되돌리기 어려운 동작이라 카드 밖에 따로 둔다(오탭 방지). 위 카드와는 섹션 간격(20)만큼 떨어진다. */}
         <Pressable
           onPress={() => setLeaveModal(true)}
           disabled={busy}
-          style={({ pressed }) => [styles.outRow, styles.outRowGap, pressed && { opacity: 0.6 }]}
+          style={({ pressed }) => [styles.outRow, pressed && { opacity: 0.6 }]}
           accessibilityRole="button"
           accessibilityLabel="매장 나가기"
         >
           <Ionicons name="exit-outline" size={19} color={BrandColors.accent} style={styles.outIcon} />
           <Text style={[styles.outLabel, { color: BrandColors.accentText }]}>매장 나가기</Text>
         </Pressable>
-
-        <View style={{ height: 16 }} />
-      </ScrollView>
+      </Screen>
 
       <PersonalizeSheet
         visible={personalize}
@@ -244,25 +215,13 @@ export default function StoreSettings() {
         onConfirm={onLeaveConfirm}
         onCancel={() => setLeaveModal(false)}
       />
-      <RoleTabBar role="junior" />
-    </SafeAreaView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: 20, paddingTop: 16 },
-
-  // 카드 크롬은 SettingsSection이 갖는다 — 여기는 카드 안 첫 행의 여백만(토큰).
-  storeHead: { flexDirection: 'row', alignItems: 'center', gap: Space.md, padding: Space.lg },
-  colorDot: { width: 20, height: 20, borderRadius: 10 },
-  storeName: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
-  storeSub: { fontSize: 13, color: InkColors.ink3, marginTop: 2 },
-
-  // 카드 밖 행 — 좌우 4는 SectionLabel과 같은 들여쓰기(카드 안 16이 아니다). 최소 높이는 터치 타깃 48dp.
+  // 카드 밖 '매장 나가기' 행 — 좌우 4는 SectionLabel과 같은 들여쓰기(카드 안 16이 아니다). 최소 높이는 터치 타깃 48dp.
   outRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingHorizontal: Space.xs, paddingVertical: Space.md, minHeight: 48 },
-  outRowGap: { marginTop: Space.sm },
   outIcon: { width: 22, textAlign: 'center' },
   outLabel: { fontSize: 15, fontWeight: '600', color: InkColors.ink },
-  outHint: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
 });

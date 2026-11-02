@@ -3,8 +3,8 @@ import { View, Text, Pressable, StyleSheet, type StyleProp, type ViewStyle } fro
 import { Ionicons } from '@expo/vector-icons';
 
 import { InfoDot } from '@/components/InfoDot';
-import { InkColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
+import { InkColors, TextColor } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
 /**
@@ -136,8 +136,9 @@ const styles = StyleSheet.create({
   grid: { gap: Space.sm },
   row: { flexDirection: 'row', gap: Space.sm },
   cell: { flex: 1, minWidth: 0 },
-  card: { ...cardBase, ...Elevation.e1 },
-  // 초안 칸 — 아직 아무 일도 아닌 것이라 떠 보이지 않게(그림자 없음·회색 면).
+  // 카드 = 그림자 없음(2026-11-02 결정).
+  card: cardBase,
+  // 초안 칸 — 아직 아무 일도 아닌 것(회색 면).
   cardDim: { ...cardBase, backgroundColor: InkColors.bgSoft },
   pressed: { opacity: 0.75 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
@@ -154,6 +155,6 @@ const styles = StyleSheet.create({
   spacer: { flex: 1 },
   // 바닥 묶음(부제 + 시각요소) — 값과의 사이가 남는 공간을 다 먹는다.
   bottom: { marginTop: 'auto', paddingTop: Space.xs },
-  sub: { fontSize: 11.5, lineHeight: 16, color: InkColors.ink3 },
+  sub: { fontSize: 11.5, lineHeight: 16, color: TextColor.secondary },
   visual: { paddingTop: Space.sm },
 });

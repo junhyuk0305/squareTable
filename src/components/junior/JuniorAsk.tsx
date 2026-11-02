@@ -24,7 +24,7 @@ import { useChatStore } from '@/lib/store/useChatStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 
-import { InkColors } from '@/lib/theme/colors';
+import { InkColors, TextColor } from '@/lib/theme/colors';
 
 import type { Category } from '@/types';
 
@@ -233,11 +233,15 @@ export function JuniorAsk({ suggestEntry = true, seed, focusId }: { suggestEntry
               <>
                 {/* ★"사장님이 확인한 것만 씁니다"는 사실이 아니었다 — match_playbook은 published 전부를 본다.
                     확인 안 한 것도 답에 쓰이므로 그 수를 그대로 밝히고, 추천 순서만 확인한 것을 앞에 둔다. */}
-                <Text style={styles.groundingText}>
-                  {unreviewedCount > 0
-                    ? `우리 매장 노하우 ${grounded.length}개를 보고 답해요. 그중 ${unreviewedCount}개는 사장님이 아직 확인 안 했어요. 아래 추천은 확인한 것부터 보여드려요.`
-                    : `우리 매장 노하우 ${grounded.length}개를 보고 답해요. 아래 추천은 많이 물어본 것부터 보여드려요.`}
-                </Text>
+                {/* 본문 15 두 줄 연속 금지(2026-11-02 결정) — 출처 고지 한 문장은 본문 15, 나머지는 설명 13/19. 문구는 그대로. */}
+                <View style={styles.grounding}>
+                  <Text style={styles.groundingText}>{`우리 매장 노하우 ${grounded.length}개를 보고 답해요.`}</Text>
+                  <Text style={styles.groundingNote}>
+                    {unreviewedCount > 0
+                      ? `그중 ${unreviewedCount}개는 사장님이 아직 확인 안 했어요. 아래 추천은 확인한 것부터 보여드려요.`
+                      : '아래 추천은 많이 물어본 것부터 보여드려요.'}
+                  </Text>
+                </View>
                 <View style={styles.suggestList}>
                   {emptySuggestions.map((text, i) => (
                     <Appear key={`${i}-${text}`} delay={stagger(i)}>
@@ -266,7 +270,7 @@ export function JuniorAsk({ suggestEntry = true, seed, focusId }: { suggestEntry
             accessibilityRole="button"
             accessibilityLabel="이전 대화 더 보기"
           >
-            <Text style={{ fontSize: 12.5, fontWeight: '700', color: InkColors.ink3 }}>⌃ 이전 대화 더 보기</Text>
+            <Text style={{ fontSize: 12.5, fontWeight: '700', color: TextColor.secondary }}>⌃ 이전 대화 더 보기</Text>
           </Pressable>
         )}
 

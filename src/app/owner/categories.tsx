@@ -1,10 +1,8 @@
-import { View, StyleSheet } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 
-import { RoleTabBar } from '@/components/RoleTabBar';
+import { Screen } from '@/components/Screen';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { OwnerKnowhowBrowse, type KnowhowSegKey } from '@/components/owner/OwnerKnowhowBrowse';
-import { InkColors } from '@/lib/theme/colors';
 
 const SEG_KEYS: KnowhowSegKey[] = ['todo', 'knowhow'];
 // 2026-08-19 에 '안 쓰임' 칸이 '할 일'로 흡수됐다. 옛 딥링크(?seg=unused)는 죽이지 않고 그리로 착지시킨다.
@@ -28,19 +26,17 @@ export default function OwnerCategoriesScreen() {
   const openEntry = (id: string) => router.push({ pathname: '/owner/edit/[id]', params: { id } });
 
   return (
-    <View style={styles.root}>
-      {/* 네이티브 헤더를 끄고 제목을 직접 그린다 — 근거는 ScreenTitleHeader 주석(iOS 는 왼쪽 정렬 평문 제목이 불가). */}
+    // 목록이 자기 스크롤·떠 있는 + 버튼을 가져서 scroll={false} — 바탕·헤더·탭바만 Screen 이 든다.
+    <Screen
+      header={
+        // 네이티브 헤더를 끄고 제목을 직접 그린다 — 근거는 ScreenTitleHeader 주석(iOS 는 왼쪽 정렬 평문 제목이 불가).
+        <ScreenTitleHeader variant="tab" title="노하우" />
+      }
+      tabBar="owner"
+      scroll={false}
+    >
       <Stack.Screen options={{ headerShown: false }} />
-      <ScreenTitleHeader
-        title="노하우"
-      />
-
       <OwnerKnowhowBrowse onSelect={openEntry} initialSegment={initialSegment} />
-      <RoleTabBar role="owner" />
-    </View>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: InkColors.cream },
-});

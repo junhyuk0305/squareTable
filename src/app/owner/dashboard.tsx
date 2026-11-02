@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { NotificationPermissionSheet } from '@/components/NotificationPermissionSheet';
 import { View, Text, Pressable, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -12,6 +11,7 @@ import { CoachmarkTour, type TourStep } from '@/components/CoachmarkTour';
 import { useTourStore } from '@/lib/store/useTourStore';
 
 import { RoleTabBar, goToTab } from '@/components/RoleTabBar';
+import { Screen } from '@/components/Screen';
 import { SectionLabel } from '@/components/SectionLabel';
 import { AlertRow } from '@/components/blocks/AlertRow';
 import { HeroSubNav, type HeroSubNavItem } from '@/components/blocks/HeroSubNav';
@@ -256,7 +256,9 @@ export default function OwnerDashboardScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    // 바탕(Surface.screen)만 Screen 이 깐다. 헤더·스크롤·탭바는 코치마크 영역(containerRef)이 함께 감싸야 해서
+    // Screen 의 header·tabBar 슬롯을 쓰지 않는다. 위 안전 영역은 AppTopBar 가 든다(edges top 을 또 주면 이중).
+    <Screen scroll={false}>
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* 코치마크 오버레이가 덮을 영역(헤더·스크롤·탭바를 함께 감싼다) */}
@@ -347,6 +349,7 @@ export default function OwnerDashboardScreen() {
         {/* 할일이 0건이어도 섹션은 남긴다 — 새 매장은 기본 할일이 없으므로(2026-09-03 시드 제거) 여기서 첫 할일을 등록한다. */}
         <Appear delay={stagger(2)} style={styles.section}>
             <SectionLabel
+              flush
               icon="today-outline"
               title="오늘"
               trailing={
@@ -493,6 +496,6 @@ export default function OwnerDashboardScreen() {
         />
       )}
       </View>
-    </SafeAreaView>
+    </Screen>
   );
 }

@@ -1,9 +1,8 @@
 import { useEffect, useMemo } from 'react';
 import { useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 
-import { RoleTabBar } from '@/components/RoleTabBar';
+import { Screen } from '@/components/Screen';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { KnowhowSegment } from '@/components/KnowhowSegment';
@@ -16,8 +15,6 @@ import { useUnknownQueueStore, answerableQuestions } from '@/lib/store/useUnknow
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useChatStore } from '@/lib/store/useChatStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-
-import { styles } from '@/styles/juniorChatStyles';
 
 /**
  * 노하우 탭(주니어) — KnowhowSegment 컨테이너.
@@ -78,10 +75,10 @@ export default function JuniorChatScreen() {
   const initialSeg = focusUq && !focusTurnId ? 'mine' : 'ask';
 
   return (
-    <SafeAreaView style={styles.safe} edges={[]}>
-      {/* 상단은 직접 그린다 — 왼쪽 정렬 평문 제목은 네이티브 헤더로 못 낸다(ScreenTitleHeader 주석).
-          헤더를 끄는 선언은 junior/_layout 에 있다(마운트 뒤에 끄면 한 프레임 깜빡인다). */}
-      <ScreenTitleHeader title="물어보기" storeLine />
+    // 바탕(Surface.screen · 채팅도 예외 없음)·탭바는 <Screen> 이 든다. 세그먼트·채팅이 자기 스크롤을 가져 scroll={false}.
+    // 상단은 직접 그린다 — 왼쪽 정렬 평문 제목은 네이티브 헤더로 못 낸다(ScreenTitleHeader 주석).
+    // 헤더를 끄는 선언은 junior/_layout 에 있다(마운트 뒤에 끄면 한 프레임 깜빡인다).
+    <Screen scroll={false} tabBar="junior" header={<ScreenTitleHeader variant="tab" title="물어보기" />}>
       {!ready ? (
         <ScreenLoading label="노하우를 불러오고 있어요…" />
       ) : playbookLoadError ? (
@@ -103,7 +100,6 @@ export default function JuniorChatScreen() {
           mineCount={answerableCount}
         />
       )}
-      <RoleTabBar role="junior" />
-    </SafeAreaView>
+    </Screen>
   );
 }

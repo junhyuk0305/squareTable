@@ -15,6 +15,7 @@ import { confirmAction, notifyAction } from '@/lib/utils/confirm';
 import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { Layout } from '@/lib/theme/layout';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { SectionLabel } from '@/components/SectionLabel';
 import { PricingTable } from '@/components/PricingTable';
@@ -302,7 +303,6 @@ export default function AccountSettings() {
         </SettingsSection>
 
         <Text style={styles.foot}>매장의 정석 · 스퀘어테이블</Text>
-        <View style={{ height: 16 }} />
       </ScrollView>
       <TextScaleModal visible={scaleModal} onClose={() => setScaleModal(false)} />
       <ContactModal visible={contactModal} onClose={() => setContactModal(false)} />
@@ -312,8 +312,9 @@ export default function AccountSettings() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: 20, paddingTop: 16 },
-  profile: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, marginBottom: 20 },
+  // 섹션 사이 = Layout.sectionGap(2026-11-02). SettingsKit 섹션이 들던 아래 여백 12 를 없앤 대신 여기서 띈다.
+  scroll: { padding: 20, paddingTop: 16, gap: Layout.sectionGap },
+  profile: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line },
   avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: BrandColors.brandSoft, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 22, fontWeight: '900', color: BrandColors.brand },
   pName: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
@@ -321,7 +322,7 @@ const styles = StyleSheet.create({
   foot: { fontSize: 11, color: InkColors.ink3, textAlign: 'center', marginTop: 6 },
 
   // 구독 및 결제 — SectionLabel(카드 밖) + 요금제 표 + CTA. SettingsSection 간격(marginBottom:18)과 통일.
-  billingSection: { gap: 8, marginBottom: 18 },
+  billingSection: { gap: 8 },
   billingCta: {
     flexDirection: 'row',
     alignItems: 'center',

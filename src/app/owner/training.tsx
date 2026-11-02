@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
-import { RoleTabBar } from '@/components/RoleTabBar';
+import { Screen, SectionStack, Section } from '@/components/Screen';
 import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,9 +40,10 @@ import { RollupRows } from '@/components/blocks/RollupRows';
 import { ProgressPill, type ProgressTone } from '@/components/blocks/ProgressPill';
 import { SheetHead, PrimaryButton, GhostButton } from '@/components/owner/quiz/kit';
 import { useGuideOnce } from '@/lib/store/useGuideStore';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space, HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
+import { Layout, Space, HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
 import { EmptyStyles } from '@/lib/theme/empty';
 
@@ -252,7 +253,9 @@ export default function OwnerTrainingScreen() {
 
   return (
     // 탭 루트(2026-09-13) — 하단 인셋은 RoleTabBar 가, 상단은 ScreenTitleHeader 가 소유한다.
-    <View style={st.safe}>
+    // 바탕·헤더·탭바 = Screen. 목록이 자기 스크롤·떠 있는 + 버튼을 가져서 scroll={false}.
+    // 탭 루트라 뒤로가기가 없다(노하우 탭과 같다).
+    <Screen header={<ScreenTitleHeader variant="tab" title="퀴즈" />} tabBar="owner" scroll={false}>
       <Stack.Screen
         options={{
           title: '퀴즈',
@@ -271,8 +274,6 @@ export default function OwnerTrainingScreen() {
             ) : null,
         }}
       />
-      {/* 탭 루트라 뒤로가기가 없다(노하우 탭과 같다). */}
-      <ScreenTitleHeader title="퀴즈" />
       {/* ★탭은 스크롤 **밖** 맨 위다(2026-09-11, 노하우 탭과 같은 구조) — 스크롤을 내려도
           지금 어느 칸을 보고 있는지가 사라지지 않는다.
           ★퀴즈가 0개여도 그린다(2026-09-13) — 처음 온 사장도 "이 화면은 응시 중/응시 완료 두 칸"이라는
@@ -337,7 +338,7 @@ export default function OwnerTrainingScreen() {
               </Appear>
               <Appear delay={stagger(1)}>
                 <View style={st.group}>
-                  <SectionLabel title="먼저 물어볼 만한 것" hint={`노하우 ${usable}개`} />
+                  <SectionLabel title="먼저 물어볼 만한 것" hint={`노하우 ${usable}개`} flush />
                   <PickRow
                     rows={pickPool.map((e) => ({
                       key: e.id,
@@ -400,11 +401,15 @@ export default function OwnerTrainingScreen() {
                   onPressCell={(id) => router.push(`/owner/edit/${id}` as never)}
                 />
               ) : (
+                // 문장 둘 = 첫 줄 + 설명 한 줄(Type.desc) — 같은 크기 두 줄로 쌓지 않는다(2026-11-02).
                 <View style={st.hero}>
                   <Text style={st.heroEmpty}>
+                    {stats.publishedEntries === 0 ? '문제를 낼 노하우가 없어요.' : '아직 직원이 없어요.'}
+                  </Text>
+                  <Text style={st.heroEmptyDesc}>
                     {stats.publishedEntries === 0
-                      ? '문제를 낼 노하우가 없어요.\n노하우를 적으면 직원이 아는지 확인할 수 있어요.'
-                      : '아직 직원이 없어요.\n직원이 합류하면 누가 어떤 노하우를 아는지 여기서 보여요.'}
+                      ? '노하우를 적으면 직원이 아는지 확인할 수 있어요.'
+                      : '직원이 합류하면 누가 어떤 노하우를 아는지 여기서 보여요.'}
                   </Text>
                 </View>
               )}
@@ -436,6 +441,7 @@ export default function OwnerTrainingScreen() {
               <SectionLabel
                 title={tab === 'running' ? '응시 중인 퀴즈' : '응시 완료'}
                 hint={tab === 'running' ? `${running.length}건` : `${finished.length}건`}
+                flush
               />
               <View style={st.group}>
                 {tab === 'running' ? (
@@ -577,9 +583,10 @@ export default function OwnerTrainingScreen() {
         <BottomSheet visible onClose={() => setFixOpen(false)}>
           <SheetHead title="고칠 퀴즈" onClose={() => setFixOpen(false)} />
           <ScrollView style={st.sheetScroll} showsVerticalScrollIndicator={false}>
+            {/* 두 갈래 사이 = 섹션 간격(SectionStack). SectionLabel 이 스스로 들던 위 여백 12 가 없어져 붙어 버렸다(2026-11-02). */}
+            <SectionStack>
             {fix.staleLive.length > 0 && (
-              <View style={st.group}>
-                <SectionLabel title="옛 정답 나가는 퀴즈" hint={`${fix.staleLive.length}건`} />
+              <Section title="옛 정답 나가는 퀴즈" hint={`${fix.staleLive.length}건`}>
                 <Text style={st.missIntro}>
                   근거가 된 노하우를 고친 뒤 문항을 다시 안 만들었어요. 퀴즈를 열어 새로 만들어 주세요.
                 </Text>
@@ -603,12 +610,11 @@ export default function OwnerTrainingScreen() {
                     </Pressable>
                   ))}
                 </View>
-              </View>
+              </Section>
             )}
 
             {fix.missLive.length > 0 && (
-              <View style={st.group}>
-                <SectionLabel title="높은 오답률" hint={`${fix.missLive.length}건`} />
+              <Section title="높은 오답률" hint={`${fix.missLive.length}건`}>
                 <Text style={st.missIntro}>
                   직원이 못 외운 게 아니라 노하우 글이 헷갈릴 수 있어요. 아래 노하우를 다시 보세요.
                 </Text>
@@ -634,8 +640,9 @@ export default function OwnerTrainingScreen() {
                     </Pressable>
                   ))}
                 </View>
-              </View>
+              </Section>
             )}
+            </SectionStack>
           </ScrollView>
         </BottomSheet>
       )}
@@ -727,8 +734,7 @@ export default function OwnerTrainingScreen() {
         onConfirm={() => void dropDraft()}
         onCancel={() => setDropTarget(null)}
       />
-      <RoleTabBar role="owner" />
-    </View>
+    </Screen>
   );
 }
 
@@ -908,10 +914,10 @@ function GuestRowView({
 }
 
 const st = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.paper },
   body: { flex: 1 },
   // 바닥 여백은 **+ 버튼(56) + 아래 거터(20)** 를 비켜야 한다 — 안 그러면 마지막 줄이 버튼에 가린다.
-  scroll: { padding: Space.gutter, paddingBottom: 56 + Space.gutter * 2, gap: Space.md, flexGrow: 1 },
+  // 블록 사이 = 섹션 간격(Layout.sectionGap 20 · 2026-11-02).
+  scroll: { padding: Space.gutter, paddingBottom: 56 + Space.gutter * 2, gap: Layout.sectionGap, flexGrow: 1 },
 
   // ★hitSlop 은 RN-web 에서 안 먹는다 — 실측 높이가 곧 누를 수 있는 크기다(2026-08-26 실측 29·31dp).
   //   48dp 하한(복잡도 §4)은 상자 크기로 지켜야 한다.
@@ -924,6 +930,7 @@ const st = StyleSheet.create({
   // 히어로 — 카드로 감싸지 않는다(카드는 아래 목록이 갖는다 · 배치규칙⑤ "1~2개는 카드로").
   hero: { paddingTop: Space.lg, paddingBottom: Space.sm },
   heroEmpty: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: InkColors.ink, textAlign: 'center' },
+  heroEmptyDesc: { ...Type.desc, textAlign: 'center' },
   // 주 액션 묶음 — Primary + 보조 링크 + (있으면) 초안 한 줄.
   actions: { gap: Space.sm },
 
@@ -957,7 +964,7 @@ const st = StyleSheet.create({
   rowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   // 정답률 파랑 · 응시 초록 — 같은 뜻의 숫자는 개인 상세 대시보드에서도 같은 색이다.
   statRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, marginTop: 3, flexWrap: 'wrap' },
-  statLabel: { fontSize: 11.5, fontWeight: '700', color: InkColors.ink3 },
+  statLabel: { fontSize: 11.5, fontWeight: '700', color: TextColor.secondary },
   statRate: { fontSize: 14, fontWeight: '900', color: BrandColors.mentionText, marginRight: Space.xs },
   statPeople: { fontSize: 14, fontWeight: '900', color: BrandColors.goodText },
   rowText: { flex: 1, minWidth: 0, gap: 2 },
@@ -965,7 +972,7 @@ const st = StyleSheet.create({
   //   없으면 배지 3개(본사·새 버전·수정됨)일 때 제목이 '…'만 남는다.
   rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0, flexWrap: 'wrap', rowGap: Space.xs },
   rowTitle: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
-  rowSub: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: InkColors.ink3 },
+  rowSub: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: TextColor.secondary },
 
   // 섹션 제목은 카드 밖 — 라벨과 카드를 한 덩어리로 묶는 wrap(제목만 따로 떠 보이지 않게).
   group: { gap: Space.sm },
@@ -977,15 +984,15 @@ const st = StyleSheet.create({
   hcardGuest: { borderStyle: 'dashed' },
 
   loadingWrap: { alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.xl * 2 },
-  loadingText: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },
+  loadingText: { fontSize: 13, fontWeight: '600', color: TextColor.secondary },
   rowSubWarn: { color: BrandColors.warnText },
 
   // 접히는 요약행 — 카드가 아니다(카드로 만들면 목록 카드 옆에서 또 하나의 카드로 읽힌다).
   // ★회색 바탕 위에 맨몸으로 두지 않는다(2026-09-11) — 섹션이 흰 카드로 묶여야 한 덩어리로 읽힌다.
+  // 흰 면 · 선 1px · 모서리 16 · 그림자 없음 · 좌우 16 = CardStyles.rows(2026-11-02).
   foldRow: {
+    ...CardStyles.rows,
     flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48,
-    backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
-    paddingHorizontal: Space.lg, ...Elevation.e1,
   },
   foldText: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
   // 좌우 여백 = 시트 머리말(SheetHead 16)과 같은 lg. 없으면 목록 카드가 시트 양끝에 붙고
@@ -998,7 +1005,8 @@ const st = StyleSheet.create({
   footNote: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, textAlign: 'center' },
   tabEmpty: EmptyStyles.line,
   // 맨 위 탭 — 공용 SegmentTabs 의 margin(16)을 화면 거터(20)에 맞춘다(노하우 탭과 같은 처리).
-  topTabs: { marginHorizontal: Space.gutter, marginTop: Space.md, marginBottom: 0 },
+  // 위 = 헤더 아래 첫 여백(Layout.screenTop 16 · 2026-11-02).
+  topTabs: { marginHorizontal: Space.gutter, marginTop: Layout.screenTop, marginBottom: 0 },
   // 노하우 탭의 + 버튼과 같은 값이다(OwnerKnowhowBrowse.fab) — 자리가 같으면 모양도 같아야 한다.
   fab: {
     position: 'absolute', right: Space.gutter, bottom: Space.gutter,
@@ -1007,7 +1015,8 @@ const st = StyleSheet.create({
     backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep,
     ...Elevation.ey,
   },
-  missIntro: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, marginBottom: Space.md },
+  // 시트 안내 = 설명 단계(Type.desc 13/19) — 문장 둘을 본문 15 로 두 줄 쌓지 않는다(2026-11-02).
+  missIntro: { ...Type.desc, marginBottom: Space.md },
 
   // 행 안의 액션 — 48dp 는 상자 크기로 지킨다(hitSlop 은 RN-web 에서 안 먹는다).
   rowAction: { flexShrink: 0, minHeight: 48, justifyContent: 'center', paddingLeft: Space.md },

@@ -1,16 +1,16 @@
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import { NotificationPermissionSheet } from '@/components/NotificationPermissionSheet';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { RoleTabBar, goToTab } from '@/components/RoleTabBar';
+import { goToTab } from '@/components/RoleTabBar';
+import { Screen, Section } from '@/components/Screen';
+import { Greeting } from '@/components/Greeting';
 import { AppTopBar } from '@/components/AppTopBar';
 import { Appear, stagger } from '@/components/Appear';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { JuniorWelcomeCoach } from '@/components/junior/JuniorWelcomeCoach';
-import { SectionLabel } from '@/components/SectionLabel';
 import { HeroSubNav } from '@/components/blocks/HeroSubNav';
 import { AlertRow } from '@/components/blocks/AlertRow';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -99,15 +99,22 @@ export default function JuniorHomeScreen() {
       : '아직 출근 전이에요';
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* 네이티브 헤더 → 커스텀 상단바(사장 홈과 같은 AppTopBar). 2026-08-08 상단바 통일.
-          네이티브 헤더는 화면 트리 밖이라 ① 두 홈의 구현이 갈라지고 ② 매장 목록을 pill 바로 아래로
-          펼칠 자리가 없었다. 홈은 탭 루트라 뒤로가기가 필요 없으므로 헤더 크롬 자체를 끈다. */}
-      <Stack.Screen options={{ headerShown: false }} />
-      <AppTopBar />
-
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.greet}>{userName}님, 오늘도 화이팅이에요</Text>
+    <>
+    {/* 바탕·첫 여백·섹션 간격·탭바는 <Screen> 이 든다(2026-11-02). 위 안전 영역은 AppTopBar 가 스스로 든다 —
+        옛 SafeAreaView edges={['top']} 를 남기면 네이티브에서 위 여백이 두 배가 된다. */}
+    <Screen
+      tabBar="junior"
+      header={
+        <>
+          {/* 네이티브 헤더 → 커스텀 상단바(사장 홈과 같은 AppTopBar). 2026-08-08 상단바 통일.
+              네이티브 헤더는 화면 트리 밖이라 ① 두 홈의 구현이 갈라지고 ② 매장 목록을 pill 바로 아래로
+              펼칠 자리가 없었다. 홈은 탭 루트라 뒤로가기가 필요 없으므로 헤더 크롬 자체를 끈다. */}
+          <Stack.Screen options={{ headerShown: false }} />
+          <AppTopBar />
+        </>
+      }
+    >
+        <Greeting name={userName} />
 
         {!loaded ? (
           // ★업무·출퇴근·근무표가 **전부** 도착하기 전에는 본문을 마운트하지 않는다.
@@ -136,8 +143,8 @@ export default function JuniorHomeScreen() {
         {forgotCheckout && openRec && <ForgotCheckoutCard record={openRec} />}
 
         {/* 2) 오늘 업무 — 목록 3건 + 전체보기 ›. 체크는 컨트롤이다 — 누르면 진짜 완료된다(업무 탭과 같은 toggleTask). */}
-        <Appear delay={stagger(1)} style={styles.section}>
-          <SectionLabel
+        <Appear delay={stagger(1)}>
+          <Section
             icon="checkbox-outline"
             title="오늘 업무"
             trailing={
@@ -155,7 +162,7 @@ export default function JuniorHomeScreen() {
                 </Pressable>
               ) : undefined
             }
-          />
+          >
           <View style={styles.todoCard}>
             {taskTotal === 0 ? (
               <Text style={styles.todoEmpty}>오늘 할일이 없어요</Text>
@@ -181,6 +188,7 @@ export default function JuniorHomeScreen() {
               ))
             )}
           </View>
+          </Section>
         </Appear>
 
         {/* 3) 안 푼 퀴즈 — 0건이면 AlertRow가 스스로 null을 돌려준다(상시 노출 금지).
@@ -194,14 +202,12 @@ export default function JuniorHomeScreen() {
         ) : null}
           </>
         )}
-      </ScrollView>
-
-      <RoleTabBar role="junior" />
+    </Screen>
 
       {/* 알림 켜기 안내 — 홈 첫 진입 1회(컴포넌트 주석 참고). */}
       <NotificationPermissionSheet />
       {/* 합류 직후 1회 — 물어보기/노하우 등록 인지 코치마크 */}
       <JuniorWelcomeCoach />
-    </SafeAreaView>
+    </>
   );
 }

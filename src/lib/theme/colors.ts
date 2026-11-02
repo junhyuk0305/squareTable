@@ -45,6 +45,32 @@ export const InkColors = {
   scrim:  'rgba(255,255,255,0.61)', // 반투명 흰 배경(날짜 디바이더 칩 등) — 기존 #ffffff9c
 } as const;
 
+/**
+ * 면의 **역할** — `InkColors` 가 "무슨 색인가"라면 `Surface` 는 "어디에 까는가"다(2026-11-02 신설).
+ * cream 하나를 화면 바탕·입력칸·선택 상태·칩 약 33곳이 같이 써서, 바탕만 회색으로 바꿀 수가 없었다.
+ * 화면 바탕은 `screen` 만 읽는다. 이 값을 바꾸면 `<Screen>` 을 쓰는 화면 전부가 같이 바뀐다.
+ * cream 값은 그대로 둔다 — 바탕이 아닌 자리는 아직 cream 을 읽는다.
+ */
+export const Surface = {
+  screen: InkColors.bgSoft, // #F4F5F7 — 탭 화면 바탕(채팅 포함)
+  card: InkColors.bg,
+  header: InkColors.bg,
+  input: InkColors.cream,
+  selected: InkColors.cream,
+} as const;
+
+/**
+ * 회색 글자의 **역할**(2026-11-02 신설). ink3 하나에 글자·아이콘·placeholder·비활성 733줄이 섞여 있어
+ * 값을 바꾸면 아이콘·비활성까지 진해진다. 읽어야 하는 글자(설명·부제·매장명)는 `secondary` 를 쓴다.
+ * ink3 값은 그대로 둔다.
+ */
+export const TextColor = {
+  secondary: InkColors.ink2, // #6b6b6b — 읽는 회색
+  iconMuted: InkColors.ink3,
+  placeholder: InkColors.ink3,
+  disabled: InkColors.ink3,
+} as const;
+
 export const BrandColors = {
   brand:     '#111111',   // 기본 액션(CTA) = 잉크 블랙
   brand2:    '#2a2a2a',   // 그라데이션 보조

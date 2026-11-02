@@ -675,7 +675,7 @@ export default function QuizNewScreen() {
             onlyUncovered ? (
               <EmptyState
                 title="안 물어본 노하우가 없어요"
-                body="적어 둔 노하우는 전부 문제로 냈어요. 그래도 만들려면 노하우를 직접 고르면 돼요."
+                body={'적어 둔 노하우는 전부 문제로 냈어요.\n그래도 만들려면 노하우를 직접 고르면 돼요.'}
                 cta={{ label: '노하우 직접 고르기', onPress: () => router.replace('/owner/quiz-new' as never) }}
               />
             ) : (

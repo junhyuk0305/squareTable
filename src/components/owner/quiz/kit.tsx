@@ -10,6 +10,7 @@ import { useState, type ReactNode } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -266,8 +267,9 @@ export const qst = StyleSheet.create({
   },
   stepValue: { fontSize: 15, fontWeight: '800', color: InkColors.ink, minWidth: 64, textAlign: 'center' },
 
-  cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 15, alignItems: 'center', minHeight: 48, ...Elevation.e1 },
-  ctaText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  // 주 버튼(52 · 모서리 16 · 가로 꽉 · 16/800 · 그림자 없음, 2026-11-02). 색은 그대로.
+  cta: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
+  ctaText: { ...ButtonTextStyles.primary, color: '#FFFFFF' },
 
   ghost: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44,

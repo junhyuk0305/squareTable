@@ -137,7 +137,7 @@ export function BrowseCard({
 export function BrowseList({ entries, onSelect, emptyHint, showCategory = true }: BrowseListProps) {
   if (!entries || entries.length === 0) {
     // 03 카탈로그 search.empty.senior / knowhow.empty 톤(해요체).
-    const hint = emptyHint ?? '찾는 노하우가 없어요. 검색어를 바꾸거나, 새 노하우로 만들어 둘 수 있어요.';
+    const hint = emptyHint ?? '찾는 노하우가 없어요.\n검색어를 바꾸거나, 새 노하우로 만들어 둘 수 있어요.';
     return <EmptyState title="아직 보여줄 노하우가 없어요" body={hint} />;
   }
 

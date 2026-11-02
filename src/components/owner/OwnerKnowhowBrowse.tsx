@@ -35,10 +35,11 @@ import { track } from '@/lib/analytics/track';
 import { UNSECTIONED, sectionOptions } from '@/lib/config/sections';
 import { manualToText } from '@/lib/utils/manualText';
 import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
-import { Space } from '@/lib/theme/layout';
+import { Layout, Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
 import { BadgeStyles } from '@/lib/theme/badge';
 import type { PlaybookEntry } from '@/types';
 
@@ -824,7 +825,8 @@ const styles = StyleSheet.create({
   scroll: { padding: Space.gutter, paddingBottom: FAB_SIZE + Space.gutter * 2, gap: Space.md },
 
   // 세그먼트 — 공용 SegmentTabs 의 margin(16)을 화면 거터(20)에 맞춘다.
-  segTabs: { marginHorizontal: Space.gutter, marginTop: Space.md, marginBottom: 0 },
+  // 위 = 헤더 아래 첫 여백(Layout.screenTop 16 · 2026-11-02).
+  segTabs: { marginHorizontal: Space.gutter, marginTop: Layout.screenTop, marginBottom: 0 },
   // 목록 탭 — 스크롤 본문 안이라 거터는 부모가 갖는다. 라벨과의 간격만 남긴다.
   listTabs: { marginHorizontal: 0, marginTop: 0, marginBottom: 0 },
 
@@ -833,9 +835,9 @@ const styles = StyleSheet.create({
   headBlock: { position: 'relative', zIndex: 20, marginVertical: -Space.xs },
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   // "총 N개 · 탭하면 수정" = 카운트+힌트라 **보조**다(본문 아님).
-  // 15sp였던 건 크기가 틀린 것이지 색이 틀린 게 아니다 — ink3는 보조의 정당한 색이고,
   // 보조는 15sp 하한 대상이 아니다(simplicity-voice §4). 12sp로 내린다. (2026-08-06)
-  subline: { flexShrink: 1, fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
+  // 색은 읽는 회색(TextColor.secondary) — ink3 는 아이콘·비활성에만 남긴다(2026-11-02).
+  subline: { flexShrink: 1, fontSize: 12, color: TextColor.secondary, fontWeight: '600' },
 
   // 노하우 추가 FAB — 세 칸 전부에서 보이는 이 화면의 Primary. 상단 버튼을 대체한다(2026-08-07).
   fab: {
@@ -855,16 +857,14 @@ const styles = StyleSheet.create({
 
   // 템플릿 둘러보기 진입 링크(홈에서 이관)
   // '여러 개 한 번에 추가' — 두 진입을 한 카드 안 2행으로. 카드 1장 = 블록 1개(2026-08-06).
-  growCard: {
-    backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line,
-    borderRadius: Radius.md, ...Elevation.e1,
-  },
+  // 카드 = CardStyles.rows(좌우 16 · 그림자 없음) + 행 위아래 16 → 안쪽 사방 16(2026-11-02).
+  growCard: CardStyles.rows,
   growRow: {
     flexDirection: 'row', alignItems: 'center', gap: Space.sm,
-    paddingVertical: Space.md, paddingHorizontal: Space.md,
+    paddingVertical: Layout.cardPad,
   },
   templateLinkTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  templateLinkSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', marginTop: 1 },
+  templateLinkSub: { fontSize: 12, color: TextColor.secondary, fontWeight: '600', marginTop: 1 },
 
   // 검토 대기(draft) 배너가 계속 쓰는 두 줄.
   bannerTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
@@ -932,7 +932,7 @@ const styles = StyleSheet.create({
 
 
   // 리스트/행
-  list: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
+  list: CardStyles.rows,
   // '더 보기' — 행과 같은 세로 리듬. 누를 수 있는 행이라 최소 터치 타깃 48.
   moreRow: { minHeight: 48, justifyContent: 'center', paddingVertical: 14 },
   moreText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
@@ -941,7 +941,7 @@ const styles = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: Radius.pill },
   rowTitle: { fontSize: 15, fontWeight: '600', color: InkColors.ink },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' },
-  meta: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
+  meta: { fontSize: 12, color: TextColor.secondary, fontWeight: '600' },
   metaRate: { fontSize: 12, color: InkColors.ink2, fontWeight: '700' },
   badgeReview: { ...BadgeStyles.box, backgroundColor: BrandColors.warnSoft },
   badgeReviewText: { ...BadgeStyles.text, color: BrandColors.warnText },

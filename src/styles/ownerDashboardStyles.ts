@@ -1,18 +1,18 @@
 import { StyleSheet } from 'react-native';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
+import { Layout, Space, screenScrollStyle } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 export const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
   // 스크롤 컨테이너는 패딩만 — 섹션 간격(gap)은 단일 자식인 콘텐츠 래퍼(scrollInner)가 갖는다.
   // (contentContainer는 자식이 하나라 gap이 무효 → 래퍼로 일원화해 중복/혼동 제거)
-  // ★위 패딩은 주지 않는다 — 상단바(AppTopBar)가 스크롤 밖에서 자기 아래 여백을 이미 갖는다.
-  // 여기서 또 주면 허브보다 콘텐츠가 20px 더 내려간다.
-  scroll: { paddingHorizontal: Space.gutter, paddingBottom: Space.gutter },
-  scrollInner: { gap: 18 },
+  // 2026-11-02: 헤더 아래 첫 여백 16 · 섹션 사이 20(Layout). 상단바는 높이 83 고정이라 아래 여백을 따로 갖지 않는다.
+  scroll: screenScrollStyle,
+  scrollInner: { gap: Layout.sectionGap },
   // 섹션: [밖 라벨] + [안 카드] 묶음
-  section: { gap: 8 },
+  section: { gap: Space.sm },
 
   // 미검증 우선 배너는 공용 <AlertRow>(블록 X2)로 대체됨(2026-08-05).
 
@@ -64,28 +64,21 @@ export const styles = StyleSheet.create({
   dutyRowDivider: { borderBottomWidth: 1, borderBottomColor: InkColors.line },
   dutyText: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 18, fontWeight: '700', color: InkColors.ink2 },
   // 완료 꼬리표(완료자·시각) — 감시원칙 D1이 드러내라고 정한 값. 역시 보조 표기.
-  taskDoneBy: { flexShrink: 0, fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
-  taskCard: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingHorizontal: Space.lg,
-    ...Elevation.e1,
-  },
-  // 할일 0건 — 첫 할일 등록으로 안내(새 매장은 기본 할일이 없다).
-  taskEmpty: { alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm },
+  taskDoneBy: { flexShrink: 0, fontSize: 12, fontWeight: '700', color: TextColor.secondary },
+  // 행 목록 카드(좌우 16 · 그림자 없음) — 위아래 여백은 각 행이 갖는다.
+  taskCard: CardStyles.rows,
+  // 할일 0건 — 첫 할일 등록으로 안내(새 매장은 기본 할일이 없다). 위아래 = 카드 안쪽 16(행이 없으니 사방 16이 된다).
+  taskEmpty: { alignItems: 'center', gap: Space.sm, paddingVertical: Layout.cardPad },
   taskEmptyText: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: InkColors.ink2, textAlign: 'center' },
+  // 작은 버튼(48 · 알약 · 내용 폭). 가운데 정렬 칸 안이라 alignSelf 만 가운데로 둔다.
   taskEmptyCta: {
+    ...ButtonStyles.small,
+    alignSelf: 'center',
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 6,
     backgroundColor: BrandColors.brand,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: Radius.pill,
   },
-  taskEmptyCtaText: { color: InkColors.bubbleText, fontSize: 14, fontWeight: '800' },
+  taskEmptyCtaText: { ...ButtonTextStyles.small, color: InkColors.bubbleText },
   taskRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingVertical: Space.sm },
   taskRowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   // 제목 한 줄 + 그 아래 담당자 알약. 알약은 문장 시작에 맞춰 왼쪽으로 붙는다.

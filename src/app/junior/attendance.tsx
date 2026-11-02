@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { RoleTabBar } from '@/components/RoleTabBar';
+import { Screen, Section } from '@/components/Screen';
+import { Greeting } from '@/components/Greeting';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
@@ -15,16 +15,21 @@ import { Sparkline } from '@/components/blocks/Sparkline';
 import { StatCard } from '@/components/blocks/StatCardGrid';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { EmptyStyles } from '@/lib/theme/empty';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Gap, Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 import { fmtDuration, hhmm, todayStr, liveMinutes, findOpenRecord, isForgotCheckout, openSinceText } from '@/lib/utils/attendance';
 import { ForgotCheckoutCard } from '@/components/junior/ForgotCheckoutCard';
 import { mondayOf, weekDates as weekDatesOf } from '@/lib/utils/schedule';
 
 /**
- * 출퇴근 패널 — 화면 크롬(SafeAreaView·탭바·헤더) 없이 콘텐츠만.
+ * 출퇴근 패널 — 화면 크롬(바탕·스크롤·탭바·헤더) 없이 콘텐츠만.
  * IA 개편으로 독립 '출퇴근' 탭(JuniorAttendanceRoute)에서 콘텐츠만 담당한다.
+ * 스크롤·첫 여백·섹션 간격은 라우트의 <Screen> 이 든다(2026-11-02). 이 패널은 그 안에 놓인다.
  */
 export function AttendancePanel() {
   const userId = useSessionStore((s) => s.userId);
@@ -85,7 +90,7 @@ export function AttendancePanel() {
   const ready = attendanceLoaded;
 
   return (
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+    <>
       {!ready ? (
         <ScreenLoading label="출퇴근 기록을 불러오고 있어요…" />
       ) : attendanceLoadError ? (
@@ -94,7 +99,7 @@ export function AttendancePanel() {
       ) : (
         <>
       <Appear delay={stagger(0)}>
-        <Text style={styles.hello}>{userName}님, 오늘도 화이팅이에요</Text>
+        <Greeting name={userName} />
       </Appear>
 
       {/* 메인 액션 카드 */}
@@ -176,30 +181,34 @@ export function AttendancePanel() {
             {
               key: 'timesheet',
               icon: 'receipt-outline',
-              label: '내역',
-              hint: monthRecs.length > 0 ? `이번 달 ${monthRecs.length}건` : undefined,
+              // 2026-11-02 사용자 결정 — "근무 내역" + 부제 고정(이번 달 건수 표시 없앰).
+              label: '근무 내역',
+              hint: '월별 출퇴근 기록',
               onPress: () => router.push('/junior/timesheet'),
             },
           ]}
         />
       </Appear>
 
-      {/* 최근 기록 */}
+      {/* 최근 기록 — 섹션 제목은 카드 밖 공용 SectionLabel(16/800). '근무 내역 전체보기'는 위 ActionRow 의
+          '근무 내역' 칸이 가져갔다 — 같은 목적지를 한 화면에 두 번 그리지 않는다. */}
       <Appear delay={stagger(4)}>
-      <View style={styles.recHeader}>
-        <View style={styles.recTitleWrap}>
-          <Text style={styles.sectionTitle}>최근 기록</Text>
+      <Section
+        title="최근 기록"
+        titleAccessory={
           <InfoDot
             title="기록이 틀렸을 때"
             body={'시간이 틀리면 본인이 직접 수정할 수 있어요.\n기록을 눌러 출근·퇴근 시각을 고치면 돼요.\n수정하면 사장님에게 ‘수정됨’으로 표시돼요.'}
           />
-        </View>
-        {/* '내역 전체보기'는 위 ActionRow 의 '내역' 칸이 가져갔다 — 같은 목적지를 한 화면에 두 번 그리지 않는다. */}
-      </View>
-      </Appear>
+        }
+      >
       <Appear delay={stagger(5)} style={styles.list}>
         {recentRecs.length === 0 && (
-          <Text style={styles.empty}>아직 출근 기록이 없어요.{'\n'}위 출근하기 버튼을 누르면 첫 기록이 남아요.</Text>
+          // 본문 15 두 줄 연속 금지(2026-11-02) — 첫 문장은 본문, 둘째 문장은 설명 13/19. 문구는 그대로.
+          <View style={styles.emptyWrap}>
+            <Text style={EmptyStyles.text}>아직 출근 기록이 없어요.</Text>
+            <Text style={styles.emptyDesc}>위 출근하기 버튼을 누르면 첫 기록이 남아요.</Text>
+          </View>
         )}
         {recentRecs.slice(0, 5).map((r) => (
           <Pressable key={r.id} onPress={() => router.push('/junior/timesheet')} style={({ pressed }) => [styles.recRow, pressed && { opacity: 0.6 }]}>
@@ -212,33 +221,30 @@ export function AttendancePanel() {
           </Pressable>
         ))}
       </Appear>
-      <View style={{ height: 8 }} />
+      </Section>
+      </Appear>
         </>
       )}
-    </ScrollView>
+    </>
   );
 }
 
 /** 출퇴근 탭 — IA 개편으로 '업무' 탭에서 분리된 독립 탭. 콘텐츠(AttendancePanel) + 탭바 크롬을 입힌다. */
 export default function JuniorAttendanceRoute() {
   return (
-    <SafeAreaView edges={[]} style={styles.routeSafe}>
-      {/* 상단은 직접 그린다 — 왼쪽 정렬 평문 제목은 네이티브 헤더로 못 낸다(ScreenTitleHeader 주석).
-          헤더를 끄는 선언은 junior/_layout 에 있다(마운트 뒤에 끄면 한 프레임 깜빡인다). */}
-      <ScreenTitleHeader title="출퇴근" storeLine />
+    // 바탕·스크롤(첫 여백 16 · 좌우 20 · 섹션 사이 20)·탭바는 <Screen> 이 든다(2026-11-02).
+    // 상단은 직접 그린다 — 왼쪽 정렬 평문 제목은 네이티브 헤더로 못 낸다(ScreenTitleHeader 주석).
+    // 헤더를 끄는 선언은 junior/_layout 에 있다(마운트 뒤에 끄면 한 프레임 깜빡인다).
+    <Screen tabBar="junior" header={<ScreenTitleHeader variant="tab" title="출퇴근" />}>
       <AttendancePanel />
-      <RoleTabBar role="junior" />
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  routeSafe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: 20, gap: 16 },
-  hello: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
-
+  // 출근 카드 — 모서리 20·안쪽 24 는 미정이라 그대로 둔다(2026-11-02 결정표 '아직 안 정한 것').
   mainCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Surface.card,
     borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: InkColors.line,
@@ -248,26 +254,19 @@ const styles = StyleSheet.create({
   },
   workingTag: { fontSize: 13, fontWeight: '800', color: BrandColors.accentText },
   bigTime: { fontSize: 40, fontWeight: '900', color: InkColors.ink, letterSpacing: -1 },
-  bigSub: { fontSize: 14, color: InkColors.ink3, fontWeight: '600', marginBottom: 14 },
-  btn: { width: '100%', paddingVertical: 17, borderRadius: Radius.md, alignItems: 'center' },
+  bigSub: { fontSize: 14, color: TextColor.secondary, fontWeight: '600', marginBottom: 14 },
+  // 주 버튼 = ButtonStyles.primary(높이 52·모서리 16·가로 꽉) — 출근 카드 자체의 모서리 20 과 별개다.
+  btn: ButtonStyles.primary,
   btnIn: { backgroundColor: BrandColors.brand },
   btnOut: { backgroundColor: BrandColors.accentSolid },
-  btnText: { fontSize: 17, fontWeight: '800', color: '#FFFFFF' },
+  btnText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 
   // 이번 달 합계는 공용 <MiniStats>(I3)로 대체됨 — 로컬 statCard·wageNote 폐기(2026-08-06).
 
-
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: InkColors.ink2 },
-  recHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
-  recTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  list: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingHorizontal: 14,
-  },
-  empty: EmptyStyles.line,
+  // 최근 기록 — 행 목록 카드(CardStyles.rows: 흰 면·선 1px·모서리 16·그림자 없음·좌우 16).
+  list: CardStyles.rows,
+  emptyWrap: { paddingVertical: Space.gutter, gap: Gap.inline },
+  emptyDesc: { ...Type.desc, textAlign: 'center' },
   recRow: {
     flexDirection: 'row',
     alignItems: 'center',

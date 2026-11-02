@@ -1,8 +1,8 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { BrandColors, InkColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
+import { BrandColors, InkColors, TextColor } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
 /** 디스크 치수 — 도형 크기라 간격 토큰 대상이 아니다. 터치 타깃은 칸(item) 전체라 48dp 를 넘긴다. */
@@ -85,7 +85,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: InkColors.line,
     backgroundColor: InkColors.bg,
-    ...Elevation.e1,
   },
   item: { flex: 1, minWidth: 0, minHeight: ITEM_MIN_H, alignItems: 'center', paddingVertical: Space.md, paddingHorizontal: Space.xs },
   divider: { borderLeftWidth: 1, borderLeftColor: InkColors.line },
@@ -100,7 +99,7 @@ const styles = StyleSheet.create({
   discPrimary: { backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep },
   // 라벨·상태 한 줄은 꼬리표(보조)라 본문 15sp 하한 대상이 아니다.
   label: { marginTop: Space.xs + 2, fontSize: 12, lineHeight: 17, fontWeight: '800', color: InkColors.ink },
-  hint: { fontSize: 10.5, lineHeight: 15, color: InkColors.ink3 },
+  hint: { fontSize: 10.5, lineHeight: 15, color: TextColor.secondary },
   pressed: { opacity: 0.7 },
 
   // 벨·허브 카드와 같은 규격(액센트 원형). 흰 숫자 11sp를 얹으므로 면은 500이 아니라 Solid(800).

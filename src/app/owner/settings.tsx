@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Text, StyleSheet, ScrollView } from 'react-native';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
+import { Screen } from '@/components/Screen';
+import { screenScrollStyle } from '@/lib/theme/layout';
 import { Stack, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore, DEFAULT_MEMBER_PREF } from '@/lib/store/useMemberPrefsStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
@@ -16,11 +16,10 @@ import { PLANS } from '@/lib/config/tiers';
 import { storeColor } from '@/lib/utils/storeColor';
 import { notifyAction } from '@/lib/utils/confirm';
 import { InkColors } from '@/lib/theme/colors';
-import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
+import { SettingsSection, SettingsRow, SettingsToggle, SettingsStoreHead } from '@/components/settings/SettingsKit';
 import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
 import { ShellTaskCleanupSheet } from '@/components/owner/quiz/ShellTaskCleanupSheet';
 import { PersonalizeSheet } from '@/components/settings/PersonalizeSheet';
-import { RoleTabBar } from '@/components/RoleTabBar';
 import { InviteBlock } from '@/components/owner/InviteBlock';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
@@ -123,11 +122,16 @@ export default function OwnerSettings() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={[]}>
-      {/* 네이티브 헤더를 끄고 제목을 직접 그린다 — 왼쪽 정렬 평문 제목은 네이티브 헤더로 못 낸다
-          (iOS 는 타이틀이 항상 가운데, headerLeft 로 옮기면 iOS 26 이 버튼처럼 그린다). 근거=ScreenTitleHeader 주석. */}
+    // 바탕·헤더·탭바 = Screen. 스크롤은 직접 둔다(scroll={false}) — 로딩 게이트가 스크롤 자리를 바꾸고,
+    // 시트·모달을 스크롤 밖 형제로 두려면 Screen 의 스크롤 안에 넣을 수 없다.
+    <Screen
+      // 네이티브 헤더를 끄고 제목을 직접 그린다 — 왼쪽 정렬 평문 제목은 네이티브 헤더로 못 낸다
+      // (iOS 는 타이틀이 항상 가운데, headerLeft 로 옮기면 iOS 26 이 버튼처럼 그린다). 근거=ScreenTitleHeader 주석.
+      header={<ScreenTitleHeader variant="tab" title="설정" />}
+      tabBar="owner"
+      scroll={false}
+    >
       <Stack.Screen options={{ headerShown: false }} />
-      <ScreenTitleHeader title="설정" storeLine />
       {/* 설정탭은 의도적으로 등장 애니메이션을 쓰지 않는다 — 자주 드나드는 관리 화면이라
           매번 카드가 떠오르면 번잡함. 카드 등장 모션은 홈·물어보기·출퇴근·업무 등 콘텐츠 탭에만(Appear).
           로딩 게이트는 애니메이션과 별개다 — 스위치가 뒤집히는 것은 번잡함이 아니라 거짓 표시다. */}
@@ -141,23 +145,18 @@ export default function OwnerSettings() {
         <LoadErrorState title="매장 설정을 불러오지 못했어요" onRetry={() => void retryPrefs()} />
       ) : (
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* 매장 헤더 — 색 점 + 매장명 + (있으면) 내 별칭. 탭하면 개인화 시트(직원 매장 설정과 동일). */}
-        <Pressable
-          onPress={openPersonalize}
-          style={({ pressed }) => [styles.storeHead, pressed && { opacity: 0.7 }]}
-          accessibilityRole="button"
-          accessibilityLabel="내가 보는 매장 이름·색 설정"
-        >
-          <View style={[styles.colorDot, { backgroundColor: color }]} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.storeName}>{pref.nickname || storeName || '내 매장'}</Text>
-            <Text style={styles.storeSub}>{pref.nickname ? storeName : '탭해서 내가 보는 매장 이름·색을 바꿔요 (나만 보여요)'}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={InkColors.ink3} />
-        </Pressable>
+        {/* 매장 헤더 — 색 점 + 매장명 + (있으면) 내 별칭. 탭하면 개인화 시트. 직원 설정과 같은 부품(SettingsStoreHead). */}
+        <SettingsSection>
+          <SettingsStoreHead
+            name={pref.nickname || storeName || '내 매장'}
+            sub={pref.nickname ? storeName : '탭해서 내가 보는 매장 이름·색을 바꿔요 (나만 보여요)'}
+            color={color}
+            onPress={openPersonalize}
+          />
+        </SettingsSection>
 
         {/* 가게 초대코드 — 직원 합류용. 상시 확인·전달. */}
-        <InviteBlock code={inviteCode} from="settings" style={styles.inviteGap} />
+        <InviteBlock code={inviteCode} from="settings" />
         {/* 2026-08-19: 코드 카드 아래 '직원 관리 · 합류 승인' 줄을 뺐다 — 바로 아래 '직원·초대코드 관리'와
             같은 화면(/owner/staff)으로 가는 중복 진입점이었다. 진입점은 매장 관리 섹션 한 곳으로 둔다. */}
         <SettingsSection icon="storefront-outline" title="매장 관리">
@@ -252,7 +251,6 @@ export default function OwnerSettings() {
         </SettingsSection>
 
         <Text style={styles.foot}>매장의 정석 · 스퀘어테이블</Text>
-        <View style={{ height: 16 }} />
       </ScrollView>
       )}
       {cleanupOpen && <ShellTaskCleanupSheet tasks={shellTasks} onClose={() => setCleanupOpen(false)} />}
@@ -277,22 +275,13 @@ export default function OwnerSettings() {
           void savePref({ nickname: draftName.trim() ? draftName.trim() : null, color: draftColor });
         }}
       />
-      <RoleTabBar role="owner" />
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: 20, paddingTop: 16 },
-  inviteGap: { marginBottom: 18 },
+  // 첫 여백 16 · 좌우 20 · 블록 사이 20 = Screen 스크롤과 같은 값. 블록마다 들던 아래 여백(20·18)은 gap 으로 옮겼다.
+  scroll: screenScrollStyle,
 
-  // 매장 헤더 — 직원 매장 설정(junior/settings)과 동일 규격
-  storeHead: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, marginBottom: 20 },
-  colorDot: { width: 20, height: 20, borderRadius: 10 },
-  storeName: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
-  storeSub: { fontSize: 13, color: InkColors.ink3, marginTop: 2 },
-
-  // marginBottom = 아래 섹션과의 간격(SettingsKit section 과 같은 18). 2026-08-19에 지운 '직원 관리' 줄이 갖고 있던 간격을 여기로 옮긴 것.
-  foot: { fontSize: 11, color: InkColors.ink3, textAlign: 'center', marginTop: 6 },
+  foot: { fontSize: 11, color: InkColors.ink3, textAlign: 'center' },
 });

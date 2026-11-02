@@ -7,8 +7,8 @@ import { useRouter, useNavigation, type Href } from 'expo-router';
 import { canManage } from '@/lib/utils/roles';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStoreDisplay } from '@/components/StoreHeaderTitle';
-import { InkColors } from '@/lib/theme/colors';
-import { SCREEN_GUTTER, Space } from '@/lib/theme/layout';
+import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
+import { Layout, SCREEN_GUTTER, Space } from '@/lib/theme/layout';
 
 /**
  * 제목 상단바 — **네이티브 헤더를 끄고 화면 안에서 직접 그린다.**
@@ -24,16 +24,23 @@ import { SCREEN_GUTTER, Space } from '@/lib/theme/layout';
  * ★상단 인셋은 **이 컴포넌트가 소유한다**(insets.top). 호출부의 SafeAreaView 에 top 을 또 주면 이중이다 —
  *   대상 화면들은 전부 edges 에 top 이 없는 상태이므로 그대로 두면 된다.
  *
+ * ★variant="tab"(2026-11-02 사용자 결정): 탭 루트 헤더. 높이를 홈 상단바(AppTopBar)와 같은 `Layout.headerH` 로
+ *   고정하고 내용을 세로 가운데 둔다. 매장명 줄은 storeLine 과 무관하게 **항상** 보인다 — 노하우·퀴즈 탭만 빠져 있었다.
+ *   하위 화면(variant 없음)은 높이·모양을 바꾸지 않는다.
+ *
  * 쓰는 법: 화면에서 `<Stack.Screen options={{ headerShown: false }} />` 와 함께 최상단에 놓는다.
  */
 export function ScreenTitleHeader({
   title,
+  variant,
   storeLine = false,
   onBack,
   backFallback,
   right,
 }: {
   title: string;
+  /** 'tab' = 탭 루트 헤더(높이 고정 + 매장명 줄 항상). 없으면 하위 화면 헤더. */
+  variant?: 'tab';
   /** 제목 아래 "어느 매장인가"(색점+매장명)를 함께 보인다 — 탭 루트용(StoreHeaderTitle 과 같은 규칙). */
   storeLine?: boolean;
   /** 뒤로가기 동작을 직접 정할 때. 보통은 `backFallback` 만 주면 된다. */
@@ -72,8 +79,16 @@ export function ScreenTitleHeader({
     router.replace(home);
   };
   const back = onBack ?? (backFallback ? goBack : undefined);
+  const tab = variant === 'tab';
   return (
-    <View style={[styles.bar, { paddingTop: insets.top + Space.sm }]}>
+    <View
+      style={[
+        styles.bar,
+        tab
+          ? [styles.barTab, { paddingTop: insets.top, height: insets.top + Layout.headerH }]
+          : { paddingTop: insets.top + Space.sm },
+      ]}
+    >
       {back && (
         <Pressable
           onPress={back}
@@ -89,7 +104,7 @@ export function ScreenTitleHeader({
         <Text style={styles.title} numberOfLines={1}>
           {title}
         </Text>
-        {storeLine && <StoreLine />}
+        {(tab || storeLine) && <StoreLine />}
       </View>
       {right ? <View style={styles.right}>{right}</View> : null}
     </View>
@@ -120,10 +135,12 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     paddingHorizontal: SCREEN_GUTTER,
     paddingBottom: Space.md,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Surface.header,
     borderBottomWidth: 1,
     borderBottomColor: InkColors.line,
   },
+  // 탭 루트 — 높이는 위에서 고정하고 아래 여백은 두지 않는다(내용은 alignItems center 로 가운데).
+  barTab: { paddingBottom: 0 },
   // 화살표는 거터 안쪽에서 시작한다 — 아이콘 좌우 여백만큼 당겨 제목과 같은 리듬을 만든다.
   // ★48dp 는 **상자 크기**로 지킨다 — RN-web 은 hitSlop 을 무시한다(2026-08-26 확인).
   //   paddingVertical:2 + hitSlop 조합이던 동안 실측 30dp 였다(2026-09-11 퀴즈 UI 실측).
@@ -132,6 +149,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
   storeLine: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, marginTop: 1 },
   dot: { width: 6, height: 6, borderRadius: 3 },
-  storeName: { fontSize: 11.5, fontWeight: '600', color: InkColors.ink3, maxWidth: 220 },
+  storeName: { fontSize: 11.5, fontWeight: '600', color: TextColor.secondary, maxWidth: 220 },
   right: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
 });

@@ -2,8 +2,10 @@
 // 오너·주니어 설정 화면이 같은 룩앤필을 공유하도록 한 곳에 모은다.
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 import { ChachakSwitch } from '@/components/ChachakSwitch';
 import { SectionLabel } from '@/components/SectionLabel';
 
@@ -21,7 +23,7 @@ export function SettingsSection({
 }) {
   return (
     <View style={styles.section}>
-      {title ? <SectionLabel icon={icon} title={title} /> : null}
+      {title ? <SectionLabel icon={icon} title={title} flush /> : null}
       <View style={styles.card}>{children}</View>
     </View>
   );
@@ -68,6 +70,38 @@ export function SettingsRow({
   );
 }
 
+/**
+ * 매장 머리 행 — 색 점 + 매장명 + 부제. SettingsSection 안 첫 행으로 둔다(카드 크롬은 섹션이 든다).
+ * 사장·직원 설정이 각자 그리던 것을 하나로 합쳤다(2026-11-02 사용자 결정 · 사장 쪽 따로 그린 카드 모서리 14 → 16).
+ */
+export function SettingsStoreHead({
+  name,
+  sub,
+  color,
+  onPress,
+}: {
+  name: string;
+  sub: string;
+  color: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.storeHead, pressed && { opacity: 0.7 }]}
+      accessibilityRole="button"
+      accessibilityLabel="내가 보는 매장 이름·색 설정"
+    >
+      <View style={[styles.storeDot, { backgroundColor: color }]} />
+      <View style={styles.rowLabelWrap}>
+        <Text style={styles.storeName}>{name}</Text>
+        <Text style={styles.storeSub}>{sub}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={InkColors.ink3} />
+    </Pressable>
+  );
+}
+
 export function SettingsToggle({
   icon,
   label,
@@ -96,10 +130,11 @@ export function SettingsToggle({
 }
 
 const styles = StyleSheet.create({
-  // 섹션 사이 = 이 12 + SectionLabel 의 위 여백 12 = 24(앱 공통, 2026-09-03). 옛 18은 라벨 여백이 없던 때 값.
-  section: { gap: 8, marginBottom: 12 },
+  // 섹션 사이 여백은 화면이 정한다(`<Screen>` 또는 스크롤 gap = Layout.sectionGap · 2026-11-02).
+  //   옛 아래 여백 12 + SectionLabel 위 12 = 24 였다. 여기 여백을 남기면 Screen 의 gap 20 과 겹쳐 32 가 된다.
+  section: { gap: 8 },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Surface.card,
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
@@ -110,6 +145,11 @@ const styles = StyleSheet.create({
   rowIcon: { width: 22, textAlign: 'center' },
   rowLabelWrap: { flex: 1 },
   rowLabelText: { fontSize: 15, fontWeight: '600', color: InkColors.ink },
-  rowHint: { fontSize: 12, color: InkColors.ink3, marginTop: 2, fontWeight: '400' },
+  // 행 설명 = 읽는 글자라 Type.desc(13/19 · secondary)(2026-11-02 결정표 '설정 행 설명').
+  rowHint: { ...Type.desc, marginTop: 2, fontWeight: '400' },
   rowValue: { fontSize: 14, color: InkColors.ink3, marginRight: 2 },
+  storeHead: { flexDirection: 'row', alignItems: 'center', gap: Space.md, padding: Space.lg },
+  storeDot: { width: 20, height: 20, borderRadius: 10 },
+  storeName: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
+  storeSub: { fontSize: 13, color: TextColor.secondary, marginTop: 2 },
 });

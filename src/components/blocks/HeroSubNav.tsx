@@ -1,6 +1,7 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -138,16 +139,13 @@ const styles = StyleSheet.create({
     color: InkColors.bubbleText,
     opacity: 0.82,
   },
+  // 주 버튼(52 · 모서리 16 · 16/800, 2026-11-02). 어두운 면 위라 노랑 그대로.
   cta: {
+    ...ButtonStyles.primary,
     marginTop: Space.md,
-    paddingVertical: Space.md,
-    borderRadius: Radius.sm,
     backgroundColor: BrandColors.yellow,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
   },
-  ctaText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  ctaText: { ...ButtonTextStyles.primary, color: InkColors.ink },
   pressed: { opacity: 0.75 },
   subnav: {
     flexDirection: 'row',

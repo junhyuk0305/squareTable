@@ -10,6 +10,11 @@ const W = 50;
 const H = 30;
 const PAD = 3;
 const KNOB = H - PAD * 2;
+// ★누르는 영역 48(2026-11-02 사용자 결정). RN-web 은 hitSlop 을 무시하므로 **상자 크기**로 지킨다
+//   (ScreenTitleHeader back 과 같은 방식). 모양(50×30)은 그대로 두고, 늘어난 위아래 9씩은 음수 margin 으로
+//   되돌려 주변 행 높이가 밀리지 않게 한다. 호출부 행(SettingsKit·RoomDrawer)은 위아래 여백이 13~15라 상자가 행 안에 든다.
+const TOUCH = 48;
+const TOUCH_OUT = (TOUCH - H) / 2;
 
 export function ChachakSwitch({
   value,
@@ -36,7 +41,7 @@ export function ChachakSwitch({
       accessibilityRole="switch"
       accessibilityState={{ checked: value }}
       accessibilityLabel={accessibilityLabel}
-      hitSlop={8}
+      style={styles.hit}
     >
       <Animated.View style={[styles.track, { backgroundColor: trackColor }]}>
         <Animated.View style={[styles.knob, { backgroundColor: knobColor, transform: [{ translateX: knobX }] }]} />
@@ -46,6 +51,7 @@ export function ChachakSwitch({
 }
 
 const styles = StyleSheet.create({
+  hit: { minWidth: TOUCH, minHeight: TOUCH, marginVertical: -TOUCH_OUT, justifyContent: 'center' },
   track: {
     width: W,
     height: H,

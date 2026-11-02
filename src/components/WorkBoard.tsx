@@ -45,7 +45,7 @@ import { RoutineScopeSheet } from '@/components/work/RoutineScopeSheet';
 import { WorkSettingsPanel } from '@/components/work/WorkSettingsPanel';
 import { TaskComposerModal } from '@/components/work/TaskComposerModal';
 import { INVITE_FIRST, type Member } from '@/components/work/MentionInput';
-import { InkColors } from '@/lib/theme/colors';
+import { Surface } from '@/lib/theme/colors';
 import { todayStr, tsMs } from '@/lib/utils/attendance';
 import { sortNotices, isNoticeUnreadFor } from '@/lib/utils/notice';
 import { asMemberRole, canManage } from '@/lib/utils/roles';
@@ -1271,5 +1271,5 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 }
 
 const st = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.paper },
+  safe: { flex: 1, backgroundColor: Surface.screen },
 });

@@ -63,6 +63,32 @@ export const Gap = {
 } as const;
 
 /**
+ * 화면 틀 치수 — `<Screen>`·`<Stack>`·탭 헤더가 읽는다(2026-11-02 사용자 결정).
+ * 화면마다 첫 여백(0~24)·섹션 간격(8~24)을 직접 적던 것을 여기 한 곳으로 모은다.
+ *  headerH = 탭 루트 헤더 높이(홈 상단바 기준). 위 안전 영역(insets.top)은 **빼고** 잰 값이다.
+ *  업무 채팅(떠 있는 알약 헤더)은 이 규칙에서 뺀다.
+ */
+export const Layout = {
+  headerH: 83,
+  screenTop: Space.lg, // 16 — 헤더 아래 첫 여백
+  screenX: SCREEN_GUTTER, // 20
+  sectionGap: 20,
+  cardPad: Space.lg, // 16
+  greetGap: Space.sm, // 8 — 인사 문구 ↔ 첫 카드
+} as const;
+
+/**
+ * 화면 스크롤 안 여백 — `<Screen>` 이 쓰고, 스크롤을 직접 두는 화면(scroll={false} · 로딩 게이트·시트가
+ * 스크롤 밖에 있어야 하는 곳)도 contentContainerStyle 에 그대로 넘긴다. 화면이 Layout 값을 다시 적지 않게.
+ */
+export const screenScrollStyle: ViewStyle = {
+  paddingTop: Layout.screenTop,
+  paddingHorizontal: Layout.screenX,
+  paddingBottom: Space.xl,
+  gap: Layout.sectionGap,
+};
+
+/**
  * 프레임 안에서 좌우 거터를 뺀 콘텐츠 최대폭 (= 460 - 20*2 = 420).
  * 풀폭 배너·토스트가 좌우 거터를 가진 wrap 안에서 추가로 거는 안전 캡.
  * 매직넘버(440 등) 대신 이 파생 상수를 쓴다 — FRAME_MAX_WIDTH/거터가 바뀌면 함께 움직인다.

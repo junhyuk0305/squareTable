@@ -153,7 +153,7 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
         />
       );
     }
-    const hint = emptyHint ?? '아직 등록된 노하우가 없어요. 물어보기로 질문하면 사장님이 채워줘요.';
+    const hint = emptyHint ?? '아직 등록된 노하우가 없어요.\n물어보기로 질문하면 사장님이 채워줘요.';
     return <EmptyState title="아직 보여줄 노하우가 없어요" body={hint} />;
   }
 
@@ -226,8 +226,8 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
             showCategory={false}
             emptyHint={
               searching
-                ? '검색어에 맞는 노하우가 없어요. 다른 단어로 검색해 보세요.'
-                : '아직 등록된 노하우가 없어요. 물어보기로 질문하면 사장님이 채워줘요.'
+                ? '검색어에 맞는 노하우가 없어요.\n다른 단어로 검색해 보세요.'
+                : '아직 등록된 노하우가 없어요.\n물어보기로 질문하면 사장님이 채워줘요.'
             }
           />
         ) : (

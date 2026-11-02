@@ -10,17 +10,23 @@
 //
 // 벨은 역할에 따라 세는 축이 다르다(사장=합류·질문·제안·교대·입금 / 직원=공지·배정·내 제안 결과).
 // 호출부가 고르게 하면 두 홈이 또 갈라지므로 여기서 role 로 가른다 — 매니저는 사장 축이다.
+//
+// ★높이·위 안전 영역(2026-11-02 사용자 결정): 높이 = insets.top + `Layout.headerH`(83) 고정, 내용은 세로 가운데.
+//   탭 루트 헤더(ScreenTitleHeader variant="tab")가 같은 값을 읽어 두 헤더 높이가 구조로 같다.
+//   위 안전 영역(insets.top)은 **이 컴포넌트가 든다** — `<Screen>` 은 edges=[] 이다. 호출부가 SafeAreaView top 을 또 주면 이중이다.
 import { View, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { StoreToggle } from '@/components/StoreToggle';
 import { NotificationBell, OwnerNotificationBell } from '@/components/NotificationBell';
 import { AccountAvatarButton } from '@/components/AccountAvatarButton';
 import { Appear } from '@/components/Appear';
-import { InkColors } from '@/lib/theme/colors';
-import { SCREEN_GUTTER, Space } from '@/lib/theme/layout';
+import { Surface } from '@/lib/theme/colors';
+import { Layout, SCREEN_GUTTER, Space } from '@/lib/theme/layout';
 
 export function AppTopBar() {
+  const insets = useSafeAreaInsets();
   const role = useSessionStore((s) => s.role);
   const ownerAxis = role === 'owner' || role === 'manager';
 
@@ -28,7 +34,7 @@ export function AppTopBar() {
     // A11(2026-08-08) — 틀이 먼저, 내용이 나중. 상단바가 화면보다 먼저 앉는다(내용은 각 화면의 Appear).
     // 둘이 동시에 뜨면 화면이 통째로 깜빡인 것처럼 보인다.
     <Appear offsetY={6} duration={340} style={styles.barWrap}>
-      <View style={styles.bar}>
+      <View style={[styles.bar, { paddingTop: insets.top, height: insets.top + Layout.headerH }]}>
         <StoreToggle />
         <View style={styles.right}>
           {ownerAxis ? <OwnerNotificationBell edge={false} /> : <NotificationBell edge={false} />}
@@ -47,12 +53,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SCREEN_GUTTER,
-    // 여백은 허브 상단바(HubTopBar)와 같은 자리다 — 허브에선 화면 scroll 의 padding(gutter)과
-    // gap(lg)이 그 값을 준다. 여기선 상단바가 스크롤 밖이라 **자기가** 들고 있어야 같은 높이에 앉는다.
-    // (매장에 들어갈 때 상단바가 위로 튀어 올라가 보이던 원인 — 08-08 통일 때 여백은 안 맞췄다.)
-    paddingTop: Space.gutter,
-    paddingBottom: Space.lg,
-    backgroundColor: InkColors.cream,
+    // 높이는 위에서 고정한다(insets.top + Layout.headerH). 옛 위 20·아래 16 여백 = 83 이 그 값의 출처다
+    // (내용 47 = 토글 트랙 테두리 2 + 안쪽 8 + 로고 칸 16 + 로고 글자 약 21). 이제 내용 높이가 바뀌어도 83 이다.
+    // 바탕 = 흰 헤더(Surface.header). 화면 바탕(Surface.screen 회색)과 띠로 갈라진다 — 비교 시안 적용 후 그림과 같다.
+    backgroundColor: Surface.header,
   },
   // 간격은 허브 상단바(HubTopBar)와 같게 — 두 층이 같은 리듬을 갖는다.
   right: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
