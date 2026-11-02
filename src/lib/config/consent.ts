@@ -14,10 +14,11 @@ const BASE_ROWS: ConsentRow[] = [
   { key: 'terms', label: '서비스 이용약관', required: true, doc: '/terms' },
   { key: 'privacy_collect', label: '개인정보 수집·이용', required: true, doc: '/legal/collect' },
 ];
-const LABOR_ROW: ConsentRow = { key: 'labor', label: '근로·급여정보 처리', required: true, doc: '/legal/labor' };
+// 라벨은 급여 기능을 빼며 '근로·급여정보 처리'에서 바꿨다(v2.3). 서버 키 'labor' 는 그대로다.
+const LABOR_ROW: ConsentRow = { key: 'labor', label: '근로정보 처리', required: true, doc: '/legal/labor' };
 const MARKETING_ROW: ConsentRow = { key: 'marketing', label: '마케팅·광고성 정보 수신(문자·이메일)', required: false, doc: '/legal/marketing' };
 
-/** 역할별 동의 행. 직원은 근로·급여정보 처리가 더 붙는다. 마지막 마케팅 행만 선택이다. */
+/** 역할별 동의 행. 직원은 근로정보 처리가 더 붙는다. 마지막 마케팅 행만 선택이다. */
 export function consentRows(role: 'owner' | 'junior'): ConsentRow[] {
   return role === 'owner' ? [...BASE_ROWS, MARKETING_ROW] : [...BASE_ROWS, LABOR_ROW, MARKETING_ROW];
 }

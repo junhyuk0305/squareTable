@@ -187,8 +187,6 @@
 .push svg{flex:0 0 auto;color:var(--yellow);margin-top:1px}
 .bar2{height:5px;border-radius:99px;background:var(--line);overflow:hidden}
 .bar2 i{display:block;height:100%;background:var(--yellowDeep);border-radius:99px}
-.tot{display:flex;align-items:center;justify-content:space-between;background:var(--ink);color:#fff;border-radius:10px;padding:9px 10px;font-size:10.5px;font-weight:800}
-.tot b{font-weight:900;color:var(--yellow);font-variant-numeric:tabular-nums;font-size:12px}
 .big{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;text-align:center;box-shadow:var(--e1)}
 .big .lb2{font-size:9px;font-weight:800;color:var(--ink3)}
 .big .vl{font-size:19px;font-weight:900;letter-spacing:-.03em;margin-top:2px;font-variant-numeric:tabular-nums}
@@ -248,7 +246,7 @@
       <div class="mega-col">
         <div class="mgt">매장 운영</div>
         <a class="mi" href="/features#chat"><span class="mic"><svg class="ic"><use href="#n-chat"/></svg></span><span class="mtx"><span class="mt">업무 배정과 기록</span><span class="md">체크하면 채팅에 남고 사장님께 알림이 가요</span></span></a>
-        <a class="mi" href="/features#pay"><span class="mic"><svg class="ic"><use href="#n-pay"/></svg></span><span class="mtx"><span class="mt">출퇴근·인건비</span><span class="md">기록이 남고 이번 달 인건비가 자동 집계돼요</span></span></a>
+        <a class="mi" href="/features#pay"><span class="mic"><svg class="ic"><use href="#n-pay"/></svg></span><span class="mtx"><span class="mt">출퇴근 기록</span><span class="md">누른 시각이 그대로 남고 고친 사람도 보여요</span></span></a>
         <a class="mi" href="/features#multi"><span class="mic"><svg class="ic"><use href="#n-multi"/></svg></span><span class="mtx"><span class="mt">여러 매장·매니저</span><span class="md">매장을 한 화면에서 보고 운영은 매니저에게</span></span></a>
       </div>
       <div class="mhi">
@@ -341,9 +339,9 @@
           </div>
         </article>
         <article class="chapter" id="pay">
-          <div class="no">06 · 출퇴근과 급여</div>
-          <h3>출퇴근부터 인건비까지<br>자동으로 계산돼요</h3>
-          <p class="fp">종이에 적고 월말에 계산하면 서로 기억이 달라요.</p>
+          <div class="no">06 · 출퇴근 기록</div>
+          <h3>출퇴근 시각이<br>버튼 한 번에 남아요</h3>
+          <p class="fp">종이에 적어 두면 서로 기억이 달라요.</p>
           <div class="ex">
             <span class="exlb">이런 경우</span>
             <p>"그날 몇 시까지 있었죠?"를 서로 다르게 기억해요.</p>
@@ -473,7 +471,6 @@
   var BTN = function (t, gh) { return '<div class="btn2 din ' + (gh ? 'gh' : '') + '">' + t + '</div>'; };
   var PUSH = function (t) { return '<div class="push din">' + ic('i-bell') + '<span>' + t + '</span></div>'; };
   var BIG = function (l, v) { return '<div class="big din"><div class="lb2">' + l + '</div><div class="vl">' + v + '</div></div>'; };
-  var TOT = function (l, v) { return '<div class="tot din">' + l + '<b>' + v + '</b></div>'; };
   var EMPTY = function (t) { return '<div class="empty">' + t + '</div>'; };
   var BAR = function (w) { return '<div class="bar2 din"><i style="width:' + w + '"></i></div>'; };
 
@@ -532,13 +529,13 @@
       { c: '체크하면 채팅에 남고 사장님께 알림이 가요', o: DPT('마감', 2, 2) + TODO('포스 시재 점검', true, '', '담당 김민재') + PUSH('김민재 · 포스 시재 점검 완료 · 21:12'),
         s: DPT('마감', 2, 2) + TODO('홀 청소', true, '', '루틴') + TODO('포스 시재 점검', true, '', '내 할일') + L('오늘 할 일', '전부 완료', 'g') },
     ] },
-    { el: 'pay', o: { t: '직원·급여', tab: 0 }, s: { who: '직원', t: '출퇴근', tab: 3 }, steps: [
-      { c: '직원이 출근을 눌러요', o: L('김민재', '근무 중', 'y') + L('이수민', '퇴근', '') + TOT('이번 달 인건비', '₩1,057,680'),
+    { el: 'pay', o: { t: '직원', tab: 0 }, s: { who: '직원', t: '출퇴근', tab: 3 }, steps: [
+      { c: '직원이 출근을 눌러요', o: L('김민재', '근무 중', 'y') + L('이수민', '퇴근', ''),
         s: L('김민재님, 오늘도 화이팅이에요', '근무 중', 'y') + BIG('경과 시간', '0:03') + BTN('퇴근하기', true) },
-      { c: '근무 시간이 자동으로 쌓여요', o: L('김민재', '근무 중 · 3:00', 'y') + L('이수민', '퇴근 · 5:00', '') + TOT('이번 달 인건비', '₩1,088,190'),
-        s: L('김민재님, 오늘도 화이팅이에요', '근무 중', 'y') + BIG('경과 시간', '3:00') + BIG('오늘', '₩30,510') },
-      { c: '퇴근하면 이번 달 인건비에 바로 반영돼요', o: L('김민재', '퇴근 · 6:00', 'g') + L('이수민', '퇴근 · 5:00', 'g') + TOT('이번 달 인건비', '₩1,118,700'),
-        s: BIG('이번 달 근무', '112시간') + BIG('예상 급여', '₩1,139,040') + L('시급 10,170원 기준 · 세전', '', '') },
+      { c: '근무 시간이 자동으로 쌓여요', o: L('김민재', '근무 중 · 3:00', 'y') + L('이수민', '퇴근 · 5:00', ''),
+        s: L('김민재님, 오늘도 화이팅이에요', '근무 중', 'y') + BIG('경과 시간', '3:00') + BTN('퇴근하기', true) },
+      { c: '퇴근하면 이번 달 근무 시간에 바로 더해져요', o: L('김민재', '퇴근 · 6:00', 'g') + L('이수민', '퇴근 · 5:00', 'g'),
+        s: BIG('이번 달 근무', '112시간') + L('오늘 근무', '6:00', 'g') },
     ] },
     { el: 'multi', o: { t: '전체 매장', tab: 0 }, s: { who: '매니저', t: '노하우', tab: 1 }, steps: [
       { c: '사장님은 전 매장을 한 화면에서 봐요', o: L('신촌점 · 1호점', '노하우 24', 'g') + L('홍대점 · 새 매장', '노하우 0', '') + K('확인 필요', '홍대점 받은 질문 3건', 'hl'),
@@ -565,7 +562,7 @@
   var pinned = matchMedia('(min-width:1001px)');
 
   /* 오른쪽 이동 레일 — 기능 이름 + 막대. 누르면 그 기능의 첫 단계로 스크롤. */
-  var RAIL_NAMES = ['노하우 AI', '노하우 만들기', '받은 질문', '퀴즈 묶음', '업무 배정', '출퇴근·급여', '다점포·매니저'];
+  var RAIL_NAMES = ['노하우 AI', '노하우 만들기', '받은 질문', '퀴즈 묶음', '업무 배정', '출퇴근 기록', '다점포·매니저'];
   els.rail.innerHTML = CH.map(function (c, k) {
     return '<button type="button" data-i="' + k + '" title="' + RAIL_NAMES[k] + '" aria-label="' + RAIL_NAMES[k] + '으로 이동">' +
       '<span class="lb">' + RAIL_NAMES[k] + '</span><span class="bar"></span></button>';

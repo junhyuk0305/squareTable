@@ -53,7 +53,7 @@ export default function SignupScreen() {
   const [bizNo, setBizNo] = useState('');
   const [industry, setIndustry] = useState('');
 
-  // 동의 항목 — 정본은 consent.ts(J12). 역할별 행은 체크리스트가 그린다(직원은 근로·급여정보 추가).
+  // 동의 항목 — 정본은 consent.ts(J12). 역할별 행은 체크리스트가 그린다(직원은 근로정보 추가).
   const [consent, setConsent] = useState<ConsentChecked>({});
 
   const [busy, setBusy] = useState(false);
