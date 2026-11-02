@@ -58,12 +58,9 @@ function environment(delayedName, failure) {
       if (name === '@/lib/store/knowhowCategories') return { setCustomCategoryRegistry() {} };
       if (name === '@/lib/store/useSyncStore') return { guardWrite: async (p, rollback) => { const r = await p; if (!r) rollback(); return r; } };
       if (name === '@/lib/utils/attendance') return { todayStr: () => '2026-10-23' };
-      if (name === '@/lib/utils/payroll') return { payWindow: () => ({ inputDates: [] }) };
-      if (name === '@/lib/utils/tenure') return { departedPayRows: () => [] };
-      if (name === '@/lib/utils/payPeriod') return { payLabelOf: () => '2026-10' };
       const base = name.split('/').at(-1);
       if (actualNames.includes(base) || ['tenantEpoch', 'tenantReset', 'realtimeSync'].includes(base)) return load('src/' + name.slice(2) + '.ts');
-      if (name.startsWith('@/lib/store/')) return { [base]: dummy, DEFAULT_SETTINGS: {}, resetHubHydrateTtl() {}, resetMemberPrefsHydrateTtl() {} };
+      if (name.startsWith('@/lib/store/')) return { [base]: dummy, resetHubHydrateTtl() {}, resetMemberPrefsHydrateTtl() {} };
       throw new Error('Unexpected dependency: ' + name);
     }
     vm.runInNewContext(js, { module: mod, exports: mod.exports, require: localRequire, Date, console, setTimeout, clearTimeout }, { filename: file });

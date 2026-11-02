@@ -104,7 +104,7 @@ async function main() {
     const reset = extractedFunction('src/lib/store/tenantReset.ts', 'resetUnitData', {
       bumpTenantEpoch: epoch.bumpTenantEpoch, UNIT_STORES: [local],
       toInitial: extractedFunction('src/lib/store/tenantReset.ts', 'toInitial', {}),
-      setCustomCategoryRegistry: () => {}, usePayrollStore: { setState: () => {} }, DEFAULT_SETTINGS: {},
+      setCustomCategoryRegistry: () => {},
     });
     return { store: local, reset, notifications: () => notifications };
   }

@@ -56,7 +56,7 @@ const notice = (a) => (fn(deleteNotice) ? deleteNotice(a) : '(함수 없음)');
 const confirmText = (a) => (fn(deleteConfirmText) ? deleteConfirmText(a) : '(함수 없음)');
 
 const M4 = '계정 정보는 30일 뒤 지워요. 법으로 보관해야 하는 기록(근로·결제)은 정해진 기간만 따로 보관한 뒤 지워요.';
-const STAFF_3Y = '출퇴근·시급 기록은 법에 따라 매장에 3년 보관돼요.';
+const STAFF_3Y = '출퇴근 기록은 법에 따라 매장에 3년 보관돼요.'; // 2026-11-02 급여 기능을 빼며 '시급'을 뺐다
 const OTHER_DEVICE = '이 이용권은 다른 기기에서 샀어요. 산 기기의 스토어에서 해지해 주세요.';
 // ⛔토스 동결(~10-16): 지금 웹 탈퇴 창 문구. 웹에서는 SHOW_IAP=false 라 이용권 문장이 없다.
 const WEB_OWNER = '계정과 매장 데이터(노하우·직원·근무 기록)가 모두 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?';

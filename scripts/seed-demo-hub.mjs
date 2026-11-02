@@ -4,7 +4,7 @@
 // 07-30 라이브된 신규 기능이 전부 데이터 있는 상태로 보이게 채운다:
 //   · 사장 현황 탭: 오늘 스냅샷(근무중/예정) · 확인 필요 4종(합류/받은질문/제안/검증) · 매장 비교 · AI 게이지
 //   · 사장 노하우 탭: 노하우로 만들 것(pending_q) · 검증 필요(needs_review) · 방치(stale 90일+)
-//   · 직원 오늘 탭: 전 매장 근무 카드 · 매장별 오늘 할일(@배정) · 이번달 근무·예상 급여(다매장 합산)
+//   · 직원 오늘 탭: 전 매장 근무 카드 · 매장별 오늘 할일(@배정) · 이번달 근무 시간(다매장 합산)
 //   · 직원 성장 탭: 가르침 실적(제안 승격 resulting_entry_id) · 내가 남긴 것(query_hits) · 해본 업무
 //   · 시작 체크리스트(콜드스타트): 매장 1곳 사장 전용 → 별도 신규 사장(한지현)으로 1/4 상태 재현
 //
@@ -218,6 +218,7 @@ async function main() {
 
   // ══════════════════════════════════════════════════════════
   console.log('4) 신촌 기준 데이터 보강(시급·근무표 — seed-demo 미실행이어도 동작하게 동일 id 업서트)');
+  // 시급 표는 옛 앱(1.1.0 이하)이 쓴다. 2026-11-02 부터 새 앱·웹 화면엔 안 보인다. 표가 남는 동안 옛 앱 확인용으로 넣는다.
   await step('wages', db.from('wages').upsert([
     { unit_id: STORE1, staff_id: JIWON, hourly_wage: 10500 },
     { unit_id: STORE1, staff_id: SUMIN, hourly_wage: 11500 },
@@ -229,12 +230,12 @@ async function main() {
   for (const wd of [3, 4, 5, 6, 0]) shifts.push({ id: `shift_jiwon_${wd}`, unit_id: STORE1, staff_id: JIWON, weekday: wd, start_time: '13:00', end_time: '19:00' });
   for (const wd of [1, 2, 3, 4, 5]) shifts.push({ id: `hub2_shift_s3_${wd}`, unit_id: STORE2, staff_id: STAFF3, weekday: wd, start_time: '07:30', end_time: '14:00' });
   for (const wd of [6, 0]) shifts.push({ id: `hub2_shift_jw_${wd}`, unit_id: STORE2, staff_id: JIWON, weekday: wd, start_time: '13:00', end_time: '19:00' });
-  // 적용 시작일(0242)을 직접 넣는다. 빼면 기본값(오늘)이 들어가 이번달 인건비·예상급여의 지난 날짜가 비어 보인다(데이터 M1).
+  // 적용 시작일(0242)을 직접 넣는다. 빼면 기본값(오늘)이 들어가 이번달 근무표·근무 내역의 지난 날짜가 비어 보인다(데이터 M1).
   for (const sh of shifts) sh.valid_from = '2000-01-01';
   await step('shift_templates(신촌+홍대)', db.from('shift_templates').upsert(shifts));
 
   // ══════════════════════════════════════════════════════════
-  console.log('5) 출퇴근 — 오늘 "근무중"(사장 현황 스냅샷) + 이번달 이력(인건비·예상급여)');
+  console.log('5) 출퇴근 — 오늘 "근무중"(사장 현황 스냅샷) + 이번달 이력(근무 내역)');
   const att = [];
   const mkAtt = (idPrefix, unit, staff, dStr, sh, sm, eh, em) => {
     const ci = ts(dStr, sh, sm);
@@ -640,7 +641,7 @@ async function main() {
      현황 탭: 매장 비교(신촌 vs 홍대) · 오늘 근무중/예정 · 확인 필요(합류1·질문4·제안2·검증2) · AI 게이지(412/37)
      노하우 탭: 노하우로 만들 것(홍대3+신촌1) · 검증 필요 2 · 방치(stale) 3
   ② 박지원(다매장 직원)  ${JIWON_EMAIL}
-     오늘 탭: 신촌+홍대 근무·할일(@홍대 재고 실사 배정) · 이번달 예상 급여(두 매장 합산)
+     오늘 탭: 신촌+홍대 근무·할일(@홍대 재고 실사 배정) · 이번달 근무 시간(두 매장 합산)
      성장 탭: 가르침 실적 1(자몽에이드 승격) · 내가 남긴 것(참조 7회) · 해본 업무 3
   ③ 이수민(단일 직원)    ${SUMIN_EMAIL} — 성장 탭 가르침 1(단체주문) · 오늘 근무중
   ④ 최은우(홍대 전담)    ${STAFF3_EMAIL} — 홍대 오늘 근무중 · 제안 대기 1

@@ -3,7 +3,7 @@
 // 메가프롬프트 완료 정의의 "npm run web으로 눈으로 확인 — 사장 홈 / 노하우 / 퀴즈 / 직원 홈 4화면 최소"를 집행한다.
 // 목업이 아니라 실 백엔드 + 실 세션이다(AGENTS.md ⑥ 라이브 증명).
 //
-//   B1 사장 홈    — HeroSubNav(답을 기다리는 질문 + 퀴즈·직원·급여·근무표 4칸) · AlertRow(확인이 필요한 노하우) · '오늘' 카드(근무 머리줄 + 업무 3건)
+//   B1 사장 홈    — HeroSubNav(답을 기다리는 질문 + 퀴즈·직원·근무표 3칸) · AlertRow(확인이 필요한 노하우) · '오늘' 카드(근무 머리줄 + 업무 3건)
 //   B2 노하우      — AlertRow(상단 미검증) · VerifyBadge(파란 체크)
 //   B3 퀴즈        — ProgressRing(통과한 직원 n/m) · AlertRow(문항 없는 노하우) · 직원별 목록
 //   B4 직원 홈     — 오늘 할 일 히어로가 최상단 · Primary는 히어로 CTA '출근하기' 하나 · 오늘 업무 3건
@@ -358,7 +358,7 @@ async function main() {
     check('B1-4b Primary 채운 버튼 1개 = 히어로 CTA', ownerYellow.length === 1 && ownerYellow[0].includes('답하러'),
       JSON.stringify(ownerYellow));
     // ★2026-08-07: A1 원형 액션 로우(5칸)는 사장 홈에서 삭제됐다. 그 자리는 히어로 바닥에 이어 붙은
-    //   HeroSubNav 4칸(퀴즈·직원·급여·근무표)이다 — 검사 의도는 그대로다:
+    //   HeroSubNav 3칸(퀴즈·직원·근무표 · 2026-11-02 급여 칸 삭제)이다 — 검사 의도는 그대로다:
     //   "바로가기 라벨이 실제 버튼으로, 한 행에 있는가".
     //   see()(부분 문자열)로 세지 않는 이유도 그대로다: '퀴즈'·'직원'은 다른 블록에도 있어서
     //   서브내비를 통째로 지워도 통과한다(2026-08-06 ActionRow에서 겪은 것과 같은 함정).
@@ -377,8 +377,8 @@ async function main() {
         rects.every((r) => Math.abs(r.top - top) <= 4) &&
         rects.every((r, i) => i === 0 || r.left > rects[i - 1].left);
       return { found: btns.length, sameRow };
-    }, ['퀴즈', '직원', '급여', '근무표']);
-    check('B1-5 히어로 서브내비 4칸(한 행 · aria-label 정확일치)', subnavRow.found === 4 && subnavRow.sameRow,
+    }, ['퀴즈', '직원', '근무표']);
+    check('B1-5 히어로 서브내비 3칸(한 행 · aria-label 정확일치)', subnavRow.found === 3 && subnavRow.sameRow,
       JSON.stringify(subnavRow));
     // ★옛 ActionRow가 되돌아오지 않았는지. 판별 라벨은 '업무'·'근무' 둘뿐이다 —
     //   '노하우'는 하단 탭, '퀴즈'·'직원'은 서브내비와 겹쳐 되살아나도 구분이 안 된다.
@@ -683,9 +683,8 @@ async function main() {
       );
 
     for (const [path, name] of [
-      ['/owner/staff', '직원·급여'],
+      ['/owner/staff', '직원'],
       ['/owner/store-config', '매장 정보'],
-      ['/owner/payroll', '급여 설정'],
       ['/junior/settings', '직원 설정'],
       ['/account-edit', '프로필 편집'],
       // 2026-08-06: 섹션 6개(카드 6장·연속 4)를 4개로 합쳐 해체했다. 되돌아오면 여기서 잡힌다.
@@ -728,7 +727,7 @@ async function main() {
       // 재는 대상은 그 세그먼트가 실제로 그리는 면이다.
       [po, '/owner/categories?seg=todo', '노하우 탭 · 할 일'],
       [po, '/hub', '허브 현황'],
-      [po, '/owner/staff', '직원·급여'],
+      [po, '/owner/staff', '직원'],
       [po, '/billing', '결제(다른 작업 소유 — 읽기만)'],
       [pj, '/junior/attendance', '출퇴근'],
       [pj, '/junior/schedule', '근무표'],

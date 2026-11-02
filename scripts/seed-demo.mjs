@@ -101,6 +101,7 @@ async function main() {
 
   // ════════════════════════════════════════════════════════
   console.log('3) 시급(wages)');
+  // 시급 표는 옛 앱(1.1.0 이하)이 쓴다. 2026-11-02 부터 새 앱·웹 화면엔 안 보인다. 표가 남는 동안 옛 앱 확인용으로 넣는다.
   await step('wages', db.from('wages').upsert([
     { unit_id: UNIT, staff_id: JIWON, hourly_wage: 10500 },
     { unit_id: UNIT, staff_id: SUMIN, hourly_wage: 11500 },

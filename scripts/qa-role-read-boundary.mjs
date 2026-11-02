@@ -85,7 +85,9 @@ try {
     { id: `att_m_${s}`, unit_id: S1, staff_id: mId, date: day, work_minutes: 60 },
     { id: `att_j_${s}`, unit_id: S1, staff_id: jId, date: day, work_minutes: 60 },
   ]).select('id');
-  check('setup: 시급·출퇴근 3인분 심기', !we && !ae, we?.message ?? ae?.message ?? '');
+  // 2026-11-02 급여 기능을 앱에서 뺐다. 시급 셋업은 아래 ① 시급 읽기 경계(옛 앱이 계속 쓰는 표)용이라 DB 축소 때 함께 뺀다.
+  check('setup: 출퇴근 3인분 심기', !ae, ae?.message ?? '');
+  check('setup: 시급 3인분 심기(① 시급 읽기 경계용)', !we, we?.message ?? '');
 
   // ── ① 시급 읽기 경계 ─────────────────────────────────────────────────────
   const jW = await J.from('wages').select('staff_id, hourly_wage');

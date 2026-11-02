@@ -12,6 +12,8 @@
 //   [3]~[7] 0246 재직 기간 — 나갈 때는 숨기지 않고(그 달 출퇴근·근무표·시급이 사장에게 보인다) 재직 기간만 닫는다.
 //       다시 들어오면 옛 재직 기간 행에 표시(archived_tenure_id)를 찍어 직원·사장 화면에서 모두 뺀다. 시급은 비운다.
 //       스스로 나가기·다시 열기도 같은 정리 함수(close_member_tenure)를 지난다. 다른 매장 tenure id 는 거부한다.
+//       2026-11-02 급여 기능을 빼며 시급을 "보여 주는" 단언(1-3 · 3-7 · 3-8 마지막 시급 · 5-8~5-10 시급 이력 · 5-12)은 뺐다.
+//       옛 앱이 계속 시급을 쓰므로 시급을 "비우고 숨기고 지우는" 단언(5-1 · 5-5 · 8-8)은 DB 축소 때까지 남긴다(처리방침 v2.3 파기 약속).
 //   [8] 0247 3년 보존 크론(purge_expired_tenures) — dry-run 은 개수만 센다. 실제 실행은 퇴직 3년+1일 지난 것만 지우고
 //       다시 돌리면 0 이다. 처리방침 개정 전까지 6개월 지난 스냅샷 이름·끝4자리를 비운다. 실행마다 retention_purge_log.
 //
@@ -105,7 +107,6 @@ try {
     check('1-1 purge 는 0 을 돌려준다', !r.error && r.data === 0, r.error?.message ?? `rpc=${r.data}`);
     const cnt = async (t, col = 'staff_id') => (await admin.from(t).select('*', { count: 'exact', head: true }).eq('unit_id', UNIT).eq(col, jId)).count;
     check('1-2 ★재입사 직원의 출퇴근 A1·A2 가 그대로 있다', (await cnt('attendance')) === 2, `left=${await cnt('attendance')}`);
-    check('1-3 ★시급이 그대로 있다', (await cnt('wages')) === 1, `left=${await cnt('wages')}`);
     check('1-4 ★근무표가 그대로 있다', (await cnt('shift_templates')) === 1, `left=${await cnt('shift_templates')}`);
     check('1-5 퇴사 스냅샷도 지우지 않는다', (await cnt('former_staff')) === 1, `left=${await cnt('former_staff')}`);
 
@@ -116,9 +117,10 @@ try {
   }
 
   // ═══════ 2. Q4 — 자정을 넘긴 야간 근무자 ═══════
-  console.log('\n[2] Q4 owner_today.working_now = 퇴근 없고 출근이 24시간 안');
+  // 0306 부터 기준이 16시간이다(직원 화면 isForgotCheckout 과 같다). 그래서 출근을 10시간 전으로 둔다.
+  console.log('\n[2] Q4 owner_today.working_now = 퇴근 없고 출근이 16시간 안(0306)');
   {
-    const night = now - 20 * H;   // 어제 날짜로 찍힌 출근, 아직 퇴근 전
+    const night = now - 10 * H;   // 어제 날짜로 찍힌 출근, 아직 퇴근 전
     const stale = now - 30 * H;   // 퇴근을 깜빡한 오래된 기록 — 세면 안 된다
     const { error } = await admin.from('attendance').insert([
       { id: `ret_n1_${s}`, unit_id: UNIT, staff_id: jId, date: kstDate(now - 24 * H), check_in: iso(night), check_out: null, work_minutes: 0 },
@@ -200,7 +202,7 @@ try {
   }
 
   // ═══════ 3. 내보낸 직원의 그 달 기록은 다시 들어오기 전까지 사장에게 보인다 ═══════
-  console.log('\n[3] 0246 remove_staff — 나갈 때는 숨기지 않는다(마지막 급여 정산) · 재직 기간이 닫힌다');
+  console.log('\n[3] 0246 remove_staff — 나갈 때는 숨기지 않는다(그 달 근무 기록) · 재직 기간이 닫힌다');
   {
     const r = await O.rpc('remove_staff', { p_staff_id: K.id });
     check('3-1 remove_staff 성공', !r.error, r.error?.message);
@@ -211,15 +213,13 @@ try {
     const ser = Array.isArray(sh) ? sh.find((x) => x.id === kSeries) : null;
     check('3-4 ★반복 근무는 오늘로 닫힌다(valid_to = 오늘)', ser?.valid_to === today, JSON.stringify(ser));
     const inp = await inputsOf(O);
-    check('3-5 ★owner_labor_inputs_v2 가 나간 직원의 근무를 준다(이번 기간 정산)',
+    check('3-5 ★owner_labor_inputs_v2(옛 앱) 가 나간 직원의 근무를 준다(그 달 근무)',
       (inp.shifts ?? []).filter((x) => x.staff_id === K.id).length === 2, JSON.stringify(inp.error ?? (inp.shifts ?? []).length));
-    check('3-7 사장이 시급을 본다(wages · wage_rates)',
-      len(await rows(O.from('wages').select('staff_id').eq('staff_id', K.id))) === 1 && len(await rows(O.from('wage_rates').select('staff_id').eq('staff_id', K.id))) >= 1);
-    const ten = await rows(admin.from('member_tenures').select('id, left_at, left_reason, role_at_end, name_snapshot, phone_last4, final_hourly_wage').eq('unit_id', UNIT).eq('user_id', K.id));
+    const ten = await rows(admin.from('member_tenures').select('id, left_at, left_reason, role_at_end, name_snapshot, phone_last4').eq('unit_id', UNIT).eq('user_id', K.id));
     const closed = Array.isArray(ten) ? ten.find((x) => x.left_at) : null;
-    check('3-8 ★재직 기간이 닫힌다(removed · 이름 · 끝4자리 · 역할 · 마지막 시급)',
+    check('3-8 ★재직 기간이 닫힌다(removed · 이름 · 끝4자리 · 역할)',
       closed?.left_reason === 'removed' && closed?.name_snapshot === 'QA재입사직원' && closed?.phone_last4 === phones[2].slice(-4)
-        && closed?.role_at_end === 'junior' && closed?.final_hourly_wage === 12000, JSON.stringify(ten));
+        && closed?.role_at_end === 'junior', JSON.stringify(ten));
     check('3-9 ★열린 재직 기간이 없다', Array.isArray(ten) && ten.filter((x) => !x.left_at).length === 0, JSON.stringify(ten));
   }
 
@@ -261,21 +261,16 @@ try {
       && Array.isArray(archT) && archT.length === 2 && archT.every((x) => !!x.archived_tenure_id)
       && len(await rows(admin.from('swap_requests').select('id').eq('id', kSwap).not('archived_tenure_id', 'is', null))) === 1, JSON.stringify([arch, archT]));
     const inp = await inputsOf(O);
-    check('5-8 ★owner_labor_inputs_v2 에 옛 근무·시급 이력이 없다',
-      !inp.error && !(inp.shifts ?? []).some((x) => x.staff_id === K.id) && !(inp.wage_rates ?? []).some((x) => x.staff_id === K.id), JSON.stringify(inp.error ?? ''));
+    check('5-8 ★owner_labor_inputs_v2(옛 앱) 에 옛 근무가 없다',
+      !inp.error && !(inp.shifts ?? []).some((x) => x.staff_id === K.id), JSON.stringify(inp.error ?? ''));
     const { data: cs, error: ce } = await K.c.rpc('my_cross_summary_v2');
     const mine = (cs ?? []).find((x) => x.unit_id === UNIT);
-    check('5-9 ★my_cross_summary_v2: 이번 달 근무 0분 · 근무 0 · 시급 이력 0', !ce && Number(mine?.month_minutes) === 0
-      && (mine?.shifts ?? []).length === 0 && (mine?.wage_rates ?? []).length === 0, ce?.message ?? JSON.stringify(mine));
-    const ten = await rows(admin.from('member_tenures').select('id, left_at, final_hourly_wage').eq('unit_id', UNIT).eq('user_id', K.id));
-    check('5-10 ★재직 기간 2개(닫힌 것 · 열린 것) · 닫힌 기간이 마지막 시급을 갖는다', Array.isArray(ten) && ten.length === 2
-      && ten.filter((x) => !x.left_at).length === 1 && ten.find((x) => x.left_at)?.final_hourly_wage === 12000, JSON.stringify(ten));
+    check('5-9 ★my_cross_summary_v2: 이번 달 근무 0분 · 근무 0', !ce && Number(mine?.month_minutes) === 0
+      && (mine?.shifts ?? []).length === 0, ce?.message ?? JSON.stringify(mine));
+    const ten = await rows(admin.from('member_tenures').select('id, left_at').eq('unit_id', UNIT).eq('user_id', K.id));
+    check('5-10 ★재직 기간 2개(닫힌 것 · 열린 것)', Array.isArray(ten) && ten.length === 2
+      && ten.filter((x) => !x.left_at).length === 1, JSON.stringify(ten));
     check('5-11 ★former_staff 행을 지운다', len(await rows(admin.from('former_staff').select('staff_id').eq('unit_id', UNIT).eq('staff_id', K.id))) === 0);
-    // 새 시급은 옛 이력과 부딪히지 않고 처음부터(옛 앱 경로)
-    const w = await O.from('wages').upsert({ unit_id: UNIT, staff_id: K.id, hourly_wage: 13000 });
-    const wr = await rows(O.from('wage_rates').select('effective_from, hourly_wage').eq('staff_id', K.id));
-    check('5-12 ★재입사 뒤 새 시급 = 이력 1행(13000 · 처음부터)', !w.error && Array.isArray(wr) && wr.length === 1 && wr[0].hourly_wage === 13000,
-      w.error?.message ?? JSON.stringify(wr));
     const ins = await K.c.from('attendance').insert({ id: `ret_kn_${s}`, unit_id: UNIT, staff_id: K.id, date: today, check_in: iso(now - 30 * 60000), work_minutes: 0 });
     check('5-13 새 재직 기간 출근은 그대로 된다', !ins.error && len(await rows(K.c.from('attendance').select('id').eq('staff_id', K.id))) === 1, ins.error?.message);
     const upd = await K.c.from('attendance').update({ archived_tenure_id: ten.find?.((x) => x.left_at)?.id ?? null }).eq('id', `ret_kn_${s}`).select('id');

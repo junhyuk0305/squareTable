@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // qa-shift-requests.mjs — 0243 직원 근무 시간 수정 요청(J2) · 로컬 도커 전용
 //
-// 사용자 결정(J2): 직원이 시간을 고치면 그날 하루만 바뀌고, 사장이 승인한 뒤에 급여에 반영된다.
-// 사용자 결정(§8 Q4): 지난 날짜를 승인하면 그 기간 급여가 바뀐다 → 서버는 p_confirm_past 를 요구한다.
+// 사용자 결정(J2): 직원이 시간을 고치면 그날 하루만 바뀌고, 사장이 승인한 뒤에 근무표에 반영된다.
+// 사용자 결정(§8 Q4): 지난 날짜를 승인하면 그 기간 근무 기록이 바뀐다 → 서버는 p_confirm_past 를 요구한다.
 // 무엇을 못박나:
 //   [1] 옛 앱 경로 update_my_shift_time 은 반복·날짜 지정 모두 false 이고 근무표를 바꾸지 않는다.
 //   [2] request_shift_time: 본인 근무 · 그날 실제로 서는 근무 · 오늘-35일~오늘+60일 · 시각 형식 · 다른 매장 거부.
@@ -145,7 +145,7 @@ try {
       r1.error?.message ?? `rpc=${r1.data} ${a1?.start_time}-${a1?.end_time}`);
     const r2 = await J.c.rpc('update_my_shift_time', { p_id: D1, p_start: '10:00', p_end: '16:00' });
     const d1 = await tpl(D1);
-    check('1-2 ★날짜 지정 근무도 false · 근무표 그대로 · 직원 수정 표시 없음(승인 없이 급여가 바뀌지 않는다)',
+    check('1-2 ★날짜 지정 근무도 false · 근무표 그대로 · 직원 수정 표시 없음(승인 없이 근무표가 바뀌지 않는다)',
       !r2.error && r2.data === false && d1?.start_time === '09:00' && d1?.end_time === '15:00' && d1?.edited_by == null,
       r2.error?.message ?? `rpc=${r2.data} ${JSON.stringify(d1 && { s: d1.start_time, e: d1.end_time, by: d1.edited_by })}`);
   }
