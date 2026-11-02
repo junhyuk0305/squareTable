@@ -21,7 +21,6 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
-import { usePayrollStore, DEFAULT_SETTINGS } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
@@ -49,7 +48,6 @@ const UNIT_STORES: StoreApi<any>[] = [
   useUnknownQueueStore,
   useWorkStore,
   useAttendanceStore,
-  usePayrollStore,
   useStaffStore,
   useScheduleStore,
   useSuggestionStore,
@@ -70,8 +68,6 @@ function resetUnitData() {
   UNIT_STORES.forEach(toInitial);
   // 노하우 커스텀 라벨 레지스트리는 스토어 밖 모듈 값이다(usePlaybookStore.reset 과 같은 이유).
   setCustomCategoryRegistry([]);
-  // 급여 규칙의 초기값은 기기 캐시(이전 매장 규칙)다. DB 에 규칙이 없는 매장에 그대로 남지 않게 기본값으로 둔다.
-  usePayrollStore.setState({ settings: DEFAULT_SETTINGS });
 }
 
 function resetTenantData() {

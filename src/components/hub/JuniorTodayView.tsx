@@ -1,4 +1,4 @@
-// 직원 허브 '오늘' 탭 본문 — 3블록(기획 v2 §04): 오늘 근무 · 오늘 할 일 · 이번달 근무/예상 급여.
+// 직원 허브 '오늘' 탭 본문 — 3블록(기획 v2 §04): 오늘 근무 · 오늘 할 일 · 이번달 근무.
 // 전부 본인 데이터(my_cross_summary 는 본인 행만, 할일은 0077 원시 행 + isPendingAssignment SSOT).
 // 사장 지표는 이 화면에 없다(시장 표준: 직원에게 관리자 위젯 숨김 — When I Work 명문화).
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -9,10 +9,7 @@ import { useHubStore } from '@/lib/store/useHubStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
-import { shiftsOn, scheduledShiftsFor } from '@/lib/store/useScheduleStore';
-import { DEFAULT_SETTINGS } from '@/lib/store/usePayrollStore';
-import { computePay, shiftsToPayRecords, payWindow } from '@/lib/utils/payroll';
-import { payLabelOf } from '@/lib/utils/payPeriod';
+import { shiftsOn } from '@/lib/store/useScheduleStore';
 import { addDays, weekdayOf } from '@/lib/utils/schedule';
 import type { MyCrossSummaryRow } from '@/lib/db';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
@@ -129,28 +126,11 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
       ? `오늘은 근무가 없어요 · 다음 근무 ${WEEKDAYS[nextShift.dow]}요일 ${nextShift.start}`
       : '오늘은 근무가 없어요';
 
-  // ── 3) 이번달 — 근무시간(출퇴근 기록)·예상 급여(근무표 기준 computePay · 매장 출퇴근 화면과 같은 계산) ──
+  // ── 3) 이번달 — 근무시간(출퇴근 기록) ──
   const month = useMemo(() => {
-    // 주휴는 그 주 일요일이 속한 달에 붙인다(Q9) — 급여 입력은 첫 주 월요일부터 편다.
-    const perStore = myCross.map((r) => {
-      const rules = { ...DEFAULT_SETTINGS, ...(r.payroll_settings ?? {}) };
-      // PAY-02: 매장마다 정산 시작일이 다르다 — 오늘이 든 그 매장의 정산 기간으로 센다.
-      const payWin = payWindow(payLabelOf(today, rules.periodStartDay), rules.periodStartDay);
-      const shifts = scheduledShiftsFor(r.shifts.map((s) => ({ ...s, staff_id: meId })), [], r.exceptions ?? [], meId, payWin.inputDates);
-      return {
-        uid: r.unit_id,
-        minutes: r.month_minutes,
-        pay: r.hourly_wage > 0 ? computePay(shiftsToPayRecords(shifts), r.hourly_wage, rules, undefined, payWin).total : 0,
-        hasWage: r.hourly_wage > 0,
-      };
-    });
-    return {
-      perStore,
-      minutes: perStore.reduce((n, s) => n + s.minutes, 0),
-      pay: perStore.reduce((n, s) => n + s.pay, 0),
-      anyWage: perStore.some((s) => s.hasWage),
-    };
-  }, [myCross, meId, today]);
+    const perStore = myCross.map((r) => ({ uid: r.unit_id, minutes: r.month_minutes }));
+    return { perStore, minutes: perStore.reduce((n, s) => n + s.minutes, 0) };
+  }, [myCross]);
   const fmtHours = (min: number) => (min >= 60 ? `${Math.floor(min / 60)}시간` : `${min}분`);
 
   // 전부 도착 전엔 무조건 로딩 — 근무 카드만 먼저 그리고 할일이 나중에 튀어나오는 부분 렌더 금지.
@@ -299,18 +279,6 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
               value: fmtHours(month.minutes),
               sub: myCross.length > 1 ? `매장 ${myCross.length}곳 합계` : '일별 기록은 출퇴근 화면에서 봐요',
             },
-            ...(month.anyWage
-              ? [{
-                  key: 'pay',
-                  label: '예상 급여',
-                  value: `${month.pay.toLocaleString()}원`,
-                  sub: '근무표 기준 · 세전',
-                  info: {
-                    title: '예상 급여가 어떻게 나온 거예요?',
-                    body: '근무표에 잡힌 근무를 시급으로 계산한 세전 예상액이에요.\n출퇴근 기록은 확인용이라 금액에 직접 들어가지 않아요.\n세금·4대보험·수당에 따라 실제 받는 금액과 다를 수 있어요.',
-                  },
-                }]
-              : []),
           ]}
         />
         {myCross.length > 1 && (
@@ -319,10 +287,7 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
               <View key={s.uid} style={styles.storeRow}>
                 <View style={[styles.dot, { backgroundColor: colorOf(s.uid) }]} />
                 <Text style={styles.storeName} numberOfLines={1}>{labelOf(s.uid)}</Text>
-                <Text style={styles.storeMeta}>
-                  {fmtHours(s.minutes)}
-                  {s.hasWage ? ` · ${s.pay.toLocaleString()}원` : ''}
-                </Text>
+                <Text style={styles.storeMeta}>{fmtHours(s.minutes)}</Text>
               </View>
             ))}
           </View>

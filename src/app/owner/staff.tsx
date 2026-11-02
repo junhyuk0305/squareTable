@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
-import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { usePayrollStore, useWagesSettled } from '@/lib/store/usePayrollStore';
-import { useScheduleStore, scheduledShiftsFor } from '@/lib/store/useScheduleStore';
-import { useStaffStore, type PendingMember } from '@/lib/store/useStaffStore';
+import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
@@ -25,13 +23,9 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { EmptyStyles } from '@/lib/theme/empty';
-import { fmtDuration, won, todayStr, liveMinutes, staffWorkStatus, minWageWarning } from '@/lib/utils/attendance';
-import { computePay, shiftsToPayRecords, payWindow } from '@/lib/utils/payroll';
-import { payLabelOf, fmtPeriodRange } from '@/lib/utils/payPeriod';
+import { fmtDuration, todayStr, liveMinutes, staffWorkStatus } from '@/lib/utils/attendance';
 import { showToast } from '@/lib/store/useToastStore';
 import { rotateInviteCode } from '@/lib/db';
-import { departedPayRows, rejoinNotice, workedInPeriod } from '@/lib/utils/tenure';
-import { confirmAction } from '@/lib/utils/confirm';
 import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
 
 // 등장 애니메이션(Appear)이 가라앉은 뒤 재야 행 위치가 맞다(schedule.tsx 와 같은 값).
@@ -60,10 +54,6 @@ export default function OwnerStaffScreen() {
       }, focusDone);
     }, FOCUS_SETTLE_MS);
   }
-  const wages = usePayrollStore((s) => s.wages);
-  const settings = usePayrollStore((s) => s.settings);
-  const settingsFail = usePayrollStore((s) => s.settingsLoadError);
-  const setWage = usePayrollStore((s) => s.setWage);
   const records = useAttendanceStore((s) => s.records);
   const staff = useStaffStore((s) => s.staff);
   const removeStaff = useStaffStore((s) => s.removeStaff);
@@ -74,22 +64,12 @@ export default function OwnerStaffScreen() {
   const reject = useStaffStore((s) => s.reject);
   const roles = useStaffStore((s) => s.roles);
   const setRole = useStaffStore((s) => s.setRole);
-  // 재직 기간(0246) — 사장에게만 온다. 이번 기간 퇴사자 줄과 재입사 경고의 입력.
-  const tenures = useStaffStore((s) => s.tenures);
-  // ★게이트가 staffLoaded 하나였다 — 그래서 히어로 "이번 달 예상 인건비"가 **₩0을 먼저 확정 표시**하고,
-  //   시급 입력칸이 DEFAULT_HOURLY_WAGE 를 보여주다 실제 시급으로 바뀌었다(입력칸이라 그 사이 사용자가 만질 수 있다).
-  //   총액은 wages·records·settings 에서 나오고 진도줄은 work 에서 나온다 — 그 넷이 다 와야 참이다.
+  // ★게이트는 명부만 보면 안 된다 — 근무 시간·상태는 records 에서 나온다. 다 와야 참이다.
+  //   (시급·근무표 대기는 2026-11-02 급여 제거로 뺐다.)
   //   훅은 `&&` 안에서 부르지 않는다(단락 평가로 훅 개수가 달라지면 크래시).
-  const wagesSettled = useWagesSettled();
   const attendanceLoaded = useAttendanceStore((s) => s.loaded);
   const workLoaded = useWorkStore((s) => s.loaded);
-  // ★급여 기준이 근무표로 바뀌었다(2026-08-26) — 근무표가 오기 전에 그리면 **금액이 0원부터 시작**한다.
-  //   금액은 분쟁 대상이라 "아직 안 옴"과 "0원"을 섞으면 안 된다. 게이트에 같이 넣는다.
-  const shiftTemplates = useScheduleStore((s) => s.templates);
-  const swaps = useScheduleStore((s) => s.swaps);
-  const shiftExceptions = useScheduleStore((s) => s.exceptions);
-  const scheduleLoaded = useScheduleStore((s) => s.loaded);
-  const ready = staffLoaded && wagesSettled && attendanceLoaded && workLoaded && scheduleLoaded;
+  const ready = staffLoaded && attendanceLoaded && workLoaded;
   const INVITE_CODE = useSessionStore((s) => s.inviteCode) || '------';
   // 0201(2026-09-14): 이 화면은 **사장 전용**이다 — 승인·시급·급여를 서버가 사장으로 좁혔고,
   // roles.ts 허용목록에도 없어 매니저는 여기에 도착하지 못한다. 0093 의 '매니저도 쓴다'는 낡았다.
@@ -115,83 +95,27 @@ export default function OwnerStaffScreen() {
     return () => clearInterval(t);
   }, []);
 
-  // 직원별 이번 달 시간·급여·근무상태 — 구 attendance 화면의 집계를 직원 목록에 합친다.
+  // 직원별 이번 달 시간·근무상태 — 구 attendance 화면의 집계를 직원 목록에 합친다.
+  // 기간은 달력 월(1일~말일)이다(2026-11-02 급여 제거 · 사용자 결정).
   const today = todayStr();
-  // PAY-02: 오늘이 든 정산 기간(정산 시작일 적용 · payPeriod.ts). 시작일 1이면 달력 월 그대로다.
-  const startDay = settings.periodStartDay;
-  const ym = payLabelOf(today, startDay);
-  const periodRange = fmtPeriodRange(payWindow(ym, startDay));
+  const ym = today.slice(0, 7);
   const perStaff = useMemo(() => {
-    // pay=null = 시급 미설정(계산 불가). 0원과 구별해야 한다 — 0원은 '무급'이라는 사실 주장이다.
-    const map: Record<string, { min: number; schedMin: number; pay: number | null; status: 'out' | 'working' | 'done' | 'forgot' }> = {};
-    // 주휴는 그 주 일요일이 속한 달에 붙인다(Q9) — 급여 입력은 첫 주 월요일부터 편다.
-    const payWin = payWindow(ym, startDay);
+    const map: Record<string, { min: number; status: 'out' | 'working' | 'done' | 'forgot' }> = {};
     for (const s of staff) {
-      const monthRecs = records.filter((r) => r.staff_id === s.id && r.date >= payWin.from && r.date <= payWin.to);
-      // 근무시간 표시는 실제 출퇴근 그대로(확인용). 금액만 근무표 기준이다.
-      const min = monthRecs.reduce((sum, r) => sum + liveMinutes(r), 0);
-      // ★급여의 기준은 **근무표**다(2026-08-26 확정). 출퇴근 기록은 확인용이라 금액에 직접 안 들어간다.
-      //   교대로 넘어간 근무는 shiftsOn 을 거친 scheduledShiftsFor 가 이미 반영한다 —
-      //   여기서 templates 를 직접 훑으면 대타 뛴 사람이 못 받는다.
-      const shiftRecs = shiftsToPayRecords(
-        scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, s.id, payWin.inputDates),
-      );
-      // ★시급 미설정을 최저시급으로 대신 계산하지 않는다(#38). 예전엔 `?? DEFAULT_HOURLY_WAGE` 라
-      //   **그럴듯한 금액**이 떠서 사장이 "최저시급으로 정해 뒀다"고 읽고 그대로 지나갔다.
-      //   같은 데이터인데 화면마다 규칙이 다르면 세 화면이 서로 다른 금액을 말한다 —
-      //   `junior/attendance`·`junior/timesheet`·`owner/timesheet/[staffId]` 가 이미 쓰는 규칙에 맞춘다.
-      const wageSet = Object.prototype.hasOwnProperty.call(wages, s.id);
+      // 근무시간 표시는 실제 출퇴근 그대로(확인용).
+      const min = records.filter((r) => r.staff_id === s.id && r.date.startsWith(ym)).reduce((sum, r) => sum + liveMinutes(r), 0);
       // ★근무 중 판정은 날짜와 상관없이 열린 기록으로 한다(Q4) — 오늘 기록만 보면 자정을 넘긴 야간 근무자가 '미출근'으로 보인다.
       //   16시간 넘게 열린 기록은 '퇴근 안 찍음'으로 따로 보인다(결함 8) — 오래된 기록 하나로 '근무 중'이라고 하지 않는다.
       const status = staffWorkStatus(records, s.id, today);
-      // 급여 규칙(주휴·휴게·야간·연장·추가수당) 반영 예상 인건비 — computePay SSOT(F1). min 은 근무시간 표시용.
-      // schedMin = 이번 달 **근무표에 잡힌** 분. 0이면 금액이 0인 게 아니라 **아직 계산할 수 없는 것**이다.
-      const schedMin = shiftRecs.reduce((sum, r) => sum + (r.date >= payWin.from ? r.work_minutes : 0), 0);
-      map[s.id] = { min, schedMin, pay: wageSet ? computePay(shiftRecs, wages[s.id], settings, undefined, payWin).total : null, status };
+      map[s.id] = { min, status };
     }
     return map;
-  }, [records, wages, settings, staff, ym, startDay, today, shiftTemplates, swaps, shiftExceptions]);
-
-  // 이번 정산 기간(이 화면의 달력 월) 입력. 퇴사자 줄·재입사 경고가 같은 판정(tenure.ts)을 쓴다.
-  const period = useMemo(
-    () => ({ ym, startDay, records, templates: shiftTemplates, swaps, exceptions: shiftExceptions }),
-    [ym, startDay, records, shiftTemplates, swaps, shiftExceptions],
-  );
-
-  // 이번 정산 기간 퇴사자 — 이번 달에 일하고 나간 직원. 근무 여부 · 시급 대체 · 금액은 departedPayRows 하나가 정한다.
-  const departed = useMemo(
-    () => departedPayRows({ ...period, tenures, memberIds: Object.keys(roles), wages, settings }),
-    [period, tenures, roles, wages, settings],
-  );
-
-  // 합류 승인 — 예전에 이 매장에서 일했던 사람이면 경고를 보이고 확인을 받는다. 막지는 않는다.
-  async function approveChecked(p: PendingMember) {
-    const lines = rejoinNotice(tenures, p.id, workedInPeriod(p.id, period));
-    if (lines && !(await confirmAction('합류를 승인할까요?', lines.join('\n\n'), '승인', { icon: 'alert-circle-outline' }))) return;
-    approve(p.id);
-  }
+  }, [records, staff, ym, today]);
 
   // 직원별 퀴즈 진도 줄은 2026-09-13 실측 QA 로 **이 화면에서 뺐다**(사장 요청).
   //   이유: 이 화면은 '누구에게 얼마' 를 보는 자리고, 진도는 퀴즈 탭(응시 현황)이 이미 맡는다.
   //   같은 사실을 두 화면에서 말하면 둘 중 하나만 고쳐지는 순간 서로 다른 말을 한다.
   //   판정 본체(taskProgress)는 그대로 두고 여기서 부르지만 않는다 — 퀴즈 탭·사장 홈이 계속 쓴다.
-  // 이번 달에 일하고 나간 직원 급여도 이번 달에 나간다(02_설계_구성원보존 §5). 아래 퇴사자 줄 금액을 더한다.
-  const totalPay = staff.reduce((a, s) => a + (perStaff[s.id]?.pay ?? 0), 0) + departed.reduce((a, d) => a + (d.pay ?? 0), 0);
-  /**
-   * ★"₩0"을 짓지 않는다(2026-09-09). 시급 축은 이미 pay=null 로 0원과 미설정을 갈라 놓았는데,
-   *   히어로는 그 null 을 `?? 0` 으로 삼켜서 **설정이 하나도 없는 새 매장에 "이번 달 예상 인건비 ₩0"**
-   *   을 확정 표시했다. 0원은 '무급'이라는 사실 주장이라 근무표 축에도 같은 규칙을 적용한다.
-   *   막힌 이유는 둘이고, 사장이 다음에 할 일이 서로 다르므로 구분해서 말한다.
-   */
-  const payBlocked: null | '시급' | '근무표' =
-    staff.length === 0
-      ? null
-      : staff.every((s) => perStaff[s.id]?.pay === null)
-        ? '시급'
-        : staff.every((s) => (perStaff[s.id]?.schedMin ?? 0) === 0)
-          ? '근무표'
-          : null;
-  const workingCount = staff.filter((s) => perStaff[s.id]?.status === 'working').length;
 
   const confirmRemove = () => {
     if (!removeTarget) return;
@@ -222,64 +146,21 @@ export default function OwnerStaffScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={[]}>
-      <Stack.Screen options={{ title: '직원·급여' }} />
-      <ScreenTitleHeader title="직원·급여" backFallback />
-      {/* 전부 도착 전엔 무조건 로딩 — "직원 0명"·"₩0" 기본 화면이 먼저 떴다가 채워지는 부분 렌더 금지. */}
+      <Stack.Screen options={{ title: '직원' }} />
+      <ScreenTitleHeader title="직원" backFallback />
+      {/* 전부 도착 전엔 무조건 로딩 — "직원 0명" 기본 화면이 먼저 떴다가 채워지는 부분 렌더 금지. */}
       {!ready ? (
-        <ScreenLoading label="직원·급여를 불러오고 있어요…" />
+        <ScreenLoading label="직원 목록을 불러오고 있어요…" />
       ) : (
       <KeyboardShift>
       <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* ① 급여 — 이번 달 인건비 총액 + 급여 설정 진입(상단). 구 '근무·급여'·'급여 설정' 카드를 흡수.
-            이 화면의 히어로는 여기 하나다(2026-08-06) — 아래 초대코드가 같은 다크·30sp 규격이라 히어로가 둘이었다. */}
-        {/* 넓은 웹에서만 두 단 — 왼쪽 급여·직원 목록 / 오른쪽 초대·바로 가기.
-            폰 폭에서는 아래 순서 그대로 한 줄씩이다(배치만 바뀐다). */}
+        {/* 넓은 웹에서만 두 단 — 왼쪽 직원 목록 / 오른쪽 초대·바로 가기.
+            폰 폭에서는 아래 순서 그대로 한 줄씩이다(배치만 바뀐다).
+            맨 위 인건비 카드는 2026-11-02 급여 기능과 함께 뺐다. */}
         <TwoPane gap={12}>
-        <Pane side="main">
-        <Appear delay={stagger(0)}>
-        <View style={styles.payCard}>
-          <Text style={styles.payLabel}>이번 정산 기간 예상 인건비</Text>
-          {/* PAY-01: 급여 설정을 못 읽었으면 기본값(시작일 1·기본 수당)으로 지은 금액을 보이지 않는다. */}
-          {settingsFail ? (
-            <>
-              <Text style={styles.payValue}>불러오지 못했어요</Text>
-              <Pressable onPress={() => void usePayrollStore.getState().hydrate()} accessibilityRole="button" accessibilityLabel="급여 설정 다시 불러오기">
-                <Text style={styles.payNote}>급여 설정을 불러오지 못했어요. 눌러서 다시 시도해 주세요.</Text>
-              </Pressable>
-            </>
-          ) : (
-          <>
-          <Text style={styles.payValue}>{payBlocked ? '아직 계산 전' : won(totalPay)}</Text>
-          {/* ★금액이 무엇으로 계산됐는지 말한다 — 출퇴근이 아니라 **근무표**다(2026-08-26).
-              안 적으면 사장이 출퇴근 시간과 안 맞는 금액을 보고 계산이 틀렸다고 읽는다.
-              막혀 있으면 그 자리에서 **다음에 할 일**을 말한다(설정 결손은 결과 지점에서 요구한다). */}
-          <Text style={styles.payNote}>
-            {payBlocked === '시급'
-              ? '직원 시급을 정하면 금액이 나와요 — 아래 목록에서 바로 넣을 수 있어요'
-              : payBlocked === '근무표'
-                ? '근무표가 비어 있어요 — 근무 시간을 넣으면 금액이 나와요'
-                : `${periodRange} · 세전 · 근무표 기준 · 직원 ${staff.length}명${departed.length > 0 ? ` · 퇴사자 ${departed.length}명 포함` : ''}${workingCount > 0 ? ` · 근무 중 ${workingCount}명` : ''}`}
-          </Text>
-          </>
-          )}
-          <Pressable
-            onPress={() => router.push('/owner/payroll')}
-            style={({ pressed }) => [styles.payrollBtn, pressed && { opacity: 0.85 }]}
-            accessibilityRole="button"
-            accessibilityLabel="급여 설정 열기"
-          >
-            <Ionicons name="options-outline" size={16} color="#FFFFFF" />
-            <Text style={styles.payrollBtnText}>급여 설정 (수당·정산 기준)</Text>
-            <Ionicons name="chevron-forward" size={15} color="rgba(255,255,255,0.7)" />
-          </Pressable>
-        </View>
-        </Appear>
-
         {/* ② 초대 — 코드 한 줄만 주던 자리를 공용 InviteBlock 으로 바꿨다(2026-09-08).
             안내·코드 복사·초대 링크가 한 벌이라, 사장이 자리마다 다른 설명을 읽지 않는다.
             '코드 변경'만 이 화면 고유라 action 슬롯으로 넘긴다. */}
-        </Pane>
-
         <Pane side="rail">
         <Appear delay={stagger(1)}>
         <InviteBlock
@@ -339,7 +220,7 @@ export default function OwnerStaffScreen() {
                   <Pressable onPress={() => setRejectTarget({ id: p.id, name: p.name || '신청자' })} hitSlop={6} style={({ pressed }) => [styles.rejectBtn, pressed && { opacity: 0.7 }]}>
                     <Text style={styles.rejectText}>거절</Text>
                   </Pressable>
-                  <Pressable onPress={() => void approveChecked(p)} hitSlop={6} style={({ pressed }) => [styles.approveBtn, pressed && { opacity: 0.85 }]}>
+                  <Pressable onPress={() => approve(p.id)} hitSlop={6} style={({ pressed }) => [styles.approveBtn, pressed && { opacity: 0.85 }]}>
                     <Text style={styles.approveText}>승인</Text>
                   </Pressable>
                 </Appear>
@@ -349,7 +230,7 @@ export default function OwnerStaffScreen() {
           </Appear>
         )}
 
-        {/* 직원 목록 — 시급 편집 + 이번 달 시간·급여·근무상태(구 근무·급여 화면 흡수) */}
+        {/* 직원 목록 — 이번 달 시간·근무상태(구 근무·급여 화면 흡수) */}
         <View style={{ gap: Space.sm }}>
         <Appear delay={stagger(4)}>
         <SectionLabel title={`합류한 직원 (${staff.length}명)`} />
@@ -402,21 +283,10 @@ export default function OwnerStaffScreen() {
                         <Text style={[chip.text, { color: '#FFFFFF' }]}>매니저</Text>
                       </View>
                     )}
-                    <Text style={styles.staffMeta} numberOfLines={1}>
-                      {/* 시급 미설정과 근무표 미입력은 다른 결손이다 — 둘 다 ₩0 으로 뭉개면 사장이 할 일을 못 고른다. */}
-                      이번 기간 {fmtDuration(agg?.min ?? 0)} ·{' '}
-                      {settingsFail
-                        ? '금액 확인 불가'
-                        : agg?.pay === null || agg?.pay === undefined
-                        ? '시급 미설정'
-                        : (agg?.schedMin ?? 0) === 0
-                          ? '근무표 없음'
-                          : won(agg.pay)}
-                    </Text>
+                    <Text style={styles.staffMeta} numberOfLines={1}>이번 달 {fmtDuration(agg?.min ?? 0)}</Text>
                   </View>
                 </View>
               </Pressable>
-              <WageCell staffId={s.id} wages={wages} setWage={setWage} />
               {/* 내보내기 — 사장 전용(remove_staff RPC 소유자만). 오탭 방지로 빨강 모달 확인 후 실행 */}
               {isOwner && (
                 <Pressable
@@ -459,30 +329,8 @@ export default function OwnerStaffScreen() {
         )}
         </Appear>
         </View>
-        {/* 이번 정산 기간 퇴사자 — 이번 달에 일하고 나간 직원도 이번 달 급여를 줘야 한다. 금액은 위 직원 줄과 같은 규칙이다. */}
-        {departed.length > 0 && (
-          <Appear delay={stagger(6)} style={{ gap: Space.sm }}>
-          <SectionLabel title={`이번 정산 기간 퇴사자 (${departed.length}명)`} />
-          <View style={styles.list}>
-            {departed.map((d) => (
-              <View key={d.id} style={styles.staffItem}>
-                <View style={[styles.staffRow, styles.staffRowFlat]}>
-                  <Avatar name={d.name} size={40} fontSize={15} />
-                  <View style={styles.nameCol}>
-                    <Text style={styles.staffName} numberOfLines={1}>{d.name}</Text>
-                    <Text style={styles.staffMeta} numberOfLines={1}>
-                      이번 기간 {fmtDuration(d.min)} ·{' '}
-                      {settingsFail ? '금액 확인 불가' : d.pay === null ? '시급 미설정' : d.schedMin === 0 ? '근무표 없음' : won(d.pay)}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            ))}
-          </View>
-          </Appear>
-        )}
         <Appear delay={stagger(6)}>
-        <Text style={styles.demoNote}>* 직원을 누르면 출근 기록을 보고 시간을 수정할 수 있어요. 시급을 바꾸면 인건비에 바로 반영돼요.</Text>
+        <Text style={styles.demoNote}>* 직원을 누르면 출근 기록을 보고 시간을 수정할 수 있어요.</Text>
         </Appear>
         </Pane>
         </TwoPane>
@@ -516,7 +364,7 @@ export default function OwnerStaffScreen() {
         visible={!!managerTarget}
         icon="ribbon-outline"
         title="매니저로 지정할까요?"
-        message={`'${managerTarget?.name ?? ''}' 님이 매장 관리를 도울 수 있어요.\n\n새로 할 수 있는 것 — 근무표 짜기·교대 승인·근무 시간 수정 승인, 할일 배정, 공지 쓰기, 출근 기록 수정, 업무방 관리, 노하우 고치기·제안 승인, 퀴즈.\n\n그대로인 것 — 급여·시급, 초대코드, 직원 내보내기·매니저 지정, 노하우 보관, 업무방 삭제, 요금제는 사장님만 해요.`}
+        message={`'${managerTarget?.name ?? ''}' 님이 매장 관리를 도울 수 있어요.\n\n새로 할 수 있는 것 — 근무표 짜기·교대 승인·근무 시간 수정 승인, 할일 배정, 공지 쓰기, 출근 기록 수정, 업무방 관리, 노하우 고치기·제안 승인, 퀴즈.\n\n그대로인 것 — 초대코드, 직원 내보내기·매니저 지정, 노하우 보관, 업무방 삭제, 요금제는 사장님만 해요.`}
         accent="매니저도 직원 화면을 그대로 써요. 설정의 '매장 관리'·'노하우'·'퀴즈'로 들어가요."
         confirmLabel="매니저로 지정"
         onConfirm={() => {
@@ -556,81 +404,11 @@ function StatusChip({ status }: { status: 'out' | 'working' | 'done' | 'forgot' 
   );
 }
 
-/**
- * 시급 입력 한 칸 — **입력 중에는 서버에 쓰지 않는다**(2026-08-25 감사 #39).
- *
- * 예전엔 `onChangeText` 가 곧바로 `setWage` 를 불러 **키 입력마다 DB 쓰기**가 나갔다.
- * 그래서 "12000"을 지우고 다시 치려고 칸을 비우는 순간 `Number('') || 0` 이 0 으로 평가돼
- * **hourly_wage=0 이 서버에 확정 저장**됐고, 직원 화면이 "시급 0원 · 예상급여 0원"이 됐다.
- * 0 저장은 정상 성공이라 실패 배너도 뜨지 않는다 — 완전한 무음 데이터 손상이었다.
- *
- * 규칙 두 가지:
- *  ① 타이핑은 로컬 state 만 바꾼다. 서버 반영은 **칸을 벗어날 때 1회**(onBlur).
- *  ② 빈칸·0 은 저장하지 않는다. "아직 안 정했다"와 "0원으로 정했다"는 다른 말이고,
- *     후자는 사장이 의도적으로 고를 일이 거의 없다 — 되돌리고 원래 값을 유지한다.
- */
-function WageCell({
-  staffId,
-  wages,
-  setWage,
-}: {
-  staffId: string;
-  wages: Record<string, number>;
-  setWage: (id: string, n: number) => void;
-}) {
-  const saved = Object.prototype.hasOwnProperty.call(wages, staffId) ? wages[staffId] : null;
-  const [draft, setDraft] = useState<string | null>(null);
-  const shown = draft ?? (saved === null ? '' : String(saved));
-
-  const commit = () => {
-    if (draft === null) return;
-    const n = Number(draft.replace(/[^0-9]/g, ''));
-    setDraft(null);
-    // 빈칸·0·값 그대로면 쓰지 않는다(무의미한 쓰기 + 0원 확정 저장 방지).
-    if (!Number.isFinite(n) || n <= 0 || n === saved) return;
-    const wage = Math.min(n, 1000000);
-    setWage(staffId, wage);
-    // 그해 최저시급보다 낮으면 저장은 하고 경고만 한다(Q12) — 수습 감액 같은 예외가 있다(최저임금법 제5조 2항).
-    const warning = minWageWarning(wage, todayStr());
-    if (warning) showToast(warning, 'warn');
-  };
-
-  return (
-    <View style={styles.wageBox}>
-      <Text style={styles.wageLabel}>시급</Text>
-      <View style={styles.wageInputRow}>
-        <TextInput
-          value={shown}
-          onChangeText={(t) => setDraft(t.replace(/[^0-9]/g, '').slice(0, 7))}
-          onBlur={commit}
-          onSubmitEditing={commit}
-          keyboardType="number-pad"
-          maxLength={7}
-          placeholder="미설정"
-          placeholderTextColor={InkColors.ink3}
-          // 칸 폭 72 고정이라 OS 글꼴이 1.3배쯤을 넘으면 5자리 시급 앞자리가 가려진다. 이 칸만 확대 상한을 둔다(웹은 무시).
-          maxFontSizeMultiplier={1.2}
-          style={styles.wageInput}
-        />
-        <Text style={styles.wageWon}>원</Text>
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, gap: 12 },
 
-  // 급여 요약 카드(구 근무·급여 totalCard + 급여 설정 진입)
-  payCard: { backgroundColor: InkColors.ink, borderRadius: Radius.lg, padding: 20, gap: 4 },
-  payLabel: { fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
-  payValue: { fontSize: 30, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5 },
-  payNote: { fontSize: 12, color: 'rgba(255,255,255,0.55)' },
-  payrollBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, backgroundColor: 'rgba(255,255,255,0.12)', paddingVertical: 11, paddingHorizontal: 14, borderRadius: Radius.md },
-  payrollBtnText: { flex: 1, color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
-
-  // 코드 변경은 보조 액션 — 화면 Primary(급여 설정)와 경쟁하지 않게 고스트로 둔다.
+  // 코드 변경은 보조 액션 — 고스트로 둔다.
   rotateBtn: { alignItems: 'center', justifyContent: 'center', minHeight: 48, paddingHorizontal: Space.md, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line },
   rotateText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
 
@@ -665,13 +443,6 @@ const styles = StyleSheet.create({
   staffName: { fontSize: 15, fontWeight: '700', color: InkColors.ink, flexShrink: 1 },
   staffMeta: { fontSize: 12, color: InkColors.ink3, flexShrink: 1 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, minWidth: 0 },
-  wageBox: { alignItems: 'flex-end', gap: 3 },
-  wageLabel: { fontSize: 11, color: InkColors.ink3, fontWeight: '600' },
-  wageInputRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  // ★폭 고정: 웹 TextInput은 명시 폭이 없으면 기본 ~20ch로 늘어나 이름 칼럼을 찌부러뜨린다(QA 실측).
-  //   maxLength 7("1000000")이 15px 폰트로 72px 안에 들어간다.
-  wageInput: { width: 72, textAlign: 'right', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 8, paddingVertical: 5, fontSize: 15, color: InkColors.ink },
-  wageWon: { fontSize: 13, color: InkColors.ink3 },
   removeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.sm, backgroundColor: BrandColors.accentSoft },
 
   demoNote: { fontSize: 12, color: InkColors.ink3, marginTop: 6 },

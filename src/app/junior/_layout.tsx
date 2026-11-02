@@ -7,7 +7,6 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useChatStore } from '@/lib/store/useChatStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
-import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
@@ -33,7 +32,6 @@ function hydrateJuniorStores() {
   useChatStore.getState().hydrate(useSessionStore.getState().userId);
   useWorkStore.getState().hydrate();
   useAttendanceStore.getState().hydrate();
-  usePayrollStore.getState().hydrate();
   useStaffStore.getState().hydrate();
   useScheduleStore.getState().hydrate();
   // 알림 '모두 읽기' 기준 시각(0078·unit_member_prefs)이 벨 배지 집계에 필요 — 레이아웃에서 당긴다.
@@ -143,7 +141,7 @@ export default function JuniorLayout() {
         //   항목을 iOS 26 이 '바 버튼'으로 취급해 유리 캡슐을 씌운다 → 웹과 같은 "왼쪽 정렬 평문 제목 +
         //   담백한 뒤로가기"를 네이티브 헤더로는 낼 수 없다. 모든 화면이 `ScreenTitleHeader` 를 직접 그린다.
         //   ★여기서 끄는 것이 핵심이다 — 화면에서 끄면 마운트 전 한 프레임 깜빡인다(native-audit: header-flash).
-        headerShown: false,
+        headerShown: false,
       }}
     >
       {/* 홈 헤더(로고+알림벨)는 home.tsx의 <Stack.Screen>이 단일 소스로 구성한다 — 여기선 등록만.

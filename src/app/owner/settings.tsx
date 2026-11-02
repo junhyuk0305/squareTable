@@ -27,7 +27,7 @@ import { LoadErrorState } from '@/components/LoadErrorState';
 
 /**
  * 매장 설정(사장) — 사장 5탭의 설정 탭. "이 매장" 단위 설정만 담는다(2레이어 IA — F6 대칭 분리).
- * 초대코드·직원·급여·매장 닉네임·색·이 매장 알림(음소거·방해금지).
+ * 초대코드·직원·매장 닉네임·색·이 매장 알림(음소거·방해금지).
  * 계정 전역(프로필·푸시 수신 동의·요금제·글자 크기·약관·로그아웃·탈퇴)은 '전체 계정 설정'
  * (account-settings — 직원과 동일 화면)으로 이동했다. 직원 매장 설정(junior/settings)과 대칭.
  */
@@ -162,7 +162,6 @@ export default function OwnerSettings() {
             같은 화면(/owner/staff)으로 가는 중복 진입점이었다. 진입점은 매장 관리 섹션 한 곳으로 둔다. */}
         <SettingsSection icon="storefront-outline" title="매장 관리">
           <SettingsRow first icon="people-outline" label="직원·초대코드 관리" onPress={() => router.push('/owner/staff')} />
-          <SettingsRow icon="cash-outline" label="급여 설정" onPress={() => router.push('/owner/payroll')} />
           {/* 옛 퀴즈 구조(0110)가 만들어 둔 껍데기 할일 치우기. 한 번 쓰고 마는 도구라
               매일 보는 퀴즈 홈이 아니라 여기에 둔다(2026-08-11 결정). 치울 게 없으면 줄 자체가 없다. */}
           {shellLeft > 0 && (

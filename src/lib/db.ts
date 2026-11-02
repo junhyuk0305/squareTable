@@ -16,7 +16,6 @@ import type { StoreConfig, ShiftTemplate, ShiftException, SwapRequest, ShiftTime
 import type { JoinDone, JoinNotice } from '@/lib/store/useStaffStore';
 import type { CustomCategory } from '@/lib/store/knowhowCategories';
 import type { KnowhowUsage } from '@/lib/knowhow/archive';
-import type { WageRate } from '@/lib/utils/payroll';
 import type { MemberTenure } from '@/lib/utils/tenure';
 import { reopenKeepsRecords, type DeleteStorePreview, type DeleteStoreResult } from '@/lib/account/storeCopy';
 import { isMissingRpc } from '@/lib/utils/userError';
@@ -317,7 +316,7 @@ export async function copyKnowhowPhotos(
 // ── 다점포 통합뷰(0060) — 내 전 매장 핵심 지표 집계(소유 매장만, definer). 합계는 클라 파생 ──────
 export type OwnerOverviewRow = {
   unit_id: string; store_name: string; is_active: boolean;
-  pending_q: number; knowhow: number; staff: number; labor_month: number;
+  pending_q: number; knowhow: number; staff: number;
   uncovered: number; // 첨부 노하우 없는 업무 수(커버리지, 0074). 매장 단위 결과물 카운트
   sugg_pending: number; // 검토 대기 제안 수(0081) — 허브 현황 '확인 필요'
   needs_review: number; // 검증 필요 노하우 수(발행본, 0081)
@@ -326,7 +325,7 @@ export type OwnerOverviewRow = {
   done_ever: boolean; // 업무 완료 기록 1건 이상(ever, 0086) — 시작 체크리스트
   stale: number; // 90일 넘게 수정 없는 발행 노하우 수(0091) — 허브 노하우 탭
 };
-/** 내가 소유한 모든 매장의 미답질문·노하우·직원·이번달 인건비를 한 번에. RLS는 활성만 보이므로 definer RPC. */
+/** 내가 소유한 모든 매장의 미답질문·노하우·직원 수를 한 번에. RLS는 활성만 보이므로 definer RPC. */
 export async function fetchOwnerOverview(): Promise<DbResult<OwnerOverviewRow[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
   const { data, error } = await supabase.rpc('owner_overview');
@@ -368,28 +367,6 @@ export async function fetchOwnerToday(): Promise<DbResult<OwnerTodayRow[]>> {
   return { data: (data as OwnerTodayRow[]) ?? null, error: error as DbErr };
 }
 
-// ── 이번달 인건비 입력(0185) — 허브 현황 '이번달 인건비'·매장 비교표 ────────────────────────
-// 금액은 서버가 내지 않는다 — 규칙(주휴·야간·휴게)의 정본은 computePay 하나라, 허브도 직원 관리와
-// **같은 함수**로 계산한다. 이 RPC 는 활성 매장 RLS 밖의 소유 매장 원자료만 definer 로 넘긴다.
-export type OwnerLaborInputRow = {
-  unit_id: string;
-  staff_ids: string[];
-  shifts: ShiftTemplate[];
-  exceptions: ShiftException[];
-  wages: Record<string, number>;
-  payroll_settings: Record<string, unknown> | null;
-  /** 이번 달 퇴사자 기간(0257). 직원 관리 히어로처럼 그 몫을 인건비에 더한다. 옛 서버면 없다. */
-  departed?: MemberTenure[];
-};
-export async function fetchOwnerLaborInputs(): Promise<DbResult<OwnerLaborInputRow[]>> {
-  if (!HAS_SUPABASE) return { data: [], error: null };
-  // ★_v2 를 읽는다(0242·0245·0246): 반복 행에 적용 기간이 있어 직원·급여 화면(shift_templates_all)과 같은 시간을 센다.
-  //   v1 은 오늘 적용 중인 행만 기간 없이 줘서, 반복을 나누면 오늘 행 하나로 한 달을 센다. v1 은 옛 앱용으로 남는다.
-  const { data, error } = await supabase.rpc('owner_labor_inputs_v2');
-  if (error) readFail('fetchOwnerLaborInputs', error);
-  return { data: (data as OwnerLaborInputRow[]) ?? null, error: error as DbErr };
-}
-
 /** 0138: weekday(요일 반복) 또는 date(그 날짜 하루) 중 하나만 값이 있다. */
 export type MyShiftRow = {
   id: string; weekday: number | null; date: string | null; start: string; end: string;
@@ -400,11 +377,9 @@ export type MyCrossSummaryRow = {
   unit_id: string; store_name: string; shifts: MyShiftRow[];
   /** 그날은 없는 것으로 치는 반복(0178·0180). 교대로 남에게 넘긴 근무가 여기에 걸린다. */
   exceptions: { template_id: string; date: string }[];
-  month_minutes: number; hourly_wage: number;
-  /** 매장 급여 설정(0257). 예상 급여를 출퇴근 화면과 같은 규칙으로 센다. null·없음 = 기본 규칙. */
-  payroll_settings?: Record<string, unknown> | null;
+  month_minutes: number;
 };
-/** 본인의 소속 매장별 근무표·이번달 근무분·시급 — 직원 오늘 탭. 본인 행만(RPC 내부 강제).
+/** 본인의 소속 매장별 근무표·이번달 근무분 — 직원 오늘 탭. 본인 행만(RPC 내부 강제).
  *  "오늘/다음 근무" 판정은 클라가 shiftsOn(요일 + 적용 기간)으로 파생한다. ★교대로 넘긴 근무를 빼려면 exceptions 를
  *  **반드시** 같이 봐야 한다 — 안 보면 이미 남에게 넘긴 근무가 '오늘 근무'로 남는다(0180).
  *  ★_v2 를 읽는다(0242·0245·0246): 전체 이력과 기간을 준다. v1 은 오늘 적용 중인 행만 줘서 앞으로 시작·끝나는 구간이
@@ -1238,7 +1213,7 @@ export async function updateUnitIndustry(unitId: string, industry: string): Prom
 }
 
 // ── 직원/사장 프로필 (같은 매장) ───────────────────────────
-// 실서비스: 이 매장 멤버(unit_members)의 프로필을 읽어 직원/근태/급여 화면을 채운다.
+// 실서비스: 이 매장 멤버(unit_members)의 프로필을 읽어 직원/근태 화면을 채운다.
 // ★사장·직원 판정 = 이 매장의 멤버십 역할(unit_members.role, 0093·0233). profiles.role 은 계정 유형이라 쓰지 않는다 —
 //   쓰면 다른 매장 사장이 이 매장 직원일 때 이 매장 사장으로 잡히고 직원 목록에서 빠졌다.
 //   합류 신청자(pending_unit_id 만 있음)는 멤버가 아니라 나오지 않는다(승인 대기 목록은 fetchPendingMembers).
@@ -1312,7 +1287,7 @@ export async function fetchMemberTenures(unitId: string | null = _unitId): Promi
   if (!HAS_SUPABASE || !unitId) return { data: [], error: false };
   const { data, error } = await supabase
     .from('member_tenures')
-    .select('id, user_id, joined_at, left_at, name_snapshot, final_hourly_wage')
+    .select('id, user_id, joined_at, left_at, name_snapshot')
     .eq('unit_id', unitId);
   // 표가 아직 없는 서버(PGRST205 · 42P01)는 장애가 아니다 — 읽기 실패 배너를 띄우지 않고 기간 없이 돈다.
   if (error && (error.code === 'PGRST205' || error.code === '42P01')) return { data: [], error: false };
@@ -3717,7 +3692,7 @@ export async function fetchBroadcastReadStatus(broadcastId: string): Promise<DbR
 
 // ── 출퇴근 ─────────────────────────────────────────────────
 // ★ReadResult 로 올린 이유: 실패를 빈배열로 돌려주면 hasOpen 이 항상 false 가 되어 화면이
-//   "아직 출근 전이에요"를 말하고, **근무 중인 직원이 이중 출근을 찍어** 급여가 부풀어 오른다(#40).
+//   "아직 출근 전이에요"를 말하고, **근무 중인 직원이 이중 출근을 찍어** 근무 기록이 부풀어 오른다(#40).
 export async function fetchAttendance(): Promise<ReadResult<AttendanceRecord[]>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase
@@ -3779,88 +3754,14 @@ export async function fetchAttendanceMonth(staffId: string, ym: string): Promise
 }
 export async function upsertAttendance(rec: AttendanceRecord): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  // 출퇴근=급여 직결 무결성 경로 — 0행(RLS/경합)이면 유령 성공 대신 실패로 롤백·배너(P1-6).
+  // 출퇴근 기록 무결성 경로 — 0행(RLS/경합)이면 유령 성공 대신 실패로 롤백·배너(P1-6).
   return writeStrict('upsertAttendance', supabase.from('attendance').upsert({ ...rec, unit_id: _unitId }).select('id'));
 }
 export async function deleteAttendance(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  // 출퇴근=급여 직결 — upsert만 writeStrict였고 delete가 빠져 있었다. 0행 삭제가 "지워짐"으로 보이나
-  // 서버 잔존하면 급여 총액이 어긋난다 → delete도 실제 영향행 확인(P1-6).
+  // 출퇴근 기록 — upsert만 writeStrict였고 delete가 빠져 있었다. 0행 삭제가 "지워짐"으로 보이나
+  // 서버 잔존하면 근무 시간 합계가 어긋난다 → delete도 실제 영향행 확인(P1-6).
   return writeStrict('deleteAttendance', supabase.from('attendance').delete().eq('id', id).select('id'));
-}
-
-// ── 시급 ───────────────────────────────────────────────────
-// ★2026-08-11 [P7-#5]: 빈 객체를 돌려주면 "시급을 아직 안 정했다"와 "못 읽었다"가 구분되지 않는다.
-//   화면이 `wages[uid] ?? 최저시급`으로 폴백해 **틀린 금액을 사실처럼** 보여줬다. 금액은 분쟁 대상이라
-//   0이나 빈칸("아직 없다")과 달리 틀린 값은 그대로 믿긴다. 그래서 실패를 신호로 돌려준다(ReadResult 선례).
-export async function fetchWages(): Promise<ReadResult<Record<string, number>>> {
-  if (!HAS_SUPABASE) return { data: {}, error: false };
-  const { data, error } = await supabase.from('wages').select('staff_id, hourly_wage');
-  if (error) {
-    readFail('fetchWages', error);
-    return { data: {}, error: true };
-  }
-  const out: Record<string, number> = {};
-  for (const r of (data ?? []) as any[]) out[r.staff_id] = r.hourly_wage;
-  return { data: out, error: false };
-}
-/**
- * 시급 이력(0244 wage_rates) — 지난달 급여를 그때 시급으로 세는 데 쓴다(2026-10-05).
- * 재입사 전 이력(archived_tenure_id)은 빼고 읽는다.
- * ★못 읽으면 실패를 신호로 돌려준다 — 빈 목록이면 지난달 급여가 지금 시급으로 조용히 계산된다([P7-#5]).
- */
-export async function fetchWageRates(): Promise<ReadResult<WageRate[]>> {
-  if (!HAS_SUPABASE) return { data: [], error: false };
-  const { data, error } = await supabase.from('wage_rates').select('staff_id, hourly_wage, effective_from').is('archived_tenure_id', null);
-  if (error) {
-    readFail('fetchWageRates', error);
-    return { data: [], error: true };
-  }
-  return { data: (data ?? []) as WageRate[], error: false };
-}
-export async function setWageDb(staffId: string, wage: number): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  // 시급=돈 직결 — 0행(RLS/경합)이면 새 시급이 화면엔 보이나 급여는 옛 값으로 계산된다 → 실제 반영 확인(P1-6).
-  return writeStrict(
-    'setWageDb',
-    supabase.from('wages').upsert({ unit_id: _unitId, staff_id: staffId, hourly_wage: wage }).select('staff_id'),
-  );
-}
-
-// ── 급여 규칙(매장 단위, units.payroll_settings jsonb) ──────
-// 직원은 읽기(급여계산), 사장만 쓰기 — units RLS(units_read/units_write)가 그대로 강제.
-export async function fetchPayrollSettings(): Promise<Record<string, unknown> | null> {
-  return (await fetchPayrollSettingsResult()).data;
-}
-/** PAY-01: 실패와 "설정 없음"을 가르는 판. 옛 함수는 실패도 null 이라 기본값 저장으로 DB를 덮을 수 있었다. */
-export async function fetchPayrollSettingsResult(): Promise<ReadResult<Record<string, unknown> | null>> {
-  if (!HAS_SUPABASE) return { data: null, error: false };
-  const { data, error } = await supabase.from('units').select('payroll_settings').eq('id', _unitId).maybeSingle();
-  if (error) {
-    readFail('fetchPayrollSettings', error);
-    return { data: null, error: true };
-  }
-  return { data: (data?.payroll_settings as Record<string, unknown> | null) ?? null, error: false };
-}
-/**
- * 급여 설정 이력(0280 payroll_settings_history) — 지난달 급여를 그 달 설정으로 세는 데 쓴다(A3 · 2026-10-06).
- * ★못 읽으면 실패를 신호로 돌려준다 — 빈 목록이면 지난달 급여가 지금 설정으로 조용히 계산된다.
- */
-export async function fetchPayrollSettingsHistory(): Promise<ReadResult<{ effective_from: string; settings: Record<string, unknown> }[]>> {
-  if (!HAS_SUPABASE) return { data: [], error: false };
-  const { data, error } = await supabase.from('payroll_settings_history').select('effective_from, settings').eq('unit_id', _unitId);
-  if (error) {
-    readFail('fetchPayrollSettingsHistory', error);
-    return { data: [], error: true };
-  }
-  return { data: (data ?? []) as { effective_from: string; settings: Record<string, unknown> }[], error: false };
-}
-export async function savePayrollSettings(settings: Record<string, unknown>): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  // 급여 규칙=돈 직결. 0093: 매니저도 저장 가능 — units 직접 update(units_write=사장 전용 유지)가 아니라
-  // save_payroll_settings RPC(auth_can_manage 게이트·payroll_settings 한 컬럼만)로 쓴다.
-  // RPC 는 권한 거부를 예외로 던지므로(0행 무음 없음) write 경유로 실패가 그대로 드러난다.
-  return write('savePayrollSettings', supabase.rpc('save_payroll_settings', { p_settings: settings }));
 }
 
 // ── 업무보드/출퇴근 Realtime 구독 ─────────────────────────

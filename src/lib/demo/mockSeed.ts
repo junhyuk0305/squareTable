@@ -6,7 +6,6 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
-import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useChatStore } from '@/lib/store/useChatStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
@@ -19,7 +18,6 @@ export function applyMockSeed(demo: boolean) {
   useUnknownQueueStore.getState().applyMock(demo);
   useWorkStore.getState().applyMock(demo);
   useAttendanceStore.getState().applyMock(demo);
-  usePayrollStore.getState().applyMock(demo);
   useChatStore.getState().applyMock(demo);
   useStaffStore.getState().applyMock(demo);
   useSuggestionStore.getState().applyMock(demo);

@@ -75,9 +75,9 @@ export type OwnerDashboardData = {
   behindStaff?: StaffBehind;
   /**
    * 직원은 있는데 근무표를 **한 번도 짜지 않았다** — 설정 결손. 5순위.
-   * ★이건 "오늘 할 일"이 아니라 **선행 조건**이다. 비어 있으면 급여가 계산되지 않고,
+   * ★이건 "오늘 할 일"이 아니라 **선행 조건**이다. 비어 있으면 출퇴근 기록과 맞춰 볼 기준이 없고,
    *   교대 요청도 생길 수 없다(있지도 않은 근무를 바꿀 수 없다). 그런데 화면 어디에도
-   *   "아직 안 짰다"는 말이 없어서, 사장은 급여일에 가서야 안다.
+   *   "아직 안 짰다"는 말이 없어서, 사장은 한참 뒤에야 안다.
    *   채우면 이 값이 false 가 되어 '다음 행동'에서 스스로 사라진다(상시 조르기가 아니다).
    */
   scheduleEmpty: boolean;
@@ -111,7 +111,7 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   const today = todayStr();
 
   // 2026-08-06: 인건비(monthPay)는 홈 KPI가 MiniStats로 흡수되며 소비자가 사라져 제거했다.
-  // 인건비는 /owner/staff·/owner/payroll이 각자 computePay로 계산한다(SSOT는 그대로 computePay).
+  // 인건비 계산은 2026-11-02 급여 기능 제거로 앱에서 없어졌다.
   // 2026-08-07: 같은 이유로 근무 중 인원(working)·userName·storeName·heroCareerDays도 제거했다 —
   // MiniStats가 사라진 뒤 사장 홈에서 읽는 곳이 하나도 없었다(출퇴근 현황은 /owner/attendance가 소유).
   // 매장 진행률: 오늘 떠야 하는 것 중 가게 전체(shared) + 내 private(대상=나 or 내가 배정). (직원 자가등록은 제외)

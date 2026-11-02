@@ -2,7 +2,7 @@
 //  1) 오늘 스냅샷: 매장별 근무중/예정 카운트(카운트까지만 — 명단은 매장 출퇴근 화면)
 //  2) 확인 필요: 합류 신청·받은질문·검토할 제안·확인 필요 노하우(행 탭 = 해당 매장 화면)
 //  3) 매장 비교 표: 손 필요 순 기본·헤더 탭 정렬(★이 블록만 multi 게이팅, 매장 1곳=단일 요약)
-//  4) 이번달: 인건비 합계 + AI 사용(무료 캡 대비 표기)
+//  4) 이번달: AI 사용(무료 캡 대비 표기)
 // 원칙: 전부 매장 단위(개인별 지표 산출 금지) · 허브는 읽기·이동까지(실행 UI 없음).
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
@@ -37,7 +37,7 @@ import { Space } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
 import type { Href } from 'expo-router';
 
-type SortKey = 'pending_q' | 'working' | 'uncovered' | 'labor_month';
+type SortKey = 'pending_q' | 'working' | 'uncovered';
 
 /**
  * 로딩 자리표의 최소 높이 — 본문(경고행·오늘·확인 필요·이번달)이 도착해도 화면이 튀지 않게 미리 자리를 잡는다.
@@ -45,19 +45,12 @@ type SortKey = 'pending_q' | 'working' | 'uncovered' | 'labor_month';
  */
 const LOADING_MIN_HEIGHT = 360;
 
-/** 표 셀용 축약 금액 — 1만 미만은 그대로, 이상은 만 단위(표 폭 보호). */
-const fmtWonShort = (n: number) => (n >= 10000 ? `${Math.round(n / 10000)}만` : n.toLocaleString());
-
 export function OwnerStatusView({ header }: { header: ReactNode }) {
   const overview = useHubStore((s) => s.overview);
   const today = useHubStore((s) => s.today);
   const ownerLoaded = useHubStore((s) => s.ownerLoaded);
   const todayLoaded = useHubStore((s) => s.todayLoaded);
   const ownerLoadError = useHubStore((s) => s.ownerLoadError);
-  // 이번달 인건비 원장 = 근무표 기준·computePay(0185) — 직원 관리 히어로와 **같은 계산**. overview.labor_month(출퇴근×시급)는 안 읽는다.
-  const labor = useHubStore((s) => s.labor);
-  const laborLoaded = useHubStore((s) => s.laborLoaded);
-  const laborLoadError = useHubStore((s) => s.laborLoadError);
   const hydrateOwner = useHubStore((s) => s.hydrateOwner);
   const retryOwner = useHubStore((s) => s.retryOwner);
   // L4 '직원이 아는 노하우' 칸(D6 · 2026-08-27) — 노하우 탭 링·퀴즈 홈 히트맵과 **같은 원장**(owner_knowhow_stats).
@@ -145,13 +138,11 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       const r = overview.find((x) => x.unit_id === uid);
       if (!r) return 0;
       if (sortKey === 'working') return todayByUnit[uid]?.working_now ?? 0;
-      if (sortKey === 'labor_month') return labor[uid] ?? 0;
       return r[sortKey];
     };
     return [...overview].sort((a, b) => val(b.unit_id) - val(a.unit_id));
-  }, [overview, sortKey, todayByUnit, labor]);
+  }, [overview, sortKey, todayByUnit]);
 
-  const laborTotal = overview.reduce((n, r) => n + (labor[r.unit_id] ?? 0), 0);
   const workingTotal = today.reduce((n, r) => n + r.working_now, 0);
   const scheduledTotal = today.reduce((n, r) => n + r.scheduled, 0);
   // 16시간 넘게 열린 기록 = '퇴근 안 찍음'(직원 화면과 같은 기준 · 0306). 근무중에는 안 센다.
@@ -166,7 +157,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
   //   되지 않는다(#6). 예전엔 넷 다 "실패하면 loaded 를 안 올림" 계약이라 **하나만 실패해도
   //   사장이 로그인 직후 착지하는 이 화면이 영원히 "매장 현황을 불러오고 있어요…"** 였고,
   //   마운트 1회 fetch 라 재시도 버튼도 트리거도 없었다.
-  if (!ownerLoaded || !todayLoaded || !laborLoaded || !crossLoaded || !prefsLoaded || !knowhowStatsLoaded) {
+  if (!ownerLoaded || !todayLoaded || !crossLoaded || !prefsLoaded || !knowhowStatsLoaded) {
     return (
       <View style={styles.loading}>
         <ScreenLoading label="매장 현황을 불러오고 있어요…" />
@@ -234,7 +225,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
    * L4 매장 상태 그리드(§7-2 · 2026-08-27). 칸 = [라벨+›][큰 값][시각요소]. R4: 원장 있는 것만 그림 —
    *  · 직원이 아는 노하우 = 스냅샷(구성 원장 없음) → 시각요소 없이 절대 수 한 줄
    *  · 확인 필요 = 지금 값의 **구성**(합류/제안/노하우) → StackBar
-   *  · 이번달 인건비·AI 답변 = 월 이력 원장을 클라가 안 갖고 있어 막대 없음(가짜 추세 금지)
+   * ★'이번달 인건비' 칸은 2026-11-02 급여 기능과 함께 뺐다. 칸이 3개라 마지막 줄 오른쪽은 StatCardGrid 가 빈 칸으로 채운다.
    * ★'이번 주 퀴즈' 칸은 넣지 않았다 — 허브 RPC 에 발송·응시 집계가 없다. 퀴즈 홈이 담당한다.
    * ★퀴즈 관리 진입은 2026-08-07 결정대로 노하우 탭이다(D6). 여기 칸은 **읽기 진입**(/owner/training).
    */
@@ -274,21 +265,6 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       sub: inboxLive.filter((k) => k.key !== 'review').map((k) => `${k.key === 'sugg' ? '승인 기다리는 제안' : k.title} ${k.n}건`).join(' · ') || undefined,
       visual: inboxTotal > 0 ? <StackBar parts={inboxKinds.map((k) => ({ n: k.n, label: k.label, color: k.color }))} /> : undefined,
       onPress: inboxTotal === 0 ? undefined : inboxLive.length === 1 ? () => goKind(inboxLive[0]) : () => setInboxOpen(true),
-    },
-    {
-      key: 'labor',
-      label: '이번달 인건비',
-      // 근무표 기준·computePay(0185) = 직원 관리 히어로와 같은 숫자. 못 읽었으면 0원으로 위장하지 않는다.
-      value: laborLoadError ? '—' : laborTotal >= 10000 ? Math.round(laborTotal / 10000).toLocaleString() : laborTotal.toLocaleString(),
-      unit: laborLoadError ? undefined : laborTotal >= 10000 ? '만원' : '원',
-      sub: laborLoadError ? '불러오지 못했어요' : multi ? `매장 ${overview.length}곳 합계 · 근무표 기준` : '근무표 기준',
-      // ★목적지는 '급여 설정'(수당·정산 기준)이 아니라 **직원·급여**다 — 이 칸을 누르는 사람은
-      //   "이 금액이 누구에게서 나왔나"를 보려는 것이고, 그 답(직원별 시간·금액)은 owner/staff 에만 있다.
-      //   수당 규칙을 고치는 화면은 거기서 한 번 더 들어간다(staff.tsx '급여 설정' 버튼).
-      onPress: () => {
-        if (multi) setPicker({ title: '직원 급여', path: '/owner/staff', units: overview.map((r) => ({ uid: r.unit_id, count: 0 })) });
-        else if (overview[0]) void goStore(overview[0].unit_id, '/owner/staff');
-      },
     },
     // 'AI 답변 사용' 칸은 2026-08-27 §7-6 판정으로 뺐다 — 월 사용/캡은 매장 설정(owner/settings)의 한 행으로 옮김.
   ];
@@ -383,7 +359,6 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
                 <SortTh label="질문" k="pending_q" cur={sortKey} onPress={setSortKey} />
                 <SortTh label="근무" k="working" cur={sortKey} onPress={setSortKey} />
                 <SortTh label="미첨부" k="uncovered" cur={sortKey} onPress={setSortKey} />
-                <SortTh label="인건비" k="labor_month" cur={sortKey} onPress={setSortKey} />
               </View>
               {sorted.map((r) => {
                 const t = todayByUnit[r.unit_id];
@@ -401,7 +376,6 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
                     <Text style={[styles.td, r.pending_q > 0 && styles.tdHot]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{r.pending_q}</Text>
                     <Text style={styles.td} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{`${t?.working_now ?? 0}/${t?.scheduled ?? 0}`}</Text>
                     <Text style={styles.td} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{r.uncovered}</Text>
-                    <Text style={styles.td} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{laborLoadError ? '—' : fmtWonShort(labor[r.unit_id] ?? 0)}</Text>
                   </Pressable>
                 );
               })}
@@ -412,7 +386,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
         </Appear>
       )}
 
-      {/* ── 4) 이번달 매장별 내역 — 다점포에서만. 합계는 위 그리드 칸(인건비)이 말한다. ── */}
+      {/* ── 4) 이번달 매장별 내역 — 다점포에서만. ── */}
       {multi && (
       <Appear delay={stagger(5)}>
         <SectionLabel title="이번달 매장별" />
@@ -422,7 +396,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
                 <View style={[styles.dot, { backgroundColor: colorOf(r.unit_id) }]} />
                 <Text style={styles.rowTitle} numberOfLines={1}>{labelOf(r.unit_id)}</Text>
                 <Text style={styles.rowSub}>
-                  {`${laborLoadError ? '—' : `${(labor[r.unit_id] ?? 0).toLocaleString()}원`} · AI ${r.ai_used.toLocaleString()}${aiCap != null ? `/${aiCap.toLocaleString()}` : ''}`}
+                  {`AI ${r.ai_used.toLocaleString()}${aiCap != null ? `/${aiCap.toLocaleString()}` : ''}`}
                 </Text>
               </View>
             ))}

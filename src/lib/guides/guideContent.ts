@@ -19,7 +19,6 @@ export type Guide = {
 export type GuideId =
   | 'owner_knowhow_v1'
   | 'owner_quiz_v1'
-  | 'owner_payroll_v1'
   | 'junior_home_v1'
   | 'junior_work_v1';
 
@@ -76,23 +75,11 @@ export const GUIDES: Record<GuideId, Guide> = {
       },
     ],
   },
-  owner_payroll_v1: {
-    pages: [
-      {
-        title: '켠 항목만 계산에 들어가요',
-        body: '야간·주휴 같은 수당은 켜두면 자동으로 반영돼요. 따로 더 챙겨줄 필요 없어요.',
-      },
-      {
-        title: '금액은 근무표에서 정해져요',
-        body: '이 화면은 규칙만 정하는 곳이에요. 실제 일한 시간은 근무표를 따라가요.',
-      },
-    ],
-  },
 };
 
 /** 역할별 가이드 id — 설정의 '사용 안내 다시 보기'가 지울 대상. */
 export const GUIDE_IDS_BY_ROLE: Record<'owner' | 'junior', readonly string[]> = {
   // 사장 홈의 스포트라이트 투어(owner_home_v1)도 함께 되살린다 — 사장이 보기엔 같은 '사용 안내'다.
-  owner: ['owner_home_v1', 'owner_knowhow_v1', 'owner_quiz_v1', 'owner_payroll_v1'],
+  owner: ['owner_home_v1', 'owner_knowhow_v1', 'owner_quiz_v1'],
   junior: ['junior_home_v1', 'junior_work_v1'],
 };
