@@ -36,7 +36,7 @@ export const VISIBILITY_LEVELS: VisibilityLevel[] = [
 ];
 
 /** 어느 수준에서도 본사에 가지 않는 것 — 스키마 수준에서 경로가 없다(brand-boundary 규칙). */
-export const NEVER_SHARED = ['근태','직원 이름 · 전화번호', '직원 개인별 점수 · 이수 기록', '업무 채팅'];
+export const NEVER_SHARED = ['근태', '직원 이름 · 전화번호', '직원 개인별 점수 · 이수 기록', '업무 채팅'];
 
 export const visibilityLabel = (v: BrandVisibility): string =>
   VISIBILITY_LEVELS.find((l) => l.key === v)?.label ?? v;
