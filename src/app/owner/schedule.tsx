@@ -57,8 +57,6 @@ import { EmptyStyles } from '@/lib/theme/empty';
 
 /** 알림으로 들어온 요청 카드로 스크롤하기 전 등장 애니메이션이 가라앉는 시간(NoticePanel · TodoScreen 과 같다). */
 const FOCUS_SETTLE_MS = 520;
-/** '되돌리기' 알약의 보이는 높이. 누르는 상자(44)는 바깥 Pressable 이 든다. */
-const EXC_BTN_H = 34;
 const TODAY_LINE = 18;
 
 export default function OwnerScheduleScreen() {
@@ -386,7 +384,7 @@ export default function OwnerScheduleScreen() {
               {/* 그날만 빠진 반복 근무 — 교대로 넘긴 흔적이다. 되돌리면 원래 반복이 이 날에도 돌아온다.
                   (넘어간 조각은 위 목록에 보이므로, 필요하면 눌러서 지운다.) */}
               {excludedToday.map((t) => (
-                <View key={`exc_${t.id}`} style={styles.excRow}>
+                <View key={`exc_${t.id}`} style={[styles.excRow, styles.excUndoRow]}>
                   <Ionicons name="git-branch-outline" size={14} color={InkColors.ink3} />
                   <Text style={styles.excText}>
                     {staff.find((x) => x.id === t.staff_id)?.name ?? '직원'}님의 매주 {WEEKDAY_LABELS[t.weekday ?? 0]}요일 {t.start}~{t.end} 근무는 이 날만 빠져 있어요
@@ -606,11 +604,14 @@ const styles = StyleSheet.create({
   dayNone: { ...Type.body, lineHeight: 21, color: TextColor.secondary, textAlign: 'center', paddingVertical: Space.lg },
   offText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary, paddingTop: Space.sm },
   excRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingTop: Space.sm },
+  // 되돌리기 줄만: 아래 여백 = 누르는 상자(44)가 보이는 32 밖으로 나가는 6. 그만큼 줄 안에 둔다(Android 는 부모 밖 터치를 안 받는다).
+  excUndoRow: { paddingBottom: -hitTrim(TouchSize.inlineFace) },
   excText: { ...Type.tag, flex: 1, fontWeight: '700', color: TextColor.secondary, lineHeight: 17 },
-  // 되돌리기 = 보이는 알약 34 그대로 · 누르는 높이 44(2026-11-02 사용자 결정 · 글자 링크). 위아래 음수 여백으로 줄 높이는 그대로.
-  excHit: { ...ButtonStyles.inlineHit, marginVertical: hitTrim(EXC_BTN_H) },
-  excBtn: { minHeight: EXC_BTN_H, justifyContent: 'center', paddingHorizontal: 10, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line },
-  excBtnText: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
+  // 되돌리기 = 줄 안 작은 버튼(2026-11-03 사용자 결정 · 직원 화면 '거절'과 같은 모양 13/700) — 보이는 32 · 누르는 44.
+  //   상자는 위아래 음수 여백(hitTrim)으로 자리를 32 만큼만 차지한다.
+  excHit: { ...ButtonStyles.inlineHit, marginVertical: hitTrim(TouchSize.inlineFace) },
+  excBtn: { minHeight: TouchSize.inlineFace, justifyContent: 'center', paddingHorizontal: Space.md, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line },
+  excBtnText: { ...Type.desc, fontWeight: '700' },
   addRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, minHeight: 48, marginTop: Space.sm, borderRadius: Radius.sm, borderWidth: 1, borderStyle: 'dashed', borderColor: InkColors.line },
   addText: { ...Type.body, lineHeight: 21, fontWeight: '800' },
 

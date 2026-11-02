@@ -63,8 +63,8 @@ export function BrowseCard({
         accessibilityLabel={`${entry.title}, ${v.label}${ratePct !== null ? `, 해결률 ${ratePct}%` : ''}${hits > 0 ? `, ${hits}명이 물어봄` : ''}`}
         style={({ pressed }) => [styles.cardBody, pressed && styles.pressed]}
       >
-        {/* 헤더: 카테고리(색점+이름) + 검증배지. 카테고리를 숨기면 배지 혼자 한 줄을 차지해
-            왼쪽 위가 비므로, 그때는 제목과 배지를 한 줄에 놓는다. */}
+        {/* 헤더: 카테고리(색점+이름) + 검증배지. 카테고리를 숨기면 제목을 맨 위에, 배지를 제목 아래 줄에 둔다.
+            한 줄에 같이 두면 제목 폭이 좁아져 낱말 가운데서 끊겼다(2026-11-03 사용자 결정 · 예: '표준 레/시피'). */}
         {showCategory ? (
           <>
             <View style={styles.header}>
@@ -84,12 +84,12 @@ export function BrowseCard({
             </Text>
           </>
         ) : (
-          <View style={styles.header}>
-            <Text style={[styles.title, styles.titleInRow]} numberOfLines={2}>
+          <>
+            <Text style={styles.title} numberOfLines={2}>
               {entry.title}
             </Text>
             <VerifyBadge state={entry.verification?.state} size="list" />
-          </View>
+          </>
         )}
 
         {/* 해결률 · 물어본 수 — 있는 것만 */}
@@ -185,7 +185,6 @@ const styles = StyleSheet.create({
   sectionDot: { width: 7, height: 7, borderRadius: Radius.pill },
   sectionChipText: { ...Type.tag, fontWeight: '800', color: InkColors.ink2 },
   title: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 21 },
-  titleInRow: { flex: 1, minWidth: 0 },
   statRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   rate: { fontSize: 12, fontWeight: '700', color: InkColors.ink2 },
   hits: { fontSize: 12, fontWeight: '700', color: BrandColors.warnText },
