@@ -19,7 +19,7 @@ import { todayStr } from '@/lib/utils/attendance';
 import { isPendingAssignment, isUnreadMention } from '@/lib/utils/notifications';
 import { SectionLabel } from '@/components/SectionLabel';
 import { FocusCard } from '@/components/blocks/FocusCard';
-import { StatCardGrid } from '@/components/blocks/StatCardGrid';
+import { StatCard } from '@/components/blocks/StatCardGrid';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { Appear, stagger } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -268,18 +268,18 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
              ★R4 — **여기엔 막대를 그리지 않는다.** `my_cross_summary` 가 주는 건 `month_minutes`
                **합계 하나**뿐이라 일별 이력이 없다. 시간축 막대를 그리면 지어낸 그림이 된다.
                일별 원장은 매장 앱 출퇴근 화면이 갖고 있으므로 그쪽으로 보낸다(보조줄).
-               매장이 2곳↑이면 매장별 분해가 실제 구성이지만 그건 바로 아래 카드가 이미 말한다. ── */}
+               매장이 2곳↑이면 매장별 분해가 실제 구성이지만 그건 바로 아래 카드가 이미 말한다.
+             ★2026-11-02 급여 제거로 '예상 급여' 칸이 빠져 한 칸만 남았다. 출퇴근 화면과 같이
+               그리드 대신 칸 하나(StatCard)를 전체 폭으로 그린다(반 폭이면 보조줄이 잘린다). ── */}
       <Appear delay={stagger(3)} style={{ gap: Space.sm }}>
         <SectionLabel title="이번달" />
-        <StatCardGrid
-          items={[
-            {
-              key: 'hours',
-              label: '근무시간',
-              value: fmtHours(month.minutes),
-              sub: myCross.length > 1 ? `매장 ${myCross.length}곳 합계` : '일별 기록은 출퇴근 화면에서 봐요',
-            },
-          ]}
+        <StatCard
+          item={{
+            key: 'hours',
+            label: '근무시간',
+            value: fmtHours(month.minutes),
+            sub: myCross.length > 1 ? `매장 ${myCross.length}곳 합계` : '일별 기록은 출퇴근 화면에서 봐요',
+          }}
         />
         {myCross.length > 1 && (
           <View style={styles.card}>
