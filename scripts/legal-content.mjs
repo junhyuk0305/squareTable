@@ -70,7 +70,7 @@
 //   ⛔ 지난 판의 날짜는 변경 이력·부칙에 **글자로** 적는다. 변수로 두면 다음 개정에서 상수를 올릴 때 같이 밀린다.
 
 /** 공고일 = 웹 배포일. ★배포일이 바뀌면 이 한 줄과 src/lib/config/business.ts 의 TERMS_VERSION 만 고친다. */
-export const ANNOUNCED_DATE = '2026-11-03';
+export const ANNOUNCED_DATE = '2026-11-02';
 
 /** 문서 공통 시행일 = 공고일 + 7일. 효력 발생일이라 빌드 날짜를 쓰면 안 된다. business.ts TERMS_VERSION 과 같아야 한다. */
 export const EFFECTIVE_DATE = addDays(ANNOUNCED_DATE, 7);
