@@ -137,10 +137,16 @@ try {
   await ownerB.rpc('approve_member', { p_uid: staffB1Id });
 
   // 매장 A 신청 대기자(승인 전 — pending_unit_id=A, unit_id=null)
+  // ★0346: join_by_invite 는 바로 합류한다(무료 좌석이 차 있으면 staff_limit). 0346 전 옛 신청을 service_role 로 심는다.
   const pendingA = mk();
-  await signUpSession(pendingA, `qa_push_pa_${s}@example.com`, { name: 'PushPending', role: 'junior', phone: ph('46') });
+  const pendingAId = await signUpSession(pendingA, `qa_push_pa_${s}@example.com`, { name: 'PushPending', role: 'junior', phone: ph('46') });
   cleanup.push(pendingA);
-  await pendingA.rpc('join_by_invite', { p_code: codeA });
+  if (!SERVICE) throw new Error('신청 대기자 심기: SUPABASE_SERVICE_ROLE_KEY 필요(.env.seed)');
+  {
+    const admin = createClient(URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { error } = await admin.from('profiles').update({ pending_unit_id: unitA }).eq('id', pendingAId);
+    if (error) throw new Error(`신청 대기자 심기: ${error.message}`);
+  }
 
   // unit 없는 유저(가입만)
   const nobody = mk();

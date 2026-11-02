@@ -130,6 +130,7 @@
     "qa:swap-transfer": "node scripts/qa-swap-transfer.mjs --allow-remote",
     "qa:retention": "node scripts/qa-retention.mjs",
     "qa:member-notices": "node scripts/qa-member-notices.mjs",
+    "qa:instant-join": "node scripts/qa-instant-join.mjs",
     "qa:knowhow-archive": "node scripts/qa-knowhow-archive.mjs",
     "qa:j15": "node --no-warnings scripts/qa-j15.mjs",
     "qa:push-session": "node scripts/qa-push-session.mjs",

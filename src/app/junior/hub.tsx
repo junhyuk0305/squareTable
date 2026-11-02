@@ -18,7 +18,7 @@ const CODE_LEN = 6;
 // 직원 개인 허브 홈 — 회원가입 직후(매장 미연결) 착지점.
 // 마이페이지 + 후킹 배너 + 가게 코드 입력 + 내 가게 목록을 한 화면에 모은다.
 // 단일매장 모델이라 지금 '내 가게'는 0~1개지만, 목록(stores)으로 그려 향후 멀티매장 확장에 대비한다.
-// 가게 합류/승인 대기 로직은 기존 joinByInvite(승인제)를 그대로 재사용한다.
+// 가게 합류는 joinByInvite 를 쓴다(0346 즉시 합류). 승인 대기 카드는 0346 전 옛 신청에만 보인다.
 export default function JuniorHub() {
   const router = useRouter();
   const userName = useSessionStore((s) => s.userName);
@@ -33,7 +33,7 @@ export default function JuniorHub() {
   const dismissRejectedJoin = useSessionStore((s) => s.dismissRejectedJoin);
 
   // 사장이 보낸 초대 링크로 가입해 들어온 경우에만 채워진다(signup 이 실어 보낸다).
-  // 채우기만 하고 **자동 제출은 하지 않는다** — 합류 신청은 직원이 누르는 것이다.
+  // 채우기만 하고 **자동 제출은 하지 않는다** — 합류는 직원이 누르는 것이다.
   const params = useLocalSearchParams<{ code?: string }>();
   const inputRef = useRef<TextInput>(null);
   const [code, setCode] = useState(typeof params.code === 'string' ? params.code.replace(/[^0-9]/g, '').slice(0, CODE_LEN) : '');
@@ -93,8 +93,7 @@ export default function JuniorHub() {
     }
     setNeedPhone(false);
     setCode('');
-    // 승인제: 성공은 '승인 대기' 신청(pendingUnitId 세팅 → 아래 대기 카드로 전환).
-    // 혹시 즉시 합류(레거시)면 바로 가게로 진입.
+    // ★0346 즉시 합류: 성공하면 그 매장 홈으로 간다. pending 은 0346 전 옛 신청(already_pending)일 때만 온다.
     if (!pending) router.replace('/junior/home');
   };
 
@@ -137,7 +136,7 @@ export default function JuniorHub() {
       {needPhone && (
         <PhoneVerifyBlock
           guide="매장에 합류하려면 본인 확인이 한 번 필요해요."
-          okText="이제 합류를 신청할 수 있어요."
+          okText="이제 합류할 수 있어요."
           initialPhone={sessionPhone}
           updateProfile={updateProfile}
           onVerifiedChange={setPhoneReady}
@@ -149,7 +148,7 @@ export default function JuniorHub() {
         onPress={join}
         style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}
       >
-        {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>합류 신청</Text>}
+        {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>합류하기</Text>}
       </Pressable>
       <Text style={styles.codeHint}>코드가 없으신가요? 사장님께 요청하세요 (사장님: 설정 › 매장 관리).</Text>
     </View>
@@ -285,7 +284,7 @@ export default function JuniorHub() {
               accessibilityLabel="코드로 매장 추가 — 초대코드 입력"
             >
               <Ionicons name="add" size={18} color={InkColors.ink2} />
-              {/* 펼치면 나오는 Primary가 '합류 신청'이라 라벨을 다르게 둔다 —
+              {/* 펼치면 나오는 Primary가 '합류하기'라 라벨을 다르게 둔다 —
                   같은 말이 위아래로 겹치면 어느 쪽을 눌러야 하는지 흐려진다. */}
               <Text style={styles.addRowText}>코드로 매장 추가</Text>
               <Ionicons name={addOpen ? 'chevron-up' : 'chevron-down'} size={16} color={InkColors.ink3} />

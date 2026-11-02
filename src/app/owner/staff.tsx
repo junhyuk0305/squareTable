@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
@@ -32,11 +32,34 @@ import { showToast } from '@/lib/store/useToastStore';
 import { rotateInviteCode } from '@/lib/db';
 import { departedPayRows, rejoinNotice, workedInPeriod } from '@/lib/utils/tenure';
 import { confirmAction } from '@/lib/utils/confirm';
+import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
+
+// 등장 애니메이션(Appear)이 가라앉은 뒤 재야 행 위치가 맞다(schedule.tsx 와 같은 값).
+const FOCUS_SETTLE_MS = 520;
 
 export default function OwnerStaffScreen() {
   const router = useRouter();
   // ?member=<신청자 id> — 합류 신청 알림(레지스트리 join_request route)에서 들어오면 그 신청 행을 강조한다(P1 역 ⑤).
   const { member: focusMemberId } = useLocalSearchParams<{ member?: string }>();
+  // ★0346 즉시 합류 — 합류함 알림(member_joined)은 재직 직원 행으로 온다. 그 행도 강조하고 한 번 스크롤한다.
+  //   행 위치는 스크롤 내용 기준으로 잰다(TodoScreen 과 같은 measureLayout · 두 단 배치에서도 맞다). 같은 id 로는 한 번만.
+  const scrollRef = useRef<ScrollView>(null);
+  const focusRowRef = useRef<View>(null);
+  const [pendingFocus, focusDone] = useOpenFromParam(focusMemberId);
+  const focusTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => { if (focusTimer.current) clearTimeout(focusTimer.current); }, []);
+  function scheduleFocusScroll() {
+    if (focusTimer.current) clearTimeout(focusTimer.current);
+    focusTimer.current = setTimeout(() => {
+      const node = focusRowRef.current;
+      const inner = scrollRef.current?.getInnerViewNode?.();
+      if (!node || !inner) return focusDone();
+      node.measureLayout(inner, (_x, y) => {
+        scrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+        focusDone();
+      }, focusDone);
+    }, FOCUS_SETTLE_MS);
+  }
   const wages = usePayrollStore((s) => s.wages);
   const settings = usePayrollStore((s) => s.settings);
   const settingsFail = usePayrollStore((s) => s.settingsLoadError);
@@ -206,7 +229,7 @@ export default function OwnerStaffScreen() {
         <ScreenLoading label="직원·급여를 불러오고 있어요…" />
       ) : (
       <KeyboardShift>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* ① 급여 — 이번 달 인건비 총액 + 급여 설정 진입(상단). 구 '근무·급여'·'급여 설정' 카드를 흡수.
             이 화면의 히어로는 여기 하나다(2026-08-06) — 아래 초대코드가 같은 다크·30sp 규격이라 히어로가 둘이었다. */}
         {/* 넓은 웹에서만 두 단 — 왼쪽 급여·직원 목록 / 오른쪽 초대·바로 가기.
@@ -357,8 +380,13 @@ export default function OwnerStaffScreen() {
             const agg = perStaff[s.id];
             const isManager = roles[s.id] === 'manager';
             return (
-            <Appear key={s.id} delay={stagger(i)} style={styles.staffItem}>
-            <View style={[styles.staffRow, styles.staffRowFlat]}>
+            <Appear key={s.id} delay={stagger(i)} style={[styles.staffItem, s.id === focusMemberId && styles.focusRow]}>
+            {/* ★0346 ?member= 로 온 직원 행 — 강조 테두리 안에서 내보내기 버튼을 그대로 바로 누를 수 있다. */}
+            <View
+              ref={s.id === focusMemberId ? focusRowRef : undefined}
+              onLayout={s.id === pendingFocus ? scheduleFocusScroll : undefined}
+              style={[styles.staffRow, styles.staffRowFlat]}
+            >
               <Pressable onPress={() => router.push(`/owner/timesheet/${s.id}`)} style={({ pressed }) => [styles.staffTap, pressed && { opacity: 0.6 }]}>
                 <Avatar name={s.name} size={40} fontSize={15} />
                 <View style={styles.nameCol}>

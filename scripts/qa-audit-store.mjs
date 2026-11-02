@@ -21,7 +21,8 @@ const lastDef = (name) => {
   let body = '', file = '';
   for (const f of migFiles()) {
     const s = readFileSync(new URL(f, migDir), 'utf8').replace(/\r\n/g, '\n');
-    const re = new RegExp(`create (or replace )?function public\\.${name}\\([\\s\\S]*?\\$\\$;`, 'g');
+    // ★0346: 대문자 CREATE … $function$ 본문(pg_get_functiondef 를 붙여 넣은 꼴)도 읽는다. 전엔 이걸 못 읽어 옛 정의를 봤다.
+    const re = new RegExp(`create (or replace )?function public\\.${name}\\([\\s\\S]*?\\$(function)?\\$;`, 'gi');
     for (const m of s.matchAll(re)) { body = m[0]; file = f; }
   }
   return { body: sqlStrip(body), file };
@@ -41,7 +42,14 @@ console.log('[C1] 무료 매장 좌석 잠금은 한 판정 — 상한(free_staf
   // ★0336: 무료 직원 상한은 free_staff_cap() 한 곳. 함수 6개 어디에도 숫자 3이 다시 박히면 안 된다.
   const cap = lastDef('free_staff_cap');
   check('★무료 직원 상한 = 2 (free_staff_cap)', /select 2\b/.test(cap.body), cap.file || '없음');
-  for (const fn of ['approve_member', 'seat_locked_for', 'unit_seat_status', 'unit_locked_seats', 'needs_downgrade_choice', 'choose_kept_seats']) {
+  // ★0346: 합류 좌석 캡은 approve_member 본문에서 _staff_seat_full 로 옮겼다. 합류 두 길(join_by_invite·approve_member)이 _admit_member → _staff_seat_full 을 지난다.
+  {
+    const adm = lastDef('_admit_member');
+    check('★합류(_admit_member)가 좌석 판정 _staff_seat_full 을 지나고, join_by_invite·approve_member 가 _admit_member 를 부른다',
+      /public\._staff_seat_full\(p_unit\)/.test(adm.body) && /public\._admit_member\(/.test(lastDef('join_by_invite').body)
+        && /public\._admit_member\(/.test(lastDef('approve_member').body), adm.file || '없음');
+  }
+  for (const fn of ['_staff_seat_full', 'seat_locked_for', 'unit_seat_status', 'unit_locked_seats', 'needs_downgrade_choice', 'choose_kept_seats']) {
     const d = lastDef(fn);
     check(`★${fn} 가 상한을 free_staff_cap() 에서 읽는다`, /free_staff_cap\(\)/.test(d.body) && !/(>=|<=|>|-|:=)\s*3\b/.test(d.body), d.file);
   }
@@ -98,9 +106,11 @@ console.log('\n[C5] 닫힌 매장·탈퇴한 사장 매장의 코드로는 합�
   const guard = j.body.match(/if v_deleted is not null[\s\S]*?end if;/)?.[0] ?? '';
   check('★삭제 대기·잠긴 매장이면 신청을 넣지 않고 store_not_accepting 으로 거부한다',
     /unit_access_locked\(v_unit\)/.test(guard) && /raise exception 'store_not_accepting'/.test(guard)
-      && j.body.indexOf('store_not_accepting') < j.body.indexOf('set pending_unit_id = v_unit'), j.file);
-  check('join_by_invite 권한 유지(authenticated)',
-    fileHas(j.file, 'grant execute on function public.join_by_invite(text, date) to authenticated;'));
+      && j.body.indexOf('store_not_accepting') < j.body.indexOf('_admit_member('), j.file); // ★0346: 신청(set pending_unit_id) 대신 즉시 합류
+  // create or replace 는 권한을 그대로 둔다. 0346 은 grant 를 다시 쓰지 않으므로 마지막 grant/revoke 문장을 본다.
+  const lastPriv = migFiles().flatMap((f) => sqlStrip(read(`supabase/migrations/${f}`)).split('\n'))
+    .filter((l) => /(grant|revoke)\s+(all|execute) on function public\.join_by_invite\(text, date\)/i.test(l) && /authenticated/.test(l)).pop() ?? '';
+  check('join_by_invite 권한 유지(authenticated)', /^\s*grant execute on function public\.join_by_invite\(text, date\) to authenticated;/i.test(lastPriv), lastPriv || '없음');
   const sess = read('src/lib/store/useSessionStore.ts');
   check('★앱이 store_not_accepting 을 쉬운 문구로 보여 준다',
     /store_not_accepting/.test(sess) && /합류 신청을 받지 않는 매장이에요/.test(sess));

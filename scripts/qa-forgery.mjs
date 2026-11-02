@@ -58,7 +58,8 @@ const J = await signUp(`qa_forg_j_${s}@example.com`, { name: 'QA직원J', role: 
 const K = await signUp(`qa_forg_k_${s}@example.com`, { name: 'QA직원K', role: 'junior', phone: phones[2] });
 for (const u of [J, K]) { await u.c.rpc('join_by_invite', { p_code: code }); await O.c.rpc('approve_member', { p_uid: u.id }); }
 const P = await signUp(`qa_forg_p_${s}@example.com`, { name: 'QA신청P', role: 'junior', phone: phones[3] });
-await P.c.rpc('join_by_invite', { p_code: code });
+// ★0346: join_by_invite 는 바로 합류한다. 합류 대기는 0346 전 옛 신청이라 서비스 키로 대기 행을 심는다.
+await must(srv.from('profiles').update({ pending_unit_id: S1 }).eq('id', P.id), 'P 대기');
 const { count: memberCount } = await srv.from('unit_members').select('user_id', { count: 'exact', head: true }).eq('unit_id', S1);
 check('setup: 사장·직원 둘·합류 대기 하나', !!S1 && memberCount === 3, `S1=${S1} members=${memberCount}`);
 

@@ -157,6 +157,8 @@ try {
     'mn:removed': { manager: 'hub:member_removed', junior: 'hub:member_removed' },
     'mn:left': { owner: 'member_left' },
     'mn:account_deleted': { owner: 'member_left' },
+    'mn:member_joined': { owner: 'member_joined' }, // ★0346 즉시 합류 → 사장
+    'mn:join_full': { owner: 'join_full' }, // ★0346 인원 초과(report_join_full) → 사장
     'mn:owner_deleted': {}, // 넣는 곳이 없다(0247 close_member_tenure 는 알림 없음)
     'mn:question_answered': {}, // 넣는 곳이 없다(답 알림은 앱 q_answered 푸시)
     'mn:swap_confirmed': { manager: 'schedule', junior: 'schedule' },

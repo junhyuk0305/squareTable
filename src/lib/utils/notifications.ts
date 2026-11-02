@@ -362,7 +362,7 @@ export function buildJuniorNotifications(args: {
       out.push(roleNoticeRow(n, ackAt));
       continue;
     }
-    if (n.kind === 'left' || n.kind === 'account_deleted') continue; // 사장이 받는 행(ownerReceivedRows)
+    if (n.kind === 'left' || n.kind === 'account_deleted' || n.kind === 'member_joined' || n.kind === 'join_full') continue; // 사장이 받는 행(ownerReceivedRows)
     out.push({
       id: `sched_${n.id}`,
       kind: 'schedule',
@@ -432,6 +432,8 @@ export function buildJoinNotifRows(joinNotices: JoinNotice[], joinAckAt: string 
 export type OwnerNotifKind =
   // 직원 나감·탈퇴(0317 · 0247 member_notices left·account_deleted)
   | 'member_left'
+  // ★0346 직원 합류함 · 인원이 다 차서 합류 못 함(member_notices member_joined·join_full)
+  | 'member_joined' | 'join_full'
   // 처리한 합류 신청(0345) — 내역이라 읽음·배지에 안 들어간다
   | 'join_done'
   | 'join_request' | 'question' | 'suggestion' | 'swap_approval' | 'mention'
@@ -597,6 +599,20 @@ function ownerReceivedRows(received: ManagerReceivedArgs): OwnerNotif[] {
       at: n.created_at,
       unread: isAfterAck(n.created_at, received.ackAt),
       route: NOTIF.member_left.route('owner'),
+    });
+  }
+  // ★0346 직원 합류함 · 인원 초과(사장 멤버십에게만). 서버 문구 그대로 · 배지에 센다(left 와 같다).
+  //   합류함은 명부의 그 직원으로(?member=<actor_id>), 인원 초과는 명부로.
+  for (const n of received.scheduleNotices ?? []) {
+    if (n.kind !== 'member_joined' && n.kind !== 'join_full') continue;
+    out.push({
+      id: `${n.kind}_${n.id}`,
+      kind: n.kind,
+      title: n.title,
+      body: n.body,
+      at: n.created_at,
+      unread: isAfterAck(n.created_at, received.ackAt),
+      route: n.kind === 'member_joined' ? NOTIF.member_joined.route('owner', n.actor_id ?? undefined) : NOTIF.join_full.route('owner'),
     });
   }
   return out;

@@ -72,7 +72,7 @@ async function signUpAndSession(client, email, meta) {
 // (★ 새 케이스가 새 번호를 쓰면 이 목록에도 추가할 것 — 빠지면 게이트 라이브 환경에서만 FAIL 난다.)
 const qaPhones = [
   `0107${s.slice(0, 7)}`, `0108${s.slice(0, 7)}`, `01091${s.slice(0, 6)}`, `01092${s.slice(0, 6)}`,
-  `01093${s.slice(0, 6)}`, `01094${s.slice(0, 6)}`, `01095${s.slice(0, 6)}`,
+  `01093${s.slice(0, 6)}`, `01094${s.slice(0, 6)}`, `01095${s.slice(0, 6)}`, `01096${s.slice(0, 6)}`,
 ];
 const seeded = await seedVerifiedPhones(URL, SERVICE, qaPhones);
 if (seeded.skipped) console.log(`  (phone_otps 시드 스킵: ${seeded.skipped})`);
@@ -103,18 +103,29 @@ try {
   const { data: ji, error: jiErr } = await staff.rpc('join_by_invite', { p_code: code });
   check('join_by_invite: no ambiguous(42702)', !isAmbig(jiErr), jiErr?.message ?? '');
   check('join_by_invite: returned store_name', !!(Array.isArray(ji)?ji[0]:ji)?.store_name);
-  // 0032부터: 합류는 "승인 대기" 신청 — unit_id는 아직 null, pending_unit_id만 세팅(노하우 격리).
+  // 0346부터: 코드를 넣으면 바로 합류한다 — unit_id 부여, 대기(pending_unit_id) 없음.
   const { data: prof0 } = await staff.from('profiles').select('unit_id, pending_unit_id, role').eq('id', staffId).maybeSingle();
-  check('join_by_invite: 즉시 합류 아님(unit_id=null, 승인대기)', prof0?.unit_id == null && prof0?.pending_unit_id === unit, `unit=${prof0?.unit_id} pending=${prof0?.pending_unit_id}`);
-  check('invite 만료정책: 갓 만든 코드는 무기한(신청 접수됨)', prof0?.pending_unit_id === unit);
-  // 승인 전 신청자는 매장 데이터(노하우)를 한 줄도 못 본다 — RLS 격리 실증.
-  const { data: peek } = await staff.from('playbook_entries').select('id').limit(1);
-  check('승인 전: 매장 노하우 0행(RLS 격리)', Array.isArray(peek) && peek.length === 0, `rows=${peek?.length}`);
-  // 사장 승인 → 소속 확정(unit_id 부여, pending 비움).
+  check('join_by_invite: 바로 합류(unit_id=매장, 대기 없음)', prof0?.unit_id === unit && prof0?.pending_unit_id == null, `unit=${prof0?.unit_id} pending=${prof0?.pending_unit_id}`);
+  check('invite 만료정책: 갓 만든 코드는 무기한(합류됨)', prof0?.unit_id === unit);
+  // 0346: 옛 사장 앱이 이어서 approve_member 를 불러도 오류 없이 끝난다(이미 멤버면 no-op).
   const { error: apprErr } = await owner.rpc('approve_member', { p_uid: staffId });
-  check('approve_member: 사장 승인 성공', !apprErr, apprErr?.message ?? '');
+  check('approve_member: 이미 멤버면 오류 없음(옛 사장 앱)', !apprErr, apprErr?.message ?? '');
   const { data: prof } = await staff.from('profiles').select('unit_id, pending_unit_id, role').eq('id', staffId).maybeSingle();
-  check('승인 후 staff actually attached to store', prof?.unit_id === unit && prof?.pending_unit_id == null, `got=${prof?.unit_id} expect=${unit}`);
+  check('approve_member 뒤에도 소속 그대로', prof?.unit_id === unit && prof?.pending_unit_id == null, `got=${prof?.unit_id} expect=${unit}`);
+  // 0346 전에 생긴 대기 신청자는 승인 전까지 매장 데이터(노하우)를 한 줄도 못 본다 — RLS 격리 실증.
+  //   대기는 이제 합류로 안 생기므로 service_role 로 심는다(SERVICE 키가 없으면 실패로 센다).
+  {
+    const pend = mk();
+    const pendId = await signUpAndSession(pend, `qa_p_${s}@example.com`, { name: 'QA대기', role: 'junior', phone: `01096${s.slice(0, 6)}` });
+    cleanup.push(pend);
+    let seedErr = SERVICE ? null : 'SERVICE 키 없음';
+    if (SERVICE) {
+      const { error } = await createClient(URL, SERVICE, { auth: { persistSession: false } }).from('profiles').update({ pending_unit_id: unit }).eq('id', pendId);
+      seedErr = error?.message ?? null;
+    }
+    const { data: peek } = await pend.from('playbook_entries').select('id').limit(1);
+    check('승인 전 대기 신청자: 매장 노하우 0행(RLS 격리)', !seedErr && Array.isArray(peek) && peek.length === 0, seedErr ?? `rows=${peek?.length}`);
+  }
 
   // ── P0 edge: 전화번호 정규화 parity(형식 달라도 같은 번호) ────────────────
   // staffPhone(01081234567)을 +82/하이픈 형식으로 줘도 phone_in_use가 true여야 클라·DB normalize가 일치.

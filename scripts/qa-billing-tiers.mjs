@@ -3,7 +3,7 @@
 //
 // 서버 스위치(app_config.billing_free_mode)를 false 로 잠깐 뒤집고 캡 3종을 실증한 뒤
 // 반드시 true 로 원복한다(finally — 파일럿 Phase 0 유지가 최우선 불변식).
-//   ① 좌석 캡: 무료 매장 직원 2명 승인 OK → 3번째 승인 staff_limit (0336)
+//   ① 좌석 캡: 무료 매장 직원 2명 합류 OK → 3번째 합류 staff_limit (0336 · ★0346 즉시 합류라 합류 시점에 막힌다)
 //   ② AI 캡(0193 플랜별): free 200 / 유료 매장당 3000. 캡 직전 200 → 캡 도달 402 로 경계를 양쪽에서 찍는다.
 //      ★ 유료 "무제한"은 폐기됐다(행사장형 무한호출 구멍). 유료도 3000 에서 402 가 나는지 회귀 가드한다.
 //      (가중치 — 답변 1·퀴즈 2·PDF 쪽당 1 — 는 qa-ai-units.mjs 가 본다.)
@@ -179,13 +179,11 @@ async function main() {
   const { data: sub1 } = await F.c.from('unit_subscriptions').select('plan, status').eq('unit_id', store1).maybeSingle();
   check('신규 매장 plan=free', sub1?.plan === 'free', `plan=${sub1?.plan}`);
 
-  // 직원 4명 준비(가입 + 합류 신청). 승인은 스위치 내린 뒤 단계별로.
+  // 직원 3명 준비(가입만). ★0346: join_by_invite 가 바로 합류하므로 합류는 스위치 내린 뒤 단계별로 한다.
   const staff = [];
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= 3; i++) {
     const j = await signUp('junior', `QA과금알바${i}`);
     cleanup.push(j.c);
-    const { error: je } = await j.c.rpc('join_by_invite', { p_code: invite1 });
-    if (je) throw new Error(`join_by_invite(${i}) 실패: ${je.message}`);
     staff.push(j);
   }
 
@@ -196,13 +194,17 @@ async function main() {
     const { data: fm1 } = await F.c.rpc('billing_free_mode');
     check('스위치 false 반영', fm1 === false, `got=${fm1}`);
 
-    // ② 좌석 캡(0336 무료 = 직원 2명): 1~2번째 승인 OK, 3번째 staff_limit
+    // ② 좌석 캡(0336 무료 = 직원 2명): 1~2번째 합류 OK, 3번째 합류 staff_limit(★0346 합류 시점)
+    const isMember1 = async (uid) => {
+      const { data } = await F.c.from('unit_members').select('user_id').eq('unit_id', store1).eq('user_id', uid);
+      return (data ?? []).length === 1;
+    };
     for (let i = 0; i < 2; i++) {
-      const { error } = await F.c.rpc('approve_member', { p_uid: staff[i].uid });
-      check(`직원 ${i + 1}명째 승인 OK(≤2)`, !error, error?.message ?? '');
+      const { error } = await staff[i].c.rpc('join_by_invite', { p_code: invite1 });
+      check(`직원 ${i + 1}명째 합류 OK(≤2)`, !error && (await isMember1(staff[i].uid)), error?.message ?? '');
     }
-    const { error: e4 } = await F.c.rpc('approve_member', { p_uid: staff[2].uid });
-    check('3번째 승인 차단(staff_limit)', /staff_limit/.test(e4?.message ?? ''), e4?.message ?? '승인돼버림');
+    const { error: e4 } = await staff[2].c.rpc('join_by_invite', { p_code: invite1 });
+    check('3번째 합류 차단(staff_limit) · 멤버 아님', /staff_limit/.test(e4?.message ?? '') && !(await isMember1(staff[2].uid)), e4?.message ?? '합류돼버림');
 
     // ③ AI 캡(0082 플랜별): free=150. 한도 내 200 → 경계 아래(149)에서도 200 → 캡 도달(150)에서 402.
     //    경계를 149/150 양쪽으로 찍는 이유: 상수만 바꾸고 부등호를 안 고치면 off-by-one 이 조용히 남는다.
@@ -235,8 +237,8 @@ async function main() {
     // ⑤ single 활성화 → 좌석·AI 해제, 매장은 여전히 차단
     const act1 = await adminActivate(store1, 30, 'single');
     check('admin_activate_store(single)', act1?.plan === 'single' && act1?.status === 'active', `plan=${act1?.plan}`);
-    const { error: e4b } = await F.c.rpc('approve_member', { p_uid: staff[2].uid });
-    check('single: 3번째 직원 승인 해제', !e4b, e4b?.message ?? '');
+    const { error: e4b } = await staff[2].c.rpc('join_by_invite', { p_code: invite1 });
+    check('single: 3번째 직원 합류 해제', !e4b && (await isMember1(staff[2].uid)), e4b?.message ?? '');
     // 0082 부터 유료도 무제한이 아니다 — 매장당 1500. free 캡을 넘긴 상태에서 200 이 나와야 하고
     // (플랜 상향으로 해제), 유료 캡까지 채우면 다시 402 여야 한다("무제한" 폐기 회귀 가드).
     const AI_PAID = [`single: free 캡 초과분 해제(used>${FREE_CAP} 에도 200)`, `single: 유료 캡 직전(used=${PAID_CAP - 1})은 200`, `single: 유료 캡 도달(used=${PAID_CAP}) 402 — '무제한' 폐기 확인`, `single: 402 응답이 캡 ${PAID_CAP} 을 실어보냄`];

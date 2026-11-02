@@ -12,7 +12,7 @@
 // 수정 전에는 inviteExpiry.ts 가 없으므로 **지금 앱의 판정**으로 같은 표를 돌린다
 //   (지금 앱은 만료일을 읽지 않는다 → 어떤 코드든 표시 없음 · 공유 가능). 모듈이 없어서가 아니라 판정이 틀려서 RED 다.
 // 실행: node scripts/qa-invite-expiry.mjs   (Node 22.18+ — .ts 를 타입만 벗겨 읽는다)
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { register } from 'node:module';
 
 register('./qa-alias-loader.mjs', import.meta.url);
@@ -78,8 +78,11 @@ check('★G3 매장 정보 읽기 실패면 같은 사용자·같은 매장의 �
   show(unitRead.slice(0, 200)));
 const staff = strip(read('src/app/owner/staff.tsx'));
 check('★2-4 [코드 변경] 뒤 만료일도 새 값으로 바꾼다', /useSessionStore\.setState\(\{ inviteCode: res\.inviteCode, inviteExpiresAt: res\.expiresAt \}\)/.test(staff));
-const join = read('supabase/migrations/0067_junior_multistore_membership.sql');
-check('2-5 서버는 만료 코드 합류를 거부한다(0067 join_by_invite · 회귀 가드)', /u\.invite_expires_at is null or u\.invite_expires_at > now\(\)/.test(join));
+// ★0346: 0067 파일만 보면 뒤 정의가 조건을 빠뜨려도 못 잡는다. join_by_invite 를 마지막으로 정의한 파일을 본다.
+const joinFile = readdirSync(new URL('../supabase/migrations/', import.meta.url)).filter((f) => f.endsWith('.sql')).sort()
+  .filter((f) => /create (or replace )?function public\.join_by_invite\(/i.test(read(`supabase/migrations/${f}`))).pop() ?? '';
+const join = joinFile ? read(`supabase/migrations/${joinFile}`) : '';
+check('2-5 서버는 만료 코드 합류를 거부한다(마지막 join_by_invite 정의 · 회귀 가드)', /u\.invite_expires_at is null or u\.invite_expires_at > now\(\)/.test(join), joinFile || '정의 없음');
 
 // ── [3] InviteBlock ───────────────────────────────────────────────────
 console.log('\n[3] InviteBlock');

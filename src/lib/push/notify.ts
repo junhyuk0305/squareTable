@@ -135,18 +135,7 @@ const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 // ── 이벤트별 헬퍼 (호출부가 문자열을 안 틀리게 얇게 감싼다) ────────────────
 // tag·url 은 레지스트리(NOTIF[kind])가 정한다. 여기서는 kind · 수신 갈래 · 항목 id · 문구만 말한다.
 // 사장이 받는 것들 (직원 행동 → 사장)
-// 합류 신청은 신청자가 아직 그 매장 소속이 아니다(pending). 서버가 신청자의 pending_unit_id 를
-// 해석해 그 매장 사장에게만 보낸다 → 신청한 매장 밖으로는 절대 못 보낸다(테넌트 안전).
-// itemId = 신청자 id → 명부 화면이 그 신청 행을 강조한다.
-export const notifyOwnersJoinRequest = (name: string, applicantId?: string) =>
-  pushNotify({
-    audience: 'join_owners',
-    kind: 'join_request',
-    itemId: applicantId,
-    title: '합류 신청',
-    body: NOTIF.join_request.title(name),
-  });
-
+// 합류(0346 즉시 합류)는 앱이 쏘지 않는다. 서버가 member_notices 행을 넣고 크론이 보낸다.
 export const notifyOwnersQuestion = (q: string, uqId?: string) =>
   pushNotify({
     audience: 'owners',

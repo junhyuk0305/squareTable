@@ -16,6 +16,7 @@ import {
   rpcRecordMyConsents,
   rpcDeleteStore,
   rpcJoinByInvite,
+  rpcReportJoinFull,
   rpcCancelJoinRequest,
   rpcLeaveStore,
   rpcDeleteMyAccount,
@@ -40,7 +41,6 @@ import { Platform } from 'react-native';
 import { SHOW_IAP, SHOW_SOCIAL_LOGIN } from '@/lib/config/store-policy';
 import { googleRedirectTo } from '@/lib/auth/googleRedirect';
 import { googleNativeSignIn, nativeRedirectUrl } from '@/lib/auth/googleNative';
-import { notifyOwnersJoinRequest } from '@/lib/push/notify';
 import { signOutWithPushRelease } from '@/lib/push/signOutPush';
 import { authStorage } from '@/lib/storage/authStorage';
 import { changePhoneByOtp } from '@/lib/otp';
@@ -975,10 +975,18 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       if (/PHONE_NOT_VERIFIED/.test(error.message)) {
         track('join_requested', { result: 'phone_not_verified' });
         return {
-          error: '전화번호 인증이 필요해요. 인증을 마치면 바로 신청할 수 있어요.',
+          error: '전화번호 인증이 필요해요. 인증을 마치면 바로 합류할 수 있어요.',
           storeName: null,
           code: 'PHONE_NOT_VERIFIED',
         };
+      }
+      // ★0346 무료 인원이 다 찼다. 사장 알림은 서버가 다시 확인하고 넣는다(report_join_full).
+      //   합류 실패와 알림 행을 한 호출에 같이 남길 수 없어 요청을 한 번 더 보낸다(0346 ⑤).
+      if (/staff_limit/.test(error.message)) {
+        const { error: repErr } = await rpcReportJoinFull(code);
+        if (repErr) reportError('session.reportJoinFull', repErr);
+        track('join_requested', { result: 'staff_limit' });
+        return { error: '이 매장은 인원이 다 찼어요. 사장님께 알려 주세요.', storeName: null, code: 'staff_limit' };
       }
       const reason = /invalid_code/.test(error.message)
         ? 'invalid_code'
@@ -1016,17 +1024,18 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       track('join_requested', { result: 'invalid_code' });
       return { error: INVALID_OR_EXPIRED_CODE_MSG, storeName: null };
     }
-    // 0032: 즉시 합류가 아니라 '승인 대기' 신청. row.unit_id=신청 대상, unit_id는 아직 안 붙는다.
-    // 대기 화면에 보여줄 매장 이름을 세션에 심고, 프로필 재로드로 pendingUnitId를 반영한다.
-    set({ pendingStoreName: row?.store_name ?? '' });
-    const uid = get().userId;
-    // 거절 감지용 기기 마커(#미아 방지) — loadProfile 의 판정이 이 마커를 읽으므로 먼저 남긴다.
-    if (uid) writeJoinMarker(uid, { unitId: row.unit_id, storeName: row?.store_name ?? '' });
-    if (uid) await loadProfile(set, uid, get().email);
-    track('join_requested', { result: 'pending' });
-    // 신청 매장 사장에게 웹푸시(승인 대기 신청이 들어옴). loadProfile 이후라 pending_unit_id 반영됨.
-    notifyOwnersJoinRequest(get().userName || '새 직원', get().userId);
-    return { error: null, storeName: row?.store_name ?? null, pending: true };
+    // ★0346: 코드를 넣으면 바로 합류한다(사장 승인 없음 · 2026-11-02 결정). 사장 '합류했어요' 알림은 서버가 행을 넣고
+    //   크론이 보낸다. 앱은 합류 푸시를 쏘지 않는다.
+    // 새 매장으로 활성을 옮긴다. 다점포 직원의 두 번째 매장도 같다. switchUnit 이 프로필을 다시 읽는다.
+    track('join_requested', { result: 'joined' });
+    const sw = await get().switchUnit(row.unit_id);
+    if (sw.error) {
+      // 합류는 끝났다. 전환만 못 했으면 프로필을 다시 읽어 매장 목록에 보이게 한다.
+      reportError('session.joinByInvite.switch', sw.error);
+      const uid = get().userId;
+      if (uid) await loadProfile(set, uid, get().email);
+    }
+    return { error: null, storeName: row.store_name ?? null };
   },
 
   cancelJoinRequest: async () => {

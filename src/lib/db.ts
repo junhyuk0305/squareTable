@@ -1196,6 +1196,12 @@ export async function rpcJoinByInvite(code: string): Promise<DbResult<JoinRow>> 
   return { data: (row as JoinRow) ?? null, error: error as DbErr };
 }
 
+/** 인원이 다 차 합류가 막혔을 때 사장에게 알린다(0346). 매장·인원·하루 한 번은 서버가 다시 확인한다. */
+export async function rpcReportJoinFull(code: string): Promise<{ error: DbErr }> {
+  const { error } = await supabase.rpc('report_join_full', { p_code: code });
+  return { error: error as DbErr };
+}
+
 export async function rpcCancelJoinRequest(): Promise<{ error: DbErr }> {
   const { error } = await supabase.rpc('cancel_join_request');
   return { error: error as DbErr };
@@ -4131,10 +4137,11 @@ export async function fetchScheduleNotices(): Promise<ReadResult<ScheduleNotice[
   if (!HAS_SUPABASE || !_unitId) return { data: [], error: false };
   const { data, error } = await supabase
     .from('member_notices')
-    .select('id, kind, title, body, created_at')
+    .select('id, kind, title, body, created_at, actor_id')
     .eq('unit_id', _unitId)
     // role_changed = 0315 매니저 지정·해제 · left·account_deleted = 0317 직원 나감·탈퇴(사장이 받는다)
-    .in('kind', ['swap_confirmed', 'shift_time_result', 'shift_changed', 'role_changed', 'left', 'account_deleted'])
+    // ★0346 member_joined·join_full = 직원 합류함·인원 초과(사장이 받는다 · actor_id = 그 직원)
+    .in('kind', ['swap_confirmed', 'shift_time_result', 'shift_changed', 'role_changed', 'left', 'account_deleted', 'member_joined', 'join_full'])
     .order('created_at', { ascending: false })
     .limit(50);
   if (error) {

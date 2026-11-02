@@ -105,18 +105,30 @@ try {
   const { data: csA, error: csAErr } = await ownerA.rpc('create_store', { p_store_name: 'NPA', p_industry: '카페·디저트', p_biz_no: null });
   if (csAErr) throw new Error(`create_store A: ${csAErr.message}`);
   const codeA = (Array.isArray(csA) ? csA[0] : csA).invite_code;
+  // ★0346: 직원 3명이 바로 합류한다. 무료 좌석 캡(free_staff_cap 2)이 켜진 곳(라이브 billing_free_mode=false)에서는
+  //   3번째 합류가 staff_limit 로 막힌다 → 매장을 하루짜리 유료(single)로 열어 캡을 비킨다(qa-quiz-schedule 과 같은 방식).
+  if (SERVICE) {
+    const r = await fetch(`${URL}/rest/v1/rpc/admin_activate_store`, {
+      method: 'POST', headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_unit_id: (Array.isArray(csA) ? csA[0] : csA).unit_id, p_days: 1, p_plan: 'single' }),
+    });
+    if (!r.ok) throw new Error(`admin_activate_store A: ${r.status} ${(await r.text()).slice(0, 160)}`);
+  }
+  const joinA = async (c, uid, label) => {
+    const { error } = await c.rpc('join_by_invite', { p_code: codeA });
+    if (error) throw new Error(`${label} join_by_invite: ${error.message}${SERVICE ? '' : ' (SERVICE 키가 없어 좌석 캡을 못 비켰다)'}`);
+    await ownerA.rpc('approve_member', { p_uid: uid }); // 0346 이미 멤버면 no-op(옛 사장 앱 경로)
+  };
 
   const staffA1 = mk();
   const staffA1Id = await signUpSession(staffA1, `qa_np_sa1_${s}@example.com`, { name: 'NPStaffA1', role: 'junior', phone: ph('52') });
   cleanup.push(staffA1);
-  await staffA1.rpc('join_by_invite', { p_code: codeA });
-  await ownerA.rpc('approve_member', { p_uid: staffA1Id });
+  await joinA(staffA1, staffA1Id, 'A1');
 
   const staffA2 = mk();
   const staffA2Id = await signUpSession(staffA2, `qa_np_sa2_${s}@example.com`, { name: 'NPStaffA2', role: 'junior', phone: ph('53') });
   cleanup.push(staffA2);
-  await staffA2.rpc('join_by_invite', { p_code: codeA });
-  await ownerA.rpc('approve_member', { p_uid: staffA2Id });
+  await joinA(staffA2, staffA2Id, 'A2');
 
   // ★0324: push 는 DB 에 실제 사건이 있어야 보낸다(사건 없는 호출은 아무에게도 안 감). 그래서 직원 A3 이 질문을 올리고
   //   '동료 질문'(tag=question · audience=staff) 사건으로 보낸다. 보낸 사람은 수신자에서 빠지므로 수신자는 A1·A2 그대로다.
@@ -124,8 +136,7 @@ try {
   const staffA3 = mk();
   const staffA3Id = await signUpSession(staffA3, `qa_np_sa3_${s}@example.com`, { name: 'NPStaffA3', role: 'junior', phone: ph('54') });
   cleanup.push(staffA3);
-  await staffA3.rpc('join_by_invite', { p_code: codeA });
-  await ownerA.rpc('approve_member', { p_uid: staffA3Id });
+  await joinA(staffA3, staffA3Id, 'A3');
   const unitRow = (Array.isArray(csA) ? csA[0] : csA).unit_id;
   let qn = 0;
   const askAndPush = async () => {

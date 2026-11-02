@@ -90,9 +90,10 @@ try {
   if (e1 || !row?.unit_id) throw new Error('create_store: ' + (e1?.message ?? 'no row'));
   UNIT = row.unit_id;
   await O.c.rpc('switch_active_unit', { p_unit_id: UNIT });
+  // ★0346: join_by_invite 는 바로 합류한다. 이 하니스는 옛 신청(승인·반려) 경로를 재므로 대기 행을 service_role 로 심는다.
   const joinUnit = async (U) => {
-    const j = await U.c.rpc('join_by_invite', { p_code: row.invite_code });
-    if (j.error) throw new Error(`${U.name} join_by_invite: ${j.error.message}`);
+    const j = await admin.from('profiles').update({ pending_unit_id: UNIT }).eq('id', U.id);
+    if (j.error) throw new Error(`${U.name} 대기 심기: ${j.error.message}`);
   };
   const approve = async (U) => {
     await joinUnit(U);

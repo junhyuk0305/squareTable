@@ -36,7 +36,12 @@ const FN_TOKENS = {
   // P1-2 0235(Q5 · H8)
   sync_iap_slots: ["source = 'iap'", 'p_continuing'],
   // 0231(본사 사본 숨김) · P4-6 0247(Q22 승인·반려 알림) · P5-1 0248(J10 노하우가 전부 보관된 코스는 첫 퀴즈로 고르지 않는다)
-  approve_member: ['brand_hidden', 'insert into public.member_notices', 'archived_at'],
+  //   ★0346: 합류 본문(좌석 · 첫 퀴즈 고르기)은 _admit_member 로 옮겼다. approve_member 는 그것을 부르고 알림을 넣는다.
+  approve_member: ['_admit_member', 'insert into public.member_notices', 'not_pending'],
+  _admit_member: ['_staff_seat_full', 'pg_advisory_xact_lock', 'unit_members', 'brand_hidden', 'archived_at', "'join'"],
+  // 0346 즉시 합류 — _admit_member 로 합류하고 사장 몫 member_joined 를 넣는다. 닫힌 매장 거부는 그 앞이다.
+  join_by_invite: ['_admit_member', "'member_joined'", "m.role = 'owner'", 'store_not_accepting', 'already_member'],
+  report_join_full: ['_staff_seat_full', "'join_full'", "m.role = 'owner'", "interval '1 day'", 'code_note_failure'],
   reject_member: ['insert into public.member_notices', "'rejected'", 'not_pending'],
   // P4-1 0242 — 적용 기간을 모르는 판정이 하나라도 남으면 근무가 두 번 잡힌다(설계 01 §7-1)
   workers_at: ['valid_from', 'valid_to', 'shift_exceptions', 'archived_tenure_id'],

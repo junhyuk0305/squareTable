@@ -397,7 +397,7 @@ async function main() {
   // ══════════════════════════════════════════════════════════════════════
   // ⑩ 입사 트리거 (0169)
   // ══════════════════════════════════════════════════════════════════════
-  // 합류가 확정되는 곳은 approve_member 하나다(join_by_invite 는 신청까지). 거기서 첫 퀴즈
+  // 합류가 확정되는 곳은 _admit_member 하나다(0346 · join_by_invite 즉시 합류와 옛 신청 approve_member 가 부른다). 거기서 첫 퀴즈
   // **코스 1개**가 자동 배정된다 — 첫날에 전부 쏟지 않는다.
   console.log('— ⑩ 입사 트리거 —');
 
@@ -423,13 +423,14 @@ async function main() {
   for (const [c, t] of [[CJ, 'j'], [CJ2, 'j2'], [CG, 'jg'], [CD, 'jd']]) await giveItem(UNIT, c, t);
 
   // 신청만 한 사람(pending)에게는 배정되지 않는다 — 승인 안 된 사람에게 매장 문항이 나가면 안 된다.
+  // ★0346: join_by_invite 는 바로 합류하므로 0346 전 옛 신청(대기 행)을 service_role 로 심는다.
   const jE = mk();
   const eId = await signUpSession(jE, `qa_qs_e_${s}@example.com`, { name: 'QA직원E', role: 'junior', phone: `0105${s.slice(0,7)}` });
-  await jE.rpc('join_by_invite', { p_code: CODE });
+  { const { error } = await admin.from('profiles').update({ pending_unit_id: UNIT }).eq('id', eId); if (error) throw new Error('E 대기 심기: ' + error.message); }
   const { data: eRows } = await admin.from('quiz_assignments').select('id').eq('unit_id', UNIT).eq('user_id', eId);
   check('신청(pending)만으로는 배정 없음', (eRows ?? []).length === 0, `n=${eRows?.length}`);
 
-  // 승인 = 합류 확정 → 첫 퀴즈 1건.
+  // 합류 확정(0346 즉시 합류 · 이어 부르는 approve_member 는 no-op) → 첫 퀴즈 1건.
   const jD = mk();
   const dId = await signUpSession(jD, `qa_qs_d_${s}@example.com`, { name: 'QA직원D', role: 'junior', phone: `0102${s.slice(0,7)}` });
   await jD.rpc('join_by_invite', { p_code: CODE });

@@ -40,6 +40,9 @@ export const JUNIOR_KIND_UI: Record<JuniorNotifKind, { icon: IconName; tint: str
 export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: string }> = {
   // 직원 나감·탈퇴(0317 · 0247 left·account_deleted).
   member_left: { icon: 'person-remove', tint: BrandColors.accentSoft },
+  // ★0346 합류함은 결과(초록 · 합류 승인과 같은 모양) · 인원 초과는 막힌 일(반려 톤).
+  member_joined: { icon: 'person-add', tint: '#E4F2E8' },
+  join_full: { icon: 'people', tint: BrandColors.accentSoft },
   join_request: { icon: 'person-add', tint: BrandColors.yellowSoft },
   // 처리한 합류 신청(0345) — 끝난 내역이라 처리 대기(노랑)와 다른 무채색.
   join_done: { icon: 'checkmark-done', tint: BrandColors.brandSoft },

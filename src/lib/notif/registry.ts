@@ -130,6 +130,18 @@ export const NOTIF = {
     route: (_s) => '/owner/staff',
     badgeUnit: '나간 직원',
   },
+  // ★0346 직원 즉시 합류(사장 승인 폐지) — 원천은 서버가 넣는 member_notices(member_joined · 사장 멤버십에게만 · actor_id = 합류한 직원).
+  //   푸시는 서버 크론(sweepMemberNotices)이 보낸다(앱은 쏘지 않는다 → pushTag 없음). 문구는 서버가 넣은 그대로.
+  //   명부의 그 직원 행을 강조한다(?member=<직원 id>). 거기서 바로 내보낼 수 있다.
+  member_joined: {
+    route: (_s, id) => `/owner/staff${id ? `?member=${enc(id)}` : ''}`,
+    badgeUnit: '합류한 직원',
+  },
+  // ★0346 인원이 다 차서 합류하지 못함(report_join_full · 직원 앱이 staff_limit 직후 부른다). 막힌 사람은 명부에 없으니 명부로.
+  join_full: {
+    route: (_s) => '/owner/staff',
+    badgeUnit: '인원 초과 합류',
+  },
   // 매니저 지정·해제 — 원천은 서버가 넣는 member_notices(0315 role_changed). 푸시는 서버 크론(sweepMemberNotices)이 보내고
   // 앱은 쏘지 않는다(엣지가 'role' user 요청을 무시한다). 벨·허브는 그 행을 문구 그대로 그린다(notifications.ts roleNoticeRow).
   // pushTag 는 옛 앱 요청을 엣지가 알아보는 이름으로 남긴다.

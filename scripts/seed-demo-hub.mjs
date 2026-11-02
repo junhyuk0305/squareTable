@@ -557,15 +557,11 @@ async function main() {
       .select('pending_unit_id').eq('id', APPLICANT).maybeSingle();
     if (mem) console.log('  · 이미 멤버(이전 QA 에서 승인됨) → 건너뜀. 다시 pending 으로 만들려면 앱에서 내보내기 후 재실행.');
     else if (prof?.pending_unit_id === STORE2) console.log('  · 이미 홍대점 합류 신청 대기 중 → 건너뜀');
-    else if (!ANON) console.log('  ! EXPO_PUBLIC_SUPABASE_ANON_KEY 없음(.env) → 합류 신청 생략');
     else {
-      await db.from('profiles').update({ pending_unit_id: null }).eq('id', APPLICANT);
-      const c = anon();
-      const { error: sErr } = await c.auth.signInWithPassword({ email: APPLICANT_EMAIL, password: PASSWORD });
-      if (sErr) throw new Error(`김하늘 로그인 실패: ${sErr.message}`);
-      const { error: jErr } = await c.rpc('join_by_invite', { p_code: code2, p_birth_date: '2004-11-30' });
-      if (jErr) throw new Error(`join_by_invite 실패: ${jErr.message}`);
-      console.log('  ✓ join_by_invite → 승인 대기 상태(사장이 허브에서 확인)');
+      // ★0346: join_by_invite 는 바로 합류한다. 신청 대기 데모는 0346 전 옛 신청과 같은 대기 행을 service_role 로 심는다.
+      const { error: jErr } = await db.from('profiles').update({ pending_unit_id: STORE2 }).eq('id', APPLICANT);
+      if (jErr) throw new Error(`합류 신청 대기 심기 실패: ${jErr.message}`);
+      console.log('  ✓ 대기 행 심기 → 승인 대기 상태(사장이 허브에서 확인)');
     }
   }
 

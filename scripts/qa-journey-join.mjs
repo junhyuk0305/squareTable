@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 // qa-journey-join.mjs — 합류 여정 하니스(2026-10-15): 초대 코드 → 직원 합류 대기 → 사장 승인 → 명부 반영.
+// ★0346(2026-11-02) 즉시 합류: 코드를 넣으면 바로 멤버다. 옛 신청(대기·승인·반려) 여정은 service_role 로 대기 행을 심어 잰다
+//   (0346 전 옛 신청이 남은 매장과 같은 상태). 화면으로 코드를 넣는 즉시 합류 여정은 K8 이 잰다(두 번 누름 · 사장 벨 → 명부).
 //   사장 창(S)과 직원 창(J)을 한 스크립트 안에서 동시에 띄우고, 화면 문자열을 DB 원본과 맞춰 본다.
 //
 //   node scripts/qa-journey-join.mjs     (개발 서버 http://localhost:8081 · QA_ORIGIN 으로 바꾼다 · .env + .env.seed)
@@ -96,6 +98,8 @@ async function openWindow(name, port, session, path) {
   windows.push(close);
   await page.seedSession(session);
   await page.send('Page.addScriptToEvaluateOnNewDocument', { source: FETCH_SPY });
+  // 전면 무료 스위치(billing_free_mode)가 켜진 백엔드(로컬 기본값)에선 새 프로필마다 무료 공지 모달이 화면을 덮는다 — 본 것으로 둔다.
+  await page.send('Page.addScriptToEvaluateOnNewDocument', { source: `try{localStorage.setItem('sqt.notice.free-until.v3','1')}catch(e){}` });
   await page.goto(path);
   let ce = 0;
   let bad = 0;
@@ -175,7 +179,7 @@ async function watch(page, pred, ms, seen = new Set()) {
   return { ok: false, sec: (Date.now() - t0) / 1000, seen, text: last };
 }
 
-/** 직원 hub 에서 코드를 넣고 '합류 신청' 을 누른다. */
+/** 직원 hub 에서 코드를 넣고 '합류하기' 를 누른다(0346 전 버튼 이름 = '합류 신청'). */
 async function joinViaUi(J, code, { double = false } = {}) {
   const page = J.page;
   if (!(await page.waitFor(`!!document.querySelector(${JSON.stringify(CODE_INPUT)}) || !!document.querySelector(${JSON.stringify(ADD_ROW)})`, 30000))) {
@@ -188,8 +192,15 @@ async function joinViaUi(J, code, { double = false } = {}) {
   await page.eval(`document.querySelector(${JSON.stringify(CODE_INPUT)}).focus()`);
   await page.send('Input.insertText', { text: code });
   if ((await page.eval(`document.querySelector(${JSON.stringify(CODE_INPUT)}).value`)) !== code) throw new Error('코드 입력이 안 들어감');
-  if (double) await doublePress(page, '합류 신청');
-  else await clickText(page, '합류 신청');
+  if (double) await doublePress(page, '합류하기');
+  else await clickText(page, '합류하기');
+}
+/** 0346 전 옛 신청을 흉내 낸다 — staff2 에게 이 매장 대기 행을 심는다(멤버가 아닌 매장에만). */
+async function seedPending(u) {
+  const { data: mem } = await admin.from('unit_members').select('user_id').eq('unit_id', u).eq('user_id', jc.uid);
+  if ((mem ?? []).length) throw new Error('대기 심기: staff2 가 이미 이 매장 멤버');
+  const { error } = await admin.from('profiles').update({ pending_unit_id: u }).eq('id', jc.uid);
+  if (error) throw new Error(`대기 심기 실패: ${error.message}`);
 }
 
 const staffNum = (t) => { const m = (t ?? '').match(/합류한 직원 \((\d+)명\)/); return m ? Number(m[1]) : null; };
@@ -279,7 +290,7 @@ async function accountActive(uid) {
 }
 
 // 이 묶음이 끝까지 못 돌면 남은 단언을 ✗ 로 센다.
-const PLANNED = ['K1-a', 'K1-b', 'K7-r', 'K5-a', 'K2-auto', 'K2', 'K7-s', 'K3', 'K4', 'K1-c', 'K2-c', 'K7-j', 'K7-d', 'K7-h', 'K5-b', 'K5-c', 'K6-a', 'K6-b'];
+const PLANNED = ['K1-a', 'K1-b', 'K7-r', 'K5-a', 'K2-auto', 'K2', 'K7-s', 'K3', 'K4', 'K1-c', 'K2-c', 'K7-j', 'K7-d', 'K7-h', 'K5-b', 'K8', 'K5-c', 'K6-a', 'K6-b'];
 const done = new Set();
 const mark = (k) => done.add(k);
 let unit = null;
@@ -330,13 +341,13 @@ try {
   }
 
   // ── K7-r: J 신청 → S 거절 → J 벨 '반려' 항목(0247 member_notices) → 탭 착지(/junior/hub) ──────────────
-  section('K7-r. J 합류 신청 → S \'거절\' → J 벨에 반려 항목 · 탭하면 직원 허브');
+  section('K7-r. (옛 신청 심기) J 대기 → S \'거절\' → J 벨에 반려 항목 · 탭하면 직원 허브');
   const J = await openWindow('J', 9334, juniorSession, '/junior/hub');
   await J.page.waitFor(`document.body.innerText.includes('코드로 매장 추가')`, 40000);
   {
-    const w0 = watch(J.page, (t) => /승인 대기|승인을 기다/.test(t), 10000);
-    await joinViaUi(J, code);
-    const r0 = await w0;
+    await seedPending(unit); // ★0346: 화면 합류는 바로 멤버라 대기를 심는다
+    await J.reload();
+    const r0 = await watch(J.page, (t) => /승인 대기|승인을 기다/.test(t), 10000);
     info(`K7-r 신청: 대기 카드 ${r0.ok ? r0.sec.toFixed(1) + '초' : '안 뜸(10초)'} · DB pending=${await dbPending(unit)}`);
     const rS = await watch(S.page, (t) => pendNum(t) === 1, 35000);
     if (!rS.ok) throw new Error('K7-r: S 신청 목록에 1명이 안 뜸');
@@ -369,20 +380,20 @@ try {
     await J.page.waitFor(`document.body.innerText.includes('코드로 매장 추가')`, 40000);
   }
 
-  // ── J: 합류 신청(두 번 누름) ─────────────────────────────────────────────
-  section('K5-a. J 같은 코드로 합류 신청 두 번(거의 동시) → 대기 카드 · 오류 문구 0');
+  // ── J: 옛 신청 다시 심기(두 번 누름 검사는 즉시 합류 K8 로 옮겼다) ──────────────
+  section('K5-a. (옛 신청 심기) J 대기 → 대기 카드 · 오류 문구 0');
   await J.mark('hub 진입');
   {
     const seen = new Set();
     const before = new Set((await J.page.text()).split('\n').map((s) => s.trim()));
-    const w0 = watch(J.page, (t) => /승인 대기|승인을 기다/.test(t), 10000, seen);
-    await joinViaUi(J, code, { double: true });
-    const r = await w0;
+    await seedPending(unit);
+    await J.reload();
+    const r = await watch(J.page, (t) => /승인 대기|승인을 기다/.test(t), 10000, seen);
     const pend = await dbPending(unit);
     check('K5-a DB 신청 1건(profiles.pending_unit_id) [건]', pend === 1, `pending=${pend}`);
-    check('K5-a J 신청 뒤 화면에 승인 대기 표시(10초) [초]', r.ok,
-      `${r.sec.toFixed(1)}초 · 신청 뒤 새 문구: ${r.text.split('\n').map((s) => s.trim()).filter((s) => s.length > 1 && !before.has(s)).join(' / ') || '없음'}`);
-    check('K5-a J 두 번 신청 → 오류 문구 0건 [건]', seen.size === 0, seen.size ? `보인 문구: ${[...seen].join(' / ')}` : '');
+    check('K5-a J 대기 행이 있으면 화면에 승인 대기 표시(10초) [초]', r.ok,
+      `${r.sec.toFixed(1)}초 · 새 문구: ${r.text.split('\n').map((s) => s.trim()).filter((s) => s.length > 1 && !before.has(s)).join(' / ') || '없음'}`);
+    check('K5-a J 대기 표시 중 오류 문구 0건 [건]', seen.size === 0, seen.size ? `보인 문구: ${[...seen].join(' / ')}` : '');
     mark('K5-a');
     await J.mark('합류 신청 뒤');
   }
@@ -553,6 +564,58 @@ try {
       shown.ok && gone.ok && mine > 0 && acked === mine, `${shown.ok ? '항목·버튼 보임' : '항목 또는 버튼 없음(30초)'} · ack 매장 ${acked}/${mine}`);
     mark('K7-h');
     await J.mark('허브 전체 읽음');
+  }
+
+  // ── K8(0346): 즉시 합류 — J 가 새 매장 코드를 두 번 누름 → 바로 멤버 · 사장 벨 '합류했어요' → 명부의 그 직원 ──
+  //   J 는 이미 하니스 매장 멤버라 두 번째 하니스 매장(qa_jr_ 접두사 · 표식 슬롯)을 만든다. 정리는 cleanup 이 같이 한다.
+  section('K8. (즉시 합류) J 코드 두 번 누름 → 바로 멤버 1행 · 오류 0 · S 벨 "<직원>님이 합류했어요" → /owner/staff?member=<J id>');
+  {
+    const until2 = new Date(Date.now() + 864e5);
+    until2.setUTCMilliseconds(777);
+    const { error: slot2Err } = await admin.from('store_slots').insert({ owner_id: oc.uid, paid_until: until2.toISOString(), source: 'grant', plan: 'multi' });
+    if (slot2Err) throw new Error(`K8 슬롯 적립 실패: ${slot2Err.message}`);
+    const { data: cs2, error: cs2Err } = await oc.rpc('create_store', { p_store_name: `${STORE_NAME}_ij`, p_industry: '카페·디저트', p_biz_no: null });
+    if (cs2Err) throw new Error(`K8 create_store 실패: ${cs2Err.message}`);
+    const { unit_id: unit2, invite_code: code2 } = Array.isArray(cs2) ? cs2[0] : cs2;
+    await sessionSwitch(ownerSession, unit2);
+    const { error: back2Err } = await oc.rpc('switch_active_unit', { p_unit_id: ownerStart });
+    if (back2Err) throw new Error(`K8 사장 계정 활성 매장 되돌리기 실패: ${back2Err.message}`);
+
+    const seen = new Set();
+    await J.goto('/junior/hub');
+    await J.page.waitFor(`document.body.innerText.includes('코드로 매장 추가')`, 40000);
+    const wErr = watch(J.page, () => false, 8000, seen);
+    await joinViaUi(J, code2, { double: true });
+    const home = await J.page.waitFor(`location.pathname==='/junior/home'`, 15000);
+    await wErr;
+    const { data: mem2 } = await admin.from('unit_members').select('role').eq('unit_id', unit2).eq('user_id', jc.uid);
+    const pend2 = await dbPending(unit2);
+    check('K8 DB 바로 멤버(unit_members junior 1행) · 대기 0 [건]', (mem2 ?? []).length === 1 && mem2[0].role === 'junior' && pend2 === 0,
+      `멤버십=${JSON.stringify(mem2)} · pending=${pend2}`);
+    check('K8 J 합류 뒤 매장 홈(/junior/home)으로 간다(≤15초) [문자열]', !!home, `착지 ${await J.page.eval('location.pathname')}`);
+    check('K8 J 두 번 누름 → 오류 문구 0건 [건]', seen.size === 0, seen.size ? `보인 문구: ${[...seen].join(' / ')}` : '');
+    const { data: mj } = await admin.from('member_notices').select('id, title, url').eq('user_id', oc.uid).eq('unit_id', unit2).eq('kind', 'member_joined').eq('actor_id', jc.uid);
+    check('K8 DB 사장 몫 member_joined 1행(url = /owner/staff?member=<J id>) [건]', (mj ?? []).length === 1 && mj[0].url === `/owner/staff?member=${jc.uid}`, JSON.stringify(mj));
+    await J.mark('즉시 합류');
+
+    const { data: jp } = await admin.from('profiles').select('name').eq('id', jc.uid).single();
+    const TITLE_M = `${jp?.name}님이 합류했어요`; // 서버(0346 join_by_invite)가 넣은 제목 그대로
+    await S.goto('/owner/notifications');
+    const sBell = await watch(S.page, (t) => t.includes(TITLE_M), 30000);
+    check('K8 S 벨에 "<직원>님이 합류했어요" 항목(제목 = DB member_notices.title) [문자열]', sBell.ok && mj?.[0]?.title === TITLE_M,
+      `${sBell.ok ? sBell.sec.toFixed(1) + '초' : '없음(30초)'} · DB title=${mj?.[0]?.title}`);
+    let land = { path: '?', search: '', rowVisible: false };
+    if (sBell.ok) {
+      await clickText(S.page, TITLE_M);
+      await S.page.waitFor(`location.pathname==='/owner/staff'`, 15000);
+      await watch(S.page, (t) => staffNum(t) === 1, 30000);
+      await sleep(800); // 강조 스크롤이 끝나기를 기다린다
+      land = await S.page.eval(`(()=>{const l=[...document.querySelectorAll('*')].find(e=>e.children.length===0&&e.textContent.trim()===${JSON.stringify(jp?.name ?? '')}&&e.getBoundingClientRect().width>0);let v=false;if(l){const r=l.getBoundingClientRect();v=r.top>=0&&r.bottom<=innerHeight;}return {path:location.pathname,search:location.search,rowVisible:v};})()`);
+    }
+    check('K8 합류 항목 탭 → /owner/staff?member=<J id> 착지 · 직원 이름이 보이는 영역에 있음 [문자열]',
+      land.path === '/owner/staff' && land.search.includes(`member=${jc.uid}`) && land.rowVisible, `착지 ${land.path}${land.search} · 행 보임=${land.rowVisible}`);
+    mark('K8');
+    await S.mark('합류 벨');
   }
 
   // ── K5-c: 이미 멤버인 코드로 다시 신청 ───────────────────────────────────

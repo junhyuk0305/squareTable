@@ -91,6 +91,11 @@ async function main() {
 
     // ── 직원 3명 합류: J1=2000(20대) · J2=1972(50대=사장과 동일 밴드) · J3=2001(뒤에 null 처리) ──
     console.log('[2] 직원 합류(메타데이터 → 트리거 기록 경로)');
+    // ★0346: 직원 3명이 바로 합류한다. 무료 좌석 캡(2)이 켜진 곳에서는 3번째가 staff_limit → 매장을 하루짜리 single 로 연다.
+    {
+      const r = await fetch(`${URL_}/rest/v1/rpc/admin_activate_store`, { method: 'POST', headers: SH, body: JSON.stringify({ p_unit_id: unitId, p_days: 1, p_plan: 'single' }) });
+      if (!r.ok) throw new Error(`admin_activate_store: ${r.status} ${(await r.text()).slice(0, 160)}`);
+    }
     const joinAndApprove = async (name, birth) => {
       const J = await signUp(name, 'junior', birth);
       const j = await J.c.rpc('join_by_invite', { p_code: row.invite_code });

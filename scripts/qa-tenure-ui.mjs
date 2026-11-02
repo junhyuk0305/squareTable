@@ -323,8 +323,9 @@ try {
     check('4-11 매니저는 member_tenures 를 0행으로 읽는다(사장 전용)', !mt.error && (mt.data ?? []).length === 0, mt.error?.message ?? `rows=${(mt.data ?? []).length}`);
 
     // ── 재입사 신청자 판정 ──
-    const j = await C.c.rpc('join_by_invite', { p_code: row.invite_code });
-    if (j.error) throw new Error('C 재신청: ' + j.error.message);
+    // ★0346: join_by_invite 는 바로 합류한다. 재입사 '신청자' 경고는 옛 신청(대기 행)에만 있으므로 대기를 심는다.
+    const j = await admin.from('profiles').update({ pending_unit_id: UNIT }).eq('id', C.id);
+    if (j.error) throw new Error('C 재신청(대기 심기): ' + j.error.message);
     const pend = await O.c.from('profiles').select('id').eq('pending_unit_id', UNIT);
     check('4-12 C 가 합류 신청 목록에 있다', (pend.data ?? []).some((p) => p.id === C.id), JSON.stringify(pend.data ?? pend.error));
     const st2 = await loadOwner();

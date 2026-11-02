@@ -73,9 +73,10 @@ async function main() {
   const { data: c1, error: e1 } = await owner.rpc('create_store', { p_store_name: 'QA거절카페', p_industry: '카페·디저트', p_biz_no: null });
   const storeRow = Array.isArray(c1) ? c1[0] : c1;
   if (e1 || !storeRow?.unit_id) throw new Error('create_store: ' + (e1?.message ?? 'no row'));
-  const { data: j1, error: e2 } = await junior.rpc('join_by_invite', { p_code: storeRow.invite_code });
-  const joinRow = Array.isArray(j1) ? j1[0] : j1;
-  if (e2 || !joinRow?.unit_id) throw new Error('join_by_invite: ' + (e2?.message ?? 'no row'));
+  // ★0346: join_by_invite 는 바로 합류한다. 거절 경로는 0346 전 옛 신청에만 있으므로 대기 행을 service_role 로 심는다.
+  const admin = createClient(URL_, SRV, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { error: e2 } = await admin.from('profiles').update({ pending_unit_id: storeRow.unit_id }).eq('id', juniorId);
+  if (e2) throw new Error('대기 심기: ' + e2.message);
 
   // ── 브라우저: 신청 직원으로 부팅 ─────────────────────────────
   const session = await passwordSession(`qa_jrb_j_${s}@example.com`);
@@ -97,7 +98,7 @@ async function main() {
     const rejectCard = page.getByText('합류 신청이 승인되지 않았어요');
     await rejectCard.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
     check('T2b 거절 안내 카드 노출', await rejectCard.isVisible().catch(() => false));
-    // 노드 RPC로 신청했으므로 이 기기 마커엔 매장 이름이 없다 → 폴백 표기를 검증
+    // 노드에서 대기를 심었으므로 이 기기 마커엔 매장 이름이 없다 → 폴백 표기를 검증
     // (이름 보존 경로는 qa:session 진리표 '거절 후 같은 매장 재신청 → 이름 보존' 케이스가 커버).
     check('T2c 안내 본문 + 이름 폴백', await page.getByText('코드를 다시 확인해').isVisible().catch(() => false)
       && await page.getByText('신청한 매장').first().isVisible().catch(() => false));

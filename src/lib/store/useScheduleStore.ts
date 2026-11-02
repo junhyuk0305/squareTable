@@ -98,10 +98,13 @@ export type ScheduleNotice = {
   id: number;
   // 0315 role_changed = 매니저 지정·해제(같은 member_notices 갈래 · 벨이 역할 행으로 그린다).
   // 0317 left·account_deleted = 직원 나감·탈퇴(사장이 받는다 · 0247) — 벨이 사장 행으로 그린다.
-  kind: 'swap_confirmed' | 'shift_time_result' | 'shift_changed' | 'role_changed' | 'left' | 'account_deleted';
+  // ★0346 member_joined·join_full = 직원 합류함·인원 초과(사장이 받는다) — 벨이 사장 행으로 그린다.
+  kind: 'swap_confirmed' | 'shift_time_result' | 'shift_changed' | 'role_changed' | 'left' | 'account_deleted' | 'member_joined' | 'join_full';
   title: string;
   body: string;
   created_at: string;
+  /** 그 사건의 사람(0346 member_joined = 합류한 직원 · join_full = 막힌 신청자). 다른 kind 는 없을 수 있다. */
+  actor_id?: string | null;
 };
 
 /**
