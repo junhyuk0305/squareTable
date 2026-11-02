@@ -9,7 +9,7 @@
 //       같은 근무·같은 날의 대기 요청은 하나다(다시 내면 앞 요청은 cancelled 로 닫고 새 id 를 만든다).
 //       사장이 본 요청 id 로 승인하면 그사이 바뀐 시각이 반영되지 않는다(4-17 · not_pending).
 //   [3] RLS: 본인과 관리자만 본다. 동료·다른 매장은 0건. 클라이언트 직접 쓰기는 안 된다.
-//   [4] decide_shift_time: 사장만(매니저도 불가 · J2 원문). 승인하면 그날만 바뀌고 edited_by='staff' 가 남는다.
+//   [4] decide_shift_time: 사장·매니저(0316 auth_can_manage · 처음엔 J2 원문대로 사장만이었다). 승인하면 그날만 바뀌고 edited_by='staff' 가 남는다.
 //       다음 주 같은 요일은 그대로다. 지난 날짜는 p_confirm_past 필수. 35일이 넘으면 거부. 두 번 승인돼도 한 번만 반영.
 //       그날 근무가 이미 없어졌으면 승인하지 않고 요청을 닫는다(cancelled).
 //   [5] 옛 앱 사장이 반복 근무를 직접 고치거나 지우면(copy_past_segment) 지난 날짜 요청은 지난 구간 복사본을 따라간다.
@@ -208,13 +208,17 @@ try {
   }
 
   // ═══════ [4] decide_shift_time ═══════
-  console.log('\n[4] decide_shift_time — 사장만 · 그날만 · 지난 날짜 확인 · 35일 · 한 번만');
+  console.log('\n[4] decide_shift_time — 사장·매니저 · 그날만 · 지난 날짜 확인 · 35일 · 한 번만');
   {
     const jd = await J.c.rpc('decide_shift_time', { p_id: R1, p_approve: true });
     check('4-1 직원은 결정 못 한다', !!jd.error && /owner_only/.test(jd.error.message), jd.error?.message ?? `data=${jd.data}`);
-    const md = await M.c.rpc('decide_shift_time', { p_id: R1, p_approve: true });
-    check('4-2 ★매니저도 결정 못 한다(J2 — 사장 승인)', !!md.error && /owner_only/.test(md.error.message) && (await req(R1))?.status === 'pending',
-      md.error?.message ?? `data=${md.data}`);
+    // 0316: 매니저도 결정한다(auth_can_manage). R1 은 사장 승인 검사에 쓰므로 다른 날 요청을 매니저가 반려한다.
+    const rm = await J.c.rpc('request_shift_time', { p_template: A1, p_date: addDays(T, 28), p_start: '10:00', p_end: '17:00', p_note: null });
+    const md = await M.c.rpc('decide_shift_time', { p_id: rm.data, p_approve: false });
+    const rmRow = await req(rm.data);
+    check('4-2 ★매니저도 결정한다(0316 auth_can_manage) · R1 은 그대로 pending',
+      !rm.error && !md.error && md.data === true && rmRow?.status === 'rejected' && rmRow?.decided_by === M.id && (await req(R1))?.status === 'pending',
+      rm.error?.message ?? md.error?.message ?? JSON.stringify(rmRow));
     const xd = await X.c.rpc('decide_shift_time', { p_id: R1, p_approve: true });
     check('4-3 ★다른 매장 사장은 결정 못 한다(IDOR)', !!xd.error && /not_found/.test(xd.error.message) && (await req(R1))?.status === 'pending',
       xd.error?.message ?? `data=${xd.data}`);

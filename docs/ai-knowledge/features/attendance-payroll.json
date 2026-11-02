@@ -1,0 +1,646 @@
+{
+  "schemaVersion": 1,
+  "id": "attendance-payroll",
+  "name": "출퇴근과 급여",
+  "aliases": [
+    "출퇴근",
+    "근태",
+    "출근 기록",
+    "예상 급여",
+    "시급",
+    "급여 설정",
+    "근무표 급여"
+  ],
+  "platforms": [
+    "web",
+    "android",
+    "ios"
+  ],
+  "summary": "출퇴근 기록의 저장/정정과 근무표를 근거로 계산하는 예상 급여의 대표 경로를 연결한다. 출퇴근 기록은 급여 금액의 직접 입력이 아니라 대조 자료다.",
+  "entrypoints": [
+    "/junior/attendance",
+    "/junior/timesheet",
+    "/owner/timesheet/[staffId]",
+    "/owner/payroll"
+  ],
+  "depth": [
+    "대표 흐름 진입점 추적",
+    "대표 흐름 상태와 실패 확인",
+    "대표 흐름 데이터와 권한 연결",
+    "최신 SQL 정의와 후속 변경 검색",
+    "관련 검사 연결. 실행은 별도"
+  ],
+  "unknowns": [
+    "로컬 HEAD f03eecd의 코드 관찰이다. 원격 DB 적용, 배포 버전, 실제 데이터, 기기 실행은 확인하지 않았다.",
+    "시급 편집과 wage_rates 생성/일일 동기화 예약의 전체 흐름, 근속 보관/재입사 및 퇴사자 급여 전체는 미추적이다.",
+    "모든 수당의 법률적 정확성이나 지급/세금/이체 기능을 검증한 기록이 아니다. 실제 지급은 이 대표 코드 경로에서 확인하지 않았다.",
+    "실시간 기기 전달과 동시 이중 출근 방지의 DB 전체 제약은 미검증이다."
+  ],
+  "findings": [
+    "현재 TimesheetView와 직원 출퇴근 예상 급여는 shiftsToPayRecords(payShifts)를 computePay에 넘긴다. 과거 주석의 출퇴근=급여 직결 표현만 읽으면 틀린다.",
+    "0322 서버가 work_minutes와 edited_by를 계산하고 실제 반영된 쓰기만 AFTER 이력으로 남긴다. upsert의 BEFORE INSERT를 이력으로 세지 않는다.",
+    "급여 설정/시급 읽기 실패는 0원과 구분한다. 설정을 모르는 상태의 setSetting은 쓰지 않는다.",
+    "법률 labor 요약은 매니저 시급/급여 열람 불가라고 쓰지만 wages_read의 auth_can_manage는 잠기지 않은 manager를 포함한다. 화면 제한과 DB 권한을 구분해야 하며 제품/법률 정본과의 조정은 미확정이다."
+  ],
+  "evidence": [
+    {
+      "id": "attendance-ui",
+      "file": "src/app/junior/attendance.tsx",
+      "symbol": "const checkIn = useAttendanceStore",
+      "kind": "code"
+    },
+    {
+      "id": "payroll-ui",
+      "file": "src/app/owner/payroll.tsx",
+      "symbol": "export default function OwnerPayrollScreen()",
+      "kind": "code"
+    },
+    {
+      "id": "attendance-store",
+      "file": "src/lib/store/useAttendanceStore.ts",
+      "symbol": "checkIn: (staffId) =>",
+      "kind": "code"
+    },
+    {
+      "id": "attendance-load",
+      "file": "src/lib/store/useAttendanceStore.ts",
+      "symbol": "hydrate: coalesce(async () =>",
+      "kind": "code"
+    },
+    {
+      "id": "attendance-db",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function upsertAttendance(",
+      "kind": "code"
+    },
+    {
+      "id": "attendance-read",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function fetchAttendanceMonth(",
+      "kind": "code"
+    },
+    {
+      "id": "attendance-policy",
+      "file": "supabase/migrations/0246_member_tenures.sql",
+      "symbol": "alter policy attendance_read",
+      "kind": "code"
+    },
+    {
+      "id": "stamp",
+      "file": "supabase/migrations/0322_client_trust_attendance.sql",
+      "symbol": "create or replace function public.attendance_staff_edit_guard()",
+      "kind": "code"
+    },
+    {
+      "id": "edit-log",
+      "file": "supabase/migrations/0322_client_trust_attendance.sql",
+      "symbol": "create or replace function public.attendance_log_after()",
+      "kind": "code"
+    },
+    {
+      "id": "log-policy",
+      "file": "supabase/migrations/0322_client_trust_attendance.sql",
+      "symbol": "create policy ae_select",
+      "kind": "code"
+    },
+    {
+      "id": "payroll-store",
+      "file": "src/lib/store/usePayrollStore.ts",
+      "symbol": "export const usePayrollStore",
+      "kind": "code"
+    },
+    {
+      "id": "settings-db",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function savePayrollSettings(",
+      "kind": "code"
+    },
+    {
+      "id": "settings-sql",
+      "file": "supabase/migrations/0280_payroll_settings_history.sql",
+      "symbol": "create or replace function public.save_payroll_settings(",
+      "kind": "code"
+    },
+    {
+      "id": "history",
+      "file": "supabase/migrations/0280_payroll_settings_history.sql",
+      "symbol": "create policy payroll_settings_history_read",
+      "kind": "code"
+    },
+    {
+      "id": "timesheet",
+      "file": "src/components/TimesheetView.tsx",
+      "symbol": "computePay(shiftsToPayRecords(payShifts)",
+      "kind": "code"
+    },
+    {
+      "id": "calculator",
+      "file": "src/lib/utils/payroll.ts",
+      "symbol": "export function computePay(",
+      "kind": "code"
+    },
+    {
+      "id": "reconcile",
+      "file": "src/lib/utils/payroll.ts",
+      "symbol": "export function reconcileSchedule(",
+      "kind": "code"
+    },
+    {
+      "id": "wage-policy",
+      "file": "supabase/migrations/0122_role_boundary_fixes.sql",
+      "symbol": "create policy wages_read",
+      "kind": "code"
+    },
+    {
+      "id": "wage-write",
+      "file": "supabase/migrations/0201_manager_narrow_to_app.sql",
+      "symbol": "create policy wages_write",
+      "kind": "code"
+    },
+    {
+      "id": "attendance-sub",
+      "file": "src/lib/db.ts",
+      "symbol": "export function subscribeAttendance(",
+      "kind": "code"
+    },
+    {
+      "id": "attendance-pub",
+      "file": "supabase/migrations/0004_workboard_attendance.sql",
+      "symbol": "alter publication supabase_realtime add table public.attendance;",
+      "kind": "code"
+    },
+    {
+      "id": "manage-helper",
+      "file": "supabase/migrations/0315_manager_permissions.sql",
+      "symbol": "create or replace function public.auth_can_manage()",
+      "kind": "code"
+    },
+    {
+      "id": "labor-copy",
+      "file": "src/app/legal/[doc].tsx",
+      "symbol": "매니저는 근무표·출근 기록만 볼 수 있고 시급·급여는 볼 수 없습니다.",
+      "kind": "code"
+    },
+    {
+      "id": "wage-rates-read",
+      "file": "supabase/migrations/0246_member_tenures.sql",
+      "symbol": "alter policy wage_rates_read on public.wage_rates",
+      "kind": "code"
+    },
+    {
+      "id": "wage-rates-client",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function fetchWageRates()",
+      "kind": "code"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "screen",
+      "type": "screen",
+      "name": "직원 출퇴근 화면",
+      "aliases": [
+        "/junior/attendance"
+      ],
+      "current": "출근/퇴근 action을 부른다. 읽기 상태를 표시하고 급여 규칙/시급 실패이면 금액을 숨긴다. 예상 급여는 근무표를 기반으로 계산한다.",
+      "evidence": [
+        "attendance-ui"
+      ],
+      "changeKinds": [
+        "copy"
+      ]
+    },
+    {
+      "id": "attendance",
+      "type": "state",
+      "name": "출퇴근 상태와 정정",
+      "aliases": [
+        "checkIn",
+        "checkOut",
+        "upsertManual",
+        "useAttendanceStore"
+      ],
+      "current": "checkIn은 loaded/loadError와 날짜 무관 열린 기록을 검사한다. checkOut도 날짜 무관 열린 기록을 닫아 야간근무를 처리한다. 수동 정정은 자정 넘김을 다음날로 만든다. 낙관적 쓰기 실패는 롤백하고 조회 실패는 기존 기록을 유지한다. 월별 로드 결과와 tenant epoch를 사용한다.",
+      "evidence": [
+        "attendance-store",
+        "attendance-load"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "write",
+      "type": "client",
+      "name": "출퇴근 행 쓰기",
+      "aliases": [
+        "upsertAttendance",
+        "fetchAttendanceMonth"
+      ],
+      "current": "upsert는 활성 unit_id와 행을 보내고 select(id)를 받아 writeStrict로 0행 성공을 막는다. 월 조회는 직원/월과 PAGE_LIMIT를 사용한다. 명시 unit 필터가 없는 읽기의 매장 격리는 서버 RLS에 의존한다.",
+      "evidence": [
+        "attendance-db",
+        "attendance-read"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "attendance-policy",
+      "type": "permission",
+      "name": "활성 매장과 근속 경계",
+      "aliases": [
+        "attendance",
+        "attendance_read"
+      ],
+      "current": "0246 정책은 활성 매장, 관리자 또는 본인 staff_id, archived_tenure_id is null을 읽기/쓰기 모두 요구한다. 직원 본인의 정정은 허용하며 흔적은 별도 트리거가 강제한다.",
+      "evidence": [
+        "attendance-policy",
+        "manage-helper"
+      ],
+      "changeKinds": [
+        "contract"
+      ]
+    },
+    {
+      "id": "audit",
+      "type": "data",
+      "name": "서버 근무분과 정정 이력",
+      "aliases": [
+        "attendance_staff_edit_guard",
+        "attendance_edits",
+        "edited_by"
+      ],
+      "current": "0322는 authenticated 쓰기의 work_minutes를 0~1440으로 계산한다. 현재 시각 ±10분의 출근/퇴근은 펀치로 분류한다. 직원이 edited_by를 낮추거나 사장 표시로 위조할 수 없게 하고 실제 insert/update/delete 뒤 이력을 쓴다. 이력은 관리자만 읽으며 클라이언트 쓰기 권한은 없다.",
+      "evidence": [
+        "stamp",
+        "edit-log",
+        "log-policy"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "payroll",
+      "type": "state",
+      "name": "시급과 급여 설정 로드",
+      "aliases": [
+        "usePayrollStore",
+        "settingsLoadError",
+        "wagesLoadError"
+      ],
+      "current": "시급/현재 설정/시급 이력/설정 이력을 병렬 로드한다. epoch가 지난 응답은 버린다. 읽기 실패는 직전 값을 보존하고 각 실패 flag를 남긴다. 설정이 미로드/실패이면 setSetting을 막는다. 현재 설정에는 web localStorage 캐시 경로가 있다.",
+      "evidence": [
+        "payroll-store"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "settings",
+      "type": "api",
+      "name": "급여 규칙 저장과 적용일 이력",
+      "aliases": [
+        "save_payroll_settings",
+        "payroll_settings_history",
+        "units.payroll_settings"
+      ],
+      "current": "0280 RPC는 활성 매장 owner만 허용한다. 이력이 없는 매장은 이전 설정을 2000-01-01로 먼저 보존한다. KST 오늘 행은 upsert하고 units.payroll_settings도 갱신한다. 이력 표는 활성 매장 읽기만 열고 직접 쓰기는 닫는다.",
+      "evidence": [
+        "settings-db",
+        "settings-sql",
+        "history"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "wage-access",
+      "type": "permission",
+      "name": "시급 읽기/쓰기 역할",
+      "aliases": [
+        "wages_read",
+        "wages_write",
+        "wage_rates",
+        "wage_rates_read",
+        "fetchWageRates"
+      ],
+      "current": "0122 wages_read는 활성 매장의 auth_can_manage 또는 본인 staff_id를 허용한다. 최신 auth_can_manage 0315는 owner 또는 좌석이 잠기지 않은 manager다. 0201 wages_write는 owner만 허용한다. UI에서 매니저의 급여 표면을 감추는 것과 서버의 읽기 권한은 다르다. 시급 이력도 조회 경계다. 최신 0246 wage_rates_read는 같은 활성 매장 및 auth_can_manage 또는 본인 조건과 archived_tenure_id null을 요구한다. fetchWageRates도 보관되지 않은 이력을 읽고 usePayrollStore.hydrate가 현재 시급과 함께 소비한다. 매니저 읽기 변경은 두 테이블 정책을 함께 검토해야 한다.",
+      "evidence": [
+        "wage-policy",
+        "wage-write",
+        "manage-helper",
+        "wage-rates-read",
+        "wage-rates-client"
+      ],
+      "changeKinds": [
+        "contract"
+      ]
+    },
+    {
+      "id": "timesheet",
+      "type": "screen",
+      "name": "월 근무표와 출퇴근 대조",
+      "aliases": [
+        "TimesheetView",
+        "/junior/timesheet",
+        "/owner/timesheet/[staffId]"
+      ],
+      "current": "payWindow의 정산 기간을 쓰고 지난 월 출퇴근은 loadMonth로 추가 조회한다. wageForMonth/settingsForMonth로 이력을 선택한다. 이력/설정 실패이면 금액을 null로 두고 reconcileSchedule로 근무표와 기록 차이를 표시한다. owner 화면은 fetchAttendanceEdits도 읽는다.",
+      "evidence": [
+        "timesheet"
+      ],
+      "changeKinds": [
+        "copy"
+      ]
+    },
+    {
+      "id": "calculation",
+      "type": "rule",
+      "name": "근무표 기반 예상 급여 계산",
+      "aliases": [
+        "computePay",
+        "shiftsToPayRecords",
+        "reconcileSchedule"
+      ],
+      "current": "computePay는 전달된 근무표 변환 입력과 시급/설정으로 휴게, 야간, 연장, 주휴와 추가수당 등을 계산한다. 출퇴근의 work_minutes를 직접 금액으로 삼는 대표 경로가 아니다. reconcileSchedule은 별도 불일치 안내를 만든다.",
+      "evidence": [
+        "calculator",
+        "reconcile",
+        "timesheet"
+      ],
+      "changeKinds": [
+        "contract"
+      ]
+    },
+    {
+      "id": "realtime",
+      "type": "async",
+      "name": "근태 변경 재조회",
+      "aliases": [
+        "subscribeAttendance"
+      ],
+      "current": "attendance postgres_changes를 subscribeDebounced로 hydrate에 연결한다. publication 추가 소스가 0004에 있다. 운영 연결과 기기 수신은 미검증이다.",
+      "evidence": [
+        "attendance-load",
+        "attendance-sub",
+        "attendance-pub"
+      ],
+      "changeKinds": []
+    }
+  ],
+  "edges": [
+    {
+      "id": "screen-attendance",
+      "from": "screen",
+      "to": "attendance",
+      "relation": "calls",
+      "when": "출근/퇴근 버튼",
+      "evidence": [
+        "attendance-ui"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "attendance-write",
+      "from": "attendance",
+      "to": "write",
+      "relation": "calls",
+      "when": "생성/퇴근/정정 저장",
+      "evidence": [
+        "attendance-store",
+        "attendance-db"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "write-attendance-policy",
+      "from": "write",
+      "to": "attendance-policy",
+      "relation": "depends-on",
+      "when": "행 조회와 쓰기의 RLS",
+      "evidence": [
+        "attendance-policy"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "write-audit",
+      "from": "write",
+      "to": "audit",
+      "relation": "writes",
+      "when": "authenticated 실제 쓰기 전후 트리거",
+      "evidence": [
+        "stamp",
+        "edit-log"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "payroll-settings",
+      "from": "payroll",
+      "to": "settings",
+      "relation": "calls",
+      "when": "설정을 읽은 뒤 변경",
+      "evidence": [
+        "payroll-store",
+        "settings-db"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "payroll-wage-access",
+      "from": "payroll",
+      "to": "wage-access",
+      "relation": "depends-on",
+      "when": "현재 시급과 비보관 시급 이력 읽기 및 현재 시급 쓰기",
+      "evidence": [
+        "payroll-store",
+        "wage-policy",
+        "wage-write",
+        "wage-rates-read",
+        "wage-rates-client"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "timesheet-payroll",
+      "from": "timesheet",
+      "to": "payroll",
+      "relation": "consumes",
+      "when": "시급과 설정/이력 선택",
+      "evidence": [
+        "timesheet"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "timesheet-calculation",
+      "from": "timesheet",
+      "to": "calculation",
+      "relation": "calls",
+      "when": "근무표 변환과 출퇴근 대조",
+      "evidence": [
+        "timesheet"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "timesheet-audit",
+      "from": "timesheet",
+      "to": "audit",
+      "relation": "calls",
+      "when": "사장 화면에서 정정 이력 조회",
+      "evidence": [
+        "timesheet",
+        "log-policy"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "attendance-realtime",
+      "from": "attendance",
+      "to": "realtime",
+      "relation": "registers",
+      "when": "근태 구독",
+      "evidence": [
+        "attendance-load",
+        "attendance-sub"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    }
+  ],
+  "flow": [
+    {
+      "node": "attendance",
+      "when": "출근/퇴근",
+      "result": "읽기 상태와 열린 기록을 검사하고 저장을 시도한다."
+    },
+    {
+      "node": "audit",
+      "when": "실제 DB 쓰기",
+      "result": "서버가 분/수정자를 찍고 실제 반영된 정정 이력을 남긴다."
+    },
+    {
+      "node": "payroll",
+      "when": "급여 자료 로드",
+      "result": "시급/설정/이력 실패를 별도 flag로 유지한다."
+    },
+    {
+      "node": "settings",
+      "when": "사장 설정 변경",
+      "result": "KST 적용일 이력과 현재 설정을 함께 쓴다."
+    },
+    {
+      "node": "timesheet",
+      "when": "정산 기간 표시",
+      "result": "근무표로 금액을 계산하고 출퇴근 기록과의 차이는 별도로 안내한다."
+    }
+  ],
+  "transitions": [
+    {
+      "from": "unknown-attendance",
+      "to": "check-in-blocked",
+      "when": "loaded=false 또는 loadError=true",
+      "evidence": [
+        "attendance-store"
+      ]
+    },
+    {
+      "from": "open",
+      "to": "closed",
+      "when": "열린 기록을 현재 시각으로 닫고 서버 저장",
+      "evidence": [
+        "attendance-store",
+        "stamp"
+      ]
+    },
+    {
+      "from": "settings-read-failed",
+      "to": "settings-write-blocked",
+      "when": "setSetting 게이트",
+      "evidence": [
+        "payroll-store"
+      ]
+    },
+    {
+      "from": "past-history-failed",
+      "to": "pay-hidden",
+      "when": "지난달 이력 실패시 monthWage=null",
+      "evidence": [
+        "timesheet"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "file": "scripts/qa-payroll.mjs",
+      "command": "node scripts/qa-payroll.mjs",
+      "scope": "computePay/shiftsToPayRecords/reconcileSchedule 실제 순수 함수 회귀. RLS나 지급 검증 아님.",
+      "execution": "not-run",
+      "requires": "로컬 TypeScript 설치 뒤 실행. .paytest 생성/정리. 미실행."
+    },
+    {
+      "file": "scripts/qa-audit-payroll-settings-read.cjs",
+      "command": "node scripts/qa-audit-payroll-settings-read.cjs",
+      "scope": "실제 db.ts/store를 VM과 통신 대역으로 실행해 읽기 실패 보존/저장차단/재시도 복구 검사.",
+      "execution": "not-run",
+      "requires": "typescript와 zustand 로컬 의존성. 네트워크 없는 검사이며 --head는 선택 플래그. 기본 실행 제안, 미실행."
+    }
+  ],
+  "desired": {
+    "status": "unconfirmed",
+    "decisionsNeeded": [
+      "현재 코드는 확정 요구사항의 근거가 아니다. 이 기능의 변경 목표와 허용할 동작 차이는 제품 정본 및 사용자 결정과 대조해야 한다."
+    ]
+  }
+}

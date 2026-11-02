@@ -1,0 +1,546 @@
+{
+  "schemaVersion": 1,
+  "id": "billing-subscription",
+  "name": "이용권과 결제",
+  "aliases": [
+    "카드 결제",
+    "이용권",
+    "구독",
+    "IAP",
+    "RevenueCat",
+    "card_begin_subscribe"
+  ],
+  "platforms": [
+    "web",
+    "android",
+    "ios"
+  ],
+  "summary": "웹 카드 첫 결제는 서버 주문 생성과 결제 결과 반영을 거친다. 네이티브 구매 결과는 외부 웹훅을 통해 서버 구독에 반영한다. UI 결제 성공과 서버 이용권 반영은 별개 단계다.",
+  "entrypoints": [
+    "/billing",
+    "/billing-card",
+    "/downgrade",
+    "card-billing Edge",
+    "iap-webhook Edge"
+  ],
+  "depth": [
+    "대표 흐름 코드 추적",
+    "상태 및 실패 분기 확인",
+    "최신 SQL 정의와 권한 근거 연결",
+    "테스트 연결. 실행 범위는 tests와 runs 참조"
+  ],
+  "unknowns": [
+    "로컬 코드의 대표 흐름 분석이다. 운영 DB 적용 상태, 배포 버전, 웹 브라우저와 Android/iOS 실기기 동작은 실행 검증하지 않았다.",
+    "카드 첫 주문과 결과/재조정 경계, IAP 웹훅 입력/최신 상태 판정을 추적했다. 계좌이체 승인, 프로모션, 카드 환불, 모든 감소/재개 화면 분기는 별도 상세 분석이 남았다.",
+    "sync_iap_slots 최신 0235의 매장 선택/선불 이월 전체 알고리즘과 각 예약 정의의 운영 설치 상태는 미검증이다.",
+    "Toss/RevenueCat 키, 활성화 스위치, 실제 과금, 원격 webhook 순서, 스토어 심사 설정은 조회하거나 실행하지 않았다."
+  ],
+  "findings": [
+    "cardBilling.ts 머리 주석의 0208은 현재 카드 SQL 파일명과 다르다. 최신 첫 주문/변경 가드는 0342, 결과 반영은 0235다.",
+    "apply_iap_event는 0263이 최신이다. 과거 0196만 읽으면 오래된 이벤트 무시와 환불 범위 보강을 놓친다.",
+    "카드 결과 pending은 HTTP 202다. UI는 완료로 표시하지 않으며 예약 reconcile 경로와 이어진다.",
+    "코드의 상품별 금액과 정책은 현재 로컬 구현이며 실제 계약이나 운영 가격 확인 결과가 아니다."
+  ],
+  "evidence": [
+    {
+      "id": "screen",
+      "file": "src/app/billing.tsx",
+      "symbol": "function BillingBody()",
+      "kind": "code"
+    },
+    {
+      "id": "return",
+      "file": "src/app/billing-card.tsx",
+      "symbol": "function ReturnBody()",
+      "kind": "code"
+    },
+    {
+      "id": "client",
+      "file": "src/lib/payments/cardBilling.ts",
+      "symbol": "async function callEdge(",
+      "kind": "code"
+    },
+    {
+      "id": "policy",
+      "file": "src/lib/config/store-policy.ts",
+      "symbol": "export const SHOW_CARD_BILLING",
+      "kind": "config"
+    },
+    {
+      "id": "edge",
+      "file": "supabase/functions/card-billing/index.ts",
+      "symbol": "if (action === 'subscribe')",
+      "kind": "code"
+    },
+    {
+      "id": "record-edge",
+      "file": "supabase/functions/card-billing/index.ts",
+      "symbol": "async function recordCharge(",
+      "kind": "code"
+    },
+    {
+      "id": "cron",
+      "file": "supabase/functions/card-billing/index.ts",
+      "symbol": "async function reconcile(",
+      "kind": "code"
+    },
+    {
+      "id": "begin",
+      "file": "supabase/migrations/0342_card_billing_guards.sql",
+      "symbol": "create or replace function public.card_begin_subscribe(",
+      "kind": "code"
+    },
+    {
+      "id": "charge",
+      "file": "supabase/migrations/0235_billing_slot_rules.sql",
+      "symbol": "create or replace function public.card_record_charge(",
+      "kind": "code"
+    },
+    {
+      "id": "slots",
+      "file": "supabase/migrations/0235_billing_slot_rules.sql",
+      "symbol": "create or replace function public.sync_iap_slots(",
+      "kind": "code"
+    },
+    {
+      "id": "iap",
+      "file": "src/lib/iap/purchases.ts",
+      "symbol": "export async function purchaseOffer(",
+      "kind": "code"
+    },
+    {
+      "id": "web",
+      "file": "src/lib/iap/purchases.web.ts",
+      "symbol": "throw new Error('iap_not_available_on_web')",
+      "kind": "code"
+    },
+    {
+      "id": "webhook",
+      "file": "supabase/functions/iap-webhook/index.ts",
+      "symbol": "db.rpc('apply_iap_event'",
+      "kind": "code"
+    },
+    {
+      "id": "apply",
+      "file": "supabase/migrations/0263_iap_event_order.sql",
+      "symbol": "create or replace function public.apply_iap_event(",
+      "kind": "code"
+    },
+    {
+      "id": "effective",
+      "file": "src/lib/utils/subscription.ts",
+      "symbol": "export function effectivePlanOf(",
+      "kind": "code"
+    },
+    {
+      "id": "test",
+      "file": "scripts/qa-iap-notes.mjs",
+      "symbol": "otherStoreNote",
+      "kind": "test"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "screen",
+      "type": "screen",
+      "name": "요금제와 결제 결과 화면",
+      "current": "플랫폼 표면과 사장 여부에 따라 결제 UI를 고른다. 카드 반환은 working/done/pending/error를 구분하며 입력 키 없으면 오류. 성공 후 세션을 재조회한다.",
+      "evidence": [
+        "screen",
+        "return",
+        "policy"
+      ],
+      "aliases": [],
+      "changeKinds": [
+        "copy",
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "card-client",
+      "type": "client",
+      "name": "카드 Edge 호출",
+      "current": "로그인 토큰으로 raw fetch한다. 토큰 없음/네트워크/설정 누락을 구조화한 오류로 반환한다. 공개 키가 있어야 카드 표면이 열린다. 카드 최대 매장 수 3은 서버 가드와 짝이다.",
+      "evidence": [
+        "client",
+        "policy"
+      ],
+      "aliases": [
+        "cardSubscribe",
+        "CARD_MAX_STORES"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "edge",
+      "type": "server",
+      "name": "card-billing subscribe",
+      "current": "서버가 authUser로 사용자 ID를 얻는다. openFor 게이트 뒤 DB 가드를 먼저 통과한 주문만 billing key 발급과 Toss 청구로 진행한다. 클라이언트 owner ID를 신뢰하지 않는다.",
+      "evidence": [
+        "edge"
+      ],
+      "aliases": [],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "order",
+      "type": "api",
+      "name": "card_begin_subscribe 주문 가드",
+      "current": "service_role 전용. customer key 소유, owner 멤버십, plan, 최대 3매장, 약관, 다점포 잔여 3일 경계, 기존 IAP/카드/대기이체/진행주문을 검사한 뒤 pending 주문을 만든다.",
+      "evidence": [
+        "begin"
+      ],
+      "aliases": [
+        "card_begin_subscribe",
+        "card_payments"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "charge",
+      "type": "api",
+      "name": "card_record_charge 결과 반영",
+      "current": "주문 행을 FOR UPDATE로 읽고 pending이 아니면 replay 반환한다. 성공/실패를 저장한다. 갱신 실패는 1일 간격 최대 3회로 past_due/expired와 알림을 갱신한다. 성공은 구독과 슬롯 반영 경로를 탄다.",
+      "evidence": [
+        "charge"
+      ],
+      "aliases": [
+        "card_record_charge"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "reconcile",
+      "type": "async",
+      "name": "결과 대기와 예약 재확인",
+      "current": "recordCharge는 확정하지 못한 응답을 pending으로 둔다. renew의 service-role 경로는 오래된 주문 조회, 청구, 키 정리를 실행한다. UI의 202는 확인 중이다.",
+      "evidence": [
+        "record-edge",
+        "cron",
+        "return"
+      ],
+      "aliases": [
+        "reconcile",
+        "renew"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "iap",
+      "type": "platform",
+      "name": "네이티브 구매와 복원",
+      "current": "RevenueCat 사용자 ID를 앱 계정에 맞춘다. Android 변경은 현재 SDK 구독을 조회해 replacement mode를 결정한다. 웹 모듈은 구매/복원 호출을 오류로 거부한다.",
+      "evidence": [
+        "iap",
+        "web"
+      ],
+      "aliases": [
+        "purchaseOffer",
+        "restorePurchases"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "webhook",
+      "type": "server",
+      "name": "IAP 웹훅 수신",
+      "current": "POST와 정확한 secret 헤더를 요구한다. 처리 대상 이벤트, 사용자/플랫폼/거래/상품을 검증한다. service_role로 apply_iap_event를 호출하며 DB 오류는 500이다.",
+      "evidence": [
+        "webhook"
+      ],
+      "aliases": [],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "apply",
+      "type": "api",
+      "name": "apply_iap_event 최신 상태",
+      "current": "0263은 같은 거래의 더 오래된 timestamp를 무시한다. 감소 PRODUCT_CHANGE는 예고만 한다. 취소/만료와 환불을 구분하고 조건부 회수 또는 미래 유효기간 슬롯 동기화를 수행한다. service_role 전용이다.",
+      "evidence": [
+        "apply"
+      ],
+      "aliases": [
+        "apply_iap_event",
+        "iap_subscriptions"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "entitlement",
+      "type": "rule",
+      "name": "이용권 반영 경계",
+      "current": "서버 sync_iap_slots는 카드와 IAP의 이용 매장 반영 경로다. 클라이언트 effectivePlanOf는 유료 만료를 free로 계산한다. 전체 매장 선택 알고리즘은 이번 대표 추적 범위 밖이다.",
+      "evidence": [
+        "slots",
+        "effective"
+      ],
+      "aliases": [
+        "sync_iap_slots",
+        "effectivePlanOf"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "screen-card-client",
+      "from": "screen",
+      "to": "card-client",
+      "relation": "calls",
+      "when": "웹 카드 결제 반환",
+      "evidence": [
+        "return"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "card-client-edge",
+      "from": "card-client",
+      "to": "edge",
+      "relation": "requests",
+      "when": "로그인 토큰 포함 subscribe",
+      "evidence": [
+        "client",
+        "edge"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "edge-order",
+      "from": "edge",
+      "to": "order",
+      "relation": "calls",
+      "when": "청구 전 주문 가드",
+      "evidence": [
+        "edge",
+        "begin"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "edge-charge",
+      "from": "edge",
+      "to": "charge",
+      "relation": "records",
+      "when": "외부 승인 또는 거절 뒤",
+      "evidence": [
+        "record-edge",
+        "charge"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "edge-reconcile",
+      "from": "edge",
+      "to": "reconcile",
+      "relation": "defers",
+      "when": "결과 미확정",
+      "evidence": [
+        "record-edge",
+        "cron"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "charge-entitlement",
+      "from": "charge",
+      "to": "entitlement",
+      "relation": "syncs",
+      "when": "성공 주문 반영",
+      "evidence": [
+        "charge",
+        "slots"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "iap-webhook",
+      "from": "iap",
+      "to": "webhook",
+      "relation": "awaits",
+      "when": "SDK 구매 후 외부 서버 이벤트. 직접 함수 호출은 아님",
+      "evidence": [
+        "iap",
+        "webhook"
+      ],
+      "kinds": [
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "webhook-apply",
+      "from": "webhook",
+      "to": "apply",
+      "relation": "calls",
+      "when": "인증 및 파싱 통과",
+      "evidence": [
+        "webhook"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "apply-entitlement",
+      "from": "apply",
+      "to": "entitlement",
+      "relation": "syncs",
+      "when": "유효기간과 상태 조건 충족",
+      "evidence": [
+        "apply",
+        "slots"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ],
+      "confidence": "confirmed-code"
+    }
+  ],
+  "flow": [
+    {
+      "node": "order",
+      "when": "첫 결제",
+      "result": "중복/플랫폼/소유 검사 후 주문 생성"
+    },
+    {
+      "node": "charge",
+      "when": "외부 결제 결과",
+      "result": "확정 성공 또는 실패 반영"
+    },
+    {
+      "node": "reconcile",
+      "when": "미확정 응답",
+      "result": "확인 중 표시 후 예약 재조회 경로"
+    },
+    {
+      "node": "webhook",
+      "when": "네이티브 외부 이벤트",
+      "result": "인증된 이벤트만 서버 반영"
+    },
+    {
+      "node": "apply",
+      "when": "감소 예고",
+      "result": "매장 수를 즉시 줄이지 않고 pending 기록"
+    }
+  ],
+  "transitions": [
+    {
+      "from": "working",
+      "to": "pending",
+      "when": "카드 응답 HTTP 202",
+      "evidence": [
+        "return"
+      ]
+    },
+    {
+      "from": "pending-order",
+      "to": "done-or-failed",
+      "when": "서버의 확정 청구 기록",
+      "evidence": [
+        "charge"
+      ]
+    },
+    {
+      "from": "active-iap",
+      "to": "downgrade-pending",
+      "when": "PRODUCT_CHANGE 감소",
+      "evidence": [
+        "apply"
+      ]
+    },
+    {
+      "from": "new-event",
+      "to": "ignored-stale",
+      "when": "동일 거래의 더 오래된 이벤트 timestamp",
+      "evidence": [
+        "apply"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "file": "scripts/qa-iap-notes.mjs",
+      "command": "node scripts/qa-iap-notes.mjs",
+      "scope": "플랫폼별 안내와 구매 오류 순수 판정. 실제 과금 검증 아님.",
+      "execution": "see-runs",
+      "requires": "Node 타입 스트립. 네트워크 불필요. 최신 runs의 적용 여부 확인.",
+      "runName": "iap-notes"
+    },
+    {
+      "file": "scripts/qa-card-billing.mjs",
+      "command": "node scripts/qa-card-billing.mjs",
+      "scope": "카드 DB 계약 검사. 외부 결제/DB 대상 확인 필요. 실행하지 않음.",
+      "execution": "not-run",
+      "requires": "이번에 실행하지 않았다. 스크립트의 접속 대상과 의존성을 먼저 읽고 DB 사용 검사는 격리한 로컬 환경에서만 실행."
+    },
+    {
+      "file": "scripts/qa-iap.mjs",
+      "command": "node scripts/qa-iap.mjs",
+      "scope": "IAP DB 상태 전이. 실행하지 않음.",
+      "execution": "not-run",
+      "requires": "이번에 실행하지 않았다. 스크립트의 접속 대상과 의존성을 먼저 읽고 DB 사용 검사는 격리한 로컬 환경에서만 실행."
+    }
+  ],
+  "desired": {
+    "status": "unconfirmed",
+    "decisionsNeeded": [
+      "제품 변경 요구는 확정하지 않았다. 이 기록은 현재 코드 관찰이며 변경 승인이 아니다."
+    ]
+  }
+}

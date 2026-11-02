@@ -266,8 +266,9 @@ try {
                            has_table_privilege('authenticated', 'public.wage_rates', 'INSERT,UPDATE,DELETE')::text || '/' ||
                            has_table_privilege('authenticated', 'public.wage_rates', 'SELECT')::text`);
     check('6-4 anon 권한 없음 · authenticated 쓰기 없음 · 읽기만', w === 'false/false/true', w);
-    const pol = psql(`select count(*)::text || '/' || count(*) filter (where cmd = 'SELECT') from pg_policies where schemaname = 'public' and tablename = 'wage_rates'`);
-    check('6-5 정책은 읽기 하나뿐(쓰기 정책 없음)', pol === '1/1', pol);
+    // 0335 account_access_allowed 는 RESTRICTIVE 라 접근을 좁히기만 한다. 허용 정책(PERMISSIVE)만 센다.
+    const pol = psql(`select count(*)::text || '/' || count(*) filter (where cmd = 'SELECT') from pg_policies where schemaname = 'public' and tablename = 'wage_rates' and permissive = 'PERMISSIVE'`);
+    check('6-5 허용 정책은 읽기 하나뿐(쓰기 정책 없음)', pol === '1/1', pol);
     const tg = psql(`select count(*) from pg_trigger where tgrelid = 'public.wages'::regclass and not tgisinternal`);
     check('6-6 wages 에 옛 앱 경로 트리거가 있다', tg === '1', tg);
     const hasCron = psql(`select count(*) from pg_extension where extname = 'pg_cron'`) === '1';

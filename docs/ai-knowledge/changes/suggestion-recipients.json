@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "suggestion-recipients",
+  "status": "draft",
+  "reason": "노하우 제안의 수신자 변경 요청에서 화면뿐 아니라 권한, 인앱 목록, 푸시, 실패, 구버전까지 찾는지 시험한다.",
+  "source": "2026-10-27 사용자의 개발 지식 구축 요청. 제품 개편 요구는 승인되지 않음.",
+  "requirements": [
+    {"id":"R1","status":"unconfirmed","text":"새 제안을 사장과 잠기지 않은 매니저에게 알리는 가상 시나리오. 실제 대상은 사용자가 결정해야 한다.","source":"미승인 도구 평가 시나리오"},
+    {"id":"R2","status":"unconfirmed","text":"OS 푸시와 인앱 목록/배지를 같은 대상에 맞추는 가상 시나리오. 범위 확인 필요.","source":"미승인 도구 평가 시나리오"},
+    {"id":"R3","status":"approved","text":"제품 기능을 임의로 개편하지 않는다. 조사와 로컬 도구만 구현한다.","source":"사용자 첨부 요청 §4"}
+  ],
+  "decisionsNeeded": ["새 제안 또는 검토 결과 중 무엇을 변경하는가", "역할/매장/잠금/자기 제안 범위", "푸시와 인앱 포함 여부", "구버전 ownerOnly 처리", "실패 재시도까지 바꾸는가"],
+  "tasks": [
+    {"id":"T1","status":"investigated","requirements":["R1","R2","R3"],"dependsOn":[],"targets":[{"feature":"knowhow-suggestion","node":"recipients"},{"feature":"knowhow-suggestion","node":"inapp"}],"acceptance":"현재 수신자, 검토 권한과 목록 차이를 코드로 설명하고 원하는 정책을 질문한다.","verification":"feature의 source anchor 재확인. 실행 검증과 구분."},
+    {"id":"T2","status":"blocked","requirements":["R1","R2"],"dependsOn":["T1"],"targets":[{"feature":"knowhow-suggestion","node":"push-request"},{"feature":"knowhow-suggestion","node":"recipients"},{"feature":"knowhow-suggestion","node":"inapp"}],"acceptance":"확정된 역할만 선택하고 다른 owners 알림이나 결과 수신자를 바꾸지 않는다.","verification":"승인 후 qa-manager-routes/qa-notif-axis 기대값과 로컬 역할별 수신자 검사를 먼저 작성.","uncertainty":"요구 미확정. 구현 금지."},
+    {"id":"T3","status":"planned","requirements":["R1","R2"],"dependsOn":["T2"],"targets":[{"feature":"knowhow-suggestion","node":"verify-event"},{"feature":"knowhow-suggestion","node":"permission"},{"feature":"knowhow-suggestion","node":"route"}],"acceptance":"타 매장, 잠금, 자기 제안, 중복 요청과 구버전 호출 조합을 검증한다.","verification":"로컬 DB/Edge 격리 계정으로 저장 실패, 사건 선점, 역할/매장 착지를 확인. SQL 자동 수정 대상으로 삼지 않음."},
+    {"id":"T4","status":"planned","requirements":["R1","R2"],"dependsOn":["T2"],"targets":[{"feature":"knowhow-suggestion","node":"delivery"},{"feature":"knowhow-suggestion","node":"web"},{"feature":"knowhow-suggestion","node":"native"}],"acceptance":"생성, 외부 요청 수락, 기기 전달, 열람을 따로 보고한다.","verification":"웹 현재 구독 스위치 확인. 사용자 Android/iOS 실기기에서 수신/탭/매장/역할 확인. 이번 구축에서는 발송하지 않음."},
+    {"id":"T5","status":"planned","requirements":["R1","R2","R3"],"dependsOn":["T3","T4"],"targets":[{"feature":"knowhow-suggestion","node":"tests"}],"acceptance":"실행 코드 상태와 결과를 저장하고 해당 기능의 현재 코드 기록을 갱신한다.","verification":"check, 관련 실제 QA 기록, refresh --reviewed, runs. 미실행 플랫폼은 미검증 유지."}
+  ],
+  "implementation": "not-started",
+  "verification": "not-run",
+  "existingDocuments": ["../../../../00_핵심/문서_지도.md", "../../../../00_핵심/기능_현황_LIVE.md"]
+}

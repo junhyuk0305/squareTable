@@ -1,0 +1,440 @@
+{
+  "schemaVersion": 1,
+  "id": "knowhow-import",
+  "name": "노하우 가져오기와 템플릿",
+  "aliases": [
+    "노하우 복사",
+    "매장 간 복사",
+    "다른 매장 노하우",
+    "업종 템플릿",
+    "copy_knowhow_between",
+    "set_knowhow_photos"
+  ],
+  "platforms": [
+    "web",
+    "android",
+    "ios"
+  ],
+  "summary": "소유 매장 간 노하우 복사의 본문/임베딩/사진 단계와 업종 템플릿 저장을 추적했다. 문서/PDF/음성에서 추출하는 HandoverImport는 이 기록의 대표 흐름에 포함하지 않았다.",
+  "entrypoints": [
+    "/owner/import-knowhow",
+    "/owner/templates"
+  ],
+  "depth": [
+    "대표 하위 흐름의 화면부터 데이터 경계까지 코드 추적",
+    "상태와 실패 및 권한 조건 확인",
+    "SQL 정의와 후속 변경 검색",
+    "관련 테스트 연결",
+    "실행 미검증"
+  ],
+  "unknowns": [
+    "로컬 HEAD f03eecd의 코드 관찰이다. 원격 마이그레이션 적용 상태와 배포 앱 버전은 확인하지 않았다.",
+    "DB, 네트워크, AI, 브라우저 및 Android/iOS 실기기 실행은 하지 않았다.",
+    "HandoverImport의 문서 추출과 분할 저장, 여러 매장 일괄 배포, 본사 배포는 범위 밖이다.",
+    "복사 요청 재실행으로 새 사본이 생기는 상황, 사진 연결 실패 후 고아 Storage 정리, 실제 storage.copy 권한은 미실행이다."
+  ],
+  "findings": [
+    "본문 복사와 사진 파일 복사는 하나의 트랜잭션이 아니다. 사진 실패를 본문 복사 실패와 합쳐 읽으면 재시도로 중복 사본을 만들 수 있다.",
+    "copy_knowhow_between 본문에는 요금제 검사가 없고 route가 canUseMultistore를 검사한다. 서버는 양쪽 매장 소유권을 검사한다."
+  ],
+  "evidence": [
+    {
+      "id": "route",
+      "file": "src/app/owner/import-knowhow.tsx",
+      "symbol": "canUseMultistore(plan, freeMode)",
+      "kind": "code"
+    },
+    {
+      "id": "screen",
+      "file": "src/components/owner/OwnerKnowhowImport.tsx",
+      "symbol": "const doCopy = async () => {",
+      "kind": "code"
+    },
+    {
+      "id": "select",
+      "file": "src/components/owner/OwnerKnowhowImport.tsx",
+      "symbol": "const owned = useMemo(() => stores.filter((s) => s.role === 'owner'), [stores]);",
+      "kind": "code"
+    },
+    {
+      "id": "db",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function copyKnowhowBetween(",
+      "kind": "code"
+    },
+    {
+      "id": "photo",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function copyKnowhowPhotos(",
+      "kind": "code"
+    },
+    {
+      "id": "list-sql",
+      "file": "supabase/migrations/0248_knowhow_archive.sql",
+      "symbol": "create or replace function public.list_unit_knowhow(",
+      "kind": "code"
+    },
+    {
+      "id": "copy-sql",
+      "file": "supabase/migrations/0248_knowhow_archive.sql",
+      "symbol": "create or replace function public.copy_knowhow_between(",
+      "kind": "code"
+    },
+    {
+      "id": "owner",
+      "file": "supabase/migrations/0215_brand_workspace_member.sql",
+      "symbol": "create or replace function public.auth_owns_unit(",
+      "kind": "code"
+    },
+    {
+      "id": "photo-sql",
+      "file": "supabase/migrations/0198_knowhow_copy_between.sql",
+      "symbol": "create or replace function public.set_knowhow_photos(",
+      "kind": "code"
+    },
+    {
+      "id": "template",
+      "file": "src/components/owner/TemplateLibrary.tsx",
+      "symbol": "const doImport = async (t: PlaybookTemplate) => {",
+      "kind": "code"
+    },
+    {
+      "id": "fork",
+      "file": "src/data/knowhowPacks.ts",
+      "symbol": "export function forkTemplate(",
+      "kind": "code"
+    },
+    {
+      "id": "store",
+      "file": "src/lib/store/usePlaybookStore.ts",
+      "symbol": "add: async (entry) => {",
+      "kind": "code"
+    },
+    {
+      "id": "test",
+      "file": "scripts/qa-knowhow-copy.mjs",
+      "symbol": "owner_overview",
+      "kind": "test"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "entry",
+      "type": "screen",
+      "name": "요금제와 소유 매장 선택",
+      "aliases": [],
+      "current": "route는 canUseMultistore(plan, freeMode)를 통과해야 복사 UI를 연다. 선택 목록은 session stores 중 owner 역할만이다. 두 소유 매장 미만이면 빈 상태를 표시한다.",
+      "evidence": [
+        "route",
+        "select"
+      ],
+      "changeKinds": [
+        "contract",
+        "copy"
+      ]
+    },
+    {
+      "id": "select",
+      "type": "screen",
+      "name": "복사 후보와 선택",
+      "aliases": [],
+      "current": "보내는/받는 매장을 구분한다. 출발 매장을 바꾸면 기존 선택을 비운다. 후보 조회 실패를 별도 표시한다. 검색 필터 전체선택은 현재 보이는 후보만 반영한다.",
+      "evidence": [
+        "screen",
+        "select"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "list",
+      "type": "rpc",
+      "name": "list_unit_knowhow",
+      "aliases": [],
+      "current": "0248 최신 정의는 units.owner_id로 출발 매장 소유권을 확인하고 published이며 archived_at null인 행만 반환한다.",
+      "evidence": [
+        "list-sql"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "copy",
+      "type": "rpc",
+      "name": "copy_knowhow_between",
+      "aliases": [],
+      "current": "출발/도착이 다르고 둘 다 auth_owns_unit이어야 한다. 최대 500 ID, published 비보관 원본만 복사한다. 새 UUID와 published/needs_review=true를 만들고 통계/확인/파트/원본 배치 표시는 초기화한다. 사진은 빈 배열이다.",
+      "evidence": [
+        "db",
+        "copy-sql",
+        "owner"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "embedding",
+      "type": "data",
+      "name": "본문과 임베딩 복사",
+      "aliases": [],
+      "current": "같은 RPC CTE에서 원본 임베딩이 있으면 새 entry/unit으로 복사한다. 반환에는 원본 사진 경로가 들어가고 실제 사진 파일 복사는 하지 않는다.",
+      "evidence": [
+        "copy-sql"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "photos",
+      "type": "external",
+      "name": "Storage 파일과 경로 연결",
+      "aliases": [],
+      "current": "클라는 상대 Storage 경로만 대상으로 사진을 순차 copy한다. 성공 경로를 set_knowhow_photos에 저장한다. 개별 copy 실패는 계속하고 경로 RPC 실패는 copied=0으로 보고한다. 본문은 이미 저장돼 있다.",
+      "evidence": [
+        "photo",
+        "photo-sql"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "result",
+      "type": "screen",
+      "name": "부분 성공 표시와 활성 목록 갱신",
+      "aliases": [],
+      "current": "복사 성공 행별 사진 성공/전체 수를 모은다. 받는 매장이 현재 활성 매장이면 hydrate한다. 사진 실패가 있어도 복사 완료 단계로 가며 누락 사진 수를 따로 계산한다.",
+      "evidence": [
+        "screen"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "template",
+      "type": "screen",
+      "name": "업종 템플릿 추가",
+      "aliases": [],
+      "current": "TemplateLibrary는 제목 소문자/trim으로 기존 항목 중복을 판정한다. forkTemplate은 published, needs_review=true 사본을 만들고 store.add 성공 후에만 완료 안내한다. 이는 매장 간 복사 RPC와 다른 쓰기 경로다.",
+      "evidence": [
+        "template",
+        "fork",
+        "store"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "tests",
+      "type": "test",
+      "name": "복사 DB 하니스",
+      "aliases": [],
+      "current": "qa-knowhow-copy는 매장 복사와 소유 범위/통합뷰 검사를 포함한다. 사진 부분 실패 UI 전체를 검증한 증거는 없다.",
+      "evidence": [
+        "test"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "entry-select",
+      "from": "entry",
+      "to": "select",
+      "relation": "opens",
+      "when": "요금제와 소유 매장 전제 통과",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "route",
+        "select"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "select-list",
+      "from": "select",
+      "to": "list",
+      "relation": "fetches",
+      "when": "출발 매장으로 후보 조회",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "screen",
+        "list-sql"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "select-copy",
+      "from": "select",
+      "to": "copy",
+      "relation": "submits",
+      "when": "선택 ID가 있고 복사 중이 아닐 때",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "screen",
+        "db"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "copy-embedding",
+      "from": "copy",
+      "to": "embedding",
+      "relation": "copies-in-transaction",
+      "when": "유효 원본과 기존 임베딩이 있을 때",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "copy-sql"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "copy-photos",
+      "from": "copy",
+      "to": "photos",
+      "relation": "returns-source-paths",
+      "when": "본문 복사 RPC 성공 후",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "copy-sql",
+        "screen",
+        "photo"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "photos-result",
+      "from": "photos",
+      "to": "result",
+      "relation": "reports-counts",
+      "when": "각 파일 복사와 사진 경로 갱신 뒤",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "screen",
+        "photo"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "template-result",
+      "from": "template",
+      "to": "result",
+      "relation": "reports-save",
+      "when": "store.add 성공 안내. 매장 복사 단계 UI는 사용하지 않음",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "template",
+        "store"
+      ],
+      "kinds": [
+        "contract",
+        "copy"
+      ]
+    },
+    {
+      "id": "tests-copy",
+      "from": "tests",
+      "to": "copy",
+      "relation": "checks",
+      "when": "별도 DB 테스트 시",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "test"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    }
+  ],
+  "flow": [
+    {
+      "node": "select",
+      "when": "매장/항목 선택",
+      "result": "후보를 읽고 ID 제출"
+    },
+    {
+      "node": "copy",
+      "when": "본문 저장",
+      "result": "새 발행 사본과 임베딩 생성"
+    },
+    {
+      "node": "photos",
+      "when": "파일 복사",
+      "result": "성공 경로 연결"
+    },
+    {
+      "node": "result",
+      "when": "완료",
+      "result": "본문과 사진 성공 수를 구분"
+    }
+  ],
+  "transitions": [
+    {
+      "from": "pick stores",
+      "to": "pick entries",
+      "when": "서로 다른 출발/도착 선택",
+      "evidence": [
+        "screen"
+      ]
+    },
+    {
+      "from": "copying",
+      "to": "done with missing photos",
+      "when": "본문 성공 후 일부 사진 copy 또는 경로 저장 실패",
+      "evidence": [
+        "screen",
+        "photo"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "file": "scripts/qa-knowhow-copy.mjs",
+      "command": "node scripts/qa-knowhow-copy.mjs --local",
+      "scope": "소유 매장 복사/격리와 집계",
+      "requires": "로컬 Supabase 필요",
+      "execution": "not-run"
+    }
+  ],
+  "desired": {
+    "status": "unconfirmed",
+    "decisionsNeeded": [
+      "현재 동작을 제품 요구로 승인한 기록이 아니다. 변경 요청이 생기면 기존 제품 정본과 사용자 결정을 별도로 연결해야 한다."
+    ]
+  }
+}

@@ -1,0 +1,1187 @@
+{
+  "schemaVersion": 1,
+  "id": "knowhow-suggestion",
+  "name": "노하우 제안과 검토 알림",
+  "aliases": [
+    "노하우 제안",
+    "노하우 제안의 알림 대상",
+    "제안함",
+    "개선 제안",
+    "신규 제안",
+    "검토할 제안",
+    "suggestion",
+    "playbook_suggestions"
+  ],
+  "platforms": [
+    "web",
+    "android",
+    "ios"
+  ],
+  "summary": "직원이 신규 또는 개선 제안을 저장하면 사장에게 푸시를 요청한다. 사장과 잠기지 않은 매니저는 제안을 검토할 수 있다. 검토 결과는 제안자에게 전달한다. 푸시 수신 범위와 검토 권한은 현재 일치하지 않는다. 로컬 코드 관찰이며 제품 요구사항으로 승인된 사실이 아니다.",
+  "entrypoints": [
+    "/junior/suggest",
+    "JuniorAsk 메뉴와 ChatTurn 개선 링크",
+    "WorkBoard.submitCapture",
+    "JuniorMySpace.onNewAnswer",
+    "/owner/suggestions",
+    "푸시 suggestion → /owner/suggestions",
+    "허브 OwnerStatusView 제안 링크"
+  ],
+  "depth": [
+    "존재와 진입점 확인",
+    "기본 흐름 추적",
+    "상태와 규칙 확인",
+    "데이터 및 외부 연결 확인",
+    "예외와 권한 코드 확인",
+    "관련 테스트 연결",
+    "실행 미검증"
+  ],
+  "unknowns": [
+    "원격 DB에 적용된 마이그레이션과 배포된 push Edge 버전은 확인하지 않았다.",
+    "웹과 Android 및 iOS 실기기에서 저장부터 알림 열람까지 실행하지 않았다.",
+    "매니저의 제안 검토 권한과 알림 제외 중 어느 쪽이 원하는 정책인지 미확정이다.",
+    "두 기기 동시 승인 및 저장 성공 후 승인 실패의 실제 복구 결과는 실행 검증이 필요하다.",
+    "APNs/FCM 기기 전달과 사용자 열람 증거가 없다. sent는 외부 요청 수락 수다.",
+    "웹 신규 구독은 정책상 비활성이다. 잔존 구독에 대한 실제 발송과 url만 사용하는 다점포 착지는 실행 검증이 필요하다.",
+    "선호 조회 실패 시 기본 허용과 토큰 조회 실패 시 중단 분기의 실제 장애 동작은 실행하지 않았다.",
+    "제안 1000건 또는 허브 조건 일치 제안 50건을 넘는 데이터에서 오래된 pending 누락과 숫자 차이를 실제 실행으로 확인하지 않았다."
+  ],
+  "findings": [
+    "정책 확인: roles.ts는 매니저의 /owner/suggestions 진입을 허용하고 DB ps_update도 auth_can_manage를 허용한다. 그러나 managerOwnerRows는 제안을 제외하고 Edge는 suggestion 태그의 ownerOnly를 강제한다. notify.ts의 매니저 진입 불가 주석은 현재 코드와 다르다.",
+    "코드 결함 후보: OwnerSuggestionsScreen.confirmDecline은 reject의 Promise 결과를 기다리지 않고 즉시 성공 토스트와 시트 닫기를 실행한다. 실제 DB 실패 시 잘못된 성공 신호를 낼 수 있다.",
+    "부분 성공: coach의 노하우 저장, 제안 승인, 출처 업무 첨부는 하나의 트랜잭션이 아니다. 승인 실패 경고는 있지만 자동 보상은 이 경로에 없다.",
+    "비동기 한계: push_client_event가 외부 발송 전에 사건 키를 기록한다. 이후 전송 실패나 선호에 따른 억제가 발생해도 제안 전용 재전송 큐는 이 경로에서 확인되지 않는다.",
+    "동시 처리 한계: reviewSuggestion은 id만 조건으로 update한다. 현재 status=pending 비교나 버전 조건이 없다. UI가 자기 제안 검토를 숨기지만 DB 정책에는 proposer_id != auth.uid 조건이 없다.",
+    "장애 처리 경계: deliver의 계정/매장 선호 조회 실패는 허용으로 진행하므로 음소거 또는 방해금지 설정이 적용되지 않을 수 있다. 토큰 조회 실패는 중단한다. 두 실패를 같은 동작으로 기록하면 수신자 변경의 검증 조건을 놓친다.",
+    "조회 상한: fetchSuggestions의 최신 1000건과 허브 제안의 매장별 최신 50건에는 pending 우선 처리나 페이지 순회가 없다. 오래된 검토 대기가 목록에서 사라질 수 있다. owner_overview의 전체 pending 집계와 목록/배지 숫자 차이가 생길 가능성이 있다. 대량 데이터 실행으로 재현하지 않았다."
+  ],
+  "evidence": [
+    {
+      "id": "submit-ui",
+      "file": "src/app/junior/suggest.tsx",
+      "symbol": "async function send()",
+      "kind": "code"
+    },
+    {
+      "id": "capture",
+      "file": "src/components/WorkBoard.tsx",
+      "symbol": "const submitCapture = useCallback(",
+      "kind": "code"
+    },
+    {
+      "id": "answer",
+      "file": "src/components/junior/JuniorMySpace.tsx",
+      "symbol": "const onNewAnswer = async",
+      "kind": "code"
+    },
+    {
+      "id": "store",
+      "file": "src/lib/store/useSuggestionStore.ts",
+      "symbol": "export const useSuggestionStore",
+      "kind": "code"
+    },
+    {
+      "id": "crud",
+      "file": "src/lib/store/crudHelpers.ts",
+      "symbol": "export function optimisticPatch",
+      "kind": "code"
+    },
+    {
+      "id": "db",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function reviewSuggestion(",
+      "kind": "code"
+    },
+    {
+      "id": "schema",
+      "file": "supabase/migrations/0014_playbook_suggestions.sql",
+      "symbol": "create table if not exists public.playbook_suggestions",
+      "kind": "code"
+    },
+    {
+      "id": "insert-policy",
+      "file": "supabase/migrations/0019_rls_perf_indexes.sql",
+      "symbol": "create policy ps_insert on public.playbook_suggestions",
+      "kind": "code"
+    },
+    {
+      "id": "review-policy",
+      "file": "supabase/migrations/0093_manager_role.sql",
+      "symbol": "create policy ps_update on public.playbook_suggestions",
+      "kind": "code"
+    },
+    {
+      "id": "stamp",
+      "file": "supabase/migrations/0319_client_trust_identity.sql",
+      "symbol": "create or replace function public.playbook_suggestions_stamp()",
+      "kind": "code"
+    },
+    {
+      "id": "manage",
+      "file": "supabase/migrations/0315_manager_permissions.sql",
+      "symbol": "create or replace function public.auth_can_manage()",
+      "kind": "code"
+    },
+    {
+      "id": "tenant",
+      "file": "supabase/migrations/0303_closed_store_server_block.sql",
+      "symbol": "create or replace function public.auth_unit_id()",
+      "kind": "code"
+    },
+    {
+      "id": "review-ui",
+      "file": "src/app/owner/suggestions.tsx",
+      "symbol": "function confirmDecline(withNote: boolean)",
+      "kind": "code"
+    },
+    {
+      "id": "coach",
+      "file": "src/app/owner/coach.tsx",
+      "symbol": "if (sugId) approveOk = await approveSuggestion",
+      "kind": "code"
+    },
+    {
+      "id": "edit",
+      "file": "src/app/owner/edit/[id].tsx",
+      "symbol": "await approveSuggestion(sugId, entry.id)",
+      "kind": "code"
+    },
+    {
+      "id": "notify",
+      "file": "src/lib/push/notify.ts",
+      "symbol": "export const notifyOwnersSuggestion",
+      "kind": "code"
+    },
+    {
+      "id": "event",
+      "file": "supabase/migrations/0339_work_assignment_server_push.sql",
+      "symbol": "create or replace function public.push_client_event(",
+      "kind": "code"
+    },
+    {
+      "id": "event-ledger",
+      "file": "supabase/migrations/0324_push_client_event_verify.sql",
+      "symbol": "create table if not exists public.push_client_events",
+      "kind": "code"
+    },
+    {
+      "id": "edge-recipients",
+      "file": "supabase/functions/push/index.ts",
+      "symbol": "const ownerOnly = payload.ownerOnly === true || tag === 'suggestion';",
+      "kind": "code"
+    },
+    {
+      "id": "edge-deliver",
+      "file": "supabase/functions/push/index.ts",
+      "symbol": "async function deliver(",
+      "kind": "code"
+    },
+    {
+      "id": "inapp",
+      "file": "src/lib/utils/notifications.ts",
+      "symbol": "function managerOwnerRows(",
+      "kind": "code"
+    },
+    {
+      "id": "registry",
+      "file": "src/lib/notif/registry.ts",
+      "symbol": "suggestion: {",
+      "kind": "code"
+    },
+    {
+      "id": "roles",
+      "file": "src/lib/utils/roles.ts",
+      "symbol": "export const MANAGER_OWNER_ROUTES",
+      "kind": "code"
+    },
+    {
+      "id": "tap",
+      "file": "src/lib/push/pushTap.ts",
+      "symbol": "export function pushTapPlan(",
+      "kind": "code"
+    },
+    {
+      "id": "native",
+      "file": "src/lib/push/nativepush.ts",
+      "symbol": "async function registerToken(",
+      "kind": "code"
+    },
+    {
+      "id": "web",
+      "file": "src/lib/push/webpush.ts",
+      "symbol": "export async function registerServiceWorker()",
+      "kind": "code"
+    },
+    {
+      "id": "sw",
+      "file": "public/sw.js",
+      "symbol": "self.addEventListener('notificationclick'",
+      "kind": "code"
+    },
+    {
+      "id": "web-tap",
+      "file": "src/lib/push/usePushBootstrap.ts",
+      "symbol": "export function usePushBootstrap()",
+      "kind": "code"
+    },
+    {
+      "id": "hub",
+      "file": "supabase/migrations/0338_legacy_quiz_hub.sql",
+      "symbol": "create or replace function public.my_units_notif_data()",
+      "kind": "code"
+    },
+    {
+      "id": "overview",
+      "file": "supabase/migrations/0299_staff_count_membership.sql",
+      "symbol": "create or replace function public.owner_overview()",
+      "kind": "code"
+    },
+    {
+      "id": "growth",
+      "file": "supabase/migrations/0305_closed_store_hub_summary.sql",
+      "symbol": "create or replace function public.my_growth()",
+      "kind": "code"
+    },
+    {
+      "id": "test-routes",
+      "file": "scripts/qa-manager-routes.mjs",
+      "symbol": "제안 검토 없음",
+      "kind": "test"
+    },
+    {
+      "id": "test-loop",
+      "file": "scripts/qa-task-knowhow.mjs",
+      "symbol": "source_template_id",
+      "kind": "test"
+    },
+    {
+      "id": "test-forgery",
+      "file": "scripts/qa-forgery.mjs",
+      "symbol": "playbook_suggestions",
+      "kind": "test"
+    },
+    {
+      "id": "test-axis",
+      "file": "scripts/qa-notif-axis.mjs",
+      "symbol": "const suggestions =",
+      "kind": "test"
+    },
+    {
+      "id": "test-tap",
+      "file": "scripts/qa-push-route.mjs",
+      "symbol": "/owner/suggestions",
+      "kind": "test"
+    },
+    {
+      "id": "test-sync",
+      "file": "scripts/check-push-route-sync.mjs",
+      "symbol": "suggestion_result",
+      "kind": "test"
+    },
+    {
+      "id": "web-policy",
+      "file": "src/lib/config/store-policy.ts",
+      "symbol": "export const WEB_PUSH_ENABLED = false;",
+      "kind": "config"
+    },
+    {
+      "id": "web-enable-card",
+      "file": "src/components/NotificationEnableCard.tsx",
+      "symbol": "const webPush = WEB_PUSH_ENABLED && pushSupported();",
+      "kind": "code"
+    },
+    {
+      "id": "web-permission-sheet",
+      "file": "src/components/NotificationPermissionSheet.tsx",
+      "symbol": "if (!isNative && !(WEB_PUSH_ENABLED && pushSupported())) return;",
+      "kind": "code"
+    },
+    {
+      "id": "suggestion-fetch",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function fetchSuggestions()",
+      "kind": "code"
+    },
+    {
+      "id": "suggestion-fetch-cap",
+      "file": "src/lib/db.ts",
+      "symbol": "const PAGE_LIMIT = 1000;",
+      "kind": "code"
+    },
+    {
+      "id": "suggestion-hub-order",
+      "file": "supabase/migrations/0338_legacy_quiz_hub.sql",
+      "symbol": "row_number() over (partition by ps.unit_id order by ps.created_at desc) as rn",
+      "kind": "code"
+    },
+    {
+      "id": "suggestion-hub-cap",
+      "file": "supabase/migrations/0338_legacy_quiz_hub.sql",
+      "symbol": ") g where g.rn <= 50",
+      "kind": "code"
+    },
+    {
+      "id": "suggestion-pending-count",
+      "file": "src/lib/hooks/useOwnerTodoCount.ts",
+      "symbol": "(s) => s.suggestions.filter((x) => isTodoSuggestion(x, me)).length",
+      "kind": "code"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "entry",
+      "type": "action",
+      "name": "제안 입력과 전송",
+      "aliases": [
+        "제안 보내기",
+        "완료 캡처",
+        "새 답 제안"
+      ],
+      "current": "/junior/suggest는 공백 제거 후 최소 5자와 개선 대상 선택을 검사한다. 완료 캡처와 동료 질문 답변도 submit을 호출한다. 모든 시작점이 5자 검사를 공유하지는 않는다.",
+      "evidence": [
+        "submit-ui",
+        "capture",
+        "answer"
+      ],
+      "changeKinds": [
+        "copy",
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "store",
+      "type": "client",
+      "name": "제안 상태 저장소",
+      "aliases": [
+        "useSuggestionStore",
+        "submit",
+        "approve",
+        "reject"
+      ],
+      "current": "낙관적 추가 및 수정 후 실패 시 롤백한다. 저장 성공일 때만 비동기 푸시를 요청한다. hydrate는 tenant epoch를 확인하고 실패 시 기존 목록을 유지한다. fetchSuggestions는 created_at 내림차순으로 최대 PAGE_LIMIT=1000건만 읽는다. 제안 fetch와 hydrate에는 pending 우선 조회나 다음 페이지 호출이 없다. 최신 1000건 뒤의 오래된 pending은 이 목록에서 빠질 수 있다.",
+      "evidence": [
+        "store",
+        "crud",
+        "db",
+        "suggestion-fetch",
+        "suggestion-fetch-cap"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "data",
+      "type": "table",
+      "name": "playbook_suggestions",
+      "aliases": [
+        "playbook_suggestions.status",
+        "proposer_id",
+        "reviewed_at",
+        "source_template_id",
+        "source_uq_id",
+        "resulting_entry_id"
+      ],
+      "current": "pending/approved/rejected 상태와 제안자, 검토자, 원본 질문/업무, 반영 노하우를 저장한다. 대상 노하우와 resulting_entry_id는 외래 키가 아니다. 서버 트리거가 생성자와 초기 상태를 강제한다.",
+      "evidence": [
+        "schema",
+        "stamp",
+        "db"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "permission",
+      "type": "policy",
+      "name": "활성 매장과 검토 권한",
+      "aliases": [
+        "ps_insert",
+        "ps_select",
+        "ps_update",
+        "auth_can_manage",
+        "auth_unit_id"
+      ],
+      "current": "INSERT는 활성 매장과 본인 제안자 조건이다. SELECT는 본인 또는 관리자다. UPDATE는 활성 매장 owner 또는 잠기지 않은 manager다. 0303의 auth_unit_id는 auth_member_unit_id로 고른 매장이 닫혔고 역할이 junior/manager이면 null을 반환한다. owner는 이 함수의 차단 대상이 아니다. 자기 제안 검토 금지는 UI 필터에만 있다.",
+      "evidence": [
+        "insert-policy",
+        "review-policy",
+        "manage",
+        "tenant",
+        "inapp"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "review",
+      "type": "screen",
+      "name": "제안함 검토",
+      "aliases": [
+        "/owner/suggestions",
+        "reflect",
+        "confirmDecline"
+      ],
+      "current": "다른 사람이 보낸 pending 제안을 검토한다. improve는 편집 화면, new는 coach로 이동한다. 뒤로 나가면 승인하지 않는다. 반려 호출은 결과를 기다리지 않고 성공 토스트를 표시한다.",
+      "evidence": [
+        "review-ui",
+        "roles"
+      ],
+      "changeKinds": [
+        "copy",
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "publish",
+      "type": "process",
+      "name": "노하우 반영 후 승인",
+      "aliases": [
+        "/owner/coach",
+        "/owner/edit/[id]",
+        "approveSuggestion"
+      ],
+      "current": "노하우 저장 뒤에 제안을 approved로 갱신한다. 실패하면 부분 성공을 안내한다. source_template_id가 있으면 업무 첨부, source_uq_id가 있으면 질문 해결 경로가 연결된다. 처리 전체는 원자적이지 않다.",
+      "evidence": [
+        "coach",
+        "edit",
+        "store"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "push-request",
+      "type": "event",
+      "name": "새 제안 푸시 요청",
+      "aliases": [
+        "notifyOwnersSuggestion",
+        "suggestion",
+        "새 제안 알림"
+      ],
+      "current": "신규 제안은 audience owners와 ownerOnly=true다. 최대 3회 네트워크/타임아웃/5xx 재시도하며 4xx는 포기한다. 원래 저장 성공과 푸시 성공은 분리된다. 별도 notifyUserSuggestionResult는 제안자 1명에게 결과를 보내며 신규 수신자 변경의 직접 수정 대상이 아니다.",
+      "evidence": [
+        "notify",
+        "store"
+      ],
+      "changeKinds": [
+        "recipient",
+        "field",
+        "contract",
+        "copy"
+      ]
+    },
+    {
+      "id": "verify-event",
+      "type": "api",
+      "name": "push_client_event 사건 검증",
+      "aliases": [
+        "push_client_event",
+        "/functions/v1/push",
+        "push_client_events"
+      ],
+      "current": "0339가 현재 마지막 정의다. owners/user 사건은 unit_access_locked(p_unit) 또는 seat_locked_for(p_unit,p_caller)이면 거부한다. 매장 잠금은 owner 발송도 막고 좌석 잠금은 발송자 조건이다. 제안은 같은 매장 본인이 24시간 안에 만든 pending 행 중 아직 선점 안 된 최신 한 건을 찾는다. 결과도 제안자와 검토 상태를 DB에서 확인한다. advisory lock 후 사건 키를 발송 전에 기록한다. 서비스 역할만 실행할 수 있다.",
+      "evidence": [
+        "event",
+        "event-ledger",
+        "edge-recipients"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "recipients",
+      "type": "process",
+      "name": "제안 수신자 해석",
+      "aliases": [
+        "알림 대상",
+        "수신자 결정",
+        "ownerOnly",
+        "audienceRoles",
+        "unit_members.role"
+      ],
+      "current": "Edge가 suggestion 태그이면 ownerOnly를 강제한다. caller의 활성 매장 owner 멤버십만 고른 뒤 발송자 본인을 제외한다. 일반 owners 대상의 manager는 좌석 잠금을 확인한다. 계정의 profiles.role로 수신자를 정하지 않는다.",
+      "evidence": [
+        "edge-recipients"
+      ],
+      "changeKinds": [
+        "recipient",
+        "contract"
+      ]
+    },
+    {
+      "id": "inapp",
+      "type": "derived",
+      "name": "제안 인앱 목록과 배지",
+      "aliases": [
+        "managerOwnerRows",
+        "isPendingSuggestionToReview",
+        "ownerUnreadCount",
+        "manageUnreadCount",
+        "my_units_notif_data"
+      ],
+      "current": "사장 목록과 배지는 pending 타인 제안에서 파생된다. 매니저 빌더는 suggestion 종류를 제외한다. 허브 RPC는 owner/manager의 pending 제안과 본인 검토 결과를 반환한다. 읽음 시각 이후만 unread이며 푸시 수신 선호와 독립이다. 0338 my_units_notif_data는 조건에 맞는 제안을 매장별 created_at 내림차순으로 정렬한 뒤 최대 50건만 반환한다. pending 우선순위나 이 RPC의 다음 페이지 인자가 없다. 따라서 오래된 pending과 생성일이 오래된 본인 결과가 잘릴 수 있다. 매장 목록과 배지는 최대 1000건 입력에서, 허브 알림은 매장별 최대 50건 입력에서 파생되며 owner_overview의 전체 pending 집계와 숫자가 달라질 수 있다.",
+      "evidence": [
+        "inapp",
+        "hub",
+        "suggestion-fetch",
+        "suggestion-fetch-cap",
+        "suggestion-hub-order",
+        "suggestion-hub-cap",
+        "suggestion-pending-count",
+        "overview"
+      ],
+      "changeKinds": [
+        "recipient",
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "route",
+      "type": "route",
+      "name": "알림 착지와 역할 보정",
+      "aliases": [
+        "NOTIF.suggestion",
+        "NOTIF.suggestion_result",
+        "routeForRole",
+        "pushTapPlan"
+      ],
+      "current": "제안은 /owner/suggestions, 결과는 /junior/chat이다. 매니저는 현재 제안함 진입 허용 목록에 있다. Edge와 클라이언트 경로표는 별개이며 동기화 검사가 있다. native는 다른 매장 푸시에서 매장 전환 뒤 역할을 재해석한다.",
+      "evidence": [
+        "registry",
+        "roles",
+        "tap",
+        "edge-recipients"
+      ],
+      "changeKinds": [
+        "contract"
+      ]
+    },
+    {
+      "id": "delivery",
+      "type": "external",
+      "name": "푸시 서비스 요청과 수신 선호",
+      "aliases": [
+        "deliver",
+        "deliverExpoPush",
+        "notification_prefs",
+        "unit_member_prefs",
+        "Expo Push",
+        "APNs",
+        "FCM"
+      ],
+      "current": "조회된 계정 push_enabled, 매장 muted, KST quiet hours를 적용한다. 선호 조회 실패는 로그만 남기고 누락된 선호를 기본 허용으로 처리한다. 반면 push_web_targets 또는 push_device_targets 조회가 하나라도 실패하면 전송을 중단하고 sent=0을 반환한다. 웹 푸시 수락과 Expo ticket status ok를 sent로 센다. 기기 도착이나 열람의 증거는 아니다.",
+      "evidence": [
+        "edge-deliver"
+      ],
+      "changeKinds": [
+        "contract"
+      ]
+    },
+    {
+      "id": "native",
+      "type": "platform",
+      "name": "Android와 iOS 푸시",
+      "aliases": [
+        "nativepush",
+        "registerToken",
+        "push_device_tokens"
+      ],
+      "current": "expo-notifications로 권한과 Expo 토큰을 등록한다. Android는 알림 채널 설정이 있다. 탭은 unitId와 route를 이용한다. .web 파일은 네이티브 모듈을 대체한다. 실제 OS 전달은 미검증이다.",
+      "evidence": [
+        "native",
+        "tap"
+      ],
+      "changeKinds": [
+        "contract"
+      ]
+    },
+    {
+      "id": "web",
+      "type": "platform",
+      "name": "웹 푸시와 서비스워커",
+      "aliases": [
+        "webpush",
+        "sw.js",
+        "push-navigate"
+      ],
+      "current": "WEB_PUSH_ENABLED=false여서 현재 앱은 웹 자동 구독/재구독과 켜기 CTA 및 첫 권한 시트를 비활성화한다. Service Worker 등록, 기존 구독 대상 서버 발송 및 클릭 처리는 남아 있다. 잔존 경로의 payload와 notificationclick는 url만 보존하며 열린 클라이언트에서는 현재 역할로 routeForRole을 실행한다. native와 같은 unitId 전환은 없다. 기존 웹 구독의 실제 잔존 여부와 전달 결과는 미확인이다.",
+      "evidence": [
+        "web",
+        "sw",
+        "web-tap",
+        "edge-deliver",
+        "web-policy",
+        "web-enable-card",
+        "web-permission-sheet"
+      ],
+      "changeKinds": [
+        "contract"
+      ]
+    },
+    {
+      "id": "dependent-reads",
+      "type": "derived",
+      "name": "기여와 사장 개요 집계",
+      "aliases": [
+        "my_growth",
+        "owner_overview",
+        "sugg_pending"
+      ],
+      "current": "my_growth는 제안 상태와 반영 노하우를 기여에 사용하고 owner_overview는 pending 제안 수를 센다. 푸시 수신자만 바꾸는 변경에서는 직접 수정 대상으로 보지 않는다. status나 proposer_id를 바꾸면 검증 범위다. owner_overview의 sugg_pending은 SQL count(*)이며 제안 목록 1000건/허브 알림 50건 상한과 다르다. 이 차이의 대량 데이터 재현은 미실시다.",
+      "evidence": [
+        "growth",
+        "overview"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "tests",
+      "type": "test",
+      "name": "제안 알림과 권한 회귀 검사",
+      "aliases": [
+        "qa-manager-routes",
+        "qa-notif-axis",
+        "qa-push-route",
+        "qa-task-knowhow",
+        "qa-forgery"
+      ],
+      "current": "순수 함수 검사는 매니저 목록에서 제안 제외와 라우트 허용을 각각 고정한다. 로컬 DB 검사는 제안 저장 및 검토와 위조 방어를 확인한다. 파일 존재는 실행 통과를 뜻하지 않는다.",
+      "evidence": [
+        "test-routes",
+        "test-loop",
+        "test-forgery",
+        "test-axis",
+        "test-tap",
+        "test-sync"
+      ],
+      "changeKinds": [
+        "recipient",
+        "field",
+        "contract"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "entry",
+      "to": "store",
+      "relation": "calls",
+      "when": "직접 제안, 완료 캡처 또는 동료 질문에 새 답을 제안할 때",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "submit-ui",
+        "capture",
+        "answer"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "e2",
+      "from": "store",
+      "to": "data",
+      "relation": "writes-and-subscribes",
+      "when": "submit/approve/reject 및 hydrate/realtime. fetch는 created_at 내림차순 최대 1000건이며 다음 페이지 호출 없음.",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "store",
+        "db",
+        "suggestion-fetch",
+        "suggestion-fetch-cap"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "e3",
+      "from": "permission",
+      "to": "data",
+      "relation": "restricts",
+      "when": "authenticated 직접 테이블 읽기/쓰기. 닫힌 매장의 junior/manager는 auth_unit_id=null로 활성 매장 비교를 통과하지 못함.",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "insert-policy",
+        "review-policy",
+        "manage",
+        "stamp",
+        "tenant"
+      ],
+      "kinds": [
+        "recipient",
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "e4",
+      "from": "review",
+      "to": "publish",
+      "relation": "opens",
+      "when": "new 또는 improve 제안을 반영할 때",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "review-ui"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "e5",
+      "from": "publish",
+      "to": "store",
+      "relation": "approves-after-save",
+      "when": "노하우 저장이 성공했을 때",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "coach",
+        "edit"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "e6",
+      "from": "store",
+      "to": "push-request",
+      "relation": "triggers-after-success",
+      "when": "새 제안 생성이 성공했을 때만. 검토 결과 알림은 별도 사용자 대상 경로다.",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "store"
+      ],
+      "kinds": [
+        "recipient",
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "e7",
+      "from": "push-request",
+      "to": "verify-event",
+      "relation": "calls",
+      "when": "로그인 토큰이 있고 Supabase 설정이 있을 때",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "notify",
+        "edge-recipients"
+      ],
+      "kinds": [
+        "recipient",
+        "contract"
+      ]
+    },
+    {
+      "id": "e8",
+      "from": "verify-event",
+      "to": "data",
+      "relation": "reads-fact-and-claims-event",
+      "when": "제안자/상태/매장/시각과 미발송 사건이 일치할 때",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "event"
+      ],
+      "kinds": [
+        "recipient",
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "e9",
+      "from": "verify-event",
+      "to": "recipients",
+      "relation": "permits-delivery",
+      "when": "ok=true이며 중복/위조/잠긴 매장이 아닐 때",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "event",
+        "edge-recipients"
+      ],
+      "kinds": [
+        "recipient",
+        "contract"
+      ]
+    },
+    {
+      "id": "e10",
+      "from": "recipients",
+      "to": "delivery",
+      "relation": "selects-recipients",
+      "when": "같은 매장 역할 대상에서 발송자 제외 후 남은 사람이 있을 때",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "edge-recipients"
+      ],
+      "kinds": [
+        "recipient",
+        "contract"
+      ]
+    },
+    {
+      "id": "e11",
+      "from": "delivery",
+      "to": "native",
+      "relation": "sends-expo-payload",
+      "when": "선호가 허용하고 유효한 기기 토큰이 있을 때",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "edge-deliver",
+        "native"
+      ],
+      "kinds": [
+        "recipient",
+        "contract"
+      ]
+    },
+    {
+      "id": "e12",
+      "from": "delivery",
+      "to": "web",
+      "relation": "sends-web-payload",
+      "when": "기존 웹 구독이 남아 있고 선호 및 토큰 조회 경로를 통과할 때. 현재 앱의 신규 웹 구독은 WEB_PUSH_ENABLED=false로 비활성이다.",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "edge-deliver",
+        "sw",
+        "web-policy",
+        "web-tap"
+      ],
+      "kinds": [
+        "recipient",
+        "contract"
+      ]
+    },
+    {
+      "id": "e13",
+      "from": "native",
+      "to": "route",
+      "relation": "opens-after-store-resolution",
+      "when": "로그인 및 탭 준비가 끝난 뒤",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "tap",
+        "native"
+      ],
+      "kinds": [
+        "recipient",
+        "contract"
+      ]
+    },
+    {
+      "id": "e14",
+      "from": "web",
+      "to": "route",
+      "relation": "opens-url",
+      "when": "서비스워커 알림 클릭 또는 push-navigate 수신",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "sw",
+        "web-tap"
+      ],
+      "kinds": [
+        "recipient",
+        "contract"
+      ]
+    },
+    {
+      "id": "e15",
+      "from": "data",
+      "to": "inapp",
+      "relation": "derives-list-and-count",
+      "when": "사장 검토 대기 또는 본인 결과, 역할 필터와 읽음 시각 적용. 매장 fetch는 최신 1000건, 허브 RPC는 조건 일치 제안 중 매장별 최신 생성 50건까지만 입력됨.",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "inapp",
+        "hub",
+        "suggestion-fetch",
+        "suggestion-fetch-cap",
+        "suggestion-hub-order",
+        "suggestion-hub-cap"
+      ],
+      "kinds": [
+        "recipient",
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "e16",
+      "from": "inapp",
+      "to": "route",
+      "relation": "opens",
+      "when": "제안 또는 제안 결과 알림을 눌렀을 때",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "inapp",
+        "registry"
+      ],
+      "kinds": [
+        "recipient",
+        "contract"
+      ]
+    },
+    {
+      "id": "e17",
+      "from": "route",
+      "to": "review",
+      "relation": "lands",
+      "when": "suggestion 태그이며 현재 역할이 경로를 열 수 있을 때",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "registry",
+        "roles"
+      ],
+      "kinds": [
+        "recipient",
+        "contract"
+      ]
+    },
+    {
+      "id": "e18",
+      "from": "data",
+      "to": "dependent-reads",
+      "relation": "feeds-aggregates",
+      "when": "제안 status/proposer_id/resulting_entry_id와 관계된 집계",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "growth",
+        "overview"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "e19",
+      "from": "tests",
+      "to": "inapp",
+      "relation": "checks-partial-contract",
+      "when": "매니저 제외와 목록/배지 일치 검사",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "test-routes",
+        "test-axis"
+      ],
+      "kinds": [
+        "recipient",
+        "contract"
+      ]
+    },
+    {
+      "id": "e20",
+      "from": "tests",
+      "to": "route",
+      "relation": "checks-partial-contract",
+      "when": "푸시 경로와 역할 보정 검사",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "test-tap",
+        "test-sync"
+      ],
+      "kinds": [
+        "recipient",
+        "contract"
+      ]
+    },
+    {
+      "id": "e21",
+      "from": "tests",
+      "to": "permission",
+      "relation": "checks-partial-contract",
+      "when": "로컬 DB 제안 저장/검토와 위조 검사",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "test-loop",
+        "test-forgery"
+      ],
+      "kinds": [
+        "recipient",
+        "field",
+        "contract"
+      ]
+    }
+  ],
+  "flow": [
+    {
+      "node": "entry",
+      "when": "사용자 입력",
+      "result": "신규/개선 및 선택적 출처 정보를 submit에 전달"
+    },
+    {
+      "node": "store",
+      "when": "submit",
+      "result": "낙관적 표시 후 DB 저장, 실패면 롤백"
+    },
+    {
+      "node": "permission",
+      "when": "DB 쓰기",
+      "result": "활성 매장 및 호출자 조건을 확인하고 초기 신원을 서버가 고정"
+    },
+    {
+      "node": "push-request",
+      "when": "저장 성공",
+      "result": "원래 작업과 분리한 발송 요청"
+    },
+    {
+      "node": "verify-event",
+      "when": "push Edge 수신",
+      "result": "DB 사실 검증과 사건 선점; 미검증이면 HTTP 200 sent=0"
+    },
+    {
+      "node": "recipients",
+      "when": "사건 선점 성공",
+      "result": "현재는 같은 매장 owner만 선택"
+    },
+    {
+      "node": "delivery",
+      "when": "수신자 존재",
+      "result": "조회된 선호 적용; 선호 조회 실패는 기본 허용, 토큰 조회 실패는 전송 중단. 기존 웹 구독 또는 네이티브 토큰에 외부 요청하며 기기 전달과 열람은 별도."
+    },
+    {
+      "node": "inapp",
+      "when": "DB 읽기/구독 갱신",
+      "result": "OS 푸시 성공 여부와 독립적으로 목록/배지 파생"
+    },
+    {
+      "node": "review",
+      "when": "pending 검토",
+      "result": "반려 또는 노하우 반영 화면 이동"
+    },
+    {
+      "node": "publish",
+      "when": "반영 저장 성공",
+      "result": "제안 승인 시도; 일부 실패가 남을 수 있음"
+    },
+    {
+      "node": "store",
+      "when": "검토 저장 성공",
+      "result": "별도 notifyUserSuggestionResult로 제안자에게 결과 알림. 신규 제안 수신자 변경 범위에 자동 포함하지 않음."
+    }
+  ],
+  "transitions": [
+    {
+      "from": "없음",
+      "to": "pending",
+      "when": "INSERT 및 authenticated 스탬프 트리거",
+      "evidence": [
+        "stamp",
+        "insert-policy"
+      ]
+    },
+    {
+      "from": "pending",
+      "to": "approved",
+      "when": "UI 반영 후 reviewSuggestion 성공. DB는 from 상태를 강제하지 않음",
+      "evidence": [
+        "coach",
+        "edit",
+        "db"
+      ]
+    },
+    {
+      "from": "pending",
+      "to": "rejected",
+      "when": "반려 갱신 성공. DB는 from 상태를 강제하지 않음",
+      "evidence": [
+        "store",
+        "db"
+      ]
+    },
+    {
+      "from": "approved/rejected",
+      "to": "approved/rejected/pending",
+      "when": "관리자 직접 UPDATE는 CHECK 허용 상태 안에서 이전 상태 조건이 없음. 정상 UI 흐름의 요구사항으로 승인된 전이가 아님",
+      "evidence": [
+        "schema",
+        "review-policy",
+        "stamp",
+        "db"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "file": "scripts/qa-manager-routes.mjs",
+      "command": "node scripts/qa-manager-routes.mjs",
+      "scope": "순수 함수: 매니저 제안함 경로 허용, 제안 알림 제외, 목록/배지 일치",
+      "execution": "see-runs",
+      "requires": "Node 22.18+; DB/네트워크 없음",
+      "runName": "manager-routes"
+    },
+    {
+      "file": "scripts/qa-notif-axis.mjs",
+      "command": "node --no-warnings scripts/qa-notif-axis.mjs",
+      "scope": "순수 함수: 역할별 파생 알림과 읽음 계산",
+      "execution": "see-runs",
+      "requires": "Node 22.18+; 실제 OS 전달 미검증",
+      "runName": "notif-axis"
+    },
+    {
+      "file": "scripts/qa-push-route.mjs",
+      "command": "node scripts/qa-push-route.mjs",
+      "scope": "순수 함수: 역할과 매장 변경에 따른 푸시 탭 계획",
+      "execution": "see-runs",
+      "requires": "Node 22.18+; 기기 실행 아님",
+      "runName": "push-route"
+    },
+    {
+      "file": "scripts/check-push-route-sync.mjs",
+      "command": "node scripts/check-push-route-sync.mjs",
+      "scope": "Edge와 클라이언트 경로 일치 검사",
+      "execution": "see-runs",
+      "requires": "Node; 실제 푸시 없음",
+      "runName": "route-sync"
+    },
+    {
+      "file": "scripts/qa-task-knowhow.mjs",
+      "command": "node scripts/qa-task-knowhow.mjs --local",
+      "scope": "로컬 DB: 완료 캡처/질문 출처와 승인 연결 해피패스",
+      "execution": "not-run",
+      "requires": "로컬 Supabase 및 의존성; AI 호출 분기는 로컬 skip"
+    },
+    {
+      "file": "scripts/qa-forgery.mjs",
+      "command": "node scripts/qa-forgery.mjs --local",
+      "scope": "로컬 DB/Edge: 초기 상태와 작성자 위조, 가짜 제안 푸시 거부",
+      "execution": "not-run",
+      "requires": "로컬 Supabase, 로컬 Edge 및 임시 테스트 VAPID; 실제 사용자 알림 금지"
+    }
+  ],
+  "desired": {
+    "status": "unconfirmed",
+    "decisionsNeeded": [
+      "바꾸려는 알림은 새 제안 검토 알림인가, 제안자 결과 알림인가?",
+      "대상 역할과 매장 범위는 무엇인가? 잠긴 매니저도 포함하는가?",
+      "OS 푸시만 바꾸는가, 인앱 목록/배지와 검토 권한까지 맞추는가?",
+      "이전 앱과 서버 버전에서 ownerOnly와 수신자 규칙의 차이를 어떻게 수용할 것인가?",
+      "발송 실패 재시도와 기기 전달 확인까지 이번 변경 범위인가?"
+    ]
+  }
+}

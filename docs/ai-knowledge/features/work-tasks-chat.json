@@ -1,0 +1,521 @@
+{
+  "schemaVersion": 1,
+  "id": "work-tasks-chat",
+  "name": "업무 작성과 대화 및 완료",
+  "aliases": [
+    "업무 할일",
+    "업무 채팅",
+    "할일 완료",
+    "담당자 배정",
+    "work_templates",
+    "work_done",
+    "work_feed",
+    "retryMessage",
+    "업무 채팅 재전송"
+  ],
+  "platforms": [
+    "web",
+    "android",
+    "ios"
+  ],
+  "summary": "공유 WorkBoard의 할일 생성, 완료 체크, 메시지 전송과 재시도 경로를 추적했다. 할일은 매장 범위이고 채팅은 방 가시성을 추가로 적용한다.",
+  "entrypoints": [
+    "/owner/work",
+    "/junior/work",
+    "WorkBoard"
+  ],
+  "depth": [
+    "대표 하위 흐름의 화면부터 데이터 경계까지 코드 추적",
+    "상태와 실패 및 권한 조건 확인",
+    "SQL 정의와 후속 변경 검색",
+    "관련 테스트 연결",
+    "실행 미검증"
+  ],
+  "unknowns": [
+    "로컬 HEAD f03eecd의 코드 관찰이다. 원격 마이그레이션 적용 상태와 배포 앱 버전은 확인하지 않았다.",
+    "DB, 네트워크, AI, 브라우저 및 Android/iOS 실기기 실행은 하지 않았다.",
+    "방 생성/초대/삭제 전체, 일괄 공지, 예약 업무 알림 및 완료 사진 Storage 삭제 큐 전체는 제외했다.",
+    "완료 기록과 피드 두 쓰기의 부분 실패 및 매장 전환 중 미완료 쓰기의 실제 결과는 DB/기기 검증이 필요하다."
+  ],
+  "findings": [
+    "업무 생성 성공과 노하우 첨부 성공은 별도다. false를 받았다고 본문이 없다고 단정할 수 없다.",
+    "배정 알림은 0339 서버 트리거로 이동했다. 클라이언트 이름만 보고 발송자를 찾으면 현재 경로를 놓친다."
+  ],
+  "evidence": [
+    {
+      "id": "owner",
+      "file": "src/app/owner/work.tsx",
+      "symbol": "return <WorkBoard role=\"owner\" />;",
+      "kind": "code"
+    },
+    {
+      "id": "junior",
+      "file": "src/app/junior/work.tsx",
+      "symbol": "return <WorkBoard role=\"junior\" />;",
+      "kind": "code"
+    },
+    {
+      "id": "board",
+      "file": "src/components/WorkBoard.tsx",
+      "symbol": "onSend={(text, mentions) => postMessage",
+      "kind": "code"
+    },
+    {
+      "id": "add",
+      "file": "src/lib/store/useWorkStore.ts",
+      "symbol": "addTask: async (input, retryId) => {",
+      "kind": "code"
+    },
+    {
+      "id": "done",
+      "file": "src/lib/store/useWorkStore.ts",
+      "symbol": "toggleTask: (date, templateId, staffId, staffName, role, photoUrl, task) => {",
+      "kind": "code"
+    },
+    {
+      "id": "chain",
+      "file": "src/lib/store/useWorkStore.ts",
+      "symbol": "function commitDone(",
+      "kind": "code"
+    },
+    {
+      "id": "message",
+      "file": "src/lib/store/useWorkStore.ts",
+      "symbol": "postMessage: (date, text, authorId, authorName, role, mentions, photoUrl) => {",
+      "kind": "code"
+    },
+    {
+      "id": "hydrate",
+      "file": "src/lib/store/useWorkStore.ts",
+      "symbol": "feed: carryUnsent(live.feed, get().feed, sendingIds)",
+      "kind": "code"
+    },
+    {
+      "id": "db",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function setDone(",
+      "kind": "code"
+    },
+    {
+      "id": "feed-db",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function upsertFeed(",
+      "kind": "code"
+    },
+    {
+      "id": "task-policy",
+      "file": "supabase/migrations/0254_task_multi_assignee.sql",
+      "symbol": "create policy wt_select_scope on public.work_templates",
+      "kind": "code"
+    },
+    {
+      "id": "insert-policy",
+      "file": "supabase/migrations/0175_wt_insert_owner_id_revert.sql",
+      "symbol": "create policy wt_insert on public.work_templates",
+      "kind": "code"
+    },
+    {
+      "id": "room-policy",
+      "file": "supabase/migrations/0285_session_active_unit.sql",
+      "symbol": "alter policy wf_select on public.work_feed",
+      "kind": "code"
+    },
+    {
+      "id": "stamp",
+      "file": "supabase/migrations/0319_client_trust_identity.sql",
+      "symbol": "create or replace function public.work_done_stamp()",
+      "kind": "code"
+    },
+    {
+      "id": "assign",
+      "file": "supabase/migrations/0339_work_assignment_server_push.sql",
+      "symbol": "create or replace function public.work_assignment_notify()",
+      "kind": "code"
+    },
+    {
+      "id": "sweep",
+      "file": "supabase/migrations/0339_work_assignment_server_push.sql",
+      "symbol": "create or replace function public.sweep_member_notices(",
+      "kind": "code"
+    },
+    {
+      "id": "push",
+      "file": "supabase/functions/push/index.ts",
+      "symbol": "sweep_member_notices",
+      "kind": "code"
+    },
+    {
+      "id": "web",
+      "file": "src/lib/config/store-policy.ts",
+      "symbol": "export const WEB_PUSH_ENABLED = false;",
+      "kind": "config"
+    },
+    {
+      "id": "test",
+      "file": "scripts/qa-j15.mjs",
+      "symbol": "markSendFailed",
+      "kind": "test"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "screen",
+      "type": "screen",
+      "name": "WorkBoard 역할별 진입",
+      "aliases": [],
+      "current": "owner/work와 junior/work는 같은 WorkBoard에 role만 다르게 전달한다. 메시지는 postMessage를 호출한다.",
+      "evidence": [
+        "owner",
+        "junior",
+        "board"
+      ],
+      "changeKinds": [
+        "contract",
+        "copy"
+      ]
+    },
+    {
+      "id": "task-write",
+      "type": "store",
+      "name": "할일 생성과 첨부",
+      "aliases": [],
+      "current": "낙관적 추가 후 insertTemplate을 실행한다. 저장 불명확 시 같은 ID를 직접 읽어 본인 작성 행만 복구한다. 본문 성공 후 노하우 첨부를 별도로 저장한다. 첨부 실패는 전체 반환 false지만 본문이 이미 남을 수 있다.",
+      "evidence": [
+        "add"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "done-write",
+      "type": "store",
+      "name": "완료/해제와 피드",
+      "aliases": [],
+      "current": "날짜/업무 키로 쓰기를 직렬화한다. work_done과 task_done 피드는 Promise.all의 별도 쓰기다. 중복 already는 재조회하고 실패는 낙관 상태를 되돌린다. 하나의 DB 트랜잭션으로 묶여 있지는 않다.",
+      "evidence": [
+        "done",
+        "chain",
+        "db"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "chat-write",
+      "type": "store",
+      "name": "메시지 실패와 재전송",
+      "aliases": [],
+      "current": "전송 실패 메시지를 sendState=failed로 남긴다. 같은 ID를 재사용해 날짜와 시각을 갱신해 재전송한다. 성공한 뒤 본인 외 언급 대상에 알림을 요청한다.",
+      "evidence": [
+        "message",
+        "feed-db"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "hydrate",
+      "type": "store",
+      "name": "업무 읽기와 실시간 합치기",
+      "aliases": [],
+      "current": "시간 제한 내 다중 조회를 끝내고 epoch가 지난 응답을 버린다. 실패/전송 중 메시지와 미정산 완료 체크를 서버 스냅샷에 다시 얹는다. 기본 업무 읽기 실패는 loadError로 분리한다.",
+      "evidence": [
+        "hydrate"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "permission",
+      "type": "permission",
+      "name": "매장/방과 작성자 경계",
+      "aliases": [],
+      "current": "할일 읽기는 활성 매장 shared 또는 담당/작성자 조건이다. insert는 활성 매장과 created_by 조건이다. 피드는 활성 매장과 기본방/멤버방 가시성, 수정은 본인 작성자 조건이다. 서버는 feed author와 완료 by를 고정한다. 완료 삭제는 작성자 또는 auth_can_manage다.",
+      "evidence": [
+        "task-policy",
+        "insert-policy",
+        "room-policy",
+        "stamp"
+      ],
+      "changeKinds": [
+        "contract",
+        "field",
+        "recipient"
+      ]
+    },
+    {
+      "id": "assignment",
+      "type": "async",
+      "name": "배정 서버 알림",
+      "aliases": [],
+      "current": "0339 AFTER 트리거가 새 담당 멤버에게만 assign outbox를 만든다. private, 잠긴 좌석, 작성자 본인은 제외한다. 해제된 담당의 미발송 항목은 취소한다. 트리거 내부 알림 실패는 warning으로 끝나 업무 저장을 막지 않는다.",
+      "evidence": [
+        "assign"
+      ],
+      "changeKinds": [
+        "contract",
+        "recipient"
+      ]
+    },
+    {
+      "id": "delivery",
+      "type": "external",
+      "name": "예약 outbox 처리 경계",
+      "aliases": [],
+      "current": "sweep_member_notices는 현재 담당/멤버십/잠금 조건을 다시 확인하고 최대 200건을 선점한다. push Edge가 소비한다. 웹 신규 구독은 정책상 비활성이다. 기기 전달 결과는 이 기록의 실행 증거가 없다.",
+      "evidence": [
+        "sweep",
+        "push",
+        "web"
+      ],
+      "changeKinds": [
+        "contract",
+        "recipient"
+      ]
+    },
+    {
+      "id": "tests",
+      "type": "test",
+      "name": "채팅 실패 회귀",
+      "aliases": [],
+      "current": "qa-j15는 순수 채팅 규칙과 소스 검사 외에 Docker DB 검사도 포함한다. 전체 파일을 순수 검사로 취급하지 않는다.",
+      "evidence": [
+        "test"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "screen-task-write",
+      "from": "screen",
+      "to": "task-write",
+      "relation": "calls",
+      "when": "업무 작성 저장",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "board",
+        "add"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "screen-chat-write",
+      "from": "screen",
+      "to": "chat-write",
+      "relation": "calls",
+      "when": "텍스트/사진 메시지 전송",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "board",
+        "message"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "done-write-permission",
+      "from": "done-write",
+      "to": "permission",
+      "relation": "writes-through",
+      "when": "완료 및 해제 두 쓰기",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "done",
+        "stamp"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "task-write-permission",
+      "from": "task-write",
+      "to": "permission",
+      "relation": "writes-through",
+      "when": "할일 INSERT",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "add",
+        "insert-policy"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "chat-write-permission",
+      "from": "chat-write",
+      "to": "permission",
+      "relation": "writes-through",
+      "when": "피드 upsert",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "feed-db",
+        "room-policy",
+        "stamp"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "permission-assignment",
+      "from": "permission",
+      "to": "assignment",
+      "relation": "triggers",
+      "when": "담당자 포함 신규 업무 또는 담당 배열 변경 성공",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "assign"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "assignment-delivery",
+      "from": "assignment",
+      "to": "delivery",
+      "relation": "queues",
+      "when": "신규 유효 담당자 outbox 생성 후 예약 소비",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "assign",
+        "sweep",
+        "push"
+      ],
+      "kinds": [
+        "contract",
+        "recipient"
+      ]
+    },
+    {
+      "id": "hydrate-screen",
+      "from": "hydrate",
+      "to": "screen",
+      "relation": "refreshes",
+      "when": "재조회 및 DB 변경 이벤트 뒤",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "hydrate",
+        "board"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "tests-chat-write",
+      "from": "tests",
+      "to": "chat-write",
+      "relation": "checks",
+      "when": "실패 메시지 유지와 같은 ID 재전송 검사",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "test"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    }
+  ],
+  "flow": [
+    {
+      "node": "screen",
+      "when": "사용자 입력",
+      "result": "업무/메시지 액션"
+    },
+    {
+      "node": "task-write",
+      "when": "업무 저장",
+      "result": "본문 후 링크 저장"
+    },
+    {
+      "node": "done-write",
+      "when": "완료 체크",
+      "result": "직렬 큐에서 완료 행과 피드 저장"
+    },
+    {
+      "node": "chat-write",
+      "when": "메시지 실패",
+      "result": "failed 상태로 남겨 재전송 제공"
+    },
+    {
+      "node": "assignment",
+      "when": "배정 변경",
+      "result": "서버 outbox 생성"
+    }
+  ],
+  "transitions": [
+    {
+      "from": "message pending",
+      "to": "message failed",
+      "when": "upsertFeed 실패",
+      "evidence": [
+        "message"
+      ]
+    },
+    {
+      "from": "message failed",
+      "to": "message pending",
+      "when": "retryMessage가 같은 ID로 재전송",
+      "evidence": [
+        "message"
+      ]
+    },
+    {
+      "from": "task incomplete",
+      "to": "task complete",
+      "when": "완료 행과 피드 쓰기를 시도하고 실패 시 UI 롤백. 두 서버 쓰기는 원자적이지 않음",
+      "evidence": [
+        "done",
+        "chain"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "file": "scripts/qa-j15.mjs",
+      "command": "node scripts/qa-j15.mjs",
+      "scope": "채팅 실패 유지, 재시도와 피드 쓰기 경계",
+      "requires": "Node 및 로컬 Docker DB도 접근",
+      "execution": "not-run"
+    },
+    {
+      "file": "scripts/qa-task-knowhow.mjs",
+      "command": "node scripts/qa-task-knowhow.mjs --local",
+      "scope": "업무 노하우 첨부와 완료 캡처 연결",
+      "requires": "로컬 DB/세션 필요. 실행하지 않음",
+      "execution": "not-run"
+    }
+  ],
+  "desired": {
+    "status": "unconfirmed",
+    "decisionsNeeded": [
+      "현재 동작을 제품 요구로 승인한 기록이 아니다. 변경 요청이 생기면 기존 제품 정본과 사용자 결정을 별도로 연결해야 한다."
+    ]
+  }
+}

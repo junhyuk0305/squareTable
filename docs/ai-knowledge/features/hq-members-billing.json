@@ -1,0 +1,729 @@
+{
+  "schemaVersion": 1,
+  "id": "hq-members-billing",
+  "name": "본사 담당자 초대와 결제 조회",
+  "aliases": [
+    "본사 구성원",
+    "본사 담당자",
+    "담당자 초대",
+    "본사 결제",
+    "본사 청구",
+    "요금 부담",
+    "payer",
+    "brand_billing_preview_mine",
+    "accept_brand_member_invite"
+  ],
+  "platforms": [
+    "web"
+  ],
+  "summary": "본사 담당자 링크를 만들고 로그인 뒤 수락해 브랜드 자격을 갱신한다. 결제 화면은 현재와 다음 달 청구 대상 및 청구서를 읽는다. 요금 부담 변경은 가맹에서 제안한 쪽의 상대가 수락한다.",
+  "entrypoints": [
+    "/hq/settings/members",
+    "/hq/join?token=",
+    "/hq/settings/billing",
+    "/hq/stores/[id] 연결과 규칙"
+  ],
+  "depth": [
+    "대표 흐름의 화면부터 최신 로컬 SQL까지 정적 추적",
+    "주요 권한과 상태 및 실패 처리 확인",
+    "실행하지 않은 QA와 연결"
+  ],
+  "unknowns": [
+    "로컬 st-feat HEAD f03eecd 기준 코드 관찰이다. 원격 DB 적용 상태와 배포 버전은 확인하지 않았다.",
+    "이번 조사는 읽기만 했다. DB, 브라우저, 실기기, AI 호출을 실행하지 않았다.",
+    "담당자 초대와 결제 읽기 및 payer 변경을 대표 흐름으로 추적했다. 내부 콘솔 청구 발행/승인/환불의 전체 구현은 소유권 경계만 확인했다.",
+    "초대 링크가 저장된 브라우저에서 로그인 계정을 바꾸거나 localStorage를 쓸 수 없는 경우는 실행하지 않았다.",
+    "청구 기간 경계, IAP 상태 변경, payer 동시 요청과 통신 재시도를 실행하지 않았다.",
+    "등록 SQL의 grant/revoke를 확인했으며 실제 서버 ACL은 조회하지 않았다."
+  ],
+  "findings": [
+    "브랜드 정체성 캐시와 결제 캐시가 분리되어 있다. 결제는 그 화면에서 current/next/invoices 세 읽기가 모두 끝나야 표시한다.",
+    "my_brand는 0212가 DROP 후 확장한 반환 계약이다. auth_brand_id는 0208의 활성 브랜드 판정이고 구성원 초대 수락은 0331의 잠금 본문이다.",
+    "brand_billing_preview는 auth.uid가 없는 경우 내부 콘솔 경로를 허용한다. public/anon EXECUTE 회수가 필수 경계이며 0222에 명시되어 있다.",
+    "브랜드 자격이 이미 있는 초대 링크 방문자는 두 번째 브랜드 수락 대신 /hq로 이동한다. DB 복수 소속 가능성과 현재 단일 브랜드 UI를 같은 것으로 기록하지 않았다."
+  ],
+  "evidence": [
+    {
+      "id": "gate",
+      "file": "src/app/hq/_layout.tsx",
+      "symbol": "export default function HqLayout()",
+      "kind": "code"
+    },
+    {
+      "id": "platform",
+      "file": "src/lib/config/store-policy.ts",
+      "symbol": "export const SHOW_HQ_CONSOLE = !IS_NATIVE;",
+      "kind": "code"
+    },
+    {
+      "id": "bridge",
+      "file": "src/lib/brand/brandDb.ts",
+      "symbol": "async function rows<T>(",
+      "kind": "code"
+    },
+    {
+      "id": "identity",
+      "file": "supabase/migrations/0208_brand_axis_members.sql",
+      "symbol": "create or replace function public.auth_brand_id()",
+      "kind": "code"
+    },
+    {
+      "id": "errors",
+      "file": "src/lib/brand/errors.ts",
+      "symbol": "export function brandErrorMessage(",
+      "kind": "code"
+    },
+    {
+      "id": "reset",
+      "file": "src/lib/store/tenantReset.ts",
+      "symbol": "function resetTenantData()",
+      "kind": "code"
+    },
+    {
+      "id": "members-ui",
+      "file": "src/app/hq/settings/members.tsx",
+      "symbol": "export default function HqSettingsMembersScreen()",
+      "kind": "code"
+    },
+    {
+      "id": "billing-ui",
+      "file": "src/app/hq/settings/billing.tsx",
+      "symbol": "export default function HqSettingsBillingScreen()",
+      "kind": "code"
+    },
+    {
+      "id": "identity-state",
+      "file": "src/lib/store/useBrandStore.ts",
+      "symbol": "export const useBrandStore =",
+      "kind": "code"
+    },
+    {
+      "id": "identity-rpc",
+      "file": "supabase/migrations/0212_brand_overview.sql",
+      "symbol": "drop function if exists public.my_brand();",
+      "kind": "code"
+    },
+    {
+      "id": "member-list",
+      "file": "supabase/migrations/0212_brand_overview.sql",
+      "symbol": "create or replace function public.brand_members_list()",
+      "kind": "code"
+    },
+    {
+      "id": "invite",
+      "file": "supabase/migrations/0210_brand_invites.sql",
+      "symbol": "create or replace function public.brand_invite_member()",
+      "kind": "code"
+    },
+    {
+      "id": "join-ui",
+      "file": "src/app/hq/join.tsx",
+      "symbol": "export default function HqJoinScreen()",
+      "kind": "code"
+    },
+    {
+      "id": "join-hook",
+      "file": "src/lib/brand/usePendingBrandJoin.ts",
+      "symbol": "export async function acceptPendingBrandJoin(",
+      "kind": "code"
+    },
+    {
+      "id": "accept",
+      "file": "supabase/migrations/0331_brand_invite_single_use.sql",
+      "symbol": "create or replace function public.accept_brand_member_invite(",
+      "kind": "code"
+    },
+    {
+      "id": "billing-state",
+      "file": "src/lib/store/useBrandBillingStore.ts",
+      "symbol": "export const useBrandBillingStore =",
+      "kind": "code"
+    },
+    {
+      "id": "billing",
+      "file": "supabase/migrations/0222_brand_billing.sql",
+      "symbol": "create or replace function public.brand_billing_preview(",
+      "kind": "code"
+    },
+    {
+      "id": "invoice",
+      "file": "supabase/migrations/0222_brand_billing.sql",
+      "symbol": "create or replace function public.brand_invoices_list()",
+      "kind": "code"
+    },
+    {
+      "id": "write-acl",
+      "file": "supabase/migrations/0222_brand_billing.sql",
+      "symbol": "revoke all on function public.brand_invoice_issue(text, text, text) from public, anon, authenticated;",
+      "kind": "code"
+    },
+    {
+      "id": "payer-propose",
+      "file": "supabase/migrations/0224_brand_relation_rules.sql",
+      "symbol": "create or replace function public.propose_payer(",
+      "kind": "code"
+    },
+    {
+      "id": "payer-accept",
+      "file": "supabase/migrations/0221_brand_payer_dates.sql",
+      "symbol": "create or replace function public.accept_payer(",
+      "kind": "code"
+    },
+    {
+      "id": "payer-ui",
+      "file": "src/app/hq/stores/[id].tsx",
+      "symbol": "const otherPayer: BrandPayer",
+      "kind": "code"
+    },
+    {
+      "id": "billing-qa",
+      "file": "scripts/qa-brand-billing.mjs",
+      "symbol": "G4 남의 브랜드 청구는 못 본다",
+      "kind": "test"
+    },
+    {
+      "id": "invite-qa",
+      "file": "scripts/qa-audit-ai-brand-invite.cjs",
+      "symbol": "0331_brand_invite_single_use.sql",
+      "kind": "test"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "gate",
+      "type": "permission",
+      "name": "본사 웹 자격과 초대 예외",
+      "aliases": [
+        "HqLayout",
+        "SHOW_HQ_CONSOLE",
+        "/hq/join"
+      ],
+      "current": "결제와 구성원 화면은 로그인과 brandId가 필요하다. /hq/join은 아직 자격이 없는 초대 수신자를 위해 레이아웃 가드를 우회한다. 화면은 네이티브에서 웹 안내를 표시한다. DB는 별도 auth_brand_id로 범위를 제한한다.",
+      "evidence": [
+        "gate",
+        "platform",
+        "join-ui"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "screen",
+      "type": "screen",
+      "name": "구성원 및 결제 화면",
+      "aliases": [
+        "/hq/settings/members",
+        "/hq/settings/billing",
+        "HqSettingsMembersScreen",
+        "HqSettingsBillingScreen"
+      ],
+      "current": "구성원은 브랜드/초대 읽기가 끝난 뒤 표시하고 링크 생성 오류를 토스트로 알린다. 결제는 브랜드/매장/결제 캐시가 모두 loaded인 뒤 서버의 price_krw 행을 더한다. 청구 발행 또는 입금 승인 버튼은 이 흐름에 없다.",
+      "evidence": [
+        "members-ui",
+        "billing-ui"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "identity-cache",
+      "type": "state",
+      "name": "브랜드 정체성과 구성원 캐시",
+      "aliases": [
+        "useBrandStore",
+        "fetchMyBrandFull",
+        "fetchBrandMembers"
+      ],
+      "current": "my_brand와 brand_members_list를 병렬 조회한다. 어느 한쪽이라도 실패하면 이전 값을 보존하고 error/loaded를 세운다. coalesce로 중복 실행을 합치고 account epoch가 다른 응답은 버린다. 로그아웃 시 reset한다.",
+      "evidence": [
+        "identity-state",
+        "reset"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "identity-rpc",
+      "type": "api",
+      "name": "활성 브랜드와 구성원 범위",
+      "aliases": [
+        "my_brand",
+        "auth_brand_id",
+        "brand_members_list",
+        "brands",
+        "brand_members"
+      ],
+      "current": "auth_brand_id는 본인 활성 브랜드 하나를 고른다. 0212의 확장 my_brand는 계약가/기본 부담/기간/작업실 ID를 반환한다. members_list는 그 브랜드 담당자의 이름과 가입일만 반환하며 매장 직원 명단 조회가 아니다. 브랜드/담당자 테이블은 직접 읽기 대신 RPC 경계를 사용한다.",
+      "evidence": [
+        "identity",
+        "identity-rpc",
+        "member-list"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "invite",
+      "type": "api",
+      "name": "7일 담당자 초대 링크",
+      "aliases": [
+        "brand_invite_member",
+        "brand_invites",
+        "token",
+        "expires_at"
+      ],
+      "current": "0210은 활성 브랜드 담당자만 7일 token 초대를 만들 수 있게 한다. created_by와 브랜드는 서버에서 정한다. 감사 로그를 기록한다. UI는 반환 토큰을 /hq/join 주소로 만들고 목록을 새로 읽는다.",
+      "evidence": [
+        "invite",
+        "members-ui"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "join",
+      "type": "lifecycle",
+      "name": "로그인 뒤 대기 초대 수락",
+      "aliases": [
+        "acceptPendingBrandJoin",
+        "st_brand_join_token",
+        "usePendingBrandJoin",
+        "refreshMembership"
+      ],
+      "current": "토큰을 localStorage에 보존하고 signed_in 뒤 accept RPC를 부른다. 성공과 실패 모두 토큰을 지운다. 실패는 만료/잘못된 링크 문구를 알리고 성공은 refreshMembership 뒤 /hq로 이동한다. 이미 brandId가 있는 계정은 새 브랜드 수락을 진행하지 않는다.",
+      "evidence": [
+        "join-hook",
+        "join-ui"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "accept",
+      "type": "api",
+      "name": "단일 사용 초대 수락",
+      "aliases": [
+        "accept_brand_member_invite",
+        "FOR UPDATE",
+        "brand_members.user_id"
+      ],
+      "current": "0331은 token/kind=member 행을 FOR UPDATE로 잠근 뒤 pending과 만료를 검사한다. 로그인 사용자를 brand_members에 추가하고 accepted/used_by/used_at과 member_joined 로그를 기록한다. 같은 토큰의 재수락은 pending 검사를 통과하지 못한다. 기존 0210 authenticated grant는 유지된다.",
+      "evidence": [
+        "accept",
+        "invite"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "billing-cache",
+      "type": "state",
+      "name": "현재와 다음 달 청구 조회",
+      "aliases": [
+        "useBrandBillingStore",
+        "nextPeriod",
+        "current",
+        "next",
+        "invoices"
+      ],
+      "current": "현재 달 미리보기, KST 기준 다음 달 미리보기, 청구서 목록을 병렬 조회한다. 한 읽기라도 실패하면 이전 금액은 보존하되 화면은 오류를 표시한다. account epoch와 reset을 사용한다. realtime은 없고 포커스에 재조회한다.",
+      "evidence": [
+        "billing-state",
+        "billing-ui",
+        "reset"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "bridge",
+      "type": "client",
+      "name": "본사 결제와 부담 RPC",
+      "aliases": [
+        "fetchBrandBilling",
+        "fetchBrandInvoices",
+        "proposePayer",
+        "acceptPayer",
+        "brandDb"
+      ],
+      "current": "결제는 brand_billing_preview_mine(period)와 brand_invoices_list로 읽는다. 부담 변경은 propose_payer(unit,payer), accept_payer(unit,accept)로 전달한다. RPC 오류는 상위에 반환하며 사용자 오류 문구는 별도 헬퍼가 처리한다.",
+      "evidence": [
+        "bridge",
+        "errors"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "billing-rpc",
+      "type": "api",
+      "name": "청구 분모와 권한",
+      "aliases": [
+        "brand_billing_preview_mine",
+        "brand_billing_preview",
+        "brand_billable_units",
+        "price_per_store_krw",
+        "payer_effective_from"
+      ],
+      "current": "0222는 active 연결 중 payer=brand이고 시작일이 해당 달 1일 이하인 매장을 청구 대상으로 잡는다. 반환 가격은 brands 계약가다. 본인 브랜드만 허용하며 public/anon 실행은 회수되어 있다. invoices_list도 본인 브랜드로 제한한다. 화면의 전체 본사 부담 매장 수와 당월 청구 대상 수는 다른 값이다.",
+      "evidence": [
+        "billing",
+        "invoice"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "payer",
+      "type": "rule",
+      "name": "가맹 요금 부담 제안과 상대 수락",
+      "aliases": [
+        "propose_payer",
+        "accept_payer",
+        "payer_proposed",
+        "unit_iap_live",
+        "direct_payer_fixed"
+      ],
+      "current": "최신 제안은 0224다. 직영은 제안 자체를 거부한다. 가맹의 점주 또는 본사가 다른 부담으로 제안하며 본사 부담 전환에는 IAP 확인을 한다. 최신 수락 0221은 제안한 쪽의 상대만 허용하고 수락 시 IAP를 다시 검사한다. 거절은 제안 필드만 지운다. 날짜 변경은 별도 트리거가 맡는다.",
+      "evidence": [
+        "payer-propose",
+        "payer-accept",
+        "payer-ui"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "write-boundary",
+      "type": "permission",
+      "name": "청구 쓰기는 내부 콘솔 권한",
+      "aliases": [
+        "brand_invoice_issue",
+        "brand_invoice_approve",
+        "brand_invoice_settle",
+        "service_role"
+      ],
+      "current": "0222는 발행/승인/정산 함수의 public, anon, authenticated 실행을 회수하고 service_role에 허용한다. 본사 웹은 읽기만 연결되어 있다. 내부 콘솔의 전체 쓰기 구현과 실제 ACL은 이번 조사 범위 밖이다.",
+      "evidence": [
+        "write-acl",
+        "billing-ui"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "gate-screen",
+      "from": "gate",
+      "to": "screen",
+      "relation": "guards",
+      "when": "일반 본사 설정 진입",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "gate"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "screen-identity-cache",
+      "from": "screen",
+      "to": "identity-cache",
+      "relation": "calls",
+      "when": "포커스 또는 초대 생성 후",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "members-ui",
+        "billing-ui"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "identity-cache-identity-rpc",
+      "from": "identity-cache",
+      "to": "identity-rpc",
+      "relation": "calls",
+      "when": "브랜드와 구성원 병렬 조회",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "identity-state",
+        "bridge"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "screen-invite",
+      "from": "screen",
+      "to": "invite",
+      "relation": "calls",
+      "when": "초대 링크 생성",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "members-ui",
+        "bridge"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "gate-join",
+      "from": "gate",
+      "to": "join",
+      "relation": "allows",
+      "when": "본사 자격 전 초대 경로",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "gate",
+        "join-ui"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "join-accept",
+      "from": "join",
+      "to": "accept",
+      "relation": "calls",
+      "when": "로그인 후 토큰 수락",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "join-hook",
+        "bridge"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "accept-identity-rpc",
+      "from": "accept",
+      "to": "identity-rpc",
+      "relation": "writes",
+      "when": "담당자 소속이 다음 자격 조회에 반영",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "accept",
+        "identity"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "screen-billing-cache",
+      "from": "screen",
+      "to": "billing-cache",
+      "relation": "calls",
+      "when": "결제 화면 포커스",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "billing-ui"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "billing-cache-bridge",
+      "from": "billing-cache",
+      "to": "bridge",
+      "relation": "calls",
+      "when": "현재/다음 달/청구서 조회",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "billing-state"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "bridge-billing-rpc",
+      "from": "bridge",
+      "to": "billing-rpc",
+      "relation": "calls",
+      "when": "내 브랜드 미리보기와 청구 목록",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "bridge"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "bridge-payer",
+      "from": "bridge",
+      "to": "payer",
+      "relation": "calls",
+      "when": "양쪽 공용 제안과 수락",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "bridge"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "payer-billing-rpc",
+      "from": "payer",
+      "to": "billing-rpc",
+      "relation": "changes",
+      "when": "payer 및 시작일에 따른 다음 청구 분모",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "payer-accept",
+        "billing"
+      ],
+      "kinds": [
+        "field",
+        "contract"
+      ]
+    }
+  ],
+  "flow": [
+    {
+      "node": "screen",
+      "when": "담당자가 초대 생성",
+      "result": "token과 만료일을 링크로 표시한다."
+    },
+    {
+      "node": "join",
+      "when": "링크 수신자가 로그인",
+      "result": "보존한 token으로 수락한다."
+    },
+    {
+      "node": "accept",
+      "when": "초대 행 잠금 획득",
+      "result": "pending 확인 후 소속을 만들고 초대를 소비한다."
+    },
+    {
+      "node": "join",
+      "when": "수락 성공",
+      "result": "멤버십 재조회 후 본사로 이동한다."
+    },
+    {
+      "node": "billing-cache",
+      "when": "결제 화면 포커스",
+      "result": "현재/다음 달/청구서를 병렬로 받는다."
+    },
+    {
+      "node": "billing-rpc",
+      "when": "청구 대상 판정",
+      "result": "시작일과 payer를 월초 기준으로 제한한다."
+    },
+    {
+      "node": "payer",
+      "when": "가맹 부담 변경",
+      "result": "상대 수락과 IAP 재검사 뒤 변경한다."
+    }
+  ],
+  "transitions": [
+    {
+      "from": "pending-member-invite",
+      "to": "accepted",
+      "when": "행 잠금 뒤 유효한 로그인 수락",
+      "evidence": [
+        "accept"
+      ]
+    },
+    {
+      "from": "join-request",
+      "to": "failed-and-token-cleared",
+      "when": "수락 RPC 오류",
+      "evidence": [
+        "join-hook"
+      ]
+    },
+    {
+      "from": "payer-current",
+      "to": "payer-proposed",
+      "when": "가맹의 허용된 양측 제안",
+      "evidence": [
+        "payer-propose"
+      ]
+    },
+    {
+      "from": "payer-proposed",
+      "to": "accepted-or-declined",
+      "when": "제안 상대가 응답하고 수락은 IAP 재검사",
+      "evidence": [
+        "payer-accept"
+      ]
+    },
+    {
+      "from": "billing-loading",
+      "to": "billing-error",
+      "when": "세 조회 중 하나 이상 실패",
+      "evidence": [
+        "billing-state"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "file": "scripts/qa-audit-ai-brand-invite.cjs",
+      "command": "node scripts/qa-audit-ai-brand-invite.cjs",
+      "scope": "0331 담당자 초대의 두 사용자 및 동일 사용자 동시 수락을 실제 RPC 본문으로 확인. 전체 스키마 테스트는 아님.",
+      "execution": "not-run",
+      "requires": "로컬 Docker의 별도 합성 DB 생성/삭제가 필요. 이번에는 실행하지 않음."
+    },
+    {
+      "file": "scripts/qa-brand-billing.mjs",
+      "command": "node scripts/qa-brand-billing.mjs",
+      "scope": "당월/다음 청구 대상, IAP 제안 및 수락 재검사, 교차 브랜드와 내부 쓰기 권한 경계.",
+      "execution": "not-run",
+      "requires": "실제 로컬 Supabase와 고정 QA 계정 및 브랜드 시드 필요. 상태를 바꾸므로 실행 전 대상 가드와 복구 범위를 확인해야 한다. 이번에는 실행하지 않음. --local 전용 선택은 없으므로 로컬 URL 환경 설정이 필요하다."
+    }
+  ],
+  "desired": {
+    "status": "unconfirmed",
+    "decisionsNeeded": [
+      "현재 구현을 기록했다. 제품 개편이나 권한 변경 요구는 확정하지 않았다."
+    ]
+  }
+}

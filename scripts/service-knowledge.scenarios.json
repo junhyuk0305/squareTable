@@ -1,0 +1,638 @@
+[
+  {
+    "name": "성장 집계 함수의 화면 연결",
+    "query": "my_growth",
+    "kind": "contract",
+    "baseline": "my_growth",
+    "expectedFeature": "growth-progress",
+    "forbiddenFeatures": [
+      "hq-members-billing"
+    ],
+    "required": [
+      [
+        "supabase/migrations/0305_closed_store_hub_summary.sql",
+        "create or replace function public.my_growth()"
+      ],
+      [
+        "src/lib/store/useHubStore.ts",
+        "hydrateGrowth: async"
+      ],
+      [
+        "src/components/hub/JuniorGrowthView.tsx",
+        "growthLoaded"
+      ]
+    ]
+  },
+  {
+    "name": "통합 모두 읽음 저장 파급",
+    "query": "ack_notifications",
+    "kind": "contract",
+    "baseline": "ack_notifications",
+    "expectedFeature": "notifications-navigation",
+    "forbiddenFeatures": [
+      "billing-subscription"
+    ],
+    "required": [
+      [
+        "supabase/migrations/0078_notif_ack.sql",
+        "create or replace function public.ack_notifications("
+      ],
+      [
+        "src/lib/store/useMemberPrefsStore.ts",
+        "ackNotifs: async"
+      ],
+      [
+        "src/lib/hooks/useCrossNotifRows.ts",
+        "const markAll = () =>"
+      ]
+    ]
+  },
+  {
+    "name": "IAP 이벤트 최신 서버 계약",
+    "query": "apply_iap_event",
+    "kind": "contract",
+    "baseline": "apply_iap_event",
+    "expectedFeature": "billing-subscription",
+    "forbiddenFeatures": [
+      "growth-progress"
+    ],
+    "required": [
+      [
+        "supabase/migrations/0263_iap_event_order.sql",
+        "create or replace function public.apply_iap_event("
+      ],
+      [
+        "supabase/functions/iap-webhook/index.ts",
+        "db.rpc('apply_iap_event'"
+      ],
+      [
+        "supabase/migrations/0235_billing_slot_rules.sql",
+        "create or replace function public.sync_iap_slots("
+      ]
+    ]
+  },
+  {
+    "name": "본사 연결 초대 수락 계약",
+    "query": "respond_brand_invite",
+    "kind": "contract",
+    "baseline": "respond_brand_invite",
+    "expectedFeature": "hq-connection-consent",
+    "forbiddenFeatures": [
+      "attendance-payroll"
+    ],
+    "required": [
+      [
+        "supabase/migrations/0331_brand_invite_single_use.sql",
+        "create or replace function public.respond_brand_invite("
+      ],
+      [
+        "src/lib/brand/brandDb.ts",
+        "export const respondBrandInvite"
+      ],
+      [
+        "src/app/owner/brand-consent.tsx",
+        "respondBrandInvite(invite.invite_id"
+      ]
+    ]
+  },
+  {
+    "name": "본사 매장 검색과 쪽 계약",
+    "query": "brand_overview_page",
+    "kind": "contract",
+    "baseline": "brand_overview_page",
+    "expectedFeature": "hq-store-operations",
+    "forbiddenFeatures": [
+      "store-list"
+    ],
+    "required": [
+      [
+        "src/app/hq/stores/index.tsx",
+        "const ready = pageLoaded && brandLoaded && knowhowLoaded"
+      ],
+      [
+        "src/lib/store/useBrandUnitsPageStore.ts",
+        "export const useBrandUnitsPageStore ="
+      ],
+      [
+        "supabase/migrations/0228_brand_overview_page.sql",
+        "create or replace function public.brand_overview_page("
+      ],
+      [
+        "supabase/migrations/0299_staff_count_membership.sql",
+        "create or replace function public.brand_overview_rows("
+      ]
+    ]
+  },
+  {
+    "name": "본사 퀴즈 배포 현재 호출 체인",
+    "query": "본사 퀴즈 재배포",
+    "kind": "contract",
+    "baseline": "brand_deploy_course",
+    "expectedFeature": "hq-content-distribution",
+    "forbiddenFeatures": [
+      "attendance-payroll"
+    ],
+    "required": [
+      [
+        "src/lib/brand/brandDb.ts",
+        "export const deployBrandCourse"
+      ],
+      [
+        "supabase/migrations/0225_brand_deploy_required.sql",
+        "rename to brand_deploy_course_inner"
+      ],
+      [
+        "supabase/migrations/0329_brand_quiz_course.sql",
+        "create or replace function public.brand_deploy_course_inner("
+      ],
+      [
+        "supabase/migrations/0307_quiz_items_course.sql",
+        "create or replace function public.brand_sync_course_copy("
+      ]
+    ]
+  },
+  {
+    "name": "본사 월별 청구 대상",
+    "query": "brand_billing_preview",
+    "kind": "contract",
+    "baseline": "brand_billing_preview",
+    "expectedFeature": "hq-members-billing",
+    "forbiddenFeatures": [
+      "work-tasks-chat"
+    ],
+    "required": [
+      [
+        "src/app/hq/settings/billing.tsx",
+        "export default function HqSettingsBillingScreen()"
+      ],
+      [
+        "src/lib/store/useBrandBillingStore.ts",
+        "export const useBrandBillingStore ="
+      ],
+      [
+        "supabase/migrations/0222_brand_billing.sql",
+        "create or replace function public.brand_billing_preview("
+      ],
+      [
+        "supabase/migrations/0221_brand_payer_dates.sql",
+        "create or replace function public.accept_payer("
+      ]
+    ]
+  },
+  {
+    "name": "로그인 인증 성공 후 프로필 실패의 착지",
+    "query": "signInWithPassword",
+    "kind": "contract",
+    "baseline": "signInWithPassword",
+    "expectedFeature": "account-auth",
+    "forbiddenFeatures": [
+      "legal-support"
+    ],
+    "required": [
+      [
+        "src/app/login.tsx",
+        "const login = async () =>"
+      ],
+      [
+        "src/lib/store/useSessionStore.ts",
+        "signInWithPassword: async (email, pw) =>"
+      ],
+      [
+        "src/app/index.tsx",
+        "needsProfileSetup"
+      ]
+    ]
+  },
+  {
+    "name": "회원탈퇴 서버 차단과 로컬 세션 종료",
+    "query": "delete_my_account",
+    "kind": "contract",
+    "baseline": "delete_my_account",
+    "expectedFeature": "account-settings",
+    "forbiddenFeatures": [
+      "work-schedule"
+    ],
+    "required": [
+      [
+        "src/app/account-settings.tsx",
+        "const onDelete = async () =>"
+      ],
+      [
+        "src/lib/store/useSessionStore.ts",
+        "deleteAccount: async () =>"
+      ],
+      [
+        "supabase/migrations/0335_deleted_account_access.sql",
+        "create or replace function public.delete_my_account()"
+      ]
+    ]
+  },
+  {
+    "name": "초대코드 신청에서 사장 승인까지",
+    "query": "join_by_invite",
+    "kind": "contract",
+    "baseline": "join_by_invite",
+    "expectedFeature": "store-onboarding",
+    "forbiddenFeatures": [
+      "legal-support"
+    ],
+    "required": [
+      [
+        "src/lib/store/useSessionStore.ts",
+        "joinByInvite: async (code) =>"
+      ],
+      [
+        "supabase/migrations/0325_code_lock_5min.sql",
+        "CREATE OR REPLACE FUNCTION public.join_by_invite("
+      ],
+      [
+        "supabase/migrations/0336_free_staff_cap_two.sql",
+        "create or replace function public.approve_member("
+      ]
+    ]
+  },
+  {
+    "name": "교대 승인이 근무와 예상 급여를 바꿈",
+    "query": "approve_swap",
+    "kind": "contract",
+    "baseline": "approve_swap",
+    "expectedFeature": "work-schedule",
+    "forbiddenFeatures": [
+      "account-settings"
+    ],
+    "required": [
+      [
+        "src/lib/db.ts",
+        "export async function approveSwapRpc("
+      ],
+      [
+        "supabase/migrations/0289_schedule_result_notices.sql",
+        "create or replace function public.approve_swap("
+      ],
+      [
+        "src/components/TimesheetView.tsx",
+        "computePay(shiftsToPayRecords(payShifts)"
+      ]
+    ]
+  },
+  {
+    "name": "급여 설정 변경의 적용일 이력과 과거 계산",
+    "query": "save_payroll_settings",
+    "kind": "contract",
+    "baseline": "save_payroll_settings",
+    "expectedFeature": "attendance-payroll",
+    "forbiddenFeatures": [
+      "legal-support"
+    ],
+    "required": [
+      [
+        "src/lib/store/usePayrollStore.ts",
+        "export const usePayrollStore"
+      ],
+      [
+        "supabase/migrations/0280_payroll_settings_history.sql",
+        "create or replace function public.save_payroll_settings("
+      ],
+      [
+        "src/components/TimesheetView.tsx",
+        "computePay(shiftsToPayRecords(payShifts)"
+      ]
+    ]
+  },
+  {
+    "name": "잠긴 이전 매장 다시 열기의 소속 정리",
+    "query": "reopen_store",
+    "kind": "contract",
+    "baseline": "reopen_store",
+    "expectedFeature": "store-lifecycle",
+    "forbiddenFeatures": [
+      "account-auth"
+    ],
+    "required": [
+      [
+        "src/app/owner/previous-stores.tsx",
+        "export default function PreviousStores()"
+      ],
+      [
+        "supabase/migrations/0282_invite_code_no_expiry.sql",
+        "create or replace function public.reopen_store("
+      ],
+      [
+        "supabase/migrations/0247_member_notices_retention.sql",
+        "create or replace function public.close_member_tenure("
+      ]
+    ]
+  },
+  {
+    "name": "웹과 앱 문의가 같은 저장 계약을 소비",
+    "query": "sales_inquiries",
+    "kind": "field",
+    "baseline": "sales_inquiries",
+    "expectedFeature": "legal-support",
+    "forbiddenFeatures": [
+      "account-auth"
+    ],
+    "required": [
+      [
+        "src/lib/db.ts",
+        "export async function insertSalesInquiry("
+      ],
+      [
+        "public/inquiry.html",
+        "var r = await fetch(ENDPOINT,"
+      ],
+      [
+        "supabase/migrations/0105_sales_inquiries.sql",
+        "create policy sales_inquiries_insert"
+      ]
+    ]
+  },
+  {
+    "name": "오늘 현황 16시간 서버 계약",
+    "query": "owner_today",
+    "kind": "contract",
+    "baseline": "owner_today",
+    "expectedFeature": "daily-work-status",
+    "forbiddenFeatures": [
+      "guest-quiz"
+    ],
+    "required": [
+      [
+        "src/lib/store/useHubStore.ts",
+        "hydrateOwner: async"
+      ],
+      [
+        "src/lib/db.ts",
+        "export async function fetchOwnerToday()"
+      ],
+      [
+        "supabase/migrations/0306_owner_today_16h.sql",
+        "create function public.owner_today()"
+      ],
+      [
+        "src/components/hub/OwnerStatusView.tsx",
+        "if (ownerLoadError)"
+      ]
+    ]
+  },
+  {
+    "name": "업무 채팅 재전송과 작성자 경계",
+    "query": "업무 채팅 재전송",
+    "kind": "contract",
+    "baseline": "업무 채팅 재전송",
+    "expectedFeature": "work-tasks-chat",
+    "forbiddenFeatures": [
+      "billing-subscription"
+    ],
+    "required": [
+      [
+        "src/lib/store/useWorkStore.ts",
+        "retryMessage: (id) =>"
+      ],
+      [
+        "src/lib/db.ts",
+        "export async function upsertFeed("
+      ],
+      [
+        "supabase/migrations/0285_session_active_unit.sql",
+        "alter policy wf_insert"
+      ],
+      [
+        "supabase/migrations/0319_client_trust_identity.sql",
+        "create or replace function public.work_feed_stamp_author()"
+      ]
+    ]
+  },
+  {
+    "name": "노하우 보관과 복원 거부",
+    "query": "노하우 보관",
+    "kind": "contract",
+    "baseline": "노하우 보관",
+    "expectedFeature": "knowhow-library",
+    "forbiddenFeatures": [
+      "guest-quiz"
+    ],
+    "required": [
+      [
+        "src/app/owner/edit/[id].tsx",
+        "archive"
+      ],
+      [
+        "src/lib/store/usePlaybookStore.ts",
+        "archive:"
+      ],
+      [
+        "src/lib/db.ts",
+        "export async function archiveEntry("
+      ],
+      [
+        "supabase/migrations/0248_knowhow_archive.sql",
+        "create or replace function public.archive_knowhow("
+      ]
+    ]
+  },
+  {
+    "name": "매장간 본문 복사와 후속 사진",
+    "query": "copy_knowhow_between",
+    "kind": "contract",
+    "baseline": "copy_knowhow_between",
+    "expectedFeature": "knowhow-import",
+    "forbiddenFeatures": [
+      "training-quizzes"
+    ],
+    "required": [
+      [
+        "src/components/owner/OwnerKnowhowImport.tsx",
+        "const doCopy = async"
+      ],
+      [
+        "src/lib/db.ts",
+        "export async function copyKnowhowBetween("
+      ],
+      [
+        "supabase/migrations/0248_knowhow_archive.sql",
+        "create or replace function public.copy_knowhow_between("
+      ],
+      [
+        "src/lib/db.ts",
+        "export async function copyKnowhowPhotos("
+      ]
+    ]
+  },
+  {
+    "name": "명시적 사장 질문 등록",
+    "query": "사장에게 질문 등록",
+    "kind": "recipient",
+    "baseline": "사장에게 질문 등록",
+    "expectedFeature": "ai-questions",
+    "forbiddenFeatures": [
+      "billing-subscription"
+    ],
+    "required": [
+      [
+        "src/lib/store/useChatStore.ts",
+        "registerToOwner:"
+      ],
+      [
+        "src/lib/store/useUnknownQueueStore.ts",
+        "enqueue:"
+      ],
+      [
+        "src/lib/db.ts",
+        "export async function insertUnknown("
+      ],
+      [
+        "supabase/migrations/0320_client_trust_questions.sql",
+        "create or replace function public.guard_unknown_query_write()"
+      ],
+      [
+        "src/lib/utils/notifications.ts",
+        "function managerOwnerRows("
+      ],
+      [
+        "src/lib/notif/registry.ts",
+        "question:"
+      ]
+    ]
+  },
+  {
+    "name": "직원 퀴즈 원문 제출과 이해 기록",
+    "query": "직원 퀴즈 제출",
+    "kind": "contract",
+    "baseline": "직원 퀴즈 제출",
+    "expectedFeature": "training-quizzes",
+    "forbiddenFeatures": [
+      "daily-work-status"
+    ],
+    "required": [
+      [
+        "src/components/work/UnderstandingCheckSheet.tsx",
+        "const finish = async"
+      ],
+      [
+        "src/lib/db.ts",
+        "export async function recordStaffQuizAttempt("
+      ],
+      [
+        "supabase/migrations/0334_quiz_self_scope_last_submission.sql",
+        "create or replace function public.quiz_staff_record_internal("
+      ],
+      [
+        "supabase/migrations/0333_quiz_understanding_from_submission.sql",
+        "create or replace function public.quiz_attempt_write_understanding()"
+      ]
+    ]
+  },
+  {
+    "name": "게스트 퀴즈 엄격 제출 계약",
+    "query": "quiz_link_submit_v2",
+    "kind": "contract",
+    "baseline": "quiz_link_submit_v2",
+    "expectedFeature": "guest-quiz",
+    "forbiddenFeatures": [
+      "knowhow-import"
+    ],
+    "required": [
+      [
+        "src/app/q/[token].tsx",
+        "const send = useCallback("
+      ],
+      [
+        "src/lib/db.ts",
+        "export async function submitQuizLink("
+      ],
+      [
+        "supabase/migrations/0326_quiz_integrity.sql",
+        "create or replace function public.quiz_link_submit_v2("
+      ],
+      [
+        "supabase/migrations/0326_quiz_integrity.sql",
+        "CREATE OR REPLACE FUNCTION public.quiz_link_submit_internal("
+      ]
+    ]
+  },
+  {
+    "name": "매니저 현재 시급과 이력 조회 권한",
+    "query": "wage_rates_read",
+    "kind": "contract",
+    "baseline": "wage_rates_read",
+    "expectedFeature": "attendance-payroll",
+    "forbiddenFeatures": [
+      "guest-quiz"
+    ],
+    "required": [
+      [
+        "supabase/migrations/0122_role_boundary_fixes.sql",
+        "create policy wages_read"
+      ],
+      [
+        "supabase/migrations/0246_member_tenures.sql",
+        "alter policy wage_rates_read on public.wage_rates"
+      ],
+      [
+        "supabase/migrations/0315_manager_permissions.sql",
+        "create or replace function public.auth_can_manage()"
+      ],
+      [
+        "src/lib/db.ts",
+        "export async function fetchWageRates()"
+      ],
+      [
+        "src/lib/store/usePayrollStore.ts",
+        "fetchWageRates()"
+      ]
+    ]
+  },
+  {
+    "name": "예약 할 일 수신자 변경은 루틴과 심야 근무 판정을 함께 봄",
+    "query": "due_task_reminders",
+    "kind": "recipient",
+    "baseline": "due_task_reminders",
+    "expectedFeature": "background-processing",
+    "forbiddenFeatures": [
+      "legal-support"
+    ],
+    "required": [
+      [
+        "supabase/migrations/0301_unit_uses_schedule.sql",
+        "create or replace function public.due_task_reminders()"
+      ],
+      [
+        "supabase/migrations/0270_workers_at_overnight.sql",
+        "create or replace function public.workers_at("
+      ],
+      [
+        "supabase/functions/push/index.ts",
+        "async function sweepTaskReminders("
+      ],
+      [
+        "src/lib/store/useWorkStore.ts",
+        "export function daypartRoutineTemplates("
+      ]
+    ]
+  },
+  {
+    "name": "사진 삭제 완료는 큐와 Storage 결과를 따로 확인",
+    "query": "photo_purge_done",
+    "kind": "contract",
+    "baseline": "photo_purge_done",
+    "expectedFeature": "background-processing",
+    "forbiddenFeatures": [
+      "account-auth"
+    ],
+    "required": [
+      [
+        "supabase/migrations/0278_unit_photo_purge.sql",
+        "create or replace function public.photo_purge_done("
+      ],
+      [
+        "supabase/functions/push/index.ts",
+        "async function sweepPhotoPurge("
+      ],
+      [
+        "supabase/migrations/0298_photo_purge_backfill.sql",
+        "insert into public.photo_purge_queue(path)"
+      ]
+    ]
+  }
+]

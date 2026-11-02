@@ -549,7 +549,9 @@ async function main() {
     await po.waitForTimeout(3000);
     check('B7-1 AlertRow — 답 기다리는 질문(맨 위로 승격)', await see(po, '답 기다리는 질문'));
     check('B7-2 옛 "받은질문" 행은 확인 필요에서 빠졌다', !(await see(po, '받은질문')));
-    check('B7-3 MiniStats — 지금 근무중', await see(po, '지금 근무중'));
+    // 2026-08-27(0a687a1): MiniStats 2칸(근무중·예정)을 '오늘 근무' 한 칸으로 합쳤다. 근무 중 인원은 아랫줄에 나온다
+    //   (OwnerStatusView.tsx gridItems 'today' · "지금 N명 근무중" 또는 "지금은 출근 전이에요").
+    check('B7-3 오늘 근무 칸 — 라벨 + 지금 근무 줄', await see(po, '오늘 근무') && ((await see(po, '명 근무중')) || (await see(po, '지금은 출근 전이에요'))));
     // ★2026-08-07: 퀴즈 진입점은 허브 '현황'에서 **노하우 탭(OwnerKnowhowHubView)으로 옮겼다**
     //   (OwnerStatusView 주석: 현황은 '지금 막힌 것', 퀴즈는 축적·순환 레이어).
     //   옛 단언은 '퀴즈'가 여기 **있어야** 통과였다 — 이동 자체를 회귀로 잡던 것이라 뒤집는다.

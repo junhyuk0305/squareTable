@@ -1,0 +1,547 @@
+{
+  "schemaVersion": 1,
+  "id": "account-auth",
+  "name": "로그인과 계정 복구",
+  "aliases": [
+    "로그인",
+    "회원가입",
+    "비밀번호 찾기",
+    "이메일 찾기",
+    "계정 복구",
+    "프로필 완성"
+  ],
+  "platforms": [
+    "web",
+    "android",
+    "ios"
+  ],
+  "summary": "이메일 로그인, 가입 프로필 생성, 프로필 보완, 문자로 비밀번호 재설정하는 대표 흐름을 연결한다. 인증 성공과 앱 세션 확정은 별도 결과다.",
+  "entrypoints": [
+    "/login",
+    "/signup",
+    "/forgot-password",
+    "/complete-profile",
+    "/email-changed"
+  ],
+  "depth": [
+    "대표 흐름 진입점 추적",
+    "대표 흐름 상태와 실패 확인",
+    "대표 흐름 데이터와 권한 연결",
+    "최신 SQL 정의와 후속 변경 검색",
+    "관련 검사 연결. 실행은 별도"
+  ],
+  "unknowns": [
+    "로컬 HEAD f03eecd의 코드 관찰이다. 원격 DB 적용, 배포 버전, 실제 데이터, 기기 실행은 확인하지 않았다.",
+    "Google OAuth 전체 반환 처리, 이메일 찾기 응답 전체, magic link, 이메일 변경 링크는 하위 흐름 전체를 추적하지 않았다.",
+    "SMS 발송 성공, 전화번호 인증의 운영 설정, Auth 서버 버전과 실제 세션 유지 여부는 실행 검증하지 않았다.",
+    "가입 후 매장 생성의 세부 규칙은 store-onboarding에 한정해 기록한다."
+  ],
+  "findings": [
+    "로그인 Auth 성공 뒤 loadProfile이 signed_in을 만들지 못하면 호출자는 오류를 받는다.",
+    "비밀번호 재설정의 현재 Edge는 0253 admin_set_password를 호출한다. 0238 주석의 다른 기기 세션 해제 설명을 현재 동작으로 읽으면 틀린다.",
+    "complete_profile의 본문은 0204이고 전화번호 UPDATE에는 후속 0238 트리거가 추가된다."
+  ],
+  "evidence": [
+    {
+      "id": "login",
+      "file": "src/app/login.tsx",
+      "symbol": "const login = async () =>",
+      "kind": "code"
+    },
+    {
+      "id": "signup",
+      "file": "src/app/signup.tsx",
+      "symbol": "export default function SignupScreen()",
+      "kind": "code"
+    },
+    {
+      "id": "session",
+      "file": "src/lib/store/useSessionStore.ts",
+      "symbol": "signInWithPassword: async (email, pw) =>",
+      "kind": "code"
+    },
+    {
+      "id": "load",
+      "file": "src/lib/store/useSessionStore.ts",
+      "symbol": "async function loadProfile(",
+      "kind": "code"
+    },
+    {
+      "id": "sign-up",
+      "file": "src/lib/store/useSessionStore.ts",
+      "symbol": "signUp: async (email, pw, meta) =>",
+      "kind": "code"
+    },
+    {
+      "id": "new-user",
+      "file": "supabase/migrations/0171_quiet_error_fixes.sql",
+      "symbol": "create or replace function public.handle_new_user()",
+      "kind": "code"
+    },
+    {
+      "id": "complete-ui",
+      "file": "src/app/complete-profile.tsx",
+      "symbol": "const submit = async () =>",
+      "kind": "code"
+    },
+    {
+      "id": "complete-store",
+      "file": "src/lib/store/useSessionStore.ts",
+      "symbol": "completeProfile: async (name, phone, birthDate, role, consent) =>",
+      "kind": "code"
+    },
+    {
+      "id": "complete-db",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function rpcCompleteProfile(",
+      "kind": "code"
+    },
+    {
+      "id": "complete-sql",
+      "file": "supabase/migrations/0204_complete_profile_phone_taken.sql",
+      "symbol": "create or replace function public.complete_profile(",
+      "kind": "code"
+    },
+    {
+      "id": "phone-guard",
+      "file": "supabase/migrations/0238_account_security.sql",
+      "symbol": "create or replace function public.guard_profile_phone_change()",
+      "kind": "code"
+    },
+    {
+      "id": "recover",
+      "file": "src/app/forgot-password.tsx",
+      "symbol": "const submit = async () =>",
+      "kind": "code"
+    },
+    {
+      "id": "otp-client",
+      "file": "src/lib/otp.ts",
+      "symbol": "export async function resetPasswordByPhone(",
+      "kind": "code"
+    },
+    {
+      "id": "otp-edge",
+      "file": "supabase/functions/otp/index.ts",
+      "symbol": "if (body.action === 'reset_password')",
+      "kind": "code"
+    },
+    {
+      "id": "otp-match",
+      "file": "supabase/functions/otp/index.ts",
+      "symbol": "async function matchCode(",
+      "kind": "code"
+    },
+    {
+      "id": "otp-attempt",
+      "file": "supabase/migrations/0323_client_trust_codes.sql",
+      "symbol": "create or replace function public.otp_claim_attempt(",
+      "kind": "code"
+    },
+    {
+      "id": "password-sql",
+      "file": "supabase/migrations/0253_password_keep_sessions.sql",
+      "symbol": "create or replace function public.admin_set_password(",
+      "kind": "code"
+    },
+    {
+      "id": "policy",
+      "file": "src/lib/config/store-policy.ts",
+      "symbol": "export const SHOW_SOCIAL_LOGIN",
+      "kind": "code"
+    },
+    {
+      "id": "landing",
+      "file": "src/app/index.tsx",
+      "symbol": "needsProfileSetup",
+      "kind": "code"
+    },
+    {
+      "id": "active-account",
+      "file": "supabase/migrations/0335_deleted_account_access.sql",
+      "symbol": "create or replace function public.require_active_account()",
+      "kind": "code"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "login",
+      "type": "screen",
+      "name": "이메일 로그인 화면",
+      "aliases": [
+        "/login"
+      ],
+      "current": "형식을 검사한 뒤 signInWithPassword를 기다린다. 오류면 화면에 표시하고 성공이면 /로 이동해 루트가 착지를 결정한다.",
+      "evidence": [
+        "login"
+      ],
+      "changeKinds": [
+        "copy"
+      ]
+    },
+    {
+      "id": "session",
+      "type": "state",
+      "name": "Auth와 loadProfile 세션 확정",
+      "aliases": [
+        "signInWithPassword",
+        "loadProfile"
+      ],
+      "current": "Auth 비밀번호 로그인 후 프로필과 세션 매장을 읽는다. 같은 사용자 재조회 실패는 기존 상태를 보존한다. 초기 로드 실패는 signed_out 또는 offline으로 표시한다. 로그아웃 세대와 로드 순서 가드가 늦은 응답을 제한한다.",
+      "evidence": [
+        "session",
+        "load"
+      ],
+      "changeKinds": [
+        "contract"
+      ]
+    },
+    {
+      "id": "signup",
+      "type": "client",
+      "name": "이메일 가입과 Auth trigger",
+      "aliases": [
+        "signUp",
+        "handle_new_user"
+      ],
+      "current": "signUp은 metadata를 보내고 중복 identities=[]를 emailTaken으로 판정한다. 즉시 세션이 있으면 setSession 후 loadProfile. 없으면 needsConfirm이다. handle_new_user는 unit_id=null, role=junior로 프로필을 생성하고 signup_role만 owner/junior를 받는다. 전화번호 unique 충돌이면 번호를 비워 프로필 생성을 재시도한다.",
+      "evidence": [
+        "signup",
+        "sign-up",
+        "new-user"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "complete",
+      "type": "client",
+      "name": "프로필 완성 제출",
+      "aliases": [
+        "/complete-profile",
+        "completeProfile",
+        "rpcCompleteProfile"
+      ],
+      "current": "선택 consent가 있으면 먼저 기록한다. 기록 실패는 저장을 막지만 missing RPC만 보고 후 진행한다. complete_profile 성공 뒤 loadProfile을 다시 호출한다. PHONE_NOT_VERIFIED를 재인증 가능한 코드로 반환한다.",
+      "evidence": [
+        "complete-ui",
+        "complete-store",
+        "complete-db"
+      ],
+      "changeKinds": [
+        "contract"
+      ]
+    },
+    {
+      "id": "profile",
+      "type": "api",
+      "name": "프로필 보완과 번호 변경 경계",
+      "aliases": [
+        "complete_profile",
+        "profiles.phone",
+        "guard_profile_phone_change"
+      ],
+      "current": "0204 complete_profile은 로그인 본인의 이름/생년월일/번호와 가입 역할을 저장한다. 0238 BEFORE UPDATE는 본인의 번호 변경에 최근 인증을 요구한다. 최초 번호는 30분, 기존 번호는 본인 인증 15분 또는 익명 인증 5분 창이다. 표시용 last4는 서버가 다시 계산한다.",
+      "evidence": [
+        "complete-sql",
+        "phone-guard"
+      ],
+      "changeKinds": [
+        "field",
+        "contract"
+      ]
+    },
+    {
+      "id": "recovery",
+      "type": "screen",
+      "name": "문자 비밀번호 재설정",
+      "aliases": [
+        "/forgot-password",
+        "resetPasswordByPhone"
+      ],
+      "current": "역할과 전화번호, 6자리 코드, 새 비밀번호를 받아 Edge otp reset_password로 보낸다. HTTP 성공과 JSON ok가 모두 참이어야 성공으로 해석한다. 실패/예외에서는 완료 상태를 만들지 않는다.",
+      "evidence": [
+        "recover",
+        "otp-client"
+      ],
+      "changeKinds": [
+        "copy",
+        "contract"
+      ]
+    },
+    {
+      "id": "otp",
+      "type": "external",
+      "name": "otp Edge 검증과 코드 소모",
+      "aliases": [
+        "otp",
+        "otp_claim_attempt",
+        "phone_otps"
+      ],
+      "current": "matchCode가 otp_claim_attempt로 시도 횟수를 원자적으로 선점한다. reset_password는 phone_norm+signup_role의 미탈퇴 프로필을 찾고 코드 소모를 먼저 한 뒤 비밀번호 RPC를 호출한다. 잘못 고른 역할에는 다른 역할 힌트를 줄 수 있다. SMS 공급자는 sendSms의 Solapi fetch이며 전달 결과는 별도 외부 경계다.",
+      "evidence": [
+        "otp-edge",
+        "otp-match",
+        "otp-attempt"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "password",
+      "type": "api",
+      "name": "서비스 전용 비밀번호 해시 변경",
+      "aliases": [
+        "admin_set_password"
+      ],
+      "current": "service_role만 실행할 수 있다. 새 비밀번호 9~72자를 검사한 뒤 미삭제 auth.users의 bcrypt 해시를 바꾼다. 현재 Edge의 이 호출 경로에는 revoke_user_sessions 호출이 없다. 코드 소모 뒤 이 쓰기가 실패하면 이미 소모한 코드로 재사용할 수 없다.",
+      "evidence": [
+        "password-sql",
+        "otp-edge"
+      ],
+      "changeKinds": [
+        "contract"
+      ]
+    },
+    {
+      "id": "platform",
+      "type": "rule",
+      "name": "로그인 플랫폼 정책과 착지",
+      "aliases": [
+        "SHOW_SOCIAL_LOGIN",
+        "needsProfileSetup"
+      ],
+      "current": "공유 로그인은 SHOW_SOCIAL_LOGIN 정책을 소비한다. 루트는 needsProfileSetup 등 세션 상태를 읽는다. Google의 플랫폼별 전체 처리와 실기기 검증은 미확인이다.",
+      "evidence": [
+        "policy",
+        "landing",
+        "login"
+      ],
+      "changeKinds": [
+        "copy"
+      ]
+    },
+    {
+      "id": "access",
+      "type": "permission",
+      "name": "탈퇴 계정 접근 제한",
+      "aliases": [
+        "require_active_account",
+        "account_access_allowed"
+      ],
+      "current": "0335는 authenticated 요청의 비활성 계정을 PT401로 막는 pre-request와 기존 RLS에 AND되는 restrictive 정책을 추가한다. 이 기록은 실제 서버의 pre-request 설치를 확인하지 않는다.",
+      "evidence": [
+        "active-account"
+      ],
+      "changeKinds": [
+        "contract"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "login-session",
+      "from": "login",
+      "to": "session",
+      "relation": "calls",
+      "when": "제출 후 Auth와 프로필 로드",
+      "evidence": [
+        "login",
+        "session"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "session-platform",
+      "from": "session",
+      "to": "platform",
+      "relation": "consumes",
+      "when": "로그인 성공 후 루트 착지",
+      "evidence": [
+        "login",
+        "landing"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "signup-session",
+      "from": "signup",
+      "to": "session",
+      "relation": "calls",
+      "when": "즉시 가입 세션이 있으면 loadProfile",
+      "evidence": [
+        "sign-up"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "complete-profile",
+      "from": "complete",
+      "to": "profile",
+      "relation": "calls",
+      "when": "동의 기록 처리 뒤 complete_profile",
+      "evidence": [
+        "complete-store",
+        "complete-db"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "complete-session",
+      "from": "complete",
+      "to": "session",
+      "relation": "calls",
+      "when": "프로필 저장 성공 뒤 재조회",
+      "evidence": [
+        "complete-store"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "recovery-otp",
+      "from": "recovery",
+      "to": "otp",
+      "relation": "calls",
+      "when": "문자 인증 코드와 역할 제출",
+      "evidence": [
+        "otp-client",
+        "otp-edge"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "otp-password",
+      "from": "otp",
+      "to": "password",
+      "relation": "calls",
+      "when": "코드 소모 성공 뒤 비밀번호 변경",
+      "evidence": [
+        "otp-edge"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    },
+    {
+      "id": "profile-access",
+      "from": "profile",
+      "to": "access",
+      "relation": "depends-on",
+      "when": "authenticated DB 요청의 공통 제한",
+      "evidence": [
+        "active-account"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ],
+      "confidence": "confirmed-code"
+    }
+  ],
+  "flow": [
+    {
+      "node": "login",
+      "when": "이메일 제출",
+      "result": "Auth 성공 뒤 loadProfile을 기다린다."
+    },
+    {
+      "node": "session",
+      "when": "프로필 읽기 실패",
+      "result": "같은 사용자 상태를 보존하거나 초기 오류/오프라인 상태로 닫는다."
+    },
+    {
+      "node": "complete",
+      "when": "필수 정보 보완",
+      "result": "동의 처리 후 complete_profile을 저장하고 프로필을 다시 읽는다."
+    },
+    {
+      "node": "recovery",
+      "when": "문자 코드와 새 비밀번호 제출",
+      "result": "Edge가 코드와 계정을 검사한다."
+    },
+    {
+      "node": "password",
+      "when": "코드 소모 성공",
+      "result": "새 비밀번호 hash를 쓴다. 뒤 실패면 소모한 코드는 재사용할 수 없다."
+    }
+  ],
+  "transitions": [
+    {
+      "from": "auth-success",
+      "to": "session-rejected",
+      "when": "loadProfile 뒤 signed_in이 아니면 로그인 오류 반환",
+      "evidence": [
+        "session"
+      ]
+    },
+    {
+      "from": "signup-created",
+      "to": "email-confirm-pending",
+      "when": "signUp에 data.session이 없을 때",
+      "evidence": [
+        "sign-up"
+      ]
+    },
+    {
+      "from": "otp-valid",
+      "to": "consumed-before-write",
+      "when": "consumeCode 성공 뒤 admin_set_password 호출",
+      "evidence": [
+        "otp-edge"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "file": "scripts/qa-account-ui.mjs",
+      "command": "node scripts/qa-account-ui.mjs",
+      "scope": "실제 계정/OTP 클라이언트의 순수 판정 및 요청 모양. fetch 대역으로 실제 발송 없음.",
+      "execution": "not-run",
+      "requires": "Node 타입 스트립 및 앱 의존성. --local 플래그 불필요. 미실행."
+    },
+    {
+      "file": "scripts/qa-session-readfail.mjs",
+      "command": "node scripts/qa-session-readfail.mjs",
+      "scope": "세션 읽기 실패 판정과 세대 가드. 서버 인증 검증 아님.",
+      "execution": "see-runs",
+      "requires": "Node와 설치된 앱 의존성. DB/네트워크 없는 검사. 최신 runs의 코드 상태와 실제 결과를 확인.",
+      "runName": "session-readfail"
+    }
+  ],
+  "desired": {
+    "status": "unconfirmed",
+    "decisionsNeeded": [
+      "현재 코드는 확정 요구사항의 근거가 아니다. 이 기능의 변경 목표와 허용할 동작 차이는 제품 정본 및 사용자 결정과 대조해야 한다."
+    ]
+  }
+}

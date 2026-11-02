@@ -1,0 +1,465 @@
+{
+  "schemaVersion": 1,
+  "id": "knowhow-library",
+  "name": "노하우 조회와 관리",
+  "aliases": [
+    "노하우 조회",
+    "노하우 편집",
+    "노하우 발행",
+    "노하우 보관",
+    "archive_knowhow",
+    "fetchEntries"
+  ],
+  "platforms": [
+    "web",
+    "android",
+    "ios"
+  ],
+  "summary": "활성 매장의 노하우 목록, 편집/발행, 보관과 검색 색인 연결을 추적했다. 허브의 계정별 전체 노하우 및 본사 사본 동기화 전체는 범위 밖이다.",
+  "entrypoints": [
+    "/owner/categories",
+    "/owner/knowledge",
+    "/owner/edit/[id]",
+    "/junior/chat 둘러보기"
+  ],
+  "depth": [
+    "대표 하위 흐름의 화면부터 데이터 경계까지 코드 추적",
+    "상태와 실패 및 권한 조건 확인",
+    "SQL 정의와 후속 변경 검색",
+    "관련 테스트 연결",
+    "실행 미검증"
+  ],
+  "unknowns": [
+    "로컬 HEAD f03eecd의 코드 관찰이다. 원격 마이그레이션 적용 상태와 배포 앱 버전은 확인하지 않았다.",
+    "DB, 네트워크, AI, 브라우저 및 Android/iOS 실기기 실행은 하지 않았다.",
+    "/hub-knowhow의 계정 단위 통합 조회, AI 코치 작성 전체, 사진 업로드/음성, 본사 사본 변경 수락 전체는 심층 분석하지 않았다.",
+    "편집 동시성, 대량 목록 페이지 중 변경, 원격 색인 성공은 실행하지 않았다."
+  ],
+  "findings": [
+    "보관은 복구를 열어 둔 상태가 아니다. 현재 archive_knowhow는 복원 요청을 거부한다.",
+    "목록은 1000건 상한 한 번 조회가 아니라 키셋 페이지 순회다."
+  ],
+  "evidence": [
+    {
+      "id": "screen",
+      "file": "src/app/owner/knowledge.tsx",
+      "symbol": "<OwnerKnowhowBrowse",
+      "kind": "code"
+    },
+    {
+      "id": "browse",
+      "file": "src/components/owner/OwnerKnowhowBrowse.tsx",
+      "symbol": "const visible = useMemo(() => entries.filter((e) => e.status !== 'draft'), [entries]);",
+      "kind": "code"
+    },
+    {
+      "id": "edit",
+      "file": "src/app/owner/edit/[id].tsx",
+      "symbol": "const onUpdated = useCallback(",
+      "kind": "code"
+    },
+    {
+      "id": "store",
+      "file": "src/lib/store/usePlaybookStore.ts",
+      "symbol": "export const usePlaybookStore",
+      "kind": "code"
+    },
+    {
+      "id": "fetch",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function fetchEntries()",
+      "kind": "code"
+    },
+    {
+      "id": "write",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function updateEntry(",
+      "kind": "code"
+    },
+    {
+      "id": "policy",
+      "file": "supabase/migrations/0248_knowhow_archive.sql",
+      "symbol": "create policy playbook_entries_read on public.playbook_entries",
+      "kind": "code"
+    },
+    {
+      "id": "archive",
+      "file": "supabase/migrations/0248_knowhow_archive.sql",
+      "symbol": "create or replace function public.archive_knowhow(",
+      "kind": "code"
+    },
+    {
+      "id": "owner",
+      "file": "supabase/migrations/0215_brand_workspace_member.sql",
+      "symbol": "create or replace function public.auth_owns_unit(",
+      "kind": "code"
+    },
+    {
+      "id": "manager",
+      "file": "supabase/migrations/0315_manager_permissions.sql",
+      "symbol": "create or replace function public.auth_can_manage()",
+      "kind": "code"
+    },
+    {
+      "id": "index",
+      "file": "src/lib/ai/searchClient.ts",
+      "symbol": "export async function embedEntry(",
+      "kind": "code"
+    },
+    {
+      "id": "subscription",
+      "file": "src/lib/db.ts",
+      "symbol": "export function subscribePlaybook(",
+      "kind": "code"
+    },
+    {
+      "id": "publication",
+      "file": "supabase/migrations/0001_init.sql",
+      "symbol": "alter publication supabase_realtime add table public.playbook_entries;",
+      "kind": "code"
+    },
+    {
+      "id": "practice",
+      "file": "src/app/junior/practice.tsx",
+      "symbol": "() => buildCards(entries.filter",
+      "kind": "code"
+    },
+    {
+      "id": "test",
+      "file": "scripts/qa-knowhow-archive.mjs",
+      "symbol": "archive_knowhow",
+      "kind": "test"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "browse",
+      "type": "screen",
+      "name": "목록과 편집 진입",
+      "aliases": [],
+      "current": "knowledge는 OwnerKnowhowBrowse를 재사용하고 선택 ID로 edit 화면을 연다. 목록은 draft를 제외하며 review 조건 진입을 지원한다.",
+      "evidence": [
+        "screen",
+        "browse"
+      ],
+      "changeKinds": [
+        "contract",
+        "copy"
+      ]
+    },
+    {
+      "id": "load",
+      "type": "store",
+      "name": "노하우와 분류 로딩",
+      "aliases": [],
+      "current": "fetchEntries와 분류를 병렬 읽고 epoch가 바뀌면 버린다. 분류 실패는 categoryLoadError로 분리하고 분류 저장을 막는다.",
+      "evidence": [
+        "store"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "data",
+      "type": "data",
+      "name": "playbook_entries 페이지 조회",
+      "aliases": [],
+      "current": "id 오름차순 키셋으로 1000행씩 끝까지 읽고 created_at 순으로 정렬한다. archived_at 누락 오류 42703이면 옛 서버 호환 조회를 재시도한다. 오류는 빈 목록과 error=true로 반환한다.",
+      "evidence": [
+        "fetch"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "edit",
+      "type": "store",
+      "name": "편집 및 발행 저장",
+      "aliases": [],
+      "current": "update는 낙관적 변경과 실패 롤백을 사용한다. publish는 DB 성공 후 published로 반영한다. updateEntry는 UPDATE 후 id를 반환받아 0행 실패를 구별한다. section/needs_review/verification만 바꾸면 updated_at을 새로 쓰지 않는다.",
+      "evidence": [
+        "edit",
+        "store",
+        "write"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "permission",
+      "type": "permission",
+      "name": "읽기/쓰기와 관리 권한",
+      "aliases": [],
+      "current": "0248 RLS는 활성 매장, 보관 제외를 적용한다. 직원은 published만 읽는다. 관리자는 쓰기가 가능하다. 숨긴 본사 사본은 auth_owns_unit인 사장만 통과한다. auth_can_manage 최신 0315는 좌석이 잠긴 manager를 제외한다.",
+      "evidence": [
+        "policy",
+        "owner",
+        "manager"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "archive",
+      "type": "rpc",
+      "name": "노하우 보관",
+      "aliases": [],
+      "current": "archive_knowhow는 소유 사장만 허용하며 p_archived=false/null 복원 요청, 본사 사본, draft를 거부한다. archived_at/by를 기록하므로 row 삭제와 다르다. 목록은 optimisticRemove로 제거하고 실패 시 복구한다.",
+      "evidence": [
+        "archive",
+        "owner",
+        "store"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "index",
+      "type": "external",
+      "name": "검색 색인 요청",
+      "aliases": [],
+      "current": "저장/발행 내용은 embedEntry로 비동기 색인한다. add는 insert 결과와 무관하게 embedEntry를 호출하고 update는 실패 시 재색인을 하지 않는다. 저장 반환값이 색인 완료를 뜻하지 않는다.",
+      "evidence": [
+        "store",
+        "index"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "consumer",
+      "type": "consumer",
+      "name": "실시간 목록과 직원 연습",
+      "aliases": [],
+      "current": "playbook 변경 구독은 hydrate를 다시 부른다. migration에는 publication 추가가 있다. 직원 practice는 published의 count standard로만 카드를 만들며 자가 평가는 화면 state에만 남는다.",
+      "evidence": [
+        "subscription",
+        "publication",
+        "store",
+        "practice"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "tests",
+      "type": "test",
+      "name": "보관 회귀 검사",
+      "aliases": [],
+      "current": "qa-knowhow-archive는 보관 뒤 목록/집계 제외와 권한을 DB로 검증하는 하니스다. 미실행이다.",
+      "evidence": [
+        "test"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "browse-load",
+      "from": "browse",
+      "to": "load",
+      "relation": "reads",
+      "when": "노하우 목록 표시",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "browse",
+        "store"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "load-data",
+      "from": "load",
+      "to": "data",
+      "relation": "fetches",
+      "when": "hydrate",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "store",
+        "fetch"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "edit-permission",
+      "from": "edit",
+      "to": "permission",
+      "relation": "writes-through",
+      "when": "내용 수정 또는 발행",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "write",
+        "policy"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "data-permission",
+      "from": "data",
+      "to": "permission",
+      "relation": "filtered-by",
+      "when": "RLS 읽기",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "fetch",
+        "policy"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "archive-permission",
+      "from": "archive",
+      "to": "permission",
+      "relation": "checks-owner",
+      "when": "보관 요청",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "archive",
+        "owner"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "edit-index",
+      "from": "edit",
+      "to": "index",
+      "relation": "requests-index",
+      "when": "update/publish 성공 뒤",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "store",
+        "index"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "data-consumer",
+      "from": "data",
+      "to": "consumer",
+      "relation": "feeds",
+      "when": "실시간 재조회 및 직원 published 연습",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "subscription",
+        "practice"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "tests-archive",
+      "from": "tests",
+      "to": "archive",
+      "relation": "checks",
+      "when": "별도 로컬 DB 검증",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "test"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    }
+  ],
+  "flow": [
+    {
+      "node": "load",
+      "when": "진입",
+      "result": "목록/분류 읽기 상태 분리"
+    },
+    {
+      "node": "edit",
+      "when": "저장",
+      "result": "DB 성공 여부로 화면/색인 갱신"
+    },
+    {
+      "node": "archive",
+      "when": "보관",
+      "result": "소유권 확인 후 보관 상태 기록"
+    },
+    {
+      "node": "consumer",
+      "when": "조회 갱신",
+      "result": "보관 제외 목록 재표시"
+    }
+  ],
+  "transitions": [
+    {
+      "from": "draft",
+      "to": "published",
+      "when": "store.publish의 DB update 성공",
+      "evidence": [
+        "store"
+      ]
+    },
+    {
+      "from": "published/non-draft",
+      "to": "archived",
+      "when": "소유 사장이 archive_knowhow 호출. 본사 사본 제외",
+      "evidence": [
+        "archive"
+      ]
+    },
+    {
+      "from": "archived",
+      "to": "restored",
+      "when": "현재 RPC는 restore_not_allowed로 거부",
+      "evidence": [
+        "archive"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "file": "scripts/qa-knowhow-archive.mjs",
+      "command": "node scripts/qa-knowhow-archive.mjs --local",
+      "scope": "보관 권한과 조회/집계 제외",
+      "requires": "로컬 Supabase 필요",
+      "execution": "not-run"
+    }
+  ],
+  "desired": {
+    "status": "unconfirmed",
+    "decisionsNeeded": [
+      "현재 동작을 제품 요구로 승인한 기록이 아니다. 변경 요청이 생기면 기존 제품 정본과 사용자 결정을 별도로 연결해야 한다."
+    ]
+  }
+}

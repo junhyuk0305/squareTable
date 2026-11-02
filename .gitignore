@@ -19,6 +19,11 @@ qa-shots/
 # 같은 기준으로 공개 저장소에서 차단한다. (2026-07-21)
 .claude/rules/
 
+# 기능 지식 도구(scripts/service-knowledge.mjs): JSON 기록만 올린다. 안내 문서·실행 증거·후보 캐시는 로컬 전용
+/docs/ai-knowledge/*.md
+/docs/ai-knowledge/runs/
+/docs/ai-knowledge/discovery.json
+
 # dependencies
 node_modules/
 

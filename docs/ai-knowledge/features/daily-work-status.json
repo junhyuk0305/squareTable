@@ -1,0 +1,452 @@
+{
+  "schemaVersion": 1,
+  "id": "daily-work-status",
+  "name": "오늘 상태와 업무 확인",
+  "aliases": [
+    "오늘 상태",
+    "오늘 할 일 현황",
+    "사장 현황",
+    "직원 오늘",
+    "owner_today",
+    "owner_overview",
+    "my_cross_summary_v2"
+  ],
+  "platforms": [
+    "web",
+    "android",
+    "ios"
+  ],
+  "summary": "허브의 사장 집계와 직원 오늘 조회, 활성 매장 홈의 업무 파생을 추적했다. 허브 계정 역할과 매장 안 역할을 구분한다. 출퇴근 쓰기와 급여 계산 전체는 범위 밖이다.",
+  "entrypoints": [
+    "/hub",
+    "/owner/dashboard",
+    "/junior/home"
+  ],
+  "depth": [
+    "대표 하위 흐름의 화면부터 데이터 경계까지 코드 추적",
+    "상태와 실패 및 권한 조건 확인",
+    "SQL 정의와 후속 변경 검색",
+    "관련 테스트 연결",
+    "실행 미검증"
+  ],
+  "unknowns": [
+    "로컬 HEAD f03eecd의 코드 관찰이다. 원격 마이그레이션 적용 상태와 배포 앱 버전은 확인하지 않았다.",
+    "DB, 네트워크, AI, 브라우저 및 Android/iOS 실기기 실행은 하지 않았다.",
+    "교대 승인, 실제 출퇴근 쓰기, 급여 공식 전체 및 cross-notification RPC 전체는 이 기록에서 심층 추적하지 않았다.",
+    "알림과 이해도 요약은 화면의 추가 입력이다. 관련 집계 전체의 분모와 대량 데이터 일치는 미검증이다."
+  ],
+  "findings": [
+    "허브 인건비와 owner_overview.labor_month는 서로 다른 계산이다. 필드명이 비슷하다는 이유로 같은 지표라고 읽으면 안 된다.",
+    "집계 함수의 주석에 남은 24시간 설명과 달리 최신 owner_today 실행 본문은 16시간이다."
+  ],
+  "evidence": [
+    {
+      "id": "hub",
+      "file": "src/app/hub.tsx",
+      "symbol": "export default function HubScreen()",
+      "kind": "code"
+    },
+    {
+      "id": "owner-view",
+      "file": "src/components/hub/OwnerStatusView.tsx",
+      "symbol": "if (ownerLoadError)",
+      "kind": "code"
+    },
+    {
+      "id": "junior-view",
+      "file": "src/components/hub/JuniorTodayView.tsx",
+      "symbol": "useForegroundRefresh(true, () => {",
+      "kind": "code"
+    },
+    {
+      "id": "store",
+      "file": "src/lib/store/useHubStore.ts",
+      "symbol": "hydrateOwner: async () => {",
+      "kind": "code"
+    },
+    {
+      "id": "pay",
+      "file": "src/lib/store/useHubStore.ts",
+      "symbol": "function laborByUnit(",
+      "kind": "code"
+    },
+    {
+      "id": "fetch",
+      "file": "src/lib/db.ts",
+      "symbol": "export async function fetchOwnerToday()",
+      "kind": "code"
+    },
+    {
+      "id": "overview-sql",
+      "file": "supabase/migrations/0299_staff_count_membership.sql",
+      "symbol": "create or replace function public.owner_overview()",
+      "kind": "code"
+    },
+    {
+      "id": "today-sql",
+      "file": "supabase/migrations/0306_owner_today_16h.sql",
+      "symbol": "create function public.owner_today()",
+      "kind": "code"
+    },
+    {
+      "id": "labor-sql",
+      "file": "supabase/migrations/0299_staff_count_membership.sql",
+      "symbol": "create or replace function public.owner_labor_inputs_v2()",
+      "kind": "code"
+    },
+    {
+      "id": "junior-sql",
+      "file": "supabase/migrations/0305_closed_store_hub_summary.sql",
+      "symbol": "create or replace function public.my_cross_summary_v2()",
+      "kind": "code"
+    },
+    {
+      "id": "nav",
+      "file": "src/lib/hooks/useStoreNav.ts",
+      "symbol": "const goStore = async",
+      "kind": "code"
+    },
+    {
+      "id": "owner-home",
+      "file": "src/lib/hooks/useOwnerDashboardData.ts",
+      "symbol": "occursOn(t, today) && taskVisibleTo(t, userId)",
+      "kind": "code"
+    },
+    {
+      "id": "junior-home",
+      "file": "src/lib/hooks/useJuniorHomeData.ts",
+      "symbol": "const loaded = workLoaded && attendanceLoaded && scheduleLoaded;",
+      "kind": "code"
+    },
+    {
+      "id": "home-toggle",
+      "file": "src/app/junior/home.tsx",
+      "symbol": "toggleTask(today, t.id, userId, userName",
+      "kind": "code"
+    },
+    {
+      "id": "test",
+      "file": "scripts/qa-audit-store.mjs",
+      "symbol": "const f = lastDef('owner_today');",
+      "kind": "test"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "entry",
+      "type": "screen",
+      "name": "허브 계정별 진입",
+      "aliases": [],
+      "current": "useSessionGate 뒤 isOwnerAccount로 OwnerStatusView/JuniorTodayView를 선택한다. 소속 목록도 활성 매장도 없으면 NoStoreView를 표시한다.",
+      "evidence": [
+        "hub"
+      ],
+      "changeKinds": [
+        "contract",
+        "copy"
+      ]
+    },
+    {
+      "id": "refresh",
+      "type": "store",
+      "name": "useHubStore 조회와 오류",
+      "aliases": [],
+      "current": "5초 TTL을 사용한다. 사장 overview/today/labor를 병렬 조회하고 성공분만 갱신한다. 실패도 loaded=true이며 오류 플래그를 따로 올린다. 실패 시 TTL을 비우고 계정 epoch가 바뀐 응답은 버린다.",
+      "evidence": [
+        "store"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "owner-data",
+      "type": "rpc",
+      "name": "owner_overview와 owner_today",
+      "aliases": [],
+      "current": "owner_overview 최신 정의는 0299, owner_today는 0306이다. units.owner_id=auth.uid()와 deleted_at is null로 소유 매장만 집계한다. 근무 중은 16시간 미만 열린 기록 수다. forgot_now는 16시간 이상 열린 기록의 직원 수다.",
+      "evidence": [
+        "overview-sql",
+        "today-sql",
+        "fetch"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "labor",
+      "type": "calculation",
+      "name": "허브 예상 인건비",
+      "aliases": [],
+      "current": "0299 owner_labor_inputs_v2의 직원은 junior/manager 멤버십 기준이다. laborByUnit은 근무표와 매장 정산 기간으로 computePay 및 departedPayRows를 호출한다. owner_overview.labor_month의 출퇴근 합산 값을 화면 인건비로 그대로 쓰지 않는다.",
+      "evidence": [
+        "labor-sql",
+        "pay"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "junior-data",
+      "type": "rpc",
+      "name": "my_cross_summary_v2",
+      "aliases": [],
+      "current": "0305 최신 정의는 본인 멤버십 매장의 본인 근무/시급 입력만 반환한다. 닫힌 매장의 junior/manager는 매장 행을 유지하되 근무와 급여 입력을 비우거나 0/null로 돌린다.",
+      "evidence": [
+        "junior-sql"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "view",
+      "type": "screen",
+      "name": "현황 표시와 재시도",
+      "aliases": [],
+      "current": "사장 현황은 여러 loaded를 함께 기다린다. overview 실패는 재시도 화면이다. 인건비 실패는 숫자 대신 실패 표시다. 직원 오늘은 마운트와 foreground 복귀 때 요약, 알림 입력, 매장 별칭을 재조회한다.",
+      "evidence": [
+        "owner-view",
+        "junior-view"
+      ],
+      "changeKinds": [
+        "contract",
+        "copy"
+      ]
+    },
+    {
+      "id": "nav",
+      "type": "navigation",
+      "name": "매장 전환 뒤 상세 이동",
+      "aliases": [],
+      "current": "다른 매장이면 switchUnit 성공을 기다린다. 실패하면 토스트 후 이동을 중단한다.",
+      "evidence": [
+        "nav"
+      ],
+      "changeKinds": [
+        "contract"
+      ]
+    },
+    {
+      "id": "store-home",
+      "type": "consumer",
+      "name": "활성 매장 홈 업무 목록",
+      "aliases": [],
+      "current": "사장과 직원 홈은 업무 스토어와 occursOn/taskVisibleTo로 오늘 항목을 파생한다. 직원 홈의 loaded는 업무/출퇴근/근무표 시도 완료다. 홈 완료 버튼은 업무보드와 같은 toggleTask를 호출한다.",
+      "evidence": [
+        "owner-home",
+        "junior-home",
+        "home-toggle"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "tests",
+      "type": "test",
+      "name": "허브 SQL 회귀 검사",
+      "aliases": [],
+      "current": "qa-audit-store에는 owner_today 16시간과 닫힌 매장 요약 검사가 있다. 이 파일은 DB도 사용하므로 순수 검사로 실행하면 안 된다.",
+      "evidence": [
+        "test"
+      ],
+      "changeKinds": [
+        "contract",
+        "field"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "entry-refresh",
+      "from": "entry",
+      "to": "refresh",
+      "relation": "starts-read",
+      "when": "허브 본문 마운트 및 foreground 복귀",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "hub",
+        "owner-view",
+        "junior-view"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "refresh-owner-data",
+      "from": "refresh",
+      "to": "owner-data",
+      "relation": "calls",
+      "when": "사장 허브 hydrateOwner",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "store",
+        "fetch"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "refresh-labor",
+      "from": "refresh",
+      "to": "labor",
+      "relation": "calculates-after-read",
+      "when": "인건비 입력 조회 성공",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "store",
+        "pay"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "refresh-junior-data",
+      "from": "refresh",
+      "to": "junior-data",
+      "relation": "calls",
+      "when": "직원 hydrateJunior",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "store",
+        "junior-sql"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "refresh-view",
+      "from": "refresh",
+      "to": "view",
+      "relation": "updates-load-state",
+      "when": "응답 계정 epoch가 유효할 때",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "store",
+        "owner-view"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "view-nav",
+      "from": "view",
+      "to": "nav",
+      "relation": "opens",
+      "when": "매장별 상세 액션을 눌렀을 때",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "owner-view",
+        "nav"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "nav-store-home",
+      "from": "nav",
+      "to": "store-home",
+      "relation": "lands",
+      "when": "전환 성공 후 매장 홈 진입",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "nav",
+        "home-toggle"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    },
+    {
+      "id": "tests-owner-data",
+      "from": "tests",
+      "to": "owner-data",
+      "relation": "checks",
+      "when": "별도 로컬 DB 검증 시",
+      "confidence": "confirmed-code",
+      "evidence": [
+        "test"
+      ],
+      "kinds": [
+        "contract",
+        "field"
+      ]
+    }
+  ],
+  "flow": [
+    {
+      "node": "entry",
+      "when": "세션 게이트 통과",
+      "result": "계정 역할과 매장 존재로 본문 선택"
+    },
+    {
+      "node": "refresh",
+      "when": "읽기 시도",
+      "result": "성공/실패와 loaded를 따로 기록"
+    },
+    {
+      "node": "view",
+      "when": "읽기 완료",
+      "result": "집계 또는 오류 표시"
+    },
+    {
+      "node": "nav",
+      "when": "상세 선택",
+      "result": "활성 매장 전환 확인 후 이동"
+    }
+  ],
+  "transitions": [
+    {
+      "from": "loading",
+      "to": "loaded with error",
+      "when": "허브 읽기 실패도 완료 플래그를 올리고 실패 TTL을 해제",
+      "evidence": [
+        "store"
+      ]
+    },
+    {
+      "from": "loaded with error",
+      "to": "loaded",
+      "when": "retryOwner가 TTL을 비우고 재조회 성공",
+      "evidence": [
+        "store"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "file": "scripts/qa-audit-store.mjs",
+      "command": "node scripts/qa-audit-store.mjs",
+      "scope": "허브 소유 범위, 닫힌 매장 요약, 16시간 근무 상태",
+      "requires": "로컬 Docker DB 사용. 자동 실행하지 않음",
+      "execution": "not-run"
+    }
+  ],
+  "desired": {
+    "status": "unconfirmed",
+    "decisionsNeeded": [
+      "현재 동작을 제품 요구로 승인한 기록이 아니다. 변경 요청이 생기면 기존 제품 정본과 사용자 결정을 별도로 연결해야 한다."
+    ]
+  }
+}
