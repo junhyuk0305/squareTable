@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SegmentTabs, type SegmentItem } from '@/components/SegmentTabs';
 import { InkColors } from '@/lib/theme/colors';
+import { Type } from '@/lib/theme/type';
 import type { UnknownQuery } from '@/types';
 
 type SubtabKey = 'pending' | 'auto';
@@ -124,9 +125,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   emptyBody: {
-    fontSize: 14,
-    color: InkColors.ink3,
-    lineHeight: 20,
+    ...Type.desc,
     textAlign: 'center',
   },
 });

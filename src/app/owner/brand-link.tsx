@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { ScreenLoading } from '@/components/ScreenLoading';
-import { SectionLabel } from '@/components/SectionLabel';
+import { Section } from '@/components/Screen';
 import { BottomSheet } from '@/components/BottomSheet';
 import { BrandMirrorView } from '@/components/owner/BrandMirrorView';
 import { useOwnerBrandStore } from '@/lib/store/useOwnerBrandStore';
@@ -22,9 +22,11 @@ import {
 } from '@/lib/brand/visibility';
 import { showToast } from '@/lib/store/useToastStore';
 import { confirmAction } from '@/lib/utils/confirm';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space, SCREEN_GUTTER } from '@/lib/theme/layout';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 const fmtBiz = (n: string | null) => (n && n.length === 10 ? `${n.slice(0, 3)}-${n.slice(3, 5)}-${n.slice(5)}` : n || '미등록');
 const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('ko-KR');
@@ -66,8 +68,7 @@ export default function BrandLinkScreen() {
           {links.map((l) => (
             <LinkCard key={l.unit_id} link={l} onChanged={() => void hydrate()} />
           ))}
-          <View style={styles.labeled}>
-          <SectionLabel icon="eye-outline" title="공개 수준이 뜻하는 것" />
+          <Section icon="eye-outline" title="공개 수준이 뜻하는 것">
           <View style={styles.card}>
             {VISIBILITY_LEVELS.map((lv, i) => (
               <View key={lv.key} style={[styles.lvRow, i > 0 && styles.rowBorder]}>
@@ -80,7 +81,7 @@ export default function BrandLinkScreen() {
               <Text style={styles.lvItems}>{NEVER_SHARED.join(' · ')}</Text>
             </View>
           </View>
-          </View>
+          </Section>
         </ScrollView>
       )}
     </SafeAreaView>
@@ -280,33 +281,35 @@ function LinkCard({ link, onChanged }: { link: MyBrandViewRow; onChanged: () => 
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  body: { paddingHorizontal: SCREEN_GUTTER, paddingBottom: 48, gap: Space.md },
-  labeled: { gap: Space.sm },
+  // 화면 바탕(Surface.screen). 탭바가 없는 화면이라 아래 안전 영역을 SafeAreaView(bottom)가 그대로 든다.
+  safe: { flex: 1, backgroundColor: Surface.screen },
+  // 첫 여백·좌우·섹션 사이 = screenScrollStyle. 아래는 넉넉히 48.
+  body: { ...screenScrollStyle, paddingBottom: 48 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Space.xl, gap: Space.sm },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
-  emptyBody: { fontSize: 13.5, lineHeight: 20, color: InkColors.ink2, textAlign: 'center' },
+  emptyTitle: Type.title,
+  emptyBody: { ...Type.desc, textAlign: 'center' },
   card: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, backgroundColor: InkColors.bg, overflow: 'hidden', ...Elevation.e1 },
   head: { flexDirection: 'row', alignItems: 'center', gap: Space.md, padding: Space.md },
   headIcon: { width: 36, height: 36, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
   brand: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
-  meta: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
+  meta: { ...Type.tag, color: TextColor.secondary, marginTop: 2 },
   pill: { paddingVertical: 3, paddingHorizontal: 9, borderRadius: Radius.pill, backgroundColor: BrandColors.goodSoft },
-  pillText: { fontSize: 11.5, fontWeight: '700', color: BrandColors.goodText },
+  pillText: { ...Type.tag, fontWeight: '700', color: BrandColors.goodText },
   rowBorder: { borderTopWidth: 1, borderTopColor: InkColors.line },
   kv: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Space.md, minHeight: 48 },
-  k: { fontSize: 13, fontWeight: '700', color: InkColors.ink2, flex: 1 },
-  v: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
+  k: { fontSize: 13, fontWeight: '700', color: TextColor.secondary, flex: 1 },
+  v: { ...Type.body, fontWeight: '700' },
   banner: { flexDirection: 'row', gap: Space.sm, padding: Space.md, backgroundColor: BrandColors.warnSoft },
-  bannerTitle: { fontSize: 13, lineHeight: 19, color: BrandColors.warnText, fontWeight: '600' },
+  bannerTitle: { ...Type.desc, color: BrandColors.warnText, fontWeight: '600' },
   bannerActions: { flexDirection: 'row', gap: Space.sm, marginTop: Space.sm },
-  smallPri: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: Radius.pill, backgroundColor: InkColors.ink },
-  smallPriText: { fontSize: 13, fontWeight: '800', color: InkColors.bubbleText },
-  small: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
-  smallText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+  // 작은 버튼(48 알약 · 내용 폭).
+  smallPri: { ...ButtonStyles.small, backgroundColor: InkColors.ink },
+  smallPriText: { ...ButtonTextStyles.small, color: InkColors.bubbleText },
+  small: { ...ButtonStyles.small, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
+  smallText: { ...ButtonTextStyles.small, color: TextColor.secondary },
   section: { padding: Space.md, gap: Space.sm },
   reqBanner: { flexDirection: 'row', gap: Space.sm, alignItems: 'flex-start', padding: Space.sm, borderRadius: Radius.sm, backgroundColor: BrandColors.warnSoft },
-  reqText: { flex: 1, fontSize: 12.5, lineHeight: 18, color: BrandColors.warnText },
+  reqText: { ...Type.desc, flex: 1, color: BrandColors.warnText },
   levels: { gap: Space.sm },
   level: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingVertical: 10, paddingHorizontal: Space.md, minHeight: 48, justifyContent: 'center' },
   levelOn: { borderColor: InkColors.ink, backgroundColor: BrandColors.yellowSoft },
@@ -314,21 +317,22 @@ const styles = StyleSheet.create({
   // 하한 아래 — 숨기지 않고 회색으로 남긴다(정본 §2 ②). 높이는 그대로라 목록이 흔들리지 않는다.
   levelLocked: { backgroundColor: InkColors.cream, borderStyle: 'dashed' },
   levelNameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  levelName: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
-  levelShort: { fontSize: 12, color: InkColors.ink3, marginTop: 1 },
-  levelTag: { fontSize: 11.5, fontWeight: '700', color: BrandColors.warnText, marginTop: 3 },
+  levelName: { ...Type.body, fontWeight: '800', color: TextColor.secondary },
+  levelShort: { ...Type.tag, color: TextColor.secondary, marginTop: 1 },
+  levelTag: { ...Type.tag, fontWeight: '700', color: BrandColors.warnText, marginTop: 3 },
   lockRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  danger: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 14, borderRadius: Radius.pill, backgroundColor: BrandColors.badSoft },
-  dangerText: { fontSize: 13, fontWeight: '800', color: BrandColors.badText },
-  note: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink3 },
+  // 연결 해제 = 작은 버튼(48 알약 · 내용 폭) + 빨강 틴트.
+  danger: { ...ButtonStyles.small, flexDirection: 'row', gap: 6, backgroundColor: BrandColors.badSoft },
+  dangerText: { ...ButtonTextStyles.small, color: BrandColors.badText },
+  note: Type.desc,
   endedCard: { alignSelf: 'stretch', padding: Space.md, gap: Space.sm, alignItems: 'flex-start' },
-  endedText: { fontSize: 13.5, lineHeight: 20, color: InkColors.ink },
+  endedText: { fontSize: Type.desc.fontSize, lineHeight: 20, color: InkColors.ink },
   secondary: { minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.lg },
-  secondaryText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
+  secondaryText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
   lvRow: { paddingVertical: 10, paddingHorizontal: Space.md, gap: 2 },
-  lvName: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
-  lvItems: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink2 },
-  sheetTitle: { fontSize: 17, fontWeight: '900', color: InkColors.ink, marginBottom: 4 },
+  lvName: { fontSize: Type.desc.fontSize, fontWeight: '800', color: InkColors.ink },
+  lvItems: Type.desc,
+  sheetTitle: { ...Type.title, marginBottom: 4 },
   reasonRow: { flexDirection: 'row', alignItems: 'center', minHeight: 52, gap: Space.md },
-  reasonText: { flex: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink },
+  reasonText: { ...Type.body, flex: 1, fontWeight: '600' },
 });

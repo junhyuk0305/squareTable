@@ -15,9 +15,11 @@ import {
 } from '@/lib/push/nativepush';
 import { canManage } from '@/lib/utils/roles';
 import { SHOW_BILLING, WEB_PUSH_ENABLED } from '@/lib/config/store-policy';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space, SCREEN_GUTTER } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 
 /**
  * 알림 켜기 안내 — 홈 첫 진입에 **딱 한 번** 뜬다.
@@ -184,17 +186,18 @@ const s = StyleSheet.create({
     width: 44, height: 44, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center',
     backgroundColor: BrandColors.yellowSoft, marginBottom: Space.xs,
   },
-  title: { fontSize: 18, fontWeight: '900', color: InkColors.ink, lineHeight: 25 },
-  sub: { fontSize: 13.5, fontWeight: '600', color: InkColors.ink3 },
+  title: { ...Type.title, lineHeight: 25 },
+  sub: { ...Type.desc, fontWeight: '600' },
   list: { gap: Space.sm, marginTop: Space.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   rowText: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
-  note: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink3, marginTop: Space.sm },
+  note: { ...Type.desc, fontWeight: '600', marginTop: Space.sm },
+  // 주 버튼 모양(52 · 모서리 16 · 가로 꽉 · 16/800). 흰 면 위 주 버튼 = 검정(2026-11-02 사용자 결정).
   primary: {
-    marginTop: Space.md, backgroundColor: BrandColors.yellow, borderRadius: Radius.md,
-    paddingVertical: 15, alignItems: 'center',
+    ...ButtonStyles.primary,
+    marginTop: Space.md, backgroundColor: InkColors.ink,
   },
-  primaryText: { fontSize: 16, fontWeight: '900', color: InkColors.ink },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   ghost: { paddingVertical: 13, alignItems: 'center' },
-  ghostText: { fontSize: 14, fontWeight: '700', color: InkColors.ink3 },
+  ghostText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
 });

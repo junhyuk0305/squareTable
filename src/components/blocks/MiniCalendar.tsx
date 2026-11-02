@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { BrandColors, InkColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
 
 /** 요일 머리글 — 일요일부터(국내 달력 관행). */
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -150,11 +151,11 @@ export function MiniCalendar({
 const st = StyleSheet.create({
   cal: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 8 },
   bar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, paddingBottom: 6 },
-  month: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  month: { ...Type.body, fontWeight: '800' },
   // ★hitSlop 이 아니라 상자로 48dp 를 만든다(RN-web 은 hitSlop 을 무시한다 — 실측 20dp 였다).
   navBtn: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   weekRow: { flexDirection: 'row' },
-  weekCell: { flex: 1, textAlign: 'center', fontSize: 10.5, fontWeight: '800', color: InkColors.ink3, paddingVertical: 3 },
+  weekCell: { ...Type.micro, flex: 1, textAlign: 'center', fontWeight: '800', color: TextColor.secondary, paddingVertical: 3 },
   days: { flexDirection: 'row', flexWrap: 'wrap' },
   cell: { width: `${100 / 7}%`, height: CELL_H, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.sm },
   cellToday: { backgroundColor: InkColors.cream, borderWidth: 1, borderColor: InkColors.line },

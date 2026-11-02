@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { InkColors } from '@/lib/theme/colors';
+import { Surface } from '@/lib/theme/colors';
 
 /**
  * 옛 코스 관리 화면 — 2026-08-11 퀴즈 재설계로 **폐기**.
@@ -24,5 +24,5 @@ export default function OwnerQuizListRedirect() {
 }
 
 const st = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.paper },
+  safe: { flex: 1, backgroundColor: Surface.screen },
 });

@@ -1,7 +1,9 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { CategoryChip } from '@/components/CategoryChip';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 import { formatAsked } from '@/lib/utils/time';
 import type { UnknownQuery } from '@/types';
 
@@ -110,8 +112,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   meta: {
-    fontSize: 12,
-    color: InkColors.ink3,
+    ...Type.tag,
+    color: TextColor.secondary,
     fontWeight: '600',
   },
   groupBadge: {
@@ -123,7 +125,7 @@ const styles = StyleSheet.create({
     borderColor: BrandColors.yellowDeep,
   },
   groupBadgeText: {
-    fontSize: 11,
+    ...Type.micro,
     fontWeight: '800',
     color: InkColors.ink,
   },
@@ -134,18 +136,14 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     paddingHorizontal: 16,
   },
+  // 작은 버튼(48 알약 · 15/800 · 내용 폭 · 2026-11-02).
   actionBtn: {
-    minHeight: 44,
-    paddingHorizontal: 16,
-    borderRadius: Radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
+    ...ButtonStyles.small,
     backgroundColor: InkColors.ink,
   },
   actionBtnPressed: { opacity: 0.7 },
   actionText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    ...ButtonTextStyles.small,
+    color: InkColors.bubbleText,
   },
 });

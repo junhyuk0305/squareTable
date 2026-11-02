@@ -2,9 +2,11 @@ import { View, Text, StyleSheet } from 'react-native';
 
 import { PLANS, PLAN_ORDER, VAT_NOTE_SENTENCE, type PlanId } from '@/lib/config/tiers';
 import { formatKrw } from '@/lib/config/billing';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
 
 // 요금제 표(3티어) — 표시 전용. 가격·티어·정가는 전부 tiers.ts(SSOT)에서만 읽는다(2곳 복제 금지).
 // 파일럿 할인가(monthlyKrw) 옆에 정가(regularKrw)를 취소선으로 병기하고, 상단에 '파일럿 만원 할인' 배지를 띄운다.
@@ -78,15 +80,8 @@ export function PricingTable({
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.lg,
-    gap: Space.md,
-    ...Elevation.e1,
-  },
+  // 카드 모양 = CardStyles.list(모서리 16 · e1 · 안쪽 16).
+  card: { ...CardStyles.list, gap: Space.md },
 
   // 파일럿 할인 배너 — 앰버 톤(확인필요와 구분되는 골드 크림). 노랑 CTA 오인 방지 위해 채도 낮춤.
   pilotBanner: {
@@ -101,7 +96,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
   },
   pilotBadge: {
-    fontSize: 11,
+    ...Type.micro,
     fontWeight: '900',
     color: InkColors.ink,
     backgroundColor: BrandColors.yellow,
@@ -110,7 +105,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     overflow: 'hidden',
   },
-  pilotText: { flex: 1, fontSize: 12.5, color: InkColors.ink2, lineHeight: 18, fontWeight: '600' },
+  pilotText: { ...Type.desc, flex: 1, fontWeight: '600' },
   pilotStrong: { fontWeight: '900', color: InkColors.ink },
 
   rows: {},
@@ -119,20 +114,21 @@ const styles = StyleSheet.create({
   rowCurrent: { marginHorizontal: -Space.sm, paddingHorizontal: Space.sm, backgroundColor: InkColors.bgSoft, borderRadius: Radius.sm },
   rowLeft: { flex: 1, gap: 2 },
   nameLine: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  name: { fontSize: 15, fontWeight: '900', color: InkColors.ink },
+  name: { ...Type.body, fontWeight: '900' },
   currentBadge: {
     backgroundColor: InkColors.ink,
     borderRadius: Radius.pill,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  currentBadgeText: { fontSize: 10.5, fontWeight: '800', color: InkColors.bubbleText },
-  tagline: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', lineHeight: 17 },
+  currentBadgeText: { ...Type.micro, fontWeight: '800', color: InkColors.bubbleText },
+  tagline: { ...Type.tag, color: TextColor.secondary, fontWeight: '600', lineHeight: 17 },
 
   rowRight: { alignItems: 'flex-end' },
-  regular: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', textDecorationLine: 'line-through' },
-  price: { fontSize: 14.5, fontWeight: '900', color: InkColors.ink },
+  // 지운 정가 — 일부러 흐리게 둔다(지운 값 = 비활성 글자).
+  regular: { ...Type.tag, color: InkColors.ink3, fontWeight: '600', textDecorationLine: 'line-through' },
+  price: { fontSize: Type.body.fontSize, fontWeight: '900', color: InkColors.ink },
 
-  vat: { fontSize: 12, color: InkColors.ink3, lineHeight: 18, fontWeight: '600' },
-  foot: { fontSize: 12, color: InkColors.ink3, lineHeight: 18, fontWeight: '600' },
+  vat: { ...Type.desc, fontWeight: '600' },
+  foot: { ...Type.desc, fontWeight: '600' },
 });

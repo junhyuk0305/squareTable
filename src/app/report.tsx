@@ -21,10 +21,13 @@ import {
   reportErrorMessage,
 } from '@/lib/report/form';
 import { honorific } from '@/lib/utils/roles';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
 import { ChipStyles } from '@/lib/theme/chip';
+import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 /**
  * 신고하기(F-1 · 0241) — 설정 > 약관·고객센터 > "신고하기". 사장·매니저·직원 모두 같은 화면이다.
@@ -221,7 +224,7 @@ function ReportBody() {
           accessibilityRole="button"
           accessibilityLabel="신고 보내기"
         >
-          {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>신고 보내기</Text>}
+          {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>신고 보내기</Text>}
         </Pressable>
         {msg && <Text style={styles.msg}>{msg}</Text>}
       </View>
@@ -255,40 +258,33 @@ function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () 
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: Space.gutter, paddingTop: Space.lg },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.gutter,
-    gap: Space.sm,
-  },
-  body: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
-  label: { fontSize: 13, lineHeight: 19, fontWeight: '700', color: InkColors.ink2, marginTop: Space.md },
-  hint: { fontSize: 12, lineHeight: 18, color: InkColors.ink3 },
+  safe: { flex: 1, backgroundColor: Surface.screen },
+  scroll: screenScrollStyle,
+  card: { ...CardStyles.list, gap: Space.sm },
+  body: { fontSize: 15, lineHeight: 22, color: TextColor.secondary },
+  label: { fontSize: 13, lineHeight: 19, fontWeight: '700', color: TextColor.secondary, marginTop: Space.md },
+  hint: { ...Type.desc },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   chip: { ...ChipStyles.chip, maxWidth: '100%' },
   chipOn: ChipStyles.chipOn,
   chipText: ChipStyles.text,
   chipTextOn: ChipStyles.textOn,
+  // 카드 없이 회색 바탕(Surface.screen)에 바로 놓인 칸 — 흰 면 + 진한 선(lineStrong · 2026-11-02 결정).
   input: {
+    ...Type.body,
     borderWidth: 1,
-    borderColor: InkColors.line,
+    borderColor: InkColors.lineStrong,
     borderRadius: Radius.md,
     paddingHorizontal: 14,
     paddingVertical: 13,
-    fontSize: 15,
-    color: InkColors.ink,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Surface.input,
   },
   inputMulti: { minHeight: 120, textAlignVertical: 'top' },
-  primary: { marginTop: Space.md, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center' },
-  primaryText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22, fontWeight: '800' },
+  primary: { ...ButtonStyles.primary, marginTop: Space.md, backgroundColor: BrandColors.brand },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   msg: { fontSize: 15, lineHeight: 22, color: BrandColors.accentText, fontWeight: '700', textAlign: 'center' },
   doneHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  doneTitle: { flex: 1, minWidth: 0, fontSize: 16, lineHeight: 23, fontWeight: '800', color: InkColors.ink },
-  ghost: { marginTop: Space.md, paddingVertical: 13, borderRadius: Radius.md, alignItems: 'center', backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
-  ghostText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
+  doneTitle: { ...Type.title, flex: 1, minWidth: 0 },
+  ghost: { ...ButtonStyles.primary, marginTop: Space.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
+  ghostText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
 });

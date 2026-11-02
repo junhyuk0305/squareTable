@@ -6,9 +6,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '@/components/BottomSheet';
 import { VerifyBadge } from '@/components/VerifyBadge';
 import { KnowhowRows, type KnowhowRow } from '@/components/blocks/KnowhowRows';
-import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { BrandColors, InkColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 import { BadgeStyles } from '@/lib/theme/badge';
 import { knowhowSourceLabel } from '@/lib/utils/knowhowSource';
 import type { PlaybookEntry } from '@/types';
@@ -122,11 +123,11 @@ export function EntryDetailModal({
 
 const s = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 8 },
-  kicker: { fontSize: 11, fontWeight: '800', letterSpacing: 1, color: InkColors.ink3 },
+  kicker: { fontSize: 11, fontWeight: '800', letterSpacing: 1, color: TextColor.secondary },
 
   scroll: { paddingHorizontal: 16 },
   scrollContent: { paddingBottom: 12, gap: 12 },
-  title: { fontSize: 19, fontWeight: '800', color: InkColors.ink, letterSpacing: -0.3 },
+  title: { ...Type.title, letterSpacing: -0.3 },
 
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   badge: BadgeStyles.box,
@@ -134,7 +135,7 @@ const s = StyleSheet.create({
 
   gaugeBox: { gap: 6, paddingVertical: 2 },
   gaugeHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  gaugeLabel: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
+  gaugeLabel: { ...Type.tag, fontWeight: '800', color: InkColors.ink2 },
   gaugeVal: { fontSize: 13, fontWeight: '900', color: InkColors.ink },
   gaugeTrack: { height: 10, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
   gaugeFill: { height: '100%', borderRadius: Radius.pill, backgroundColor: BrandColors.yellow },

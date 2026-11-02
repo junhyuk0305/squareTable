@@ -17,10 +17,11 @@ import { usePhoneOtp } from '@/lib/otp';
 import { ConsentChecklist } from '@/components/ConsentChecklist';
 import { allConsented, consentPayload, UNDER_14_TEXT, type ConsentChecked } from '@/lib/config/consent';
 import { EMAIL_TAKEN_TEXT, ROLE_SPLIT_TEXT } from '@/lib/account/copy';
-import { BrandColors, InkColors } from '@/lib/theme/colors';
-import { Space } from '@/lib/theme/layout';
+import { BrandColors, InkColors, Surface, TextColor } from '@/lib/theme/colors';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
 import { Radius, Elevation } from '@/lib/theme/elevation';
-import { ButtonStyles } from '@/lib/theme/button';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 import { ChipStyles } from '@/lib/theme/chip';
 import type { Role } from '@/types';
 import { INDUSTRIES } from '@/lib/config/industry';
@@ -193,7 +194,7 @@ export default function SignupScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen options={{ headerShown: false, title: '회원가입', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
+      <Stack.Screen options={{ headerShown: false, title: '회원가입', headerStyle: { backgroundColor: Surface.header }, headerTintColor: InkColors.ink }} />
       <ScreenTitleHeader title="회원가입" backFallback />
       <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
@@ -428,7 +429,7 @@ export default function SignupScreen() {
           style={({ pressed }) => [styles.primary, busy && styles.primaryDisabled, pressed && !busy && { opacity: 0.88 }]}
         >
           {busy ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={InkColors.bubbleText} />
           ) : (
             // 계정 생성까지 끝난 뒤 가게 연결만 실패해 재시도하는 상태면 라벨을 '가게 다시 만들기'로 바꿔
             // (계정은 이미 있으니 다시 안 만든다는 뜻) 에러 안내문과 일치시킨다.
@@ -494,27 +495,28 @@ function Field({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: 24, gap: 14 },
-  roleQ: { fontSize: 16, fontWeight: '800', color: InkColors.ink, marginBottom: 2 },
+  safe: { flex: 1, backgroundColor: Surface.screen },
+  // 첫 여백·좌우·아래 = 화면 틀 값. 입력칸 사이 14 는 폼 리듬이라 섹션 간격(20) 대신 그대로 둔다.
+  scroll: { ...screenScrollStyle, gap: 14 },
+  roleQ: { ...Type.section, marginBottom: 2 },
   roleRow: { flexDirection: 'row', gap: 12, marginBottom: 4 },
   roleCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Surface.card,
     borderWidth: 2,
     borderColor: InkColors.line,
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: Radius.md,
+    padding: Space.lg,
     gap: 4,
   },
   // 선택 = 잉크 테두리 + 소프트 섀도로 '선택된 border'를 굵게(bold) 강조(입력칸 선택 효과와 통일).
-  roleCardOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB', ...Elevation.e1 },
+  roleCardOn: { borderColor: BrandColors.brand, backgroundColor: Surface.selected, ...Elevation.e1 },
   // 그림 이모지 금지(워딩 §2.3) — Ionicons로 교체. 아이콘도 Text 기반이라 글자 크기 설정에 함께 반응한다.
   roleIcon: { marginBottom: 4 },
   roleLabel: { fontSize: 16, fontWeight: '800', color: InkColors.ink2, marginTop: 4 },
   roleLabelOn: { color: BrandColors.brand },
-  roleDesc: { fontSize: 12, color: InkColors.ink3, lineHeight: 17 },
-  roleSplit: { fontSize: 13, color: InkColors.ink2, lineHeight: 19, marginBottom: 4 },
+  roleDesc: { ...Type.desc },
+  roleSplit: { ...Type.desc, marginBottom: 4 },
   roleCheck: {
     position: 'absolute',
     top: 10,
@@ -526,36 +528,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  roleCheckMark: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
+  roleCheckMark: { ...Type.tag, color: InkColors.bubbleText, fontWeight: '900' },
   field: { gap: 6 },
-  label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+  label: { fontSize: 13, fontWeight: '700', color: TextColor.secondary },
   req: { color: BrandColors.accentText, fontWeight: '900' },
+  // 카드 없이 회색 바탕(Surface.screen)에 바로 놓인 칸 — 흰 면 + 진한 선(lineStrong · 2026-11-02 결정).
   input: {
+    ...Type.body,
     borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: 12,
+    borderColor: InkColors.lineStrong,
+    borderRadius: Radius.md,
     paddingHorizontal: 14,
     paddingVertical: 13,
-    fontSize: 15,
-    color: InkColors.ink,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Surface.input,
   },
-  joinNote: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm, backgroundColor: BrandColors.brandSoft, borderRadius: Radius.md, padding: 14 },
-  joinNoteText: { flex: 1, fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
+  // 바탕이 #F4F5F7 이 되면서 옛 brandSoft 면은 바탕에 묻힌다 → 흰 면 + 선.
+  joinNote: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm, backgroundColor: Surface.card, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 14 },
+  joinNoteText: { ...Type.desc, flex: 1 },
   joinNoteStrong: { fontWeight: '800', color: InkColors.ink },
   // 안내 문구(이미 가입된 이메일 등) — 성공 초록이 아닌 중립 톤으로 오해 방지.
-  emailOk: { fontSize: 12, color: InkColors.ink2, fontWeight: '700', marginTop: 1 },
-  bizHint: { fontSize: 12, fontWeight: '600', marginTop: -2 },
+  emailOk: { ...Type.tag, color: TextColor.secondary, fontWeight: '700', marginTop: 1 },
+  bizHint: { ...Type.tag, fontWeight: '600', marginTop: -2 },
   bizOk: { color: BrandColors.goodText },
-  bizBad: { color: InkColors.ink3 },
+  bizBad: { color: TextColor.secondary },
   // flexWrap + 입력칸 기준 폭 160 — 글자가 커져(OS 배율·앱 배율) 버튼이 넓어지면 버튼이 아랫줄로 내려간다.
   //   기본 크기에서는 지금처럼 한 줄이다. 버튼 paddingVertical 은 아랫줄로 내려갔을 때의 높이다(한 줄일 땐 입력칸 높이로 늘어난다).
   otpRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   otpInput: { flexGrow: 1, flexShrink: 1, flexBasis: 160 },
-  otpBtn: { minWidth: 116, minHeight: 44, flexShrink: 1, paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  otpBtn: { minWidth: 116, minHeight: 44, flexShrink: 1, paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: Surface.card, alignItems: 'center', justifyContent: 'center' },
   otpBtnDim: { opacity: 0.5 },
-  otpBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2, textAlign: 'center' },
-  otpMsg: { fontSize: 12, fontWeight: '600', color: BrandColors.accentText, marginTop: -2 },
+  otpBtnText: { fontSize: Type.body.fontSize, fontWeight: '800', color: TextColor.secondary, textAlign: 'center' },
+  otpMsg: { ...Type.tag, fontWeight: '600', color: BrandColors.accentText, marginTop: -2 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   chip: ChipStyles.chip,
   chipOn: ChipStyles.chipOn,
@@ -564,8 +567,8 @@ const styles = StyleSheet.create({
   err: { fontSize: 15, color: BrandColors.accentText, fontWeight: '600', lineHeight: 22 },
   primary: { ...ButtonStyles.primary, marginTop: 6, backgroundColor: BrandColors.brand },
   primaryDisabled: { backgroundColor: InkColors.line },
-  primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   loginRow: { alignItems: 'center', paddingVertical: 6 },
-  loginText: { fontSize: 14, color: InkColors.ink3 },
+  loginText: { fontSize: Type.body.fontSize, color: TextColor.secondary },
   loginStrong: { color: BrandColors.brand, fontWeight: '800' },
 });

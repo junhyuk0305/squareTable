@@ -2,11 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, ScrollView, TextInput, StyleSheet } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { RoleTabBar } from '@/components/RoleTabBar';
+import { Screen } from '@/components/Screen';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
@@ -15,17 +14,20 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { isPendingSuggestionToReview } from '@/lib/utils/notifications';
 import { showToast } from '@/lib/store/useToastStore';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { CardStyles } from '@/lib/theme/card';
 import { EmptyStyles } from '@/lib/theme/empty';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { screenScrollStyle } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 import type { PlaybookSuggestion } from '@/types';
 
 /** 처리됨 상태칩 — 면(bg)과 글자(fg)를 한 쌍으로 묶는다. 떨어져 있으면 '반영'에 빨간 틴트가 깔린다. */
 const STATUS_CHIP: Record<PlaybookSuggestion['status'], { bg: string; fg: string }> = {
   approved: { bg: BrandColors.goodSoft, fg: BrandColors.goodText },
-  rejected: { bg: InkColors.bgSoft, fg: InkColors.ink3 },
-  pending: { bg: InkColors.bgSoft, fg: InkColors.ink3 },
+  rejected: { bg: InkColors.bgSoft, fg: TextColor.secondary },
+  pending: { bg: InkColors.bgSoft, fg: TextColor.secondary },
 };
 
 /**
@@ -102,8 +104,10 @@ export default function OwnerSuggestionsScreen() {
   }
 
   return (
-    <SafeAreaView edges={[]} style={styles.safe}>
-      <ScreenTitleHeader title="노하우 제안함" backFallback />
+    // 바탕·헤더·탭바 = Screen. 로딩 게이트가 스크롤 자리를 바꿔 스크롤은 직접 둔다(scroll={false}).
+    // 반려 시트는 Screen 밖 형제.
+    <>
+    <Screen header={<ScreenTitleHeader title="노하우 제안함" backFallback />} tabBar="owner" scroll={false}>
       <Stack.Screen options={{ title: '노하우 제안함' }} />
       {!ready ? (
         <ScreenLoading label="직원 제안을 불러오고 있어요…" />
@@ -152,12 +156,10 @@ export default function OwnerSuggestionsScreen() {
           </View>
           </Appear>
         )}
-
-        <View style={{ height: 16 }} />
       </ScrollView>
       </KeyboardShift>
       )}
-      <RoleTabBar role="owner" />
+    </Screen>
 
       {/* 반려 사유 시트 — 건너뛰기 가능. 사유는 직원 제안 카드·알림에 표시된다. */}
       {declineFor && (
@@ -190,7 +192,7 @@ export default function OwnerSuggestionsScreen() {
           </View>
         </BottomSheet>
       )}
-    </SafeAreaView>
+    </>
   );
 }
 
@@ -245,9 +247,10 @@ function SuggestionCard({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 24, gap: 14 },
-  subline: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
+  // 첫 여백 16 · 좌우 20 · 블록 사이 20 = Screen 스크롤과 같은 값(2026-11-02).
+  scroll: screenScrollStyle,
+  // 화면 부제 = 설명(Type.desc · 13/19 secondary).
+  subline: { ...Type.desc, fontWeight: '600' },
 
 
   list: { gap: 12 },
@@ -256,26 +259,27 @@ const styles = StyleSheet.create({
   kindChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: Radius.pill },
   kindImprove: { backgroundColor: '#FBF3E3' },
   kindNew: { backgroundColor: BrandColors.yellowSoft },
-  kindText: { fontSize: 12, fontWeight: '800' },
+  kindText: { ...Type.tag, fontWeight: '800' },
   proposer: { marginLeft: 'auto', fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
 
   targetRow: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: InkColors.bgSoft, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 7 },
-  targetText: { flex: 1, fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
+  targetText: { ...Type.tag, flex: 1, fontWeight: '700', color: InkColors.ink2 },
 
-  body: { fontSize: 15, color: InkColors.ink, lineHeight: 22 },
+  body: { ...Type.body, lineHeight: 22 },
 
+  // 버튼 = 주 버튼 모양(52 · 모서리 16 · 16/800 · 2026-11-02). 둘이 한 줄에 서서 반려는 내용 폭, 승인은 나머지 폭.
   actions: { flexDirection: 'row', gap: 8, marginTop: 2 },
-  btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 11, borderRadius: Radius.md },
-  btnGhost: { paddingHorizontal: 18, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
-  btnGhostText: { fontSize: 13.5, fontWeight: '700', color: InkColors.ink2 },
+  btn: { ...ButtonStyles.primary, flexDirection: 'row', gap: 5 },
+  btnGhost: { borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
+  btnGhostText: { ...ButtonTextStyles.primary, color: InkColors.ink2 },
   btnPrimary: { flex: 1, backgroundColor: InkColors.ink },
-  btnPrimaryText: { fontSize: 13.5, fontWeight: '800', color: '#FFFFFF' },
+  btnPrimaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 
   // 반려 사유 시트
   // 시트 좌우 여백 16 — 화면 거터(20)가 아니라 시트 표준을 따른다(kit 의 qst.body).
   declineSheet: { paddingHorizontal: 16, paddingBottom: 20, gap: 10 },
   declineTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
-  declineSub: { fontSize: 12.5, color: InkColors.ink3, fontWeight: '600' },
+  declineSub: { ...Type.desc, fontWeight: '600' },
   declineInput: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.cream, minHeight: 72, textAlignVertical: 'top' },
   declineBtns: { flexDirection: 'row', gap: 8, marginTop: 2 },
 
@@ -283,6 +287,6 @@ const styles = StyleSheet.create({
   handledHeader: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
   handledRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   statusChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.pill },
-  statusChipText: { fontSize: 11, fontWeight: '800' },
-  handledText: { flex: 1, fontSize: 12.5, color: InkColors.ink3, fontWeight: '600' },
+  statusChipText: { ...Type.micro, fontWeight: '800' },
+  handledText: { ...Type.tag, flex: 1, color: TextColor.secondary, fontWeight: '600' },
 });

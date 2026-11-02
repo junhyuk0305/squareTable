@@ -14,9 +14,13 @@ import {
   type CardPaymentRow,
 } from '@/lib/db';
 import { cardPrecheck, cardChange, cardErrorText, cardRpcErrorCode, openCardRegistration, CARD_MAX_STORES } from '@/lib/payments/cardBilling';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
+import { Section } from '@/components/Screen';
 
 // 웹 카드 정기결제(토스페이먼츠 빌링, 0208) — /billing 안의 카드 결제 블록.
 //   sub = null      → 새로 결제: 금액·이용 기간·다음 결제일 → 자동결제 동의 → 토스 카드 등록창
@@ -173,8 +177,7 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
     };
 
     return (
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>카드 자동결제</Text>
+      <Section title="카드 자동결제">
 
         {pastDue && (
           <View style={[styles.card, styles.warnCard]}>
@@ -268,7 +271,7 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
               accessibilityRole="button"
             >
               {busy ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <ActivityIndicator color={InkColors.bubbleText} />
               ) : (
                 <Text style={styles.primaryText}>
                   {increase ? '지금 바로 변경하기' : '다음 결제일부터 변경하기'} · {planLabel(paidPlan as 'single' | 'multi', count)}
@@ -293,7 +296,7 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
             style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}
             accessibilityRole="button"
           >
-            {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>해지 취소하기</Text>}
+            {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>해지 취소하기</Text>}
           </Pressable>
         )}
 
@@ -335,7 +338,7 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
               </View>
             </View>
           ))}
-      </View>
+      </Section>
     );
   }
 
@@ -343,10 +346,9 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
   if (!paidPlan) return null;
   if (overLimit) {
     return (
-      <View style={styles.section}>
-        <Text style={styles.sectionLabel}>카드 자동결제</Text>
+      <Section title="카드 자동결제">
         {limitNotice}
-      </View>
+      </Section>
     );
   }
   const supply = supplyPrice(monthly);
@@ -365,8 +367,7 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
   };
 
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionLabel}>카드 자동결제</Text>
+    <Section title="카드 자동결제">
       <View style={styles.card}>
         <Row label="오늘 결제" value={formatKrw(monthly)} strong />
         <Text style={styles.hint}>
@@ -400,9 +401,9 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
         style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}
         accessibilityRole="button"
       >
-        {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>카드 등록하고 결제하기</Text>}
+        {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>카드 등록하고 결제하기</Text>}
       </Pressable>
-    </View>
+    </Section>
   );
 }
 
@@ -416,43 +417,36 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
 }
 
 const styles = StyleSheet.create({
-  section: { gap: Space.md },
-  sectionLabel: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, marginLeft: 2 },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.lg,
-    gap: Space.md,
-    ...Elevation.e1,
-  },
+  // 카드 모양 = CardStyles.list(모서리 16 · e1 · 안쪽 16). 섹션 제목은 <Section>(카드 밖 16/800).
+  card: { ...CardStyles.list, gap: Space.md },
   warnCard: { borderColor: BrandColors.warn },
   head: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  headTitle: { fontSize: 14, fontWeight: '900', color: InkColors.ink },
-  body: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
-  hint: { fontSize: 12, color: InkColors.ink3, lineHeight: 18 },
+  headTitle: { ...Type.body, fontWeight: '900' },
+  body: { fontSize: Type.body.fontSize, color: TextColor.secondary, lineHeight: 22 },
+  hint: { ...Type.desc },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.md },
-  rowLabel: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
-  rowValue: { flexShrink: 1, textAlign: 'right', fontSize: 14, color: InkColors.ink, fontWeight: '700' },
-  rowValueStrong: { fontSize: 15, fontWeight: '900' },
-  link: { fontSize: 13, fontWeight: '700', color: InkColors.ink2, textDecorationLine: 'underline' },
+  rowLabel: { fontSize: 13, color: TextColor.secondary, fontWeight: '600' },
+  rowValue: { ...Type.body, flexShrink: 1, textAlign: 'right', fontWeight: '700' },
+  rowValueStrong: { fontSize: Type.body.fontSize, fontWeight: '900' },
+  link: { fontSize: 13, fontWeight: '700', color: TextColor.secondary, textDecorationLine: 'underline' },
   linkRow: { alignItems: 'center', paddingVertical: Space.sm },
-  linkMuted: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3, textDecorationLine: 'underline' },
+  linkMuted: { ...Type.tag, fontWeight: '700', color: TextColor.secondary, textDecorationLine: 'underline' },
   storeRow: {
     flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48,
     paddingHorizontal: Space.md, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
   },
   storeRowOn: { borderColor: InkColors.ink, borderWidth: 2 },
-  storeName: { flex: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink },
+  storeName: { ...Type.body, flex: 1, fontWeight: '600' },
   consentRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingHorizontal: 2 },
-  consentText: { flex: 1, fontSize: 15, lineHeight: 22, color: InkColors.ink2, fontWeight: '600' },
-  primary: { backgroundColor: BrandColors.brand, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center' },
-  primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-  ghost: { paddingVertical: 13, borderRadius: Radius.md, alignItems: 'center', backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
-  ghostText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
-  danger: { paddingVertical: 13, borderRadius: Radius.md, alignItems: 'center', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: BrandColors.warn },
-  dangerText: { fontSize: 14, fontWeight: '800', color: BrandColors.warn },
+  consentText: { flex: 1, fontSize: Type.body.fontSize, lineHeight: 22, color: TextColor.secondary, fontWeight: '600' },
+  // 주 버튼(52 · 모서리 16 · 가로 꽉 · 16/800). 보조·해지 버튼도 같은 모양, 색만 다르다.
+  primary: { ...ButtonStyles.primary, backgroundColor: BrandColors.brand },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  // 보조 버튼은 흰 면 + 선 — 옛 bgSoft 면은 회색 바탕(Surface.screen) 위에서 묻혔다.
+  ghost: { ...ButtonStyles.primary, backgroundColor: Surface.card, borderWidth: 1, borderColor: InkColors.line },
+  ghostText: { ...ButtonTextStyles.primary, color: TextColor.secondary },
+  danger: { ...ButtonStyles.primary, backgroundColor: Surface.card, borderWidth: 1, borderColor: BrandColors.warn },
+  dangerText: { ...ButtonTextStyles.primary, color: BrandColors.warn },
   confirmRow: { flexDirection: 'row', gap: Space.sm },
   flex1: { flex: 1 },
 });

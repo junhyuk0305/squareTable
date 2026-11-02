@@ -2,9 +2,11 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 /**
  * 루틴 업무를 고칠 때 **어디까지 바꿀지** 먼저 묻는 시트.
@@ -77,9 +79,9 @@ export function RoutineScopeSheet({
 
 const s = StyleSheet.create({
   sheet: { paddingHorizontal: Space.lg, paddingBottom: Space.xl, gap: Space.sm },
-  title: { fontSize: 17, fontWeight: '800', color: InkColors.ink, paddingTop: Space.xs },
+  title: { ...Type.title, paddingTop: Space.xs },
   // 어떤 루틴을 고르는 중인지 — 읽어서 판단하는 문장이라 본문 하한 15sp.
-  sub: { fontSize: 15, color: InkColors.ink2, marginBottom: Space.sm },
+  sub: { ...Type.desc, marginBottom: Space.sm },
 
   opt: {
     flexDirection: 'row', alignItems: 'center', gap: Space.md,
@@ -91,12 +93,12 @@ const s = StyleSheet.create({
   icon: { width: 34, height: 34, borderRadius: Radius.sm, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
   iconAccent: { backgroundColor: BrandColors.yellow },
   body: { flex: 1, gap: 1 },
-  optTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  optSub: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink2 },
+  optTitle: { ...Type.body, fontWeight: '800' },
+  optSub: { ...Type.desc },
 
   cancel: {
-    minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: Space.xs,
-    borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bgSoft,
+    ...ButtonStyles.primary, marginTop: Space.xs,
+    borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bgSoft,
   },
-  cancelText: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
+  cancelText: { ...ButtonTextStyles.primary, color: TextColor.secondary },
 });

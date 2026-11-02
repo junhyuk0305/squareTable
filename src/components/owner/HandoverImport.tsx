@@ -30,9 +30,12 @@ import { showUpgradeHint } from '@/lib/config/store-policy';
 import { showToast } from '@/lib/store/useToastStore';
 import { genId } from '@/lib/utils/id';
 import type { PlaybookEntry, SquareBlock } from '@/types';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
+import { Layout, Space, screenScrollStyle } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 
 const MIN_RAWTEXT = 12;
 // PDF 원본 크기 캡(클라 1차 방어 — 엣지 base64 하드캡 14MB 와 정렬). 넘으면 "나눠 올리기" 안내.
@@ -711,12 +714,14 @@ function DraftCard({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: Space.gutter, gap: Space.md, paddingBottom: 32 },
+  // 화면 바탕(Surface.screen · 2026-11-02). 저장 바가 아래 안전 영역을 써야 해 SafeAreaView(bottom)는 그대로.
+  safe: { flex: 1, backgroundColor: Surface.screen },
+  scroll: screenScrollStyle,
 
+  // 모서리 20 카드는 없앤다 — 16(2026-11-02 결정표).
   uploadZone: {
     backgroundColor: BrandColors.sourceBg,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: BrandColors.yellowDeep,
     padding: 18,
@@ -724,7 +729,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
   },
   uploadTitle: { fontSize: 16, fontWeight: '900', color: InkColors.ink, marginTop: 8, marginBottom: 3 },
-  uploadSub: { fontSize: 12.5, color: InkColors.ink2, lineHeight: 18, textAlign: 'center' },
+  uploadSub: { ...Type.desc, textAlign: 'center' },
 
   resumeBar: {
     flexDirection: 'row',
@@ -738,21 +743,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     marginBottom: Space.md,
   },
-  resumeText: { flex: 1, fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
+  resumeText: { flex: 1, fontSize: Type.desc.fontSize, fontWeight: '800', color: InkColors.ink },
 
+  // 흰 면 보조 버튼 — 주 버튼과 같은 모양(52 · 모서리 16 · 16/800 · 2026-11-02), 색만 흰 면.
   pdfBtn: {
+    ...ButtonStyles.primary,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: 7,
     backgroundColor: InkColors.bg,
     borderWidth: 1,
     borderColor: InkColors.line,
-    borderRadius: Radius.md,
-    paddingVertical: 14,
     marginBottom: Space.sm,
   },
-  pdfBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  pdfBtnText: { ...ButtonTextStyles.primary, color: InkColors.ink },
 
   input: {
     minHeight: 180,
@@ -762,12 +765,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: InkColors.line,
     padding: 14,
-    fontSize: 14,
+    ...Type.body,
     lineHeight: 21,
-    color: InkColors.ink,
   },
   metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
-  counter: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
+  counter: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
 
   errorBox: {
     flexDirection: 'row',
@@ -778,37 +780,30 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
-  errorText: { flex: 1, fontSize: 12.5, fontWeight: '700', color: BrandColors.badText, lineHeight: 17 },
+  errorText: { ...Type.desc, flex: 1, fontWeight: '700', color: BrandColors.badText },
 
+  // 주 버튼(52 · 모서리 16 · 16/800 · 2026-11-02).
   cta: {
+    ...ButtonStyles.primary,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: 8,
     backgroundColor: InkColors.ink,
-    borderRadius: Radius.md,
-    paddingVertical: 15,
     marginTop: 2,
   },
   ctaDisabled: { opacity: 0.45 },
-  ctaText: { fontSize: 15, fontWeight: '900', color: InkColors.bubbleText },
-  hint: { fontSize: 11.5, color: InkColors.ink3, fontWeight: '600', textAlign: 'center' },
+  ctaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  hint: { ...Type.desc, fontWeight: '600', textAlign: 'center' },
 
-  // ── 진행(파이프) ──
+  // ── 진행(파이프) ── 카드 = CardStyles.list(모서리 16 · 안쪽 16 · 그림자 e1).
   progressCard: {
-    backgroundColor: InkColors.bg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: Radius.lg,
-    padding: Space.gutter,
+    ...CardStyles.list,
     alignItems: 'center',
     gap: Space.md,
-    ...Elevation.e1,
   },
-  progressTitle: { fontSize: 14.5, fontWeight: '800', color: InkColors.ink },
+  progressTitle: { ...Type.body, fontWeight: '800' },
   progressTrack: { alignSelf: 'stretch', height: 8, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: Radius.pill, backgroundColor: BrandColors.yellowDeep },
-  progressSub: { fontSize: 12, fontWeight: '600', color: InkColors.ink3, textAlign: 'center' },
+  progressSub: { ...Type.desc, fontWeight: '600', textAlign: 'center' },
 
   // ── 검수 ──
   reviewBanner: {
@@ -823,25 +818,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     marginBottom: Space.md,
   },
-  reviewBannerText: { flex: 1, fontSize: 12.5, fontWeight: '700', color: InkColors.ink, lineHeight: 18 },
-  overflowNote: { fontSize: 12, fontWeight: '600', color: BrandColors.warnText, lineHeight: 17, marginBottom: Space.sm },
+  // 노랑 크림 띠 위 안내 문장 — 크기만 설명(13/19), 글자색은 띠 위 검정 그대로.
+  reviewBannerText: { ...Type.desc, flex: 1, fontWeight: '700', color: InkColors.ink },
+  overflowNote: { ...Type.desc, fontWeight: '600', color: BrandColors.warnText, marginBottom: Space.sm },
 
   sectionBlock: { marginBottom: Space.lg, gap: Space.sm },
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 2 },
-  sectionName: { fontSize: 13.5, fontWeight: '900', color: InkColors.ink },
-  sectionCount: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
+  sectionName: { fontSize: Type.desc.fontSize, fontWeight: '900', color: InkColors.ink },
+  sectionCount: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
 
   list: { gap: Space.sm },
+  // 카드 = CardStyles(모서리 16 · 그림자 e1). 안쪽은 머리(cardHeader)·편집기가 각자 16 을 든다.
   row: {
-    backgroundColor: InkColors.bg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: Radius.md,
+    ...CardStyles.list,
+    padding: 0,
     overflow: 'hidden',
-    ...Elevation.e1,
   },
   rowOn: { borderColor: InkColors.ink },
-  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, padding: 13 },
+  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, padding: Layout.cardPad },
   headerBody: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   chevron: { marginTop: 1 },
   cbox: {
@@ -855,27 +849,28 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   cboxOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  rowTitle: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink, lineHeight: 19 },
+  rowTitle: { fontSize: Type.desc.fontSize, fontWeight: '800', color: InkColors.ink, lineHeight: 19 },
   rowMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5 },
   catDot: { width: 7, height: 7, borderRadius: Radius.pill },
-  catLabel: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
-  stepCount: { fontSize: 11, fontWeight: '600', color: InkColors.ink3 },
-  needContent: { fontSize: 11, fontWeight: '700', color: BrandColors.warnText },
+  // 줄 아래 작은 글자 = 꼬리표(Type.tag 12).
+  catLabel: { ...Type.tag, fontWeight: '800', color: InkColors.ink2 },
+  stepCount: { ...Type.tag, fontWeight: '600', color: TextColor.secondary },
+  needContent: { ...Type.tag, fontWeight: '700', color: BrandColors.warnText },
 
   badgeDup: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, alignSelf: 'flex-start', backgroundColor: BrandColors.accentSoft, borderRadius: Radius.pill, paddingVertical: 3, paddingHorizontal: 8 },
-  badgeDupText: { fontSize: 10.5, fontWeight: '800', color: BrandColors.badText, maxWidth: 240 },
+  badgeDupText: { ...Type.micro, fontWeight: '800', color: BrandColors.badText, maxWidth: 240 },
   badgeSim: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, alignSelf: 'flex-start', backgroundColor: BrandColors.warnSoft, borderRadius: Radius.pill, paddingVertical: 3, paddingHorizontal: 8 },
-  badgeSimText: { fontSize: 10.5, fontWeight: '800', color: BrandColors.warnText, maxWidth: 240 },
+  badgeSimText: { ...Type.micro, fontWeight: '800', color: BrandColors.warnText, maxWidth: 240 },
 
   // ── 카드 펼침 편집기 ──
   editor: {
     borderTopWidth: 1,
     borderTopColor: InkColors.line,
     backgroundColor: InkColors.cream,
-    paddingHorizontal: 13,
-    paddingBottom: 14,
+    paddingHorizontal: Layout.cardPad,
+    paddingBottom: Layout.cardPad,
   },
-  fieldLabel: { fontSize: 11.5, fontWeight: '800', color: InkColors.ink2, marginTop: 12, marginBottom: 5 },
+  fieldLabel: { ...Type.tag, fontWeight: '800', color: InkColors.ink2, marginTop: 12, marginBottom: 5 },
   fieldInput: {
     backgroundColor: InkColors.bg,
     borderWidth: 1,
@@ -883,7 +878,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
     paddingVertical: 9,
     paddingHorizontal: 11,
-    fontSize: 13.5,
+    fontSize: Type.desc.fontSize,
     lineHeight: 19,
     color: InkColors.ink,
   },
@@ -898,7 +893,7 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bg,
   },
   sectionChipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  sectionChipText: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
+  sectionChipText: { ...Type.tag, fontWeight: '800', color: InkColors.ink2 },
   sectionChipTextOn: { color: InkColors.bubbleText },
   listRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 },
   listInput: { flex: 1 },
@@ -919,10 +914,10 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bg,
     marginTop: 2,
   },
-  addBtnText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
-  editorWarn: { fontSize: 12, fontWeight: '700', color: BrandColors.warnText, marginTop: 12 },
+  addBtnText: { ...Type.tag, fontWeight: '800', color: InkColors.ink2 },
+  editorWarn: { ...Type.desc, fontWeight: '700', color: BrandColors.warnText, marginTop: 12 },
   deleteLink: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', marginTop: 12, paddingVertical: 4 },
-  deleteLinkText: { fontSize: 12, fontWeight: '800', color: BrandColors.badText },
+  deleteLinkText: { ...Type.tag, fontWeight: '800', color: BrandColors.badText },
 
   backLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
   backLinkText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
@@ -935,12 +930,9 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bg,
   },
   saveBtn: {
+    ...ButtonStyles.primary,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: InkColors.ink,
-    borderRadius: Radius.md,
-    paddingVertical: 15,
   },
-  saveText: { fontSize: 15, fontWeight: '900', color: InkColors.bubbleText },
+  saveText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

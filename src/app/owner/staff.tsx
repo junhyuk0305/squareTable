@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -10,18 +9,22 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
-import { RoleTabBar, goToTab } from '@/components/RoleTabBar';
+import { goToTab } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { Avatar } from '@/components/Avatar';
 import { SectionLabel } from '@/components/SectionLabel';
+import { Screen, Section } from '@/components/Screen';
 import { TwoPane, Pane } from '@/components/shell/TwoPane';
 import { InviteBlock } from '@/components/owner/InviteBlock';
 import { ActionRow } from '@/components/blocks/ActionRow';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { Layout, Space, screenScrollStyle } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { EmptyStyles } from '@/lib/theme/empty';
 import { fmtDuration, todayStr, liveMinutes, staffWorkStatus } from '@/lib/utils/attendance';
 import { showToast } from '@/lib/store/useToastStore';
@@ -145,19 +148,20 @@ export default function OwnerStaffScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={[]}>
+    <>
+    {/* 바탕·헤더·탭바 = Screen. 스크롤은 직접 둔다(scroll={false}) — 로딩 게이트가 스크롤 자리를 바꾸고 KeyboardShift 가 스크롤을 감싼다. */}
+    <Screen header={<ScreenTitleHeader title="직원" backFallback />} tabBar="owner" scroll={false}>
       <Stack.Screen options={{ title: '직원' }} />
-      <ScreenTitleHeader title="직원" backFallback />
       {/* 전부 도착 전엔 무조건 로딩 — "직원 0명" 기본 화면이 먼저 떴다가 채워지는 부분 렌더 금지. */}
       {!ready ? (
         <ScreenLoading label="직원 목록을 불러오고 있어요…" />
       ) : (
       <KeyboardShift>
-      <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={screenScrollStyle} showsVerticalScrollIndicator={false}>
         {/* 넓은 웹에서만 두 단 — 왼쪽 직원 목록 / 오른쪽 초대·바로 가기.
-            폰 폭에서는 아래 순서 그대로 한 줄씩이다(배치만 바뀐다).
+            폰 폭에서는 아래 순서 그대로 한 줄씩이다(배치만 바뀐다 · 섹션 사이 = 스크롤 gap).
             맨 위 인건비 카드는 2026-11-02 급여 기능과 함께 뺐다. */}
-        <TwoPane gap={12}>
+        <TwoPane gap={Layout.sectionGap}>
         {/* ② 초대 — 코드 한 줄만 주던 자리를 공용 InviteBlock 으로 바꿨다(2026-09-08).
             안내·코드 복사·초대 링크가 한 벌이라, 사장이 자리마다 다른 설명을 읽지 않는다.
             '코드 변경'만 이 화면 고유라 action 슬롯으로 넘긴다. */}
@@ -188,15 +192,14 @@ export default function OwnerStaffScreen() {
             근무표 칸은 허브 '현황'이 근무표로 착지하게 바뀐(2026-08-11 P2) 보상으로 둔 반대 방향 진입점.
             상태 한 줄 없음 — 이 화면은 퀴즈·근무표 건수를 읽지 않는다(새 쿼리 금지). */}
         <Appear delay={stagger(2)}>
-        <View style={{ gap: Space.sm }}>
-          <SectionLabel title="바로 가기" />
+        <Section title="바로 가기">
           <ActionRow
             items={[
               { key: 'quiz', icon: 'school-outline', label: '퀴즈', onPress: () => goToTab('/owner/training') },
               { key: 'schedule', icon: 'calendar-outline', label: '근무표', onPress: () => router.push('/owner/schedule') },
             ]}
           />
-        </View>
+        </Section>
         </Appear>
 
         </Pane>
@@ -205,12 +208,11 @@ export default function OwnerStaffScreen() {
         {/* 합류 신청(승인 대기) — 남용 #2. 코드로 신청한 사람을 사장이 승인해야 소속된다. */}
         {pending.length > 0 && (
           <Appear delay={stagger(3)}>
-          <View style={styles.pendingWrap}>
-            <SectionLabel title={`합류 신청 (${pending.length}명)`} />
+          <Section title={`합류 신청 (${pending.length}명)`}>
             <View style={[styles.list, styles.pendingList]}>
               {pending.map((p, i) => (
                 <Appear key={p.id} delay={stagger(i)} style={[styles.staffRow, p.id === focusMemberId && styles.focusRow]}>
-                  <Avatar name={p.name} size={40} fontSize={15} />
+                  <Avatar name={p.name} size={40} fontSize={Type.body.fontSize} />
                   <View style={styles.nameCol}>
                     <Text style={styles.staffName} numberOfLines={1}>{p.name || '이름 미입력'}</Text>
                     <Text style={styles.staffMeta} numberOfLines={1}>{p.phone_last4 ? `••••-${p.phone_last4}` : '연락처 미입력'}</Text>
@@ -224,14 +226,14 @@ export default function OwnerStaffScreen() {
                 </Appear>
               ))}
             </View>
-          </View>
+          </Section>
           </Appear>
         )}
 
-        {/* 직원 목록 — 이번 달 시간·근무상태(구 근무·급여 화면 흡수) */}
+        {/* 직원 목록 — 이번 달 시간·근무상태(구 근무·급여 화면 흡수). 제목과 목록이 따로 등장해 Section 대신 같은 간격(sm)을 직접 둔다. */}
         <View style={{ gap: Space.sm }}>
         <Appear delay={stagger(4)}>
-        <SectionLabel title={`합류한 직원 (${staff.length}명)`} />
+        <SectionLabel title={`합류한 직원 (${staff.length}명)`} flush />
         </Appear>
         <Appear delay={stagger(5)}>
         {staff.length === 0 ? (
@@ -244,7 +246,7 @@ export default function OwnerStaffScreen() {
                 onPress={() => useStaffStore.getState().hydrate()}
                 style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.85 }]}
               >
-                <Ionicons name="refresh" size={15} color="#FFFFFF" />
+                <Ionicons name="refresh" size={15} color={InkColors.bubbleText} />
                 <Text style={styles.retryText}>다시 시도</Text>
               </Pressable>
             </View>
@@ -267,7 +269,7 @@ export default function OwnerStaffScreen() {
               style={[styles.staffRow, styles.staffRowFlat]}
             >
               <Pressable onPress={() => router.push(`/owner/timesheet/${s.id}`)} style={({ pressed }) => [styles.staffTap, pressed && { opacity: 0.6 }]}>
-                <Avatar name={s.name} size={40} fontSize={15} />
+                <Avatar name={s.name} size={40} fontSize={Type.body.fontSize} />
                 <View style={styles.nameCol}>
                   <View style={styles.nameRow}>
                     <Text style={styles.staffName} numberOfLines={1}>{s.name}</Text>
@@ -278,7 +280,7 @@ export default function OwnerStaffScreen() {
                         찌부러져(QA 실측) 둘째 줄에 둔다. 전 역할에게 보인다. */}
                     {isManager && (
                       <View style={[chip.wrap, { backgroundColor: InkColors.ink }]}>
-                        <Text style={[chip.text, { color: '#FFFFFF' }]}>매니저</Text>
+                        <Text style={[chip.text, { color: InkColors.bubbleText }]}>매니저</Text>
                       </View>
                     )}
                     <Text style={styles.staffMeta} numberOfLines={1}>이번 달 {fmtDuration(agg?.min ?? 0)}</Text>
@@ -332,10 +334,10 @@ export default function OwnerStaffScreen() {
         </Appear>
         </Pane>
         </TwoPane>
-        <View style={{ height: 12 }} />
       </ScrollView>
       </KeyboardShift>
       )}
+    </Screen>
       <ConfirmModal
         visible={!!removeTarget}
         icon="person-remove-outline"
@@ -381,8 +383,7 @@ export default function OwnerStaffScreen() {
         onConfirm={confirmRotate}
         onCancel={() => setRotateOpen(false)}
       />
-      <RoleTabBar role="owner" />
-    </SafeAreaView>
+    </>
   );
 }
 
@@ -390,8 +391,8 @@ function StatusChip({ status }: { status: 'out' | 'working' | 'done' | 'forgot' 
   const map = {
     // '근무 중'은 정상 상태다 — accent(=bad 레드) 틴트라 정상이 경고로 읽혔다(2026-08-06). 색은 good, 판별은 라벨이 한다.
     working: { label: '근무 중', color: BrandColors.goodText, bg: BrandColors.goodSoft },
-    done: { label: '퇴근', color: InkColors.ink3, bg: InkColors.bgSoft },
-    out: { label: '미출근', color: InkColors.ink3, bg: InkColors.bgSoft },
+    done: { label: '퇴근', color: TextColor.secondary, bg: InkColors.bgSoft },
+    out: { label: '미출근', color: TextColor.secondary, bg: InkColors.bgSoft },
     forgot: { label: '퇴근 안 찍음', color: BrandColors.warnText, bg: BrandColors.warnSoft },
   } as const;
   const m = map[status];
@@ -403,54 +404,51 @@ function StatusChip({ status }: { status: 'out' | 'working' | 'done' | 'forgot' 
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: 20, gap: 12 },
-
-  // 코드 변경은 보조 액션 — 고스트로 둔다.
+  // 코드 변경은 보조 액션 — 고스트로 둔다. 초대코드 줄(코드 · 복사 · 이 버튼)이 좁아 작은 버튼 규격(좌우 20 · 15)을 쓰지 않는다.
   rotateBtn: { alignItems: 'center', justifyContent: 'center', minHeight: 48, paddingHorizontal: Space.md, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line },
-  rotateText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+  rotateText: { fontSize: 13, fontWeight: '700', color: TextColor.secondary },
 
-
-  pendingWrap: { gap: 8 },
   // 흰 카드가 세로로 이어지면 "승인해야 진행되는 항목"이 나열 속에 묻힌다 → 옐로 틴트로 떼어놓는다.
   pendingList: { backgroundColor: BrandColors.yellowSoft, borderColor: BrandColors.gold },
   // 알림으로 들어온 신청 행 — 테두리만 강조.
   focusRow: { borderWidth: 2, borderColor: BrandColors.accentSolid, borderRadius: Radius.md, paddingHorizontal: 8 },
   rejectBtn: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line },
-  rejectText: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
+  rejectText: { fontSize: 13, fontWeight: '700', color: TextColor.secondary },
   approveBtn: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: Radius.sm, backgroundColor: BrandColors.brand },
-  approveText: { fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
+  approveText: { fontSize: 13, fontWeight: '800', color: InkColors.bubbleText },
 
-  list: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
+  list: CardStyles.rows,
   staffRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   // 직원 항목 컨테이너(0093) — 행 + (사장 전용) 매니저 지정 줄. 구분선은 여기 하나만.
   staffItem: { borderBottomWidth: 1, borderBottomColor: InkColors.line },
   staffRowFlat: { borderBottomWidth: 0 },
   roleBtn: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 4, paddingBottom: 12, paddingHorizontal: 2 },
-  roleBtnText: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
+  roleBtnText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
   // 지정(권장 액션) — 노랑 알약 + 검정 글자. 해제(roleBtn)와 무게를 일부러 다르게 둔다.
   roleBtnOn: {
     flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 4,
     marginBottom: 12, paddingVertical: 6, paddingHorizontal: 12,
     borderRadius: Radius.pill, backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep,
   },
-  roleBtnOnText: { fontSize: 12, fontWeight: '800', color: InkColors.ink },
+  roleBtnOnText: { ...Type.tag, fontWeight: '800', color: InkColors.ink },
   staffTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 0 },
   nameCol: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
-  staffName: { fontSize: 15, fontWeight: '700', color: InkColors.ink, flexShrink: 1 },
-  staffMeta: { fontSize: 12, color: InkColors.ink3, flexShrink: 1 },
+  staffName: { ...Type.body, fontWeight: '700', flexShrink: 1 },
+  staffMeta: { ...Type.tag, color: TextColor.secondary, flexShrink: 1 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, minWidth: 0 },
   removeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.sm, backgroundColor: BrandColors.accentSoft },
 
-  demoNote: { fontSize: 12, color: InkColors.ink3, marginTop: 6 },
+  // 안내 한 줄 = 설명(13/19 secondary). 위 간격은 스크롤 gap(20)이 정한다.
+  demoNote: Type.desc,
   emptyBox: EmptyStyles.box,
   emptyText: EmptyStyles.text,
-  retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: InkColors.ink, paddingVertical: 9, paddingHorizontal: 16, borderRadius: Radius.pill, marginTop: 2 },
-  retryText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
+  // 빈 카드 가운데 작은 버튼(48 알약) — 카드가 가운데 정렬이라 alignSelf 만 되돌린다.
+  retryBtn: { ...ButtonStyles.small, alignSelf: 'center', flexDirection: 'row', gap: 6, backgroundColor: InkColors.ink, marginTop: 2 },
+  retryText: { ...ButtonTextStyles.small, color: InkColors.bubbleText },
 });
 
 const chip = StyleSheet.create({
   wrap: { paddingVertical: 3, paddingHorizontal: 9, borderRadius: Radius.pill },
-  text: { fontSize: 11, fontWeight: '800' },
+  text: { ...Type.micro, fontWeight: '800' },
 });

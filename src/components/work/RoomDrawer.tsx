@@ -7,9 +7,10 @@ import { Appear } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
 import { SectionLabel } from '@/components/SectionLabel';
 import { ChachakSwitch } from '@/components/ChachakSwitch';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
-import { HEADER_EDGE_GUTTER, Space } from '@/lib/theme/layout';
+import { HEADER_EDGE_GUTTER, Layout, Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 import { confirmAction } from '@/lib/utils/confirm';
 import { roleNoun } from '@/lib/utils/roles';
 import { roomLook } from '@/lib/utils/room';
@@ -264,6 +265,7 @@ function Block({
   return (
     <Appear style={s.block}>
       <SectionLabel
+        flush
         title={title}
         trailing={
           moreLabel && onMore ? (
@@ -323,31 +325,32 @@ const s = StyleSheet.create({
   // RN-web 은 hitSlop 을 무시한다 — 상자 자체를 44 로.
   topBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   tapBox: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  scroll: { paddingHorizontal: Space.gutter, gap: Space.lg },
+  // 섹션 사이 = 화면 틀과 같은 20. 섹션 제목은 flush(위 여백을 들지 않는다).
+  scroll: { paddingHorizontal: Space.gutter, gap: Layout.sectionGap },
 
   identity: { alignItems: 'center', gap: Space.xs, paddingVertical: Space.md },
   bigAvatar: { width: 66, height: 66, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   bigAvatarText: { fontSize: 27, fontWeight: '800', color: InkColors.bubbleText },
   roomName: { fontSize: 18, fontWeight: '800', color: InkColors.ink },
-  roomMeta: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink3 },
+  roomMeta: { ...Type.tag, fontWeight: '600', color: TextColor.secondary },
 
   block: { gap: Space.sm },
   card: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, overflow: 'hidden', ...Elevation.e1 },
-  blockMore: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3 },
-  blockEmpty: { fontSize: 15, lineHeight: 21, color: InkColors.ink3, fontWeight: '600', paddingHorizontal: Space.lg, paddingVertical: Space.md },
+  blockMore: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
+  blockEmpty: { ...Type.body, lineHeight: 21, color: TextColor.secondary, fontWeight: '600', paddingHorizontal: Space.lg, paddingVertical: Space.md },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingHorizontal: Space.lg, paddingVertical: 13, minHeight: 52 },
   rowBorder: { borderTopWidth: 1, borderTopColor: InkColors.line },
   rowIcon: { width: 22, textAlign: 'center' },
-  rowTitle: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
-  rowSub: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink3, marginTop: 2 },
-  rowRight: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3 },
+  rowTitle: { ...Type.body, fontWeight: '700' },
+  rowSub: { ...Type.tag, fontWeight: '600', color: TextColor.secondary, marginTop: 2 },
+  rowRight: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
   smallAvatar: { width: 26, height: 26, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft },
 
-  inviteLabel: { fontSize: 12, fontWeight: '800', color: InkColors.ink2, paddingHorizontal: Space.lg, paddingTop: Space.md },
+  inviteLabel: { ...Type.tag, fontWeight: '800', color: TextColor.secondary, paddingHorizontal: Space.lg, paddingTop: Space.md },
 
   exit: { gap: Space.xs },
   exitRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: 13, minHeight: 48 },
-  exitText: { fontSize: 15, fontWeight: '700', color: BrandColors.badText },
-  exitNote: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink3 },
+  exitText: { ...Type.body, fontWeight: '700', color: BrandColors.badText },
+  exitNote: { ...Type.desc, fontWeight: '600' },
 });

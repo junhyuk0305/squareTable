@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { BrandColors, InkColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
+import { BrandColors, InkColors, TextColor } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
 
 /**
  * 규모 3단계(퀴즈 개발계획 §10-9 · 데모 §2-11) — 열 수는 개수로 자동.
@@ -238,25 +239,18 @@ export function Heatmap({
 }
 
 const styles = StyleSheet.create({
-  card: {
-    paddingHorizontal: Space.lg,
-    paddingTop: Space.lg,
-    paddingBottom: Space.md,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    backgroundColor: InkColors.bg,
-    ...Elevation.e2,
-  },
+  // 카드 = CardStyles.list(모서리 16 · 그림자 e1 · 2026-11-02. 옛 모서리 20 · e2). 아래만 접기 줄이 있어 12.
+  card: { ...CardStyles.list, paddingBottom: Space.md },
   head: { flexDirection: 'row', alignItems: 'baseline', gap: Space.sm },
-  big: { fontSize: 28, lineHeight: 34, fontWeight: '900', color: InkColors.ink, letterSpacing: -1 },
-  bigUnit: { fontSize: 14, fontWeight: '800', color: InkColors.ink3, letterSpacing: 0 },
-  headTitle: { flex: 1, minWidth: 0, fontSize: 13.5, lineHeight: 19, fontWeight: '800', color: InkColors.ink2 },
-  aside: { fontSize: 11.5, lineHeight: 16, fontWeight: '800', color: BrandColors.goodText },
+  // 대표 숫자 = Type.numHero(32/40/900 · 2026-11-02. 옛 28).
+  big: { ...Type.numHero, color: InkColors.ink },
+  bigUnit: { fontSize: 15, fontWeight: '800', color: TextColor.secondary, letterSpacing: 0 },
+  headTitle: { flex: 1, minWidth: 0, fontSize: Type.desc.fontSize, lineHeight: 19, fontWeight: '800', color: InkColors.ink2 },
+  aside: { ...Type.tag, lineHeight: 16, fontWeight: '800', color: BrandColors.goodText },
   // 피크·그룹 라벨·범례는 꼬리표(보조)라 본문 15sp 하한 대상이 아니다(simplicity-voice §4).
-  peek: { marginTop: Space.xs, minHeight: PEEK_MIN_H, fontSize: 11, lineHeight: PEEK_MIN_H, fontWeight: '700', color: InkColors.ink2 },
+  peek: { ...Type.micro, marginTop: Space.xs, minHeight: PEEK_MIN_H, lineHeight: PEEK_MIN_H, fontWeight: '700', color: InkColors.ink2 },
   group: { marginTop: Space.md },
-  groupLabel: { fontSize: 11, lineHeight: 15, fontWeight: '800', color: InkColors.ink3, marginBottom: Space.xs },
+  groupLabel: { ...Type.micro, lineHeight: 15, fontWeight: '800', color: TextColor.secondary, marginBottom: Space.xs },
   // 눌리는 라벨 — 글자는 작아도 상자는 48dp(hitSlop 은 RN-web 에서 안 먹는다). 아래 여백은 라벨이 갖는다.
   groupBtn: { minHeight: 48, justifyContent: 'flex-end', alignSelf: 'flex-start' },
   // 라벨이 48dp 상자를 가지면 그룹 위 여백은 그 상자가 대신한다.
@@ -271,7 +265,7 @@ const styles = StyleSheet.create({
   cellPressed: { opacity: 0.6 },
   // 눌리는 행이라 48dp — RN-web 은 hitSlop 을 무시한다(2026-08-26 실측).
   more: { minHeight: 48, justifyContent: 'center' },
-  moreText: { fontSize: 11, lineHeight: 15, fontWeight: '800', color: InkColors.ink2 },
+  moreText: { ...Type.micro, lineHeight: 15, fontWeight: '800', color: InkColors.ink2 },
   moreN: { color: InkColors.ink },
   // 카테고리 접기 줄 — 격자와 범례 사이를 가르는 자리라 위에 선을 하나 둔다.
   foldRow: {
@@ -280,7 +274,7 @@ const styles = StyleSheet.create({
   },
   foldText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
   legend: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Space.xs - 1, marginTop: Space.md },
-  legendText: { fontSize: 10, lineHeight: 14, color: InkColors.ink3 },
+  legendText: { ...Type.micro, lineHeight: 14, color: TextColor.secondary },
   legendBox: { width: LEGEND_BOX, height: LEGEND_BOX, borderRadius: 3, backgroundColor: InkColors.bg },
   legendGap: { width: Space.xs },
 });

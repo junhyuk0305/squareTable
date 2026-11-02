@@ -5,6 +5,7 @@ import { View, Text, Animated, Easing, StyleSheet } from 'react-native';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 /** 진행 막대 두께 — 도형 치수라 간격 토큰 대상이 아니다. */
 const BAR_HEIGHT = 4;
@@ -73,7 +74,7 @@ const styles = StyleSheet.create({
   wrap: { gap: Space.sm },
   head: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   count: { fontSize: 13, fontWeight: '900', color: InkColors.ink2 },
-  title: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
+  title: { ...Type.body, flex: 1, minWidth: 0, lineHeight: 21, fontWeight: '800' },
   track: { height: BAR_HEIGHT, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
   // 채워진 만큼은 브랜드 노랑이다(2026-08-26). 검정 막대는 회색 트랙과 명도만 다를 뿐이라
   // "여기까지 왔다"가 눈에 안 들어왔다. 색은 브랜드 2색 안에서만 쓴다(디자인 시스템).

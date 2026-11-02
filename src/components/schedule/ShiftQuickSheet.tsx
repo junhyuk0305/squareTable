@@ -30,9 +30,11 @@ import {
   PAST_MONTH_LOCKED_TEXT,
   overlapsStaffShift,
 } from '@/lib/utils/schedule';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 /** 터치 타깃 하한(복잡도 원칙). 칩도 이 높이를 지킨다. */
 const TAP = 48;
@@ -407,11 +409,11 @@ export function ShiftQuickSheet({
 }
 
 const s = StyleSheet.create({
-  title: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: Space.lg },
-  sub: { fontSize: 12.5, color: InkColors.ink3, fontWeight: '700', paddingHorizontal: Space.lg, paddingTop: Space.xs },
+  title: { ...Type.title, paddingHorizontal: Space.lg },
+  sub: { ...Type.desc, fontWeight: '700', paddingHorizontal: Space.lg, paddingTop: Space.xs },
   scroll: { paddingHorizontal: Space.lg, paddingTop: Space.md },
 
-  label: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2, marginBottom: Space.sm, marginTop: Space.md },
+  label: { ...Type.tag, fontWeight: '800', color: TextColor.secondary, marginBottom: Space.sm, marginTop: Space.md },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   chip: {
     minHeight: TAP, minWidth: TAP, justifyContent: 'center', alignItems: 'center',
@@ -429,11 +431,11 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   checkOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  repeatLabel: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  repeatLabel: { ...Type.body, fontWeight: '800' },
 
   chipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   chipPressed: { backgroundColor: InkColors.bgSoft },
-  chipText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  chipText: { ...Type.body, fontWeight: '800' },
   chipTextOn: { color: InkColors.bubbleText },
   sun: { color: BrandColors.badText },
 
@@ -447,24 +449,25 @@ const s = StyleSheet.create({
   timeInpBad: { borderColor: BrandColors.bad },
   tilde: { fontSize: 15, color: InkColors.ink3, fontWeight: '700' },
 
-  warn: { fontSize: 12.5, color: BrandColors.badText, fontWeight: '700', marginTop: Space.sm, lineHeight: 18 },
+  warn: { ...Type.desc, color: BrandColors.badText, fontWeight: '700', marginTop: Space.sm },
   noteRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, marginTop: Space.sm },
-  noteText: { fontSize: 12, color: BrandColors.warnText, fontWeight: '700' },
+  noteText: { ...Type.tag, color: BrandColors.warnText, fontWeight: '700' },
   // 자정 넘김은 경고가 아니라 해석 안내라 경고색을 쓰지 않는다.
-  infoText: { fontSize: 12, color: InkColors.ink2, fontWeight: '700' },
+  infoText: { ...Type.tag, color: TextColor.secondary, fontWeight: '700' },
   scopeNote: { marginTop: Space.sm, lineHeight: 17 },
   pastNote: { flex: 1, lineHeight: 17 },
   pastAsk: { marginHorizontal: Space.lg, marginBottom: Space.sm, padding: Space.md, gap: Space.xs, borderRadius: Radius.md, backgroundColor: BrandColors.warnSoft },
-  pastAskTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  pastAskBody: { fontSize: 13, fontWeight: '700', color: InkColors.ink2, lineHeight: 19 },
+  pastAskTitle: { ...Type.body, fontWeight: '800' },
+  pastAskBody: { ...Type.desc, fontWeight: '700' },
 
   delBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, minHeight: TAP, marginTop: Space.md },
-  delText: { fontSize: 15, fontWeight: '800', color: BrandColors.badText },
+  delText: { ...ButtonTextStyles.small, color: BrandColors.badText },
 
   foot: { flexDirection: 'row', gap: Space.sm, paddingHorizontal: Space.lg, paddingTop: Space.md, paddingBottom: Space.xl, borderTopWidth: 1, borderTopColor: InkColors.line },
-  btn: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 56, borderRadius: Radius.md },
+  // 취소·저장 = 주 버튼 모양(52 · 모서리 16) 두 개를 나란히.
+  btn: { ...ButtonStyles.primary, flex: 1 },
   btnGhost: { backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
-  btnGhostText: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
+  btnGhostText: { ...ButtonTextStyles.primary, color: TextColor.secondary },
   btnSolid: { backgroundColor: InkColors.ink },
-  btnSolidText: { fontSize: 15, fontWeight: '800', color: InkColors.bubbleText },
+  btnSolidText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

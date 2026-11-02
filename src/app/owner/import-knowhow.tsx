@@ -1,14 +1,11 @@
-import { StyleSheet } from 'react-native';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { OwnerKnowhowImport } from '@/components/owner/OwnerKnowhowImport';
 import { PlanUpgradeNotice } from '@/components/PlanUpgradeNotice';
-import { RoleTabBar } from '@/components/RoleTabBar';
+import { Screen } from '@/components/Screen';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { canUseMultistore } from '@/lib/config/tiers';
-import { InkColors } from '@/lib/theme/colors';
 
 /**
  * '노하우 복사하기'(다점포) — 내 한 매장의 발행 노하우를 **내 다른 매장으로** 복사하는 3단계 위저드.
@@ -21,8 +18,8 @@ export default function OwnerImportKnowhowScreen() {
   const plan = useSessionStore((s) => s.plan);
   const freeMode = useSessionStore((s) => s.freeMode);
   return (
-    <SafeAreaView style={styles.safe} edges={[]}>
-      <ScreenTitleHeader title="노하우 복사하기" backFallback />
+    // 바탕·탭바 = Screen. 위저드가 자기 스크롤을 가져 scroll={false}.
+    <Screen header={<ScreenTitleHeader title="노하우 복사하기" backFallback />} tabBar="owner" scroll={false}>
       {canUseMultistore(plan, freeMode) ? (
         <KeyboardShift>
           <OwnerKnowhowImport />
@@ -30,11 +27,6 @@ export default function OwnerImportKnowhowScreen() {
       ) : (
         <PlanUpgradeNotice description="매장 간 노하우 복사는 다점포 요금제 기능이에요." />
       )}
-      <RoleTabBar role="owner" />
-    </SafeAreaView>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-});

@@ -14,10 +14,12 @@ import { logout } from '@/lib/auth';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
 import { PhoneVerifyBlock } from '@/components/PhoneVerifyBlock';
 import { INDUSTRIES } from '@/lib/config/industry';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Space } from '@/lib/theme/layout';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
 import { Radius } from '@/lib/theme/elevation';
-import { ButtonStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { ChipStyles } from '@/lib/theme/chip';
 
 // 로그인 직후 매장 미연결 가드 화면(사장용) — junior/join 의 사장 버전.
@@ -186,7 +188,7 @@ export default function OwnerCreateStore() {
             onPress={submit}
             style={({ pressed }) => [styles.primary, pressed && valid && { opacity: 0.88 }, (busy || !valid) && { opacity: 0.5 }]}
           >
-            {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>매장 만들고 시작하기</Text>}
+            {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>매장 만들고 시작하기</Text>}
           </Pressable>
         </View>
         </Appear>
@@ -203,32 +205,34 @@ export default function OwnerCreateStore() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { flexGrow: 1, padding: 24, justifyContent: 'center', gap: 22 },
+  // 화면 바탕(Surface.screen). 탭바가 없는 화면이라 아래 안전 영역을 SafeAreaView(bottom)가 그대로 든다.
+  safe: { flex: 1, backgroundColor: Surface.screen },
+  // 좌우·블록 사이 = screenScrollStyle. 내용이 짧으면 세로 가운데에 둔다(기존 배치 그대로).
+  scroll: { ...screenScrollStyle, flexGrow: 1, justifyContent: 'center' },
   hero: { alignItems: 'center', gap: 10 },
   iconWrap: { width: 56, height: 56, borderRadius: 28, backgroundColor: BrandColors.brandSoft, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 21, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
-  sub: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
+  title: { ...Type.title, textAlign: 'center' },
+  sub: { ...Type.desc, textAlign: 'center' },
   strong: { fontWeight: '800', color: InkColors.ink },
 
   // 이전 매장 진입 행 — 폼 위에 한 줄. 카드가 아니라 행(카드 연속을 만들지 않는다).
   prevRow: {
     flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48,
-    paddingHorizontal: Space.md, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF',
+    paddingHorizontal: Space.md, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: Surface.card,
   },
-  prevText: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink },
-  card: { backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line, padding: 20, gap: 8 },
-  label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2, marginTop: 6 },
+  prevText: { ...Type.body, flex: 1, fontWeight: '700' },
+  card: { ...CardStyles.list, gap: 8 },
+  label: { fontSize: 13, fontWeight: '700', color: TextColor.secondary, marginTop: 6 },
   req: { color: BrandColors.accentText, fontWeight: '900' },
-  input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: InkColors.ink, backgroundColor: '#FFFFFF' },
+  input: { ...Type.body, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 13, backgroundColor: Surface.input },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   chip: ChipStyles.chip,
   chipOn: ChipStyles.chipOn,
   chipText: ChipStyles.text,
   chipTextOn: ChipStyles.textOn,
-  bizHint: { fontSize: 12, fontWeight: '600', marginTop: -2 },
+  bizHint: { ...Type.tag, fontWeight: '600', marginTop: -2 },
   bizOk: { color: BrandColors.goodText },
-  bizBad: { color: InkColors.ink3 },
+  bizBad: { color: TextColor.secondary },
 
   // 전화번호 인증 — 막혔을 때만 나타나는 단계라 카드 안에서 한 덩어리로 묶어 구분한다.
   otpBox: {
@@ -247,9 +251,9 @@ const styles = StyleSheet.create({
   otpBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
   otpMsg: { fontSize: 12, fontWeight: '600', color: BrandColors.accentText },
 
-  err: { fontSize: 15, color: BrandColors.accentText, fontWeight: '600', marginTop: 4 },
+  err: { ...Type.body, color: BrandColors.accentText, fontWeight: '600', marginTop: 4 },
   primary: { ...ButtonStyles.primary, marginTop: 12, backgroundColor: BrandColors.brand },
-  primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   logoutRow: { alignItems: 'center', paddingVertical: 4 },
-  logoutText: { fontSize: 13, color: InkColors.ink3, fontWeight: '700' },
+  logoutText: { fontSize: 13, color: TextColor.secondary, fontWeight: '700' },
 });

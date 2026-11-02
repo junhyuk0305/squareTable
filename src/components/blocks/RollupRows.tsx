@@ -2,9 +2,10 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { ProgressPill } from '@/components/blocks/ProgressPill';
-import { InkColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
+import { InkColors, TextColor } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
 
 /**
  * 행 최소 높이 — **모든 행이 같은 높이**다(2026-09-03 웹 실측 피드백: 대상 줄 있는 행과 없는 행의
@@ -64,19 +65,14 @@ export function RollupRows({ rows }: { rows: RollupRow[] }) {
 
 const styles = StyleSheet.create({
   card: {
-    paddingHorizontal: Space.lg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    backgroundColor: InkColors.bg,
-    ...Elevation.e1,
+    ...CardStyles.rows,
   },
   row: { minHeight: ROW_MIN_H, paddingVertical: Space.sm, flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   divider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   pressed: { opacity: 0.7 },
   text: { flex: 1, minWidth: 0 },
-  title: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
+  title: { ...Type.body, lineHeight: 21, fontWeight: '800' },
   // 대상 줄은 꼬리표(보조)라 본문 15sp 하한 대상이 아니다.
   // 제목 바로 아래 붙인다(2px) — xs(4)면 제목·대상이 따로 노는 두 줄로 읽혔다(2026-08-27 실측).
-  target: { marginTop: 2, fontSize: 12, lineHeight: 16, color: InkColors.ink3 },
+  target: { ...Type.tag, marginTop: 2, lineHeight: 16, color: TextColor.secondary },
 });

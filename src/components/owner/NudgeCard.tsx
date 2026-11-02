@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { PressableScale } from '@/components/PressableScale';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
 
 export function NudgeCard({
   icon,
@@ -51,6 +52,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  nudgeTitle: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
-  nudgeSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '500', marginTop: 2, lineHeight: 17 },
+  nudgeTitle: { ...Type.body, fontWeight: '700' },
+  nudgeSub: { ...Type.desc, fontWeight: '500', marginTop: 2 },
 });

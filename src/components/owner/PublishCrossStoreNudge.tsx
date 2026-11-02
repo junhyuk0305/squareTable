@@ -8,6 +8,8 @@ import { notifyAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 
 type Target = { unit_id: string; store_name: string };
 
@@ -116,7 +118,7 @@ const s = StyleSheet.create({
   scroll: { flexGrow: 0 },
   body: { paddingHorizontal: Space.lg, paddingTop: 4 },
   title: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: InkColors.ink },
-  sub: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink3, fontWeight: '600', marginTop: 4 },
+  sub: { ...Type.desc, fontWeight: '600', marginTop: 4 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, marginTop: 14 },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 7, maxWidth: '100%',
@@ -124,17 +126,18 @@ const s = StyleSheet.create({
     borderRadius: Radius.pill, paddingVertical: 9, paddingHorizontal: 13,
   },
   chipOn: { backgroundColor: InkColors.cream, borderColor: InkColors.ink },
-  chipText: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink2, flexShrink: 1 },
+  chipText: { fontSize: Type.desc.fontSize, fontWeight: '800', color: InkColors.ink2, flexShrink: 1 },
   chipTextOn: { color: InkColors.ink },
   check: {
     width: 20, height: 20, borderRadius: Radius.sm, borderWidth: 1.5, borderColor: InkColors.line,
     alignItems: 'center', justifyContent: 'center', backgroundColor: InkColors.paper,
   },
   checkOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  hint: { fontSize: 11.5, color: InkColors.ink3, marginTop: 12, paddingHorizontal: 2, lineHeight: 17 },
+  hint: { ...Type.desc, marginTop: 12, paddingHorizontal: 2 },
   foot: { flexDirection: 'row', alignItems: 'stretch', gap: 8, marginTop: 16, marginHorizontal: Space.lg, marginBottom: 18 },
-  skip: { paddingHorizontal: 18, justifyContent: 'center', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
-  skipText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
-  cta: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: BrandColors.brand, borderRadius: Radius.md, paddingVertical: 14 },
-  ctaText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  // 버튼 = 주 버튼 틀(52 · 모서리 16 · 16/800 · 2026-11-02). 건너뛰기는 내용 폭 흰 면.
+  skip: { ...ButtonStyles.primary, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
+  skipText: { ...ButtonTextStyles.primary, color: InkColors.ink2 },
+  cta: { ...ButtonStyles.primary, flex: 1, flexDirection: 'row', gap: 6, backgroundColor: BrandColors.brand },
+  ctaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

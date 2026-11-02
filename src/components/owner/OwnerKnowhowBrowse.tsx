@@ -442,7 +442,7 @@ export function OwnerKnowhowBrowse({
   //   한 갈래에 몰리면(예: '고객 응대' 300건) 그 묶음 하나가 300줄이다.
   const groupBlock = (key: string, title: string, items: PlaybookEntry[]) => (
     <View key={key} style={styles.group}>
-      <SectionLabel title={title} hint={`${items.length}건`} />
+      <SectionLabel flush title={title} hint={`${items.length}건`} />
       <PagedRows key={`${key}-${listKey}`} items={items} render={entryItem} style={styles.list} />
     </View>
   );
@@ -864,12 +864,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: Space.sm,
     paddingVertical: Layout.cardPad,
   },
-  templateLinkTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  templateLinkTitle: { ...Type.body, fontWeight: '800' },
   templateLinkSub: { fontSize: 12, color: TextColor.secondary, fontWeight: '600', marginTop: 1 },
 
   // 검토 대기(draft) 배너가 계속 쓰는 두 줄.
-  bannerTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  bannerBody: { fontSize: 12, color: InkColors.ink2, marginTop: 1 },
+  bannerTitle: { ...Type.body, fontWeight: '800' },
+  // 제목 아래 설명 = Type.desc(13/19 secondary · 2026-11-02).
+  bannerBody: { ...Type.desc, marginTop: 1 },
 
   // 검토 대기(draft) 배너 — 인수인계서 검수 재진입점
   draftBanner: {
@@ -912,7 +913,7 @@ const styles = StyleSheet.create({
     marginTop: 4, paddingVertical: 9, borderRadius: Radius.sm,
     backgroundColor: BrandColors.warnSoft, borderWidth: 1, borderColor: BrandColors.warnBorder,
   },
-  verifyBtnText: { fontSize: 12, fontWeight: '800', color: InkColors.ink },
+  verifyBtnText: { ...Type.tag, fontWeight: '800', color: InkColors.ink },
 
   // 톱니 패널 — 개수 줄 **아래에 떠서** 열린다(목록을 밀어내지 않는다).
   // Collapse 의 style 은 안쪽 내용 View 로 가고 바깥은 높이를 재는 클리핑 박스라, '띄우기'는 이 앵커가 맡는다
@@ -924,12 +925,12 @@ const styles = StyleSheet.create({
   },
   manageRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingHorizontal: Space.md },
   manageRowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
-  manageRowText: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  manageRowText: { ...Type.body, flex: 1, fontWeight: '700' },
   // 개수 줄 오른쪽 톱니 — 작게 그리되 hitSlop 으로 48dp 하한을 지킨다.
   gearBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
 
-  // 묶음(쓰임새·안 쓰임) = 카드 밖 라벨 + 목록
-  group: { gap: Space.sm },
+  // 묶음(쓰임새·안 쓰임) = 카드 밖 라벨 + 목록. 위 = 스크롤 gap 12 + 8 = 섹션 사이 20(SectionLabel flush · 2026-11-02).
+  group: { gap: Space.sm, marginTop: Space.sm },
 
 
   // 리스트/행
@@ -940,10 +941,10 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   rowNoDivider: { borderBottomWidth: 0 },
   dot: { width: 10, height: 10, borderRadius: Radius.pill },
-  rowTitle: { fontSize: 15, fontWeight: '600', color: InkColors.ink },
+  rowTitle: { ...Type.body, fontWeight: '600' },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' },
   meta: { fontSize: 12, color: TextColor.secondary, fontWeight: '600' },
-  metaRate: { fontSize: 12, color: InkColors.ink2, fontWeight: '700' },
+  metaRate: { ...Type.tag, color: InkColors.ink2, fontWeight: '700' },
   badgeReview: { ...BadgeStyles.box, backgroundColor: BrandColors.warnSoft },
   badgeReviewText: { ...BadgeStyles.text, color: BrandColors.warnText },
   badgeUnused: { ...BadgeStyles.box, backgroundColor: BrandColors.accentSoft },
@@ -952,6 +953,6 @@ const styles = StyleSheet.create({
 
   // 빈 결과
   emptyResult: { alignItems: 'center', gap: 6, paddingVertical: 36 },
-  emptyResultText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
+  emptyResultText: { ...Type.body, fontWeight: '700', color: InkColors.ink2 },
   resetLink: { fontSize: 13, fontWeight: '800', color: BrandColors.brand, marginTop: 4, textDecorationLine: 'underline' },
 });

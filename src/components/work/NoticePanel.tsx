@@ -6,8 +6,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { type FeedItem } from '@/lib/store/useWorkStore';
 import { fetchBroadcastReadStatus } from '@/lib/db';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { CardStyles } from '@/lib/theme/card';
+import { Radius } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
 import { BadgeStyles } from '@/lib/theme/badge';
 import { mdHHmm } from '@/lib/utils/attendance';
 import { ReactionBar } from './ReactionBar';
@@ -390,38 +392,40 @@ const s = StyleSheet.create({
   scroll: { padding: 13, gap: 11 },
   // 알림으로 들어온 공지 — 테두리만 강조(카드 안 레이아웃은 그대로).
   focusCard: { borderWidth: 2, borderColor: BrandColors.accentSolid, borderRadius: Radius.md },
-  empty: { textAlign: 'center', color: InkColors.ink2, fontSize: 15, marginTop: 40 },
+  empty: { ...Type.body, textAlign: 'center', color: TextColor.secondary, marginTop: 40 },
 
-  card: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 12, ...Elevation.e1 },
+  card: { ...CardStyles.list },
   cardPinned: { borderColor: InkColors.ink3 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 6 },
   tag: { ...(BadgeStyles.box as TextStyle), ...BadgeStyles.text, backgroundColor: InkColors.paper, color: InkColors.ink2, overflow: 'hidden' },
-  pinlab: { fontSize: 10, color: InkColors.ink3, fontWeight: '700' },
-  who: { fontSize: 11, color: InkColors.ink2, fontWeight: '700', marginLeft: 'auto' },
-  time: { fontSize: 10, color: InkColors.ink3 },
-  body: { fontSize: 15, fontWeight: '600', color: InkColors.ink, lineHeight: 22 },
+  pinlab: { ...Type.micro, color: TextColor.secondary, fontWeight: '700' },
+  who: { ...Type.tag, color: TextColor.secondary, fontWeight: '700', marginLeft: 'auto' },
+  time: { ...Type.micro, color: TextColor.secondary },
+  body: { ...Type.body, fontWeight: '600', lineHeight: 22 },
 
-  editInput: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, padding: 10, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.cream, minHeight: 60 },
+  editInput: { ...Type.body, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, padding: 10, backgroundColor: InkColors.cream, minHeight: 60 },
   editActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 16, marginTop: 8 },
-  editCancel: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
+  editCancel: { fontSize: 13, fontWeight: '700', color: TextColor.secondary },
   editSave: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
 
   foot2: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, paddingTop: 9, borderTopWidth: 1, borderTopColor: InkColors.line },
   readRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  readText: { fontSize: 11, color: InkColors.ink2, fontWeight: '700' },
+  readText: { ...Type.tag, color: TextColor.secondary, fontWeight: '700' },
   acts: { flexDirection: 'row', gap: 6, marginLeft: 'auto' },
   act: { borderWidth: 1, borderColor: InkColors.line, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 5, backgroundColor: InkColors.bg },
   actOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   actText: { fontSize: 11, fontWeight: '700', color: InkColors.ink2 },
 
   comments: { marginTop: 10, paddingTop: 9, borderTopWidth: 1, borderTopColor: InkColors.line, gap: 8 },
-  cLabel: { fontSize: 10.5, fontWeight: '800', color: InkColors.ink3 },
+  cLabel: { ...Type.micro, fontWeight: '800', color: TextColor.secondary },
   cmt: { flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
-  cAv: { width: 23, height: 23, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
-  cAvTx: { fontSize: 9, fontWeight: '800', color: InkColors.ink2 },
+  // 첫 두 글자를 11 로 올려 원도 26 으로 키웠다(23 이면 두 글자가 테두리에 닿는다).
+  cAv: { width: 26, height: 26, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  cAvTx: { ...Type.micro, fontWeight: '800', color: TextColor.secondary },
   cBubble: { flex: 1, backgroundColor: InkColors.paper, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 7 },
-  cName: { fontSize: 10.5, fontWeight: '800', color: InkColors.ink2, marginBottom: 2 },
-  cText: { fontSize: 12.5, color: InkColors.ink },
+  cName: { ...Type.micro, fontWeight: '800', color: TextColor.secondary, marginBottom: 2 },
+  // 댓글 본문은 읽는 내용이라 검정 그대로. 크기만 설명 단계(13/19).
+  cText: { ...Type.desc, color: InkColors.ink },
   cDel: { fontSize: 11, color: BrandColors.badText, fontWeight: '700', padding: 3 },
   cInputRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   cInput: { paddingVertical: 8, fontSize: 12 },
@@ -430,12 +434,12 @@ const s = StyleSheet.create({
 
   footWrap: { backgroundColor: InkColors.cream, borderTopWidth: 1, borderTopColor: InkColors.line },
   targetRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingTop: 9 },
-  targetLead: { fontSize: 11, fontWeight: '800', color: InkColors.ink3 },
+  targetLead: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
   targetChips: { gap: 6, paddingRight: 12 },
   tChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1.5, borderColor: InkColors.line, borderRadius: Radius.pill, paddingVertical: 5, paddingHorizontal: 10, backgroundColor: InkColors.bg, maxWidth: 160 },
   tChipLocked: { backgroundColor: InkColors.ink3, borderColor: InkColors.ink3 },
   tChipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  tChipText: { fontSize: 12, fontWeight: '800', color: InkColors.ink2, flexShrink: 1 },
+  tChipText: { ...Type.tag, fontWeight: '800', color: TextColor.secondary, flexShrink: 1 },
   tChipTextOn: { color: InkColors.bubbleText },
   foot: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
   footInput: { flex: 1, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 15, paddingVertical: 11, fontSize: 13, color: InkColors.ink },

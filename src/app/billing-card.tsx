@@ -9,9 +9,10 @@ import { SHOW_CARD_BILLING } from '@/lib/config/store-policy';
 import { TERMS_VERSION } from '@/lib/config/business';
 import { formatKrw } from '@/lib/config/billing';
 import { cardSubscribe, cardUpdateCard, cardErrorText } from '@/lib/payments/cardBilling';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
+import { CONTENT_MAX_WIDTH, Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 // 토스 카드 등록창에서 돌아오는 자리(웹 전용, 0208).
 //   successUrl = /billing-card?mode=subscribe&plan=..&stores=..  (+ 토스가 붙이는 customerKey·authKey)
@@ -144,11 +145,12 @@ function ReturnBody() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
+  safe: { flex: 1, backgroundColor: Surface.screen },
   wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Space.gutter, gap: Space.md },
   iconWrap: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FBF3E2', alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 20, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
-  body: { fontSize: 15, color: InkColors.ink2, lineHeight: 22, textAlign: 'center', maxWidth: 420 },
-  primary: { marginTop: Space.lg, backgroundColor: BrandColors.brand, paddingVertical: 15, paddingHorizontal: 28, borderRadius: Radius.md, alignItems: 'center' },
-  primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  title: { ...Type.title, textAlign: 'center' },
+  body: { fontSize: Type.body.fontSize, color: TextColor.secondary, lineHeight: 22, textAlign: 'center', maxWidth: CONTENT_MAX_WIDTH },
+  // 주 버튼(52 · 모서리 16 · 가로 꽉 · 16/800).
+  primary: { ...ButtonStyles.primary, marginTop: Space.lg, backgroundColor: BrandColors.brand },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

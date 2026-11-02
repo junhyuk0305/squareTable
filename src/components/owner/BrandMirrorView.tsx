@@ -16,9 +16,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { myBrandMirror, type BrandOverviewRow } from '@/lib/brand/brandDb';
 import { brandErrorMessage } from '@/lib/brand/errors';
 import { visibilityLabel, payerLabel } from '@/lib/brand/visibility';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 const pct = (v: number | null) => (v === null ? '—' : `${Math.round(v * 100)}%`);
 const num = (v: number | null) => (v === null ? '—' : v.toLocaleString());
@@ -107,16 +108,17 @@ function Kv({ k, v, first }: { k: string; v: string; first?: boolean }) {
 const styles = StyleSheet.create({
   wrap: { paddingVertical: Space.sm },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingVertical: 6 },
-  headText: { fontSize: 14.5, fontWeight: '700', color: InkColors.ink },
+  headText: { ...Type.body, fontWeight: '700' },
   // 고정 높이를 안 준다 — 두 줄이 되면 늘어난다(메모리 feedback_fixed_height_text_overflow).
-  headSub: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink3, marginTop: 2 },
+  headSub: { ...Type.desc, marginTop: 2 },
   body: { marginTop: Space.sm, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 13 },
   kv: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, minHeight: 44 },
   border: { borderTopWidth: 1, borderTopColor: InkColors.line },
-  k: { flex: 1, minWidth: 0, fontSize: 13.5, color: InkColors.ink2 },
-  v: { fontSize: 14, fontWeight: '700', color: InkColors.ink, fontVariant: ['tabular-nums'] },
-  vNull: { color: InkColors.ink3, fontWeight: '600' },
-  note: { fontSize: 13.5, color: InkColors.ink3, paddingVertical: 14 },
-  err: { fontSize: 13.5, lineHeight: 20, color: BrandColors.badText, fontWeight: '600', paddingVertical: 14 },
-  foot: { fontSize: 12, lineHeight: 18, color: InkColors.ink3, paddingVertical: 12, borderTopWidth: 1, borderTopColor: InkColors.line },
+  k: { flex: 1, minWidth: 0, fontSize: Type.desc.fontSize, color: TextColor.secondary },
+  v: { ...Type.body, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  // 수준 밖 값(—) = 비활성 회색.
+  vNull: { color: TextColor.disabled, fontWeight: '600' },
+  note: { ...Type.desc, paddingVertical: 14 },
+  err: { ...Type.desc, color: BrandColors.badText, fontWeight: '600', paddingVertical: 14 },
+  foot: { ...Type.desc, paddingVertical: 12, borderTopWidth: 1, borderTopColor: InkColors.line },
 });

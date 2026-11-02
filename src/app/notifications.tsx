@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useForegroundRefresh } from '@/lib/app/useForegroundRefresh';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, Redirect } from 'expo-router';
 
@@ -14,7 +14,8 @@ import { NotificationList, ALL_KIND_UI } from '@/components/NotificationList';
 import { MarkAllReadButton } from '@/components/MarkAllReadButton';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
-import { InkColors } from '@/lib/theme/colors';
+import { Surface } from '@/lib/theme/colors';
+import { screenScrollStyle } from '@/lib/theme/layout';
 
 /**
  * 통합 알림(허브 레이어) — 내 매장 허브 우상단 벨에서 진입. 소속 전 매장 알림을 시간 역순으로
@@ -70,7 +71,6 @@ export default function HubNotificationsScreen() {
               }}
             />
           </Appear>
-          <View style={{ height: 12 }} />
         </ScrollView>
       )}
     </SafeAreaView>
@@ -78,6 +78,7 @@ export default function HubNotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: 20, gap: 16 },
+  // 탭바 없는 하위 화면 — 아래 안전 영역은 SafeAreaView(bottom)가 든다. 바탕·스크롤 여백만 화면 틀 값을 쓴다.
+  safe: { flex: 1, backgroundColor: Surface.screen },
+  scroll: screenScrollStyle,
 });

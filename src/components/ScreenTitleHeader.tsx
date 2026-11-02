@@ -9,6 +9,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStoreDisplay } from '@/components/StoreHeaderTitle';
 import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Layout, SCREEN_GUTTER, Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 /**
  * 제목 상단바 — **네이티브 헤더를 끄고 화면 안에서 직접 그린다.**
@@ -146,9 +147,9 @@ const styles = StyleSheet.create({
   //   paddingVertical:2 + hitSlop 조합이던 동안 실측 30dp 였다(2026-09-11 퀴즈 UI 실측).
   back: { marginLeft: -4, minWidth: 48, minHeight: 48, alignItems: 'flex-start', justifyContent: 'center', paddingRight: 6 },
   titleWrap: { flex: 1, justifyContent: 'center' },
-  title: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
+  title: { ...Type.section },
   storeLine: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, marginTop: 1 },
   dot: { width: 6, height: 6, borderRadius: 3 },
-  storeName: { fontSize: 11.5, fontWeight: '600', color: TextColor.secondary, maxWidth: 220 },
+  storeName: { ...Type.tag, fontWeight: '600', color: TextColor.secondary, maxWidth: 220 },
   right: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
 });

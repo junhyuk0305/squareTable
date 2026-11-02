@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { ScreenLoading } from '@/components/ScreenLoading';
-import { SectionLabel } from '@/components/SectionLabel';
+import { Section } from '@/components/Screen';
 import { useOwnerBrandStore } from '@/lib/store/useOwnerBrandStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { respondBrandInvite, ackBrandConsent, type BrandVisibility, type MyBrandViewRow } from '@/lib/brand/brandDb';
@@ -19,10 +19,12 @@ import { brandErrorMessage } from '@/lib/brand/errors';
 import { VISIBILITY_LEVELS, NEVER_SHARED, payerLabel, relationLabel, RELATION_RULES, visibilityLabel } from '@/lib/brand/visibility';
 import { showToast } from '@/lib/store/useToastStore';
 import { confirmAction } from '@/lib/utils/confirm';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space, SCREEN_GUTTER } from '@/lib/theme/layout';
-import { ButtonStyles } from '@/lib/theme/button';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { industryLabel } from '@/lib/config/industry';
 
 const fmtBiz = (n: string | null) => (n && n.length === 10 ? `${n.slice(0, 3)}-${n.slice(3, 5)}-${n.slice(5)}` : n || '미등록');
@@ -118,8 +120,7 @@ export default function BrandConsentScreen() {
           </View>
 
           {/* 2) 본사가 보게 되는 것 — 첫 화면(§5-3). 고른 수준이 곧 동의 범위다. */}
-          <View style={styles.labeled}>
-          <SectionLabel icon="eye-outline" title="본사가 보게 되는 것" hint="수준은 내가 고르고, 언제든 바꿀 수 있어요" />
+          <Section icon="eye-outline" title="본사가 보게 되는 것" hint="수준은 내가 고르고, 언제든 바꿀 수 있어요">
           <View style={styles.levels}>
             {VISIBILITY_LEVELS.map((l) => {
               const on = level === l.key;
@@ -145,7 +146,7 @@ export default function BrandConsentScreen() {
               );
             })}
           </View>
-          </View>
+          </Section>
           <View style={styles.never}>
             <Text style={styles.neverTitle}>어느 수준에서도 본사에 가지 않는 것</Text>
             <Text style={styles.neverBody}>{NEVER_SHARED.join(' · ')}</Text>
@@ -154,8 +155,7 @@ export default function BrandConsentScreen() {
           <Text style={styles.note}>직원이 1~2명인 매장은 매장 단위 숫자만으로도 누구인지 짐작될 수 있어요.</Text>
 
           {/* 3) 어느 매장을 */}
-          <View style={styles.labeled}>
-          <SectionLabel icon="storefront-outline" title="연결할 내 매장" hint="고른 매장만 본사에 보여요" />
+          <Section icon="storefront-outline" title="연결할 내 매장" hint="고른 매장만 본사에 보여요">
           {candidates.length === 0 ? (
             <View style={styles.card}>
               <Text style={styles.cardText}>연결할 수 있는 매장이 없어요. 내가 사장인 매장 중 아직 다른 본사와 연결되지 않은 매장만 고를 수 있어요.</Text>
@@ -182,7 +182,7 @@ export default function BrandConsentScreen() {
               })}
             </View>
           )}
-          </View>
+          </Section>
 
           {/* 4) 답 */}
           <Text style={styles.note}>수락한 뒤에도 설정 &gt; 본사 연결에서 공개 수준을 바꾸거나 연결을 끝낼 수 있어요. 본사가 해제해도 받은 노하우는 매장에 남아요.</Text>
@@ -247,12 +247,11 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
         </Text>
       </View>
 
-      <View style={styles.labeled}>
-      <SectionLabel
+      <Section
         icon={notice ? 'megaphone-outline' : 'shield-checkmark-outline'}
         title={notice ? '본사가 보는 범위를 알려드려요' : '공개 범위에 다시 동의해 주세요'}
         hint={notice ? '직영점이라 본사가 정해요' : '관계가 바뀌어 근거가 달라졌어요'}
-      />
+      >
       <View style={styles.card}>
         <Text style={styles.cardText}>
           {notice
@@ -260,7 +259,7 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
             : '이 매장이 가맹으로 바뀌었어요. 이제 공개 범위를 사장님이 직접 정하고, 연결도 언제든 끊을 수 있어요.'}
         </Text>
       </View>
-      </View>
+      </Section>
 
       {/* 지금 실제로 무엇이 보이나 — 추상적인 표보다 이 한 줄이 먼저다. */}
       <View style={styles.card}>
@@ -278,8 +277,7 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
         ) : null}
       </View>
 
-      <View style={styles.labeled}>
-      <SectionLabel icon="list-outline" title={`${relationLabel(link.relation)}점에서는 이렇게 달라져요`} />
+      <Section icon="list-outline" title={`${relationLabel(link.relation)}점에서는 이렇게 달라져요`}>
       <View style={styles.card}>
         {RELATION_RULES.map((r, i) => (
           <View key={r.label} style={[styles.pickRow, styles.ruleRow, i > 0 && styles.pickBorder]}>
@@ -288,7 +286,7 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
           </View>
         ))}
       </View>
-      </View>
+      </Section>
 
       <View style={styles.never}>
         <Text style={styles.neverTitle}>관계와 상관없이 본사에 가지 않는 것</Text>
@@ -329,39 +327,40 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  body: { paddingHorizontal: SCREEN_GUTTER, paddingBottom: 48, gap: Space.md },
-  labeled: { gap: Space.sm },
+  // 화면 바탕(Surface.screen). 탭바가 없는 화면이라 아래 안전 영역을 SafeAreaView(bottom)가 그대로 든다.
+  safe: { flex: 1, backgroundColor: Surface.screen },
+  // 좌우·섹션 사이 = screenScrollStyle. 첫 여백 16 은 hero 의 위 여백이 들어 스크롤 위 여백은 뺀다.
+  body: { ...screenScrollStyle, paddingTop: 0, paddingBottom: 48 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Space.xl, gap: Space.sm },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
-  emptyBody: { fontSize: 13.5, lineHeight: 20, color: InkColors.ink2, textAlign: 'center' },
+  emptyTitle: Type.title,
+  emptyBody: { ...Type.desc, textAlign: 'center' },
   hero: { alignItems: 'center', gap: 4, paddingVertical: Space.lg },
   heroIcon: { width: 44, height: 44, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  heroTitle: { fontSize: 20, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.4 },
-  heroSub: { fontSize: 13, color: InkColors.ink2 },
+  heroTitle: { ...Type.title, letterSpacing: -0.4 },
+  heroSub: Type.desc,
   levels: { gap: Space.sm },
-  level: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: Space.md, backgroundColor: InkColors.bg, gap: 3, ...Elevation.e1 },
+  level: { ...CardStyles.list, gap: 3 },
   levelOn: { borderColor: InkColors.ink, backgroundColor: BrandColors.yellowSoft },
   levelHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: 4 },
-  levelName: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
+  levelName: { ...Type.body, fontWeight: '800', color: TextColor.secondary },
   // flexShrink — 글자가 커지면 짧은 설명이 카드 밖으로 넘치지 않고 안에서 줄바꿈된다.
-  levelShort: { fontSize: 12, color: InkColors.ink3, marginLeft: 'auto', flexShrink: 1, textAlign: 'right' },
+  levelShort: { ...Type.tag, color: TextColor.secondary, marginLeft: 'auto', flexShrink: 1, textAlign: 'right' },
   levelItem: { fontSize: 13, lineHeight: 19, color: InkColors.ink, paddingLeft: 26 },
   never: { borderWidth: 1, borderColor: BrandColors.badSoft, backgroundColor: BrandColors.badSoft, borderRadius: Radius.md, padding: Space.md },
   neverTitle: { fontSize: 13, fontWeight: '800', color: BrandColors.badText, marginBottom: 3 },
-  neverBody: { fontSize: 12.5, lineHeight: 18, color: BrandColors.badText },
-  note: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink3 },
+  neverBody: { ...Type.desc, color: BrandColors.badText },
+  note: Type.desc,
   card: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, backgroundColor: InkColors.bg, overflow: 'hidden', ...Elevation.e1 },
-  cardText: { fontSize: 13.5, lineHeight: 20, color: InkColors.ink2, padding: Space.md },
+  cardText: { ...Type.desc, padding: Space.md },
   pickRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingHorizontal: Space.md, minHeight: 52 },
   pickBorder: { borderTopWidth: 1, borderTopColor: InkColors.line },
-  pickName: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink },
-  pickSub: { fontSize: 12, color: InkColors.ink3 },
+  pickName: { ...Type.body, flex: 1, fontWeight: '700' },
+  pickSub: { ...Type.tag, color: TextColor.secondary },
   // 재동의 표 — 설명(pickSub)이 줄어들지 않으면 항목명(flex 1)이 남는 폭 0이 되어 사라진다. 설명에 상한을 두고 줄바꿈한다.
   ruleRow: { paddingVertical: Space.sm },
   ruleVal: { flexShrink: 1, maxWidth: '55%', textAlign: 'right' },
   primary: { ...ButtonStyles.primary, marginTop: Space.sm, backgroundColor: BrandColors.brand },
-  primaryText: { fontSize: 15, fontWeight: '800', color: InkColors.bubbleText },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   secondary: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  secondaryText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
+  secondaryText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
 });

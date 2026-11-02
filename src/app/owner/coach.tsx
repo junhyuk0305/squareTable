@@ -18,8 +18,9 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { buildDirectUq } from '@/lib/utils/buildEntry';
 import { insertKnowhowToUnit } from '@/lib/db';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
 
 import type { Category, PlaybookEntry } from '@/types';
 
@@ -398,7 +399,8 @@ export default function OwnerCoachScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: InkColors.cream },
+  // 화면 바탕(Surface.screen · 채팅도 예외 없음 · 2026-11-02). 입력칸이 아래 안전 영역을 써야 해 SafeAreaView(bottom)는 그대로.
+  container: { flex: 1, backgroundColor: Surface.screen },
 
   toastWrap: { position: 'absolute', left: 0, right: 0, bottom: 36, alignItems: 'center' },
   toast: {
@@ -407,5 +409,5 @@ const styles = StyleSheet.create({
   },
   toastCheck: { color: BrandColors.yellow, fontWeight: '800', fontSize: 16 },
   toastCheckErr: { color: BrandColors.accentText },
-  toastText: { color: '#FFFFFF', fontWeight: '700', fontSize: 15 },
+  toastText: { ...Type.body, color: InkColors.bubbleText, fontWeight: '700' },
 });

@@ -1,11 +1,8 @@
-import { StyleSheet } from 'react-native';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 
 import { OwnerKnowhowBrowse } from '@/components/owner/OwnerKnowhowBrowse';
-import { RoleTabBar } from '@/components/RoleTabBar';
-import { InkColors } from '@/lib/theme/colors';
+import { Screen } from '@/components/Screen';
 
 /**
  * '내 노하우' — 노하우 탭과 같은 목록을 보여주는 백-가능 서브화면.
@@ -19,11 +16,8 @@ export default function OwnerKnowledgeScreen() {
   const openEntry = (id: string) => router.push({ pathname: '/owner/edit/[id]', params: { id } });
 
   return (
-    <SafeAreaView style={styles.safe} edges={[]}>
-      <ScreenTitleHeader
-        title="내 노하우"
-        backFallback
-      />
+    // 바탕·탭바 = Screen. 목록이 자기 스크롤을 가져 scroll={false}(노하우 탭과 같은 부품).
+    <Screen header={<ScreenTitleHeader title="내 노하우" backFallback />} tabBar="owner" scroll={false}>
       {/* ?review=1 = 홈 '점검할 노하우' 착지점 → '노하우' 칸 + '점검 필요' 탭(2026-08-27 §7-2).
           (2026-08-19~08-27 사이엔 '할 일' 칸으로 보냈다.) */}
       <OwnerKnowhowBrowse
@@ -31,11 +25,6 @@ export default function OwnerKnowledgeScreen() {
         initialSegment={review === '1' ? 'knowhow' : undefined}
         initialListTab={review === '1' ? 'review' : undefined}
       />
-      <RoleTabBar role="owner" />
-    </SafeAreaView>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-});

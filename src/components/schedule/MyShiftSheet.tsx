@@ -13,9 +13,11 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { useScheduleStore, type ShiftTemplate } from '@/lib/store/useScheduleStore';
 import { checkShiftTime, isOvernight, fmtDateKo, fmtRange } from '@/lib/utils/schedule';
 import { maskHHMM, todayStr } from '@/lib/utils/attendance';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 export function MyShiftSheet({
   date,
@@ -132,22 +134,23 @@ export function MyShiftSheet({
 }
 
 const s = StyleSheet.create({
-  title: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: 16 },
-  sub: { fontSize: 13, fontWeight: '700', color: InkColors.ink2, paddingHorizontal: 16, paddingTop: 4 },
+  // 시트 안은 버튼·글자 크기·색 토큰만 맞춘다(2026-11-02 결정 — 시트 틀·안쪽 행 모양은 그대로).
+  title: { ...Type.title, paddingHorizontal: 16 },
+  sub: { ...Type.desc, fontWeight: '700', paddingHorizontal: 16, paddingTop: 4 },
   pendingRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingTop: Space.sm },
-  pendingText: { flex: 1, fontSize: 12, fontWeight: '700', color: BrandColors.warnText, lineHeight: 17 },
+  pendingText: { ...Type.tag, flex: 1, fontWeight: '700', color: BrandColors.warnText, lineHeight: 17 },
   actions: { padding: 16, gap: Space.sm },
   act: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingHorizontal: 14, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
-  actText: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  actText: { ...Type.body, fontWeight: '700' },
   editBox: { padding: 16, gap: Space.sm },
-  label: { fontSize: 11.5, fontWeight: '800', color: InkColors.ink2 },
+  label: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   // ★minWidth:0 — RN-web TextInput 은 브라우저 고유 폭(size=20)이 flex-basis 라 두 칸이 안 줄어 뷰포트 밖(497px)으로 나갔다.
-  timeInp: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, minHeight: 48, fontSize: 15, fontWeight: '700', color: InkColors.ink, backgroundColor: InkColors.cream, textAlign: 'center', ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
+  timeInp: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, minHeight: 48, fontSize: Type.body.fontSize, fontWeight: '700', color: InkColors.ink, backgroundColor: InkColors.cream, textAlign: 'center', ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
   timeInpBad: { borderColor: BrandColors.badText },
-  tilde: { fontSize: 15, color: InkColors.ink3, fontWeight: '700' },
-  warn: { fontSize: 12, color: BrandColors.badText, fontWeight: '700' },
-  note: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', lineHeight: 17 },
-  cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
-  ctaText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  tilde: { fontSize: Type.body.fontSize, color: InkColors.ink3, fontWeight: '700' },
+  warn: { ...Type.desc, color: BrandColors.badText, fontWeight: '700' },
+  note: { ...Type.desc, fontWeight: '600' },
+  cta: { ...ButtonStyles.primary, backgroundColor: InkColors.ink, marginTop: 4 },
+  ctaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

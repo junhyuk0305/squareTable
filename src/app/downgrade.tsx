@@ -22,9 +22,12 @@ import { StepProgress } from '@/components/blocks/StepProgress';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space, SCREEN_GUTTER } from '@/lib/theme/layout';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 
 // ── 체험이 끝났을 때 무엇을 남길지 고르는 화면 (0142·0144) ────────────────────
 // ★이 화면의 값어치는 **갈림길**에 있다. "무엇을 버릴지 고르기"와 "요금제로 전부 지키기"를
@@ -471,39 +474,36 @@ function FooterActions({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: SCREEN_GUTTER, gap: Space.xl, paddingBottom: 40 },
+  // 헤더 없는 게이트 화면 — 위·아래 안전 영역은 SafeAreaView(top·bottom)가 든다. 바탕·스크롤 여백만 화면 틀 값.
+  safe: { flex: 1, backgroundColor: Surface.screen },
+  scroll: screenScrollStyle,
 
   head: { gap: Space.sm },
-  h1: { fontSize: 24, lineHeight: 33, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5 },
-  sub: { fontSize: 15, lineHeight: 23, color: InkColors.ink2 },
+  h1: { ...Type.pageTitle, lineHeight: 33, color: InkColors.ink },
+  sub: { ...Type.desc },
 
   list: { gap: Space.md },
 
+  // 카드 모양 = CardStyles.list(모서리 16 · e1 · 안쪽 16).
   optionCard: {
+    ...CardStyles.list,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.lg,
     minHeight: 56,
-    ...Elevation.e2,
   },
   // 금액은 오른쪽 끝에 세운다 — 세 줄의 숫자가 같은 축에 서야 비교가 된다(이 화면의 목적).
   optionTitleRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: Space.sm },
   optionTitle: { flex: 1, minWidth: 0, fontSize: 16, lineHeight: 23, fontWeight: '900', color: InkColors.ink },
   optionPrice: { fontSize: 16, lineHeight: 23, fontWeight: '900', color: InkColors.ink },
-  optionBody: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
+  optionBody: { ...Type.desc },
 
   pickRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
+    backgroundColor: Surface.card,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
     padding: Space.lg,
@@ -516,24 +516,22 @@ const styles = StyleSheet.create({
   },
   pickIconOn: { backgroundColor: InkColors.ink },
   pickTitle: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: InkColors.ink },
-  pickMeta: { fontSize: 12, lineHeight: 17, color: InkColors.ink3, marginTop: 2 },
+  pickMeta: { ...Type.tag, lineHeight: 17, color: TextColor.secondary, marginTop: 2 },
   pickBadge: {
-    fontSize: 11, fontWeight: '900', color: InkColors.ink,
+    ...Type.micro, fontWeight: '900', color: InkColors.ink,
     backgroundColor: BrandColors.yellowSoft, borderWidth: 1, borderColor: BrandColors.gold,
     paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.pill, overflow: 'hidden',
   },
 
-  noteBox: { gap: Space.sm, backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.lg },
-  noteText: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
+  // 안내 상자 — 바탕이 회색(Surface.screen = bgSoft)이 되면서 옛 bgSoft 면은 바탕에 묻힌다. 흰 면 + 선으로 띄운다.
+  noteBox: { gap: Space.sm, backgroundColor: Surface.card, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: Space.lg },
+  noteText: { ...Type.desc },
 
   footer: { gap: Space.md },
-  primary: {
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: BrandColors.brand, borderRadius: Radius.md,
-    paddingVertical: 16, minHeight: 56,
-  },
+  // 주 버튼(52 · 모서리 16 · 가로 꽉 · 16/800).
+  primary: { ...ButtonStyles.primary, backgroundColor: BrandColors.brand },
   primaryOff: { opacity: 0.35 },
-  primaryText: { color: InkColors.bubbleText, fontSize: 16, lineHeight: 22, fontWeight: '800' },
+  primaryText: { ...ButtonTextStyles.primary, lineHeight: 22, color: InkColors.bubbleText },
   link: { alignItems: 'center', paddingVertical: Space.sm, minHeight: 48, justifyContent: 'center' },
-  linkText: { fontSize: 15, lineHeight: 22, fontWeight: '800', color: InkColors.ink2, textDecorationLine: 'underline' },
+  linkText: { fontSize: Type.body.fontSize, lineHeight: 22, fontWeight: '800', color: TextColor.secondary, textDecorationLine: 'underline' },
 });

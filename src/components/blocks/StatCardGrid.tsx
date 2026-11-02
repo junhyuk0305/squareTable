@@ -144,10 +144,10 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.75 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   // 라벨·단위·부제는 위치·상태 꼬리표라 본문 15sp 하한 대상이 아니다(simplicity-voice §4 '보조').
-  label: { flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 17, fontWeight: '800', color: InkColors.ink2 },
+  label: { ...Type.tag, flex: 1, minWidth: 0, lineHeight: 17, fontWeight: '800', color: InkColors.ink2 },
   // 26 → 22: "498만원"처럼 단위 붙은 값이 칸을 압도했다(2026-09-03 웹 실측 피드백).
   value: { ...Type.numCell, marginTop: Space.xs, color: InkColors.ink, letterSpacing: -0.8 },
-  unit: { fontSize: 14, fontWeight: '800', color: InkColors.ink3, letterSpacing: 0 },
+  unit: { fontSize: Type.body.fontSize, fontWeight: '800', color: TextColor.secondary, letterSpacing: 0 },
   // info 가 있을 때만 — 라벨이 자리를 다 먹지 않고 ⓘ 를 바로 옆에 붙인다.
   // ★`flex: 0` 를 쓰면 안 된다: RN 의 flex 단축은 basis 를 **0%** 로 잡아서 grow 0 과 겹치면
   //   라벨 폭이 그대로 0 이 된다 — 2026-08-27 브라우저 실측에서 '내가 만든 노하우' 글자가
@@ -156,6 +156,6 @@ const styles = StyleSheet.create({
   spacer: { flex: 1 },
   // 바닥 묶음(부제 + 시각요소) — 값과의 사이가 남는 공간을 다 먹는다.
   bottom: { marginTop: 'auto', paddingTop: Space.xs },
-  sub: { fontSize: 11.5, lineHeight: 16, color: TextColor.secondary },
+  sub: { ...Type.tag, lineHeight: 16, color: TextColor.secondary },
   visual: { paddingTop: Space.sm },
 });

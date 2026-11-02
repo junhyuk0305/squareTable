@@ -1,8 +1,11 @@
 import { StyleSheet, Platform } from 'react-native';
 
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 import { COMPOSER_BAR_H } from '@/components/ChatComposerBar';
 
 export const styles = StyleSheet.create({
@@ -19,33 +22,32 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BrandColors.yellowDeep,
   },
-  similarText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink },
+  // 노랑 띠 위 안내 문장 — 크기만 설명(13/19), 글자색은 띠 위 검정 그대로(2026-11-02).
+  similarText: { ...Type.desc, fontWeight: '700', color: InkColors.ink },
 
   // 이미 있는 노하우 카드 — 새로 적기 전에 한 번 멈춰 세운다(중복 노하우 차단).
+  // 카드 = CardStyles.list(모서리 16 · 안쪽 16 · 그림자 e1 · 2026-11-02).
   similarEntryCard: {
+    ...CardStyles.list,
     marginHorizontal: 12,
     marginTop: 8,
-    padding: 12,
     gap: 6,
-    borderRadius: Radius.md,
-    backgroundColor: InkColors.bg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    ...Elevation.e1,
   },
   similarEntryHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  similarEntryLabel: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
-  similarEntryTitle: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
-  similarEntryBody: { fontSize: 15, lineHeight: 21, color: InkColors.ink2 },
+  similarEntryLabel: { ...Type.tag, fontWeight: '800', color: InkColors.ink2 },
+  similarEntryTitle: { ...Type.body, lineHeight: 21, fontWeight: '800' },
+  // 제목 15 아래 둘째 줄 = 설명 13/19 — 본문 15 두 줄 연속 금지(2026-11-02).
+  similarEntryBody: Type.desc,
   similarEntryActions: { flexDirection: 'row', gap: 8, marginTop: 2 },
-  similarEntryBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 48, borderRadius: Radius.sm },
+  // 버튼 = 주 버튼 틀(52 · 모서리 16 · 16/800 · 2026-11-02). 둘이 한 줄에 반씩.
+  similarEntryBtn: { ...ButtonStyles.primary, flex: 1 },
   similarEntryGhost: { backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
-  similarEntryGhostText: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
+  similarEntryGhostText: { ...ButtonTextStyles.primary, color: InkColors.ink2 },
   similarEntrySolid: { backgroundColor: InkColors.ink },
-  similarEntrySolidText: { fontSize: 15, fontWeight: '800', color: InkColors.bubbleText },
+  similarEntrySolidText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 
   albaWrap: { gap: 4, alignItems: 'flex-start', maxWidth: '90%' },
-  albaLabel: { fontSize: 11, fontWeight: '800', color: BrandColors.accentText, letterSpacing: 0.5 },
+  albaLabel: { ...Type.micro, fontWeight: '800', color: BrandColors.accentText, letterSpacing: 0.5 },
   albaBubble: {
     backgroundColor: InkColors.bg,
     borderWidth: 1,
@@ -56,13 +58,14 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 14,
     ...Elevation.e1,
   },
-  albaText: { fontSize: 15, color: InkColors.ink, fontStyle: 'italic', lineHeight: 22 },
-  albaMeta: { fontSize: 11, color: InkColors.ink3, fontWeight: '500' },
+  albaText: { ...Type.body, fontStyle: 'italic', lineHeight: 22 },
+  albaMeta: { ...Type.micro, color: TextColor.secondary, fontWeight: '500' },
 
+  // 면은 흰색 — 화면 바탕이 회색(Surface.screen = bgSoft)이 되면서 옛 bgSoft 말풍선은 바탕에 묻혔다(2026-11-02).
   aiBubble: {
     alignSelf: 'flex-start',
     maxWidth: '90%',
-    backgroundColor: InkColors.bgSoft,
+    backgroundColor: InkColors.bg,
     borderRadius: Radius.md,
     borderTopLeftRadius: Radius.tail,
     paddingVertical: 10,
@@ -97,7 +100,7 @@ export const styles = StyleSheet.create({
     borderColor: BrandColors.accent,
   },
   errorText: { flex: 1, fontSize: 13, color: BrandColors.accentText, fontWeight: '600' },
-  errorClose: { fontSize: 14, fontWeight: '800', color: BrandColors.accentText },
+  errorClose: { fontSize: 15, fontWeight: '800', color: BrandColors.accentText },
 
   // 꼬리질문 탈출구 — 입력창 바로 위, 답 안 해도 바로 등록할 수 있는 동등 액션.
   escapeBar: { alignItems: 'center', paddingHorizontal: 12, paddingBottom: 6 },
@@ -108,11 +111,12 @@ export const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: Radius.pill,
-    backgroundColor: InkColors.bgSoft,
+    // 흰 면 — 회색 바탕(Surface.screen) 위에서 묻히지 않게(2026-11-02. 옛 bgSoft).
+    backgroundColor: InkColors.bg,
     borderWidth: 1,
     borderColor: InkColors.line,
   },
-  escapeText: { fontSize: 13.5, fontWeight: '700', color: InkColors.ink2 },
+  escapeText: { fontSize: Type.desc.fontSize, fontWeight: '700', color: InkColors.ink2 },
 
   // 입력바(떠 있는 알약)는 공용 ChatComposerBar 가 그린다 — 업무 채팅·직원 물어보기와 같은 형태.
   // 입력바 좌측 ＋ — 업무 채팅(WorkChat)의 composer 와 같은 형태·같은 치수.
@@ -133,14 +137,15 @@ export const styles = StyleSheet.create({
   menuItemAccent: { backgroundColor: BrandColors.yellowSoft },
   menuIcon: { width: 30, height: 30, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
   menuIconAccent: { backgroundColor: BrandColors.yellow },
-  menuLabel: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
-  menuSub: { fontSize: 11, color: InkColors.ink3, fontWeight: '600' },
+  menuLabel: { ...Type.body, fontWeight: '700' },
+  // 폭 232 고정 메뉴라 11 그대로(Type.micro) — 12 로 올리면 설명 줄이 접힌다. 읽는 글자라 색만 secondary.
+  menuSub: { ...Type.micro, color: TextColor.secondary, fontWeight: '600' },
   menuInfoRow: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 11, paddingTop: 8, paddingBottom: 2,
     borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: 4,
   },
-  menuInfoText: { flex: 1, fontSize: 11, color: InkColors.ink3, fontWeight: '600' },
+  menuInfoText: { ...Type.micro, flex: 1, color: TextColor.secondary, fontWeight: '600' },
   // 알약(ChatComposerBar) 안에 들어가므로 자기 배경·테두리를 두지 않는다 — 두면 알약 속 알약이 된다.
   inputWrap: {
     flex: 1,
@@ -155,8 +160,7 @@ export const styles = StyleSheet.create({
   // 한 줄일 때 placeholder·텍스트가 입력창(minHeight 44) 세로 중앙에 오도록 — 웹 textarea는
   // 위로 붙는 경향이 있어 상하 패딩을 대칭(10)으로 맞춘다(android는 textAlignVertical로 중앙).
   input: {
-    fontSize: 15,
-    color: InkColors.ink,
+    ...Type.body,
     paddingVertical: Platform.OS === 'android' ? 6 : 10,
     textAlignVertical: 'center',
     ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),

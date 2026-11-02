@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -10,12 +9,16 @@ import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { showToast } from '@/lib/store/useToastStore';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { getSectionMeta } from '@/lib/utils/category';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Radius } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
-import { ButtonStyles } from '@/lib/theme/button';
-import { RoleTabBar } from '@/components/RoleTabBar';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { CardStyles } from '@/lib/theme/card';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { Screen, Section } from '@/components/Screen';
+import { SegmentTabs } from '@/components/SegmentTabs';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import type { PlaybookSuggestion } from '@/types';
@@ -23,8 +26,8 @@ import type { PlaybookSuggestion } from '@/types';
 /** 제안 상태 칩 — 면(bg)과 글자(fg)를 한 쌍으로 묶는다. 떨어져 있으면 '반영됨'에 빨간 틴트가 깔린다. */
 const STATUS_CHIP: Record<PlaybookSuggestion['status'], { bg: string; fg: string }> = {
   approved: { bg: BrandColors.goodSoft, fg: BrandColors.goodText },
-  rejected: { bg: InkColors.bgSoft, fg: InkColors.ink3 },
-  pending: { bg: BrandColors.yellowSoft, fg: '#8A5A12' },
+  rejected: { bg: InkColors.bgSoft, fg: TextColor.secondary },
+  pending: { bg: BrandColors.yellowSoft, fg: BrandColors.warnText },
 };
 
 /**
@@ -107,11 +110,11 @@ export default function JuniorSuggestScreen() {
   }
 
   return (
-    <SafeAreaView edges={[]} style={styles.safe}>
+    <Screen scroll={false} tabBar="junior" header={<ScreenTitleHeader title="노하우 제안" backFallback />}>
       <Stack.Screen options={{ title: '노하우 제안' }} />
-      <ScreenTitleHeader title="노하우 제안" backFallback />
+      {/* 키보드가 입력칸을 가리지 않게 스크롤을 KeyboardShift 안에 직접 둔다 — 여백은 screenScrollStyle 그대로. */}
       <KeyboardShift>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={screenScrollStyle} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {!ready ? (
             <ScreenLoading label="노하우를 불러오고 있어요…" />
           ) : (
@@ -125,14 +128,16 @@ export default function JuniorSuggestScreen() {
           {/* 종류 선택 — 개선 프리셋이면 잠금(대상 고정) */}
           {!presetImprove && (
             <Appear delay={stagger(1)}>
-            <View style={styles.seg}>
-              <Pressable onPress={() => setKind('new')} style={[styles.segO, kind === 'new' && styles.segOn]}>
-                <Text style={[styles.segText, kind === 'new' && styles.segTextOn]}>새 노하우 제안</Text>
-              </Pressable>
-              <Pressable onPress={() => setKind('improve')} style={[styles.segO, kind === 'improve' && styles.segOn]}>
-                <Text style={[styles.segText, kind === 'improve' && styles.segTextOn]}>기존 노하우 개선</Text>
-              </Pressable>
-            </View>
+            {/* 화면 안 복제 세그먼트 → 공용 SegmentTabs(흰 트랙 + 검정 선택 칸). 바깥 여백은 화면 틀이 정한다. */}
+            <SegmentTabs
+              style={{ margin: 0 }}
+              items={[
+                { key: 'new', label: '새 노하우 제안' },
+                { key: 'improve', label: '기존 노하우 개선' },
+              ]}
+              value={kind}
+              onChange={(k) => setKind(k as 'new' | 'improve')}
+            />
             </Appear>
           )}
 
@@ -140,15 +145,18 @@ export default function JuniorSuggestScreen() {
           {kind === 'improve' && targetEntryId && (targetTitle || picked) && (
             <Appear delay={stagger(2)}>
             <View style={styles.targetCard}>
-              <Ionicons name="create-outline" size={15} color={'#8A5A12'} />
+              <Ionicons name="create-outline" size={15} color={BrandColors.warnText} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.targetLabel}>이 노하우를 개선해요</Text>
                 <Text style={styles.targetTitle} numberOfLines={2}>{targetTitle}</Text>
               </View>
               {/* 프리셋이 아니면 다시 고를 수 있게 */}
               {!presetImprove && (
-                <Pressable onPress={() => setPickedId(null)} hitSlop={8} style={({ pressed }) => [styles.changeBtn, pressed && { opacity: 0.6 }]}>
-                  <Text style={styles.changeText}>변경</Text>
+                // 보이는 알약은 낮게, 누르는 상자는 44 이상(RN-web 은 hitSlop 을 무시한다).
+                <Pressable onPress={() => setPickedId(null)} hitSlop={8} style={({ pressed }) => [styles.changeHit, pressed && { opacity: 0.6 }]}>
+                  <View style={styles.changeBtn}>
+                    <Text style={styles.changeText}>변경</Text>
+                  </View>
                 </Pressable>
               )}
             </View>
@@ -200,14 +208,13 @@ export default function JuniorSuggestScreen() {
           )}
 
           {/* 본문 입력 — 신규이거나, 개선 대상을 정한 뒤에만 노출 */}
+          {/* 라벨 ↔ 입력칸 ↔ 안내는 한 묶음이라 섹션 간격(20)이 아니라 붙은 여백 하나(field gap)로 둔다. */}
           {!needsPick && (
-            <>
               <Appear delay={stagger(2)}>
+              <View style={styles.field}>
               <Text style={styles.fieldLabel}>
                 {kind === 'improve' ? '어떻게 바꾸면 더 좋을까요?' : '어떤 노하우인가요?'}
               </Text>
-              </Appear>
-              <Appear delay={stagger(2)}>
               <TextInput
                 value={text}
                 onChangeText={setText}
@@ -221,16 +228,14 @@ export default function JuniorSuggestScreen() {
                 multiline
                 textAlignVertical="top"
               />
-              </Appear>
-              <Appear delay={stagger(2)}>
               <Text style={styles.hint}>구체적으로 적을수록 사장님이 반영하기 쉬워요. (최소 5자)</Text>
+              </View>
               </Appear>
-            </>
           )}
 
           <Appear delay={stagger(3)}>
           <Pressable onPress={send} disabled={!canSubmit || sending} style={({ pressed }) => [styles.cta, (!canSubmit || sending) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
-            <Ionicons name="paper-plane-outline" size={16} color="#FFFFFF" />
+            <Ionicons name="paper-plane-outline" size={16} color={InkColors.bubbleText} />
             <Text style={styles.ctaText}>{sending ? '보내는 중…' : '사장님께 제안 보내기'}</Text>
           </Pressable>
           </Appear>
@@ -238,10 +243,10 @@ export default function JuniorSuggestScreen() {
           {/* 내 제안 — 데드엔드 방지(보낸 제안의 상태를 본인이 추적) */}
           {mine.length > 0 && (
             <Appear delay={stagger(4)}>
-            <View style={styles.mineWrap}>
-              <Text style={styles.mineHeader}>내가 보낸 제안</Text>
-              {mine.slice(0, 10).map((s) => (
-                <View key={s.id} style={styles.mineRow}>
+            <Section title="내가 보낸 제안">
+              <View style={styles.mineCard}>
+              {mine.slice(0, 10).map((s, i) => (
+                <View key={s.id} style={[styles.mineRow, i > 0 && styles.mineRowLine]}>
                   <View style={[styles.mineChip, { backgroundColor: STATUS_CHIP[s.status].bg }]}>
                     <Text style={[styles.mineChipText, { color: STATUS_CHIP[s.status].fg }]}>
                       {s.status === 'approved' ? '반영됨' : s.status === 'rejected' ? '반려' : '검토 중'}
@@ -250,56 +255,53 @@ export default function JuniorSuggestScreen() {
                   <Text style={styles.mineText} numberOfLines={1}>{s.text}</Text>
                 </View>
               ))}
-            </View>
+              </View>
+            </Section>
             </Appear>
           )}
             </>
           )}
-
-          <View style={{ height: 16 }} />
         </ScrollView>
       </KeyboardShift>
-      <RoleTabBar role="junior" />
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  pickMore: { fontSize: 15, color: InkColors.ink3, paddingVertical: 8, paddingHorizontal: 4 },
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: 20, gap: 14 },
-  lead: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
+  pickMore: { ...Type.desc, paddingVertical: 8, paddingHorizontal: 4 },
+  lead: { ...Type.desc },
 
-  seg: { flexDirection: 'row', gap: 8 },
-  segO: { flex: 1, alignItems: 'center', paddingVertical: 11, borderRadius: 12, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
-  segOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  segText: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink2 },
-  segTextOn: { color: '#FFFFFF' },
-
-  targetCard: { flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: '#FBF3E3', borderWidth: 1, borderColor: '#EAD9B5', borderRadius: 12, padding: 13 },
-  targetLabel: { fontSize: 11.5, fontWeight: '800', color: '#8A5A12' },
-  targetTitle: { fontSize: 14, fontWeight: '700', color: InkColors.ink, marginTop: 2 },
-  changeBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: Radius.pill, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAD9B5' },
-  changeText: { fontSize: 12, fontWeight: '800', color: '#8A5A12' },
+  // 개선 대상 — 주의 틴트 면(warnSoft) + 글자는 800(warnText). 선 색은 맞는 토큰이 없어 그대로 둔다.
+  targetCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: BrandColors.warnSoft, borderWidth: 1, borderColor: '#EAD9B5', borderRadius: Radius.md, padding: Space.md },
+  targetLabel: { ...Type.tag, fontWeight: '800', color: BrandColors.warnText },
+  targetTitle: { ...Type.body, fontWeight: '700', marginTop: 2 },
+  changeHit: { minHeight: 44, justifyContent: 'center' },
+  changeBtn: { paddingHorizontal: Space.md, paddingVertical: Space.xs, borderRadius: Radius.pill, backgroundColor: Surface.card, borderWidth: 1, borderColor: '#EAD9B5' },
+  changeText: { ...Type.tag, fontWeight: '800', color: BrandColors.warnText },
 
   pickWrap: { gap: 10 },
-  pickEmpty: { fontSize: 13, color: InkColors.ink3, lineHeight: 20, paddingVertical: 8 },
-  pickList: { borderWidth: 1, borderColor: InkColors.line, borderRadius: 13, backgroundColor: InkColors.bg, overflow: 'hidden' },
-  pickRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 13, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: InkColors.line },
+  pickEmpty: { ...Type.desc, paddingVertical: 8 },
+  // 고르기 목록 = 행 목록 카드(좌우 16은 카드가 든다).
+  pickList: { ...CardStyles.rows },
+  pickRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingVertical: Space.md, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   catDot: { width: 9, height: 9, borderRadius: 5 },
-  pickTitle: { flex: 1, fontSize: 14, fontWeight: '600', color: InkColors.ink },
+  pickTitle: { ...Type.body, flex: 1, fontWeight: '600' },
 
-  fieldLabel: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, marginTop: 2 },
-  input: { minHeight: 130, borderWidth: 1, borderColor: InkColors.line, borderRadius: 13, padding: 14, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.bg, lineHeight: 22 },
-  hint: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
+  // 라벨 ↔ 입력칸 ↔ 안내 — 한 묶음 안 여백 하나.
+  field: { gap: Space.sm },
+  fieldLabel: { fontSize: 13, fontWeight: '800', color: TextColor.secondary },
+  // 카드 없이 회색 바탕(Surface.screen)에 바로 놓인 칸 — 흰 면 + 진한 선(lineStrong · 2026-11-02 결정).
+  input: { minHeight: 130, borderWidth: 1, borderColor: InkColors.lineStrong, borderRadius: Radius.md, padding: 14, fontSize: 15, color: InkColors.ink, backgroundColor: Surface.input, lineHeight: 22 },
+  hint: { ...Type.desc, fontWeight: '600' },
 
-  cta: { ...ButtonStyles.primary, flexDirection: 'row', gap: 7, backgroundColor: InkColors.ink, marginTop: 4, ...Elevation.e1 },
-  ctaText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  // 주 버튼 — 그림자 없음(결정표).
+  cta: { ...ButtonStyles.primary, flexDirection: 'row', gap: 7, backgroundColor: InkColors.ink, marginTop: 4 },
+  ctaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 
-  mineWrap: { marginTop: 10, gap: 8 },
-  mineHeader: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
-  mineRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: InkColors.line },
+  mineCard: { ...CardStyles.rows },
+  mineRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: Space.md },
+  mineRowLine: { borderTopWidth: 1, borderTopColor: InkColors.line },
   mineChip: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: Radius.pill },
-  mineChipText: { fontSize: 11, fontWeight: '800' },
-  mineText: { flex: 1, fontSize: 13, color: InkColors.ink2, fontWeight: '500' },
+  mineChipText: { ...Type.tag, fontWeight: '800' },
+  mineText: { flex: 1, fontSize: 13, color: TextColor.secondary, fontWeight: '500' },
 });

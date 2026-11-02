@@ -56,11 +56,13 @@ import { QuizEditorSheet } from '@/components/owner/quiz/QuizEditorSheet';
 import { QuizPreviewSheet } from '@/components/owner/quiz/QuizPreviewSheet';
 import { QuizSettingsPanel } from '@/components/owner/quiz/QuizSettingsPanel';
 import { SheetHead } from '@/components/owner/quiz/kit';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface, TextColor, CustomCategoryColorSoft } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
-import type { QuizItem } from '@/lib/quiz/types';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
+import type { QuizItem, QuizKind } from '@/lib/quiz/types';
 
 type Seg = 'people' | 'items' | 'settings';
 
@@ -563,12 +565,21 @@ export default function QuizDetailScreen() {
                     accessibilityLabel={`${i + 1}번 문항 — 미리보기·고치기·빼기`}
                   >
                     <View style={st.rowText}>
-                      <Text style={st.rowTitle} numberOfLines={1}>
-                        {i + 1} · {FORMATS[q.format]?.label ?? q.format}
+                      {/* 첫 줄 = 번호 - 질문, 둘째 줄 = 유형 칩 + 답안 수(2026-11-02 사용자 요청).
+                          질문이 빈 형태는 유형 이름으로 대신한다. */}
+                      <Text style={st.rowTitle} numberOfLines={2}>
+                        {i + 1} - {String(q.payload?.ask ?? '').trim() || (FORMATS[q.format]?.label ?? q.format)}
                       </Text>
-                      <Text style={st.rowSub} numberOfLines={1}>
-                        {itemAnswersLabel(s)}
-                      </Text>
+                      <View style={st.itemMeta}>
+                        <View style={[st.formatChip, { backgroundColor: kindChip(q.format).bg }]}>
+                          <Text style={[st.formatChipText, { color: kindChip(q.format).fg }]} numberOfLines={1}>
+                            {FORMATS[q.format]?.label ?? q.format}
+                          </Text>
+                        </View>
+                        <Text style={[st.rowSub, st.itemMetaSub]} numberOfLines={1}>
+                          {itemAnswersLabel(s)}
+                        </Text>
+                      </View>
                     </View>
                     {/* 경고 기준은 metrics.itemAnswers 의 warn 하나다(N18). 목록 경고행과 같다. */}
                     {stale ? (
@@ -756,6 +767,24 @@ function SheetOption({ label, badge, danger, onPress }: { label: string; badge?:
 }
 
 /** 링 아래 기본 정보 — 이름표와 값을 짝지어 돌려준다(값은 명사형, 워딩 §5). */
+/**
+ * 문항 유형 칩 색 — 유형(kind)마다 한 쌍(면 50 · 글자 800). 형태가 17종이라 형태마다 색을 나누면
+ * 토큰이 모자라 같은 유형의 형태(일반형·게임형)는 같은 색을 쓴다. 글자는 AA 를 지키는 800·ink 만 쓴다.
+ */
+const KIND_CHIP: Record<QuizKind, { bg: string; fg: string }> = {
+  t0: { bg: InkColors.bgSoft, fg: InkColors.ink2 },
+  t1: { bg: BrandColors.mentionSoft, fg: BrandColors.mentionText },
+  t2: { bg: BrandColors.goodSoft, fg: BrandColors.goodText },
+  t3: { bg: BrandColors.badSoft, fg: BrandColors.badText },
+  t4: { bg: CustomCategoryColorSoft, fg: InkColors.ink },
+  t5: { bg: BrandColors.warnSoft, fg: BrandColors.warnText },
+  t6: { bg: BrandColors.yellowSoft, fg: InkColors.ink },
+};
+function kindChip(format: string): { bg: string; fg: string } {
+  const kind = FORMATS[format as keyof typeof FORMATS]?.kind;
+  return (kind && KIND_CHIP[kind]) || KIND_CHIP.t0;
+}
+
 function factsOf(
   itemCount: number,
   answerDays: number | null | undefined,
@@ -772,11 +801,13 @@ function factsOf(
 
 
 const st = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.paper },
+  // 바탕 = Surface.screen(2026-11-02). SafeAreaView(bottom)는 그대로 — 탭바가 없는 하위 화면이라 아래 안전 영역을 여기서 든다.
+  safe: { flex: 1, backgroundColor: Surface.screen },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.sm },
-  loadingText: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },
+  loadingText: { fontSize: 13, fontWeight: '600', color: TextColor.secondary },
   segBody: { gap: Space.md },
-  scroll: { padding: Space.gutter, paddingBottom: Space.xl * 2, gap: Space.md },
+  // 첫 여백 16 · 좌우 20 · 블록 사이 20 = 화면 틀 값(2026-11-02).
+  scroll: screenScrollStyle,
   // ★hitSlop 은 RN-web 에서 안 먹는다 — 실측 높이가 곧 누를 수 있는 크기다(2026-08-26 실측 29·31dp).
   //   48dp 하한(복잡도 §4)은 상자 크기로 지켜야 한다.
   // ScreenTitleHeader 의 바가 이미 좌우 거터를 갖는다 — 여기서 또 주면 거터가 두 겹이 된다.
@@ -792,26 +823,29 @@ const st = StyleSheet.create({
     backgroundColor: BrandColors.warnSoft, borderRadius: Radius.sm, borderWidth: 1, borderColor: BrandColors.warnBorder,
     paddingHorizontal: Space.md,
   },
-  staleText: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '700', color: BrandColors.warnText, lineHeight: 21 },
+  staleText: { ...Type.body, flex: 1, minWidth: 0, fontWeight: '700', color: BrandColors.warnText, lineHeight: 21 },
 
-  // 그림자(2026-09-03): 카드=e2 · 버튼·패널=e1. 그림자 없는 상자는 배경면과 구분이 안 됐다.
-  ringCard: {
-    backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
-    padding: Space.lg, alignItems: 'center', gap: Space.xs, ...Elevation.e2,
-  },
+  // 카드 = CardStyles.list(모서리 16 · 안쪽 16 · 그림자 e1 · 2026-11-02 결정표. 옛 e2).
+  ringCard: { ...CardStyles.list, alignItems: 'center', gap: Space.xs },
   // 링 아래 기본 정보 표 — ringCard 가 가운데 정렬이라 표는 스스로 폭을 펴야 한다.
   factTable: { alignSelf: 'stretch', marginTop: Space.sm },
   factRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.md, paddingVertical: Space.sm },
   factRowTop: { borderTopWidth: 1, borderTopColor: InkColors.line },
-  factKey: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
+  factKey: { fontSize: 13, fontWeight: '700', color: TextColor.secondary },
   factVal: { flex: 1, minWidth: 0, fontSize: 13, fontWeight: '800', color: InkColors.ink2, textAlign: 'right' },
 
   listCard: CardStyles.rows,
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 56, paddingVertical: Space.sm },
   rowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   rowText: { flex: 1, minWidth: 0, gap: 2 },
-  rowTitle: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
-  rowSub: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: InkColors.ink3 },
+  rowTitle: { ...Type.body, flex: 1, minWidth: 0, lineHeight: 21, fontWeight: '800' },
+  rowSub: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: TextColor.secondary },
+  // 문항 줄 둘째 줄 — 유형 칩(글자 Type.tag) + 답안 수.
+  itemMeta: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: Space.xs },
+  itemMetaSub: { flexShrink: 1, minWidth: 0 },
+  formatChip: { borderRadius: Radius.pill, paddingHorizontal: Space.sm, flexShrink: 0 },
+  // 칩 높이는 줄 높이 20 으로 낸다(세로 패딩 대신).
+  formatChipText: { ...Type.tag, lineHeight: 20, fontWeight: '800' },
 
 
   feedback: {
@@ -819,22 +853,21 @@ const st = StyleSheet.create({
     padding: Space.lg, gap: Space.xs, ...Elevation.e1,
   },
   feedbackLabel: { fontSize: 13, fontWeight: '800', color: BrandColors.badText },
-  feedbackBody: { fontSize: 15, fontWeight: '600', color: InkColors.ink, lineHeight: 22 },
-  feedbackCta: {
-    marginTop: Space.sm, minHeight: 48, alignItems: 'center', justifyContent: 'center',
-    borderRadius: Radius.sm, backgroundColor: InkColors.ink, ...Elevation.e1,
-  },
-  feedbackCtaText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
+  feedbackBody: { ...Type.body, fontWeight: '600', lineHeight: 22 },
+  // 주 버튼(52 · 모서리 16 · 16/800 · 그림자 없음 · 2026-11-02).
+  feedbackCta: { ...ButtonStyles.primary, marginTop: Space.sm, backgroundColor: InkColors.ink },
+  feedbackCtaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 
   thinBox: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.lg, gap: Space.sm, ...Elevation.e1 },
-  thinTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
+  thinTitle: { ...Type.body, fontWeight: '800', lineHeight: 22 },
   thinRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  thinName: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  thinName: { ...Type.body, flex: 1, minWidth: 0, fontWeight: '700' },
+  // 작은 버튼 = ButtonStyles.small(2026-11-02 결정으로 48 알약). 선·면 색은 자리 값 그대로.
   smallAct: {
-    minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.md,
-    borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', ...Elevation.e1,
+    ...ButtonStyles.small,
+    borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', ...Elevation.e1,
   },
-  smallActText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
+  smallActText: { ...ButtonTextStyles.small, color: InkColors.ink2 },
 
   // 시트 본문 여백 — 값은 kit 의 `qst.body`(좌우 16 · 아래 20)와 같다. 없으면 카드·입력칸이
   // 시트 좌우 끝에 붙어 SheetHead(16)와 왼쪽 선이 어긋난다(2026-09-03 웹 실측과 같은 결함).
@@ -845,10 +878,10 @@ const st = StyleSheet.create({
     borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', ...Elevation.e1,
   },
   optDanger: { borderColor: '#F3C9C9' },
-  optText: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
+  optText: { ...Type.body, flex: 1, fontWeight: '700', color: InkColors.ink2 },
   optTextDanger: { color: BrandColors.badText },
   optBadge: {
-    fontSize: 12, fontWeight: '800', color: InkColors.ink,
+    ...Type.tag, fontWeight: '800', color: InkColors.ink,
     backgroundColor: BrandColors.yellowSoft, borderRadius: Radius.pill, paddingHorizontal: Space.sm, paddingVertical: 3,
   },
 

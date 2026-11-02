@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 /**
  * D10 · 노하우 행 — **좌측 라벨 열 + 점**. 노하우 본문을 그리는 자리는 전부 이것 하나다.
@@ -107,11 +108,11 @@ const styles = StyleSheet.create({
   label: { width: LABEL_COL_W, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingTop: 2 },
   dot: { width: DOT, height: DOT, borderRadius: Radius.pill },
   // 위치 꼬리표라 본문 15sp 하한 대상이 아니다(simplicity-voice §4 '보조').
-  labelText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink3 },
+  labelText: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
 
   value: { flex: 1, minWidth: 0 },
-  text: { fontSize: 15, lineHeight: 22, color: InkColors.ink },
-  sub: { fontSize: 12.5, color: InkColors.ink3, marginTop: Space.xs },
+  text: { ...Type.body, lineHeight: 22 },
+  sub: { ...Type.tag, color: TextColor.secondary, marginTop: Space.xs },
 
   bullet: { flexDirection: 'row', gap: Space.sm, alignItems: 'flex-start' },
   bulletGap: { marginTop: Space.sm },

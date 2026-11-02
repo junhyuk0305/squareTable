@@ -2,14 +2,12 @@ import { useEffect, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, TextInput, StyleSheet, ScrollView, Platform } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { RoleTabBar } from '@/components/RoleTabBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
-import { SectionLabel } from '@/components/SectionLabel';
+import { Screen, Section } from '@/components/Screen';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
@@ -20,10 +18,11 @@ import { maskHHMM } from '@/lib/utils/attendance';
 import { formatBizNo, isValidBizNo } from '@/lib/utils/bizno';
 import { friendlyError } from '@/lib/utils/userError';
 import { WEEKDAY_LABELS, WEEKDAY_ORDER, closedDaysLabel } from '@/lib/utils/schedule';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
-import { ButtonStyles } from '@/lib/theme/button';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { CardStyles } from '@/lib/theme/card';
 
 const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
@@ -47,8 +46,8 @@ export default function OwnerStoreConfigScreen() {
   const retry = useScheduleStore((s) => s.retry);
 
   return (
-    <SafeAreaView style={styles.safe} edges={[]}>
-      <ScreenTitleHeader title="매장 기본 정보" backFallback />
+    // 바탕·헤더·탭바 = Screen. 스크롤은 폼이 직접 든다(scroll={false}) — 게이트가 폼 자리를 바꾸고 KeyboardShift 가 스크롤을 감싼다.
+    <Screen header={<ScreenTitleHeader title="매장 기본 정보" backFallback />} tabBar="owner" scroll={false}>
       <Stack.Screen options={{ title: '매장 기본 정보' }} />
       {!loaded ? (
         <ScreenLoading label="매장 정보를 불러오고 있어요…" />
@@ -57,8 +56,7 @@ export default function OwnerStoreConfigScreen() {
       ) : (
         <StoreConfigForm />
       )}
-      <RoleTabBar role="owner" />
-    </SafeAreaView>
+    </Screen>
   );
 }
 
@@ -131,13 +129,12 @@ function StoreConfigForm() {
 
   return (
     <KeyboardShift>
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={screenScrollStyle} showsVerticalScrollIndicator={false}>
       <Text style={styles.lead}>운영시간과 정기 휴무를 정해두면 근무표에 반영돼요.</Text>
 
       {/* 운영시간 — 이 화면의 최우선. 2026-08-06: 카드 껍데기를 벗겨 시각 자체가 화면에서 가장 큰
           요소가 되게 했다(세 섹션이 전부 '제목→카드'라 한 종류의 나열로 읽히던 것을 여기서 끊는다). */}
-      <View style={styles.section}>
-        <SectionLabel title="운영시간" />
+      <Section title="운영시간">
         <View style={styles.timeRow}>
           <View style={styles.timeField}>
             <Text style={styles.timeLabel}>오픈</Text>
@@ -166,11 +163,10 @@ function StoreConfigForm() {
           </View>
         </View>
         {!valid && <Text style={styles.warn}>HH:MM 형식으로, 오픈이 마감보다 빠르게 입력해 주세요.</Text>}
-      </View>
+      </Section>
 
       {/* 정기 휴무 — 카드 없이 칩 줄. 선택 상태 요약(연중무휴·월·화)은 라벨 우측 hint 로 올렸다. */}
-      <View style={styles.section}>
-        <SectionLabel title="정기 휴무" hint={closedDaysLabel(closedDays)} />
+      <Section title="정기 휴무" hint={closedDaysLabel(closedDays)}>
         <View style={styles.dows}>
           {WEEKDAY_ORDER.map((wd) => {
             const on = closedDays.includes(wd);
@@ -180,18 +176,17 @@ function StoreConfigForm() {
                 onPress={() => toggleDay(wd)}
                 style={[styles.dow, on && styles.dowOn, wd === 0 && on && styles.dowSun]}
               >
-                <Text style={[styles.dowText, on && { color: '#fff' }]}>{WEEKDAY_LABELS[wd]}</Text>
+                <Text style={[styles.dowText, on && { color: InkColors.bubbleText }]}>{WEEKDAY_LABELS[wd]}</Text>
               </Pressable>
             );
           })}
         </View>
         <Text style={styles.hint}>쉬는 요일을 누르세요. 연중무휴면 모두 끄면 돼요.</Text>
-      </View>
+      </Section>
 
       {/* 비고 — 이 화면에서 유일하게 카드로 남긴 블록(배치규칙⑤: 화면당 카드 1~2개는 남긴다).
           여러 줄 자유 입력이라 경계면이 있어야 어디까지 쓰는 칸인지 보인다. */}
-      <View style={styles.section}>
-        <SectionLabel title="비고" />
+      <Section title="비고">
         <View style={styles.card}>
           <TextInput
             value={note}
@@ -202,7 +197,7 @@ function StoreConfigForm() {
             multiline
           />
         </View>
-      </View>
+      </Section>
 
       <Pressable onPress={() => { void save(); }} disabled={!valid || saving} style={({ pressed }) => [styles.saveBtn, (!valid || saving) && { opacity: 0.4 }, pressed && valid && !saving && { opacity: 0.85 }]}>
         <Text style={styles.saveText}>{saved ? '저장됐어요 ✓' : saving ? '저장 중이에요' : '저장'}</Text>
@@ -228,8 +223,6 @@ function StoreConfigForm() {
           </Pressable>
         </View>
       ) : null}
-
-      <View style={{ height: 12 }} />
     </ScrollView>
     </KeyboardShift>
   );
@@ -282,8 +275,7 @@ function BizNoSection() {
   };
 
   return (
-    <View style={styles.section}>
-      <SectionLabel title="사업자등록번호" />
+    <Section title="사업자등록번호">
       <TextInput
         value={bizNo}
         onChangeText={(v) => { setErr(null); setBizNo(formatBizNo(v)); }}
@@ -313,50 +305,50 @@ function BizNoSection() {
       >
         <Text style={styles.bizBtnText}>{saving ? '저장 중이에요' : '번호 저장'}</Text>
       </Pressable>
-    </View>
+    </Section>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: Space.gutter, gap: Space.xl },
-  lead: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
+  lead: { ...Type.desc },
 
-  // 카드가 빠진 자리에서 섹션을 가르는 건 여백이다 — 섹션 안은 좁게(sm), 섹션 사이는 넓게(scroll gap xl).
-  section: { gap: Space.sm },
+  // 카드가 빠진 자리에서 섹션을 가르는 건 여백이다 — 섹션 안은 좁게(Section · sm), 섹션 사이는 넓게(스크롤 gap).
   card: { ...CardStyles.list, gap: 10 },
 
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: Space.lg },
   timeField: { flex: 1, alignItems: 'center', gap: Space.xs },
   // 필드 위 라벨 높이만큼 화살표를 내려 시각 입력의 세로 중앙에 맞춘다(라벨은 화살표 쪽에 없다).
   timeArrow: { marginTop: Space.gutter },
-  timeLabel: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
+  timeLabel: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
   // 카드 보더가 사라졌으니 입력칸이 스스로 면을 갖는다 — 흰 배경에 흰 필드면 어디를 누르는지 안 보인다.
   timeInp: { alignSelf: 'stretch', textAlign: 'center', fontSize: 24, fontWeight: '800', color: InkColors.ink, letterSpacing: 1, paddingVertical: 10, backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
   bad: { borderColor: BrandColors.bad },
-  warn: { fontSize: 15, color: BrandColors.badText, fontWeight: '700', textAlign: 'center' },
+  warn: { ...Type.body, color: BrandColors.badText, fontWeight: '700', textAlign: 'center' },
 
   dows: { flexDirection: 'row', justifyContent: 'space-between' },
   dow: { width: 38, height: 38, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, alignItems: 'center', justifyContent: 'center' },
   dowOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   dowSun: { backgroundColor: BrandColors.badSolid, borderColor: BrandColors.bad },
-  dowText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
-  hint: { fontSize: 12, color: InkColors.ink3 },
+  dowText: { fontSize: Type.body.fontSize, fontWeight: '800', color: TextColor.secondary },
+  hint: Type.desc,
 
-  noteInp: { fontSize: 15, color: InkColors.ink, minHeight: 56, lineHeight: 22, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
+  noteInp: { ...Type.body, minHeight: 56, lineHeight: 22, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
 
   saveBtn: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
-  saveText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  saveText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 
-  bizInp: { fontSize: 15, color: InkColors.ink, paddingHorizontal: 14, paddingVertical: 13, backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
+  // 카드 없이 회색 바탕(Surface.screen)에 바로 놓인 칸 — 흰 면 + 진한 선이어야 보인다(검색창과 같은 lineStrong).
+  bizInp: { ...Type.body, paddingHorizontal: 14, paddingVertical: 13, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.lineStrong, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
   bizOk: { color: BrandColors.goodText },
-  bizErr: { fontSize: 12, fontWeight: '700', color: BrandColors.badText },
-  bizBtn: { borderRadius: Radius.md, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
-  bizBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  bizErr: { ...Type.tag, fontWeight: '700', color: BrandColors.badText },
+  // 보조 버튼 = 주 버튼 모양(52 · 모서리 16) + 흰 면·선.
+  bizBtn: { ...ButtonStyles.primary, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
+  bizBtnText: { fontSize: Type.body.fontSize, fontWeight: '800', color: InkColors.ink },
 
-  dangerBox: { marginTop: Space.lg, borderWidth: 1, borderColor: BrandColors.bad, borderRadius: Radius.md, padding: 16, gap: 8, backgroundColor: InkColors.bg },
-  dangerLabel: { fontSize: 12, fontWeight: '800', color: BrandColors.badText, letterSpacing: 0.3 },
-  dangerDesc: { fontSize: 15, color: InkColors.ink2, lineHeight: 21 },
-  dangerBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 4, paddingVertical: 12, borderRadius: Radius.sm, borderWidth: 1, borderColor: BrandColors.bad, backgroundColor: InkColors.bg },
-  dangerBtnText: { fontSize: 14, fontWeight: '800', color: BrandColors.badText },
+  // 위험 구역 — 목록 카드 모양 + 빨강 선. 위 여백은 저장 버튼 묶음과 한 번 더 떼어 둔다.
+  dangerBox: { ...CardStyles.list, marginTop: Space.lg, borderColor: BrandColors.bad, gap: 8 },
+  dangerLabel: { ...Type.tag, fontWeight: '800', color: BrandColors.badText, letterSpacing: 0.3 },
+  dangerDesc: { ...Type.desc },
+  dangerBtn: { ...ButtonStyles.primary, flexDirection: 'row', gap: 6, marginTop: 4, borderWidth: 1, borderColor: BrandColors.bad, backgroundColor: InkColors.bg },
+  dangerBtnText: { fontSize: Type.body.fontSize, fontWeight: '800', color: BrandColors.badText },
 });

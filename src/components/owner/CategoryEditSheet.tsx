@@ -8,8 +8,10 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { getSectionMeta, SECTION_PALETTE, FIXED_SECTION_COLORS } from '@/lib/utils/category';
 import { UNSECTIONED, standardSections, sectionOptions } from '@/lib/config/sections';
 import { newCustomCategory, pickCategoryColor, type CustomCategory } from '@/lib/store/knowhowCategories';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 
 const LABEL_MAX = 20;
 
@@ -187,7 +189,7 @@ export function CategoryEditSheet({ onClose }: { onClose: () => void }) {
 
 const s = StyleSheet.create({
   title: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: 16, paddingBottom: 4 },
-  lead: { fontSize: 12.5, color: InkColors.ink2, paddingHorizontal: 16, paddingBottom: 12, lineHeight: 18 },
+  lead: { ...Type.desc, paddingHorizontal: 16, paddingBottom: 12 },
   scroll: { flex: 1, paddingHorizontal: 16 },
 
   card: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, backgroundColor: InkColors.bg, padding: 12, marginBottom: 8 },
@@ -205,16 +207,17 @@ const s = StyleSheet.create({
     color: InkColors.ink,
     backgroundColor: InkColors.cream,
   },
-  count: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
+  count: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
   iconBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
 
   confirmBar: { marginTop: 10, padding: 10, borderRadius: Radius.sm, backgroundColor: '#FBECEC', borderWidth: 1, borderColor: BrandColors.bad },
-  confirmText: { fontSize: 12, color: '#8A2B2B', fontWeight: '700', lineHeight: 17 },
+  confirmText: { ...Type.desc, color: '#8A2B2B', fontWeight: '700' },
+  // 작은 버튼(48 알약 · 15/800 · 내용 폭 · 2026-11-02).
   confirmBtns: { flexDirection: 'row', gap: 8, marginTop: 8, justifyContent: 'flex-end' },
-  cCancel: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
-  cCancelText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
-  cDel: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: Radius.sm, backgroundColor: BrandColors.badSolid },
-  cDelText: { fontSize: 12.5, fontWeight: '800', color: '#fff' },
+  cCancel: { ...ButtonStyles.small, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
+  cCancelText: { ...ButtonTextStyles.small, color: InkColors.ink2 },
+  cDel: { ...ButtonStyles.small, backgroundColor: BrandColors.badSolid },
+  cDelText: { ...ButtonTextStyles.small, color: InkColors.bubbleText },
 
   addBtn: {
     flexDirection: 'row',
@@ -229,10 +232,11 @@ const s = StyleSheet.create({
     marginTop: 4,
     marginBottom: 8,
   },
-  addBtnText: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
-  note: { fontSize: 12, color: InkColors.ink3, lineHeight: 17, marginBottom: 8 },
+  addBtnText: { fontSize: Type.desc.fontSize, fontWeight: '800', color: InkColors.ink },
+  note: { ...Type.desc, marginBottom: 8 },
 
   foot: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 18, borderTopWidth: 1, borderTopColor: InkColors.line },
-  saveBtn: { flex: 1, backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center' },
-  saveText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  // 주 버튼(52 · 모서리 16 · 16/800 · 2026-11-02).
+  saveBtn: { ...ButtonStyles.primary, flex: 1, backgroundColor: InkColors.ink },
+  saveText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

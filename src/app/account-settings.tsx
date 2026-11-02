@@ -13,11 +13,13 @@ import { FREE_PROMO } from '@/lib/config/tiers';
 import { logout } from '@/lib/auth';
 import { confirmAction, notifyAction } from '@/lib/utils/confirm';
 import { showToast } from '@/lib/store/useToastStore';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
-import { Layout } from '@/lib/theme/layout';
+import { InkColors, BrandColors, Surface } from '@/lib/theme/colors';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
+import { screenScrollStyle } from '@/lib/theme/layout';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
-import { SectionLabel } from '@/components/SectionLabel';
+import { Section } from '@/components/Screen';
 import { PricingTable } from '@/components/PricingTable';
 import { SHOW_BILLING, showIapSurface, showPaymentSurface } from '@/lib/config/store-policy';
 import { deleteConfirmText, deleteNotice } from '@/lib/account/copy';
@@ -246,12 +248,11 @@ export default function AccountSettings() {
               />
             </SettingsSection>
           ) : (
-            <View style={styles.billingSection}>
-              <SectionLabel
-                icon="card-outline"
-                title="구독 및 결제"
-                hint={multiOwner && storeName ? `${storeName} 기준` : undefined}
-              />
+            <Section
+              icon="card-outline"
+              title="구독 및 결제"
+              hint={multiOwner && storeName ? `${storeName} 기준` : undefined}
+            >
               <PricingTable currentPlan={plan} footNote={null} />
               <Pressable
                 onPress={() => router.push('/billing' as never)}
@@ -262,7 +263,7 @@ export default function AccountSettings() {
                 <Text style={styles.billingCtaText}>요금제 보기 · 바꾸기</Text>
                 <Ionicons name="chevron-forward" size={16} color={InkColors.bubbleText} />
               </Pressable>
-            </View>
+            </Section>
           ))}
 
         {/* 이전 매장(0196) — 구독 및 결제 바로 아래. 닫힌 매장이 있을 때만(대다수 사장에겐 안 보인다). */}
@@ -311,26 +312,23 @@ export default function AccountSettings() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
+  // 탭바 없는 하위 화면 — 아래 안전 영역은 SafeAreaView(bottom)가 든다. 바탕·스크롤 여백만 화면 틀 값을 쓴다.
+  safe: { flex: 1, backgroundColor: Surface.screen },
   // 섹션 사이 = Layout.sectionGap(2026-11-02). SettingsKit 섹션이 들던 아래 여백 12 를 없앤 대신 여기서 띈다.
-  scroll: { padding: 20, paddingTop: 16, gap: Layout.sectionGap },
-  profile: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line },
+  scroll: screenScrollStyle,
+  profile: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: 14 },
   avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: BrandColors.brandSoft, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 22, fontWeight: '900', color: BrandColors.brand },
   pName: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
-  pMeta: { fontSize: 13, color: InkColors.ink3, marginTop: 1 },
+  pMeta: { ...Type.desc, marginTop: 1 },
   foot: { fontSize: 11, color: InkColors.ink3, textAlign: 'center', marginTop: 6 },
 
-  // 구독 및 결제 — SectionLabel(카드 밖) + 요금제 표 + CTA. SettingsSection 간격(marginBottom:18)과 통일.
-  billingSection: { gap: 8 },
+  // 구독 및 결제 — <Section>(카드 밖 제목) + 요금제 표 + CTA(주 버튼).
   billingCta: {
+    ...ButtonStyles.primary,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: 4,
     backgroundColor: InkColors.ink,
-    borderRadius: Radius.md,
-    paddingVertical: 13,
   },
-  billingCtaText: { fontSize: 14, fontWeight: '800', color: InkColors.bubbleText },
+  billingCtaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

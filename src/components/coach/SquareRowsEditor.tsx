@@ -6,6 +6,8 @@ import { KnowhowRows, type KnowhowRow, type KnowhowRowKind } from '@/components/
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 import type { SquareBlock } from '@/types';
 
 /**
@@ -206,7 +208,7 @@ function BulletRead({ items, tone }: { items: string[]; tone: string }) {
 }
 
 const styles = StyleSheet.create({
-  readText: { flex: 1, fontSize: 15, lineHeight: 22, color: InkColors.ink },
+  readText: { ...Type.body, flex: 1, lineHeight: 22 },
 
   lineRead: { flexDirection: 'row', gap: Space.sm, alignItems: 'flex-start' },
   lineRow: { flexDirection: 'row', gap: Space.sm, alignItems: 'center' },
@@ -216,7 +218,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm,
     paddingHorizontal: Space.md, paddingVertical: Space.sm,
-    fontSize: 15, lineHeight: 22, color: InkColors.ink, backgroundColor: InkColors.bg,
+    ...Type.body, lineHeight: 22, backgroundColor: InkColors.bg,
   },
   removeBtn: {
     width: 26, height: 26, borderRadius: Radius.sm, backgroundColor: InkColors.bgSoft,
@@ -224,20 +226,18 @@ const styles = StyleSheet.create({
   },
 
   addRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, minHeight: 48 },
-  addText: { fontSize: 14, fontWeight: '700', color: BrandColors.goodText },
+  addText: { fontSize: 15, fontWeight: '700', color: BrandColors.goodText },
 
   cellFoot: { flexDirection: 'row', gap: Space.sm, alignItems: 'center', marginTop: Space.sm },
   ghostBtn: { minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.sm },
-  ghostText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
-  doneBtn: {
-    minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.lg,
-    borderRadius: Radius.sm, backgroundColor: InkColors.ink,
-  },
-  doneText: { fontSize: 14, fontWeight: '800', color: InkColors.bubbleText },
+  ghostText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
+  // 작은 버튼(48 알약 · 15/800 · 내용 폭 · 2026-11-02).
+  doneBtn: { ...ButtonStyles.small, backgroundColor: InkColors.ink },
+  doneText: { ...ButtonTextStyles.small, color: InkColors.bubbleText },
 
   hintWrap: { marginTop: Space.sm, alignSelf: 'flex-start' },
   hint: {
-    fontSize: 12, fontWeight: '700', color: BrandColors.mentionText,
+    ...Type.tag, fontWeight: '700', color: BrandColors.mentionText,
     backgroundColor: BrandColors.mentionSoft, paddingHorizontal: Space.md, paddingVertical: Space.xs,
     borderRadius: Radius.sm, overflow: 'hidden',
   },

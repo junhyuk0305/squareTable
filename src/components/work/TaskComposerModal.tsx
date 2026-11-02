@@ -8,7 +8,8 @@ import { useDayparts, useDaypartLabels, assigneesOf, type NewTask, type TaskSect
 import { type Member } from '@/components/work/MentionInput';
 import { maskHHMM } from '@/lib/utils/attendance';
 import { genId } from '@/lib/utils/id';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Radius } from '@/lib/theme/elevation';
 import { Type } from '@/lib/theme/type';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
@@ -700,19 +701,19 @@ function fmtDate(d: string): string {
 }
 
 const s = StyleSheet.create({
-  title: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: InkColors.ink, paddingHorizontal: 16, paddingBottom: 12 },
+  title: { ...Type.title, lineHeight: 25, paddingHorizontal: 16, paddingBottom: 12 },
   scroll: { flex: 1, paddingHorizontal: 16 },
   fld: { marginBottom: 13 },
-  fldLabel: { fontSize: 11.5, lineHeight: 17, fontWeight: '800', color: InkColors.ink2, marginBottom: FIELD_INNER_GAP },
+  fldLabel: { ...Type.tag, lineHeight: 17, fontWeight: '800', color: TextColor.secondary, marginBottom: FIELD_INNER_GAP },
   fldLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: FIELD_INNER_GAP },
   fldLabelInRow: { marginBottom: 0 },
   timeInp: { alignSelf: 'flex-start', minWidth: 96, textAlign: 'center' },
   // ⓘ 설명 — 시트 위에 겹쳐 뜨는 창. 바깥이나 '알겠어요'를 누르면 닫힌다.
   infoOverlay: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', paddingHorizontal: 24, borderTopLeftRadius: Radius.sheet, borderTopRightRadius: Radius.sheet },
   infoNote: { padding: 16, backgroundColor: InkColors.bg, borderRadius: Radius.md, gap: 12 },
-  infoClose: { fontSize: 15, fontWeight: '800', color: InkColors.ink, textAlign: 'center', paddingVertical: 6 },
-  infoText: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
-  inp: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.cream },
+  infoClose: { ...Type.body, fontWeight: '800', textAlign: 'center', paddingVertical: 6 },
+  infoText: { fontSize: 15, lineHeight: 22, color: TextColor.secondary },
+  inp: { ...Type.body, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, backgroundColor: InkColors.cream },
   textarea: { minHeight: 76, textAlignVertical: 'top' },
   infoBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
 
@@ -724,21 +725,22 @@ const s = StyleSheet.create({
   // 이 방에 없는 직원 — 지우지 않고 흐리게. 옆의 '불가' 알약이 색 없이도 상태를 말한다.
   segBlocked: { opacity: 0.45 },
   segPill: { marginLeft: 6 },
-  segText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
+  segText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
 
   reveal: { marginTop: 9, padding: 11, backgroundColor: InkColors.cream, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md },
-  revealLabel: { fontSize: 11, fontWeight: '800', color: InkColors.ink2, marginBottom: 8 },
+  revealLabel: { ...Type.tag, fontWeight: '800', color: TextColor.secondary, marginBottom: 8 },
   // 선택 버튼 아래 설명 — 같은 묶음이라 제목↔버튼과 같은 붙은 여백(2026-11-02 사용자). 설명 글자 = Type.desc.
   scopeNote: { ...Type.desc, marginTop: FIELD_INNER_GAP },
-  dateText: { fontSize: 14, fontWeight: '700', color: InkColors.ink, marginTop: 8, textAlign: 'center' },
+  dateText: { ...Type.body, fontWeight: '700', marginTop: 8, textAlign: 'center' },
 
   // 미니 달력
   dowRow: { flexDirection: 'row', gap: 5 },
   dow: { width: 34, height: 34, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, alignItems: 'center', justifyContent: 'center' },
   dowOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   dowSun: { backgroundColor: BrandColors.badSolid, borderColor: BrandColors.bad },
-  dowText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
-  dowWarn: { fontSize: 11, color: BrandColors.badText, fontWeight: '700', marginTop: 8 },
+  dowText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
+  // 입력 안내 문장 — 설명 단계 크기, 색은 경고 빨강 그대로.
+  dowWarn: { ...Type.desc, color: BrandColors.badText, fontWeight: '700', marginTop: 8 },
 
   lockedScope: { backgroundColor: InkColors.cream, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 10 },
   lockedScopeText: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
@@ -748,24 +750,25 @@ const s = StyleSheet.create({
   // 노하우 첨부
   khChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
   khChip: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 11, paddingVertical: 7, backgroundColor: InkColors.cream },
-  khChipText: { flexShrink: 1, fontSize: 12.5, fontWeight: '700', color: InkColors.ink },
+  khChipText: { ...Type.tag, flexShrink: 1, fontWeight: '700', color: InkColors.ink },
   khResults: { marginTop: 6, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, backgroundColor: InkColors.bg, overflow: 'hidden' },
   khRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: InkColors.paper },
-  khRowText: { flex: 1, fontSize: 13.5, fontWeight: '600', color: InkColors.ink },
-  khEmpty: { fontSize: 12.5, color: InkColors.ink3, paddingHorizontal: 12, paddingVertical: 12 },
-  khRecoLabel: { fontSize: 11, fontWeight: '800', color: InkColors.ink3, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 2 },
+  khRowText: { flex: 1, fontWeight: '600', fontSize: Type.desc.fontSize, color: InkColors.ink },
+  khEmpty: { ...Type.desc, paddingHorizontal: 12, paddingVertical: 12 },
+  khRecoLabel: { ...Type.tag, fontWeight: '800', color: TextColor.secondary, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 2 },
   khOpenBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 6, paddingVertical: 10, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, borderStyle: 'dashed', backgroundColor: InkColors.bg },
-  khOpenText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
+  khOpenText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
 
   foot: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: InkColors.line },
   destBar: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-  destText: { flex: 1, fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
+  destText: { ...Type.tag, flex: 1, color: TextColor.secondary, fontWeight: '600' },
   destStrong: { color: InkColors.ink, fontWeight: '800' },
   dupBar: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, paddingVertical: 9, paddingHorizontal: 11, backgroundColor: '#FBF3E3', borderWidth: 1, borderColor: BrandColors.warn, borderRadius: Radius.sm },
-  dupText: { flex: 1, fontSize: 12, color: '#8A5A12', fontWeight: '700', lineHeight: 16 },
+  dupText: { ...Type.tag, flex: 1, color: '#8A5A12', fontWeight: '700', lineHeight: 16 },
   footBtns: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
-  cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
-  ctaText: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  delBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 16, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.bad, backgroundColor: InkColors.bg },
-  delText: { color: BrandColors.badText, fontSize: 14, fontWeight: '800' },
+  // 주 버튼 모양(52 · 모서리 16 · 16/800). 삭제가 있으면 한 줄을 나눠 쓴다(호출부 flex 1).
+  cta: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
+  ctaText: { ...ButtonTextStyles.primary, color: '#fff' },
+  delBtn: { ...ButtonStyles.primary, flexDirection: 'row', gap: 5, borderWidth: 1, borderColor: BrandColors.bad, backgroundColor: InkColors.bg },
+  delText: { ...ButtonTextStyles.primary, color: BrandColors.badText },
 });

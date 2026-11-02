@@ -6,9 +6,11 @@ import { Collapse } from '@/components/Collapse';
 import { ProgressPill, type ProgressTone } from '@/components/blocks/ProgressPill';
 import { cardProgressText, type QuizItemProgress } from '@/lib/quiz/checkCopy';
 import { roundLabel } from '@/lib/quiz/metrics';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { CardStyles } from '@/lib/theme/card';
+import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 /** 직원 퀴즈 카드의 항목 상태 — passed=통과 · next=다음 차례 · todo=대기 · due=주기 도래 · asked=관리자 요청. */
 export type TrainingCardItem = {
@@ -222,41 +224,41 @@ export function TrainingCard({
 }
 
 const st = StyleSheet.create({
+  // 목록 카드 공용 모양(모서리 16 · 그림자 e1 · 안쪽 16). 옛 모서리 20·그림자 e2 를 없앴다(2026-11-02 결정표).
   card: {
-    marginHorizontal: Space.gutter, marginTop: Space.sm, marginBottom: Space.xs,
-    backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line,
-    paddingHorizontal: Space.lg, paddingVertical: Space.md, gap: Space.xs, ...Elevation.e2,
+    ...CardStyles.list,
+    marginHorizontal: Space.gutter, marginTop: Space.sm, marginBottom: Space.xs, gap: Space.xs,
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   title: { flex: 1, fontSize: 13, fontWeight: '800', color: InkColors.ink },
-  next: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 21 },
+  next: { ...Type.body, fontWeight: '700', lineHeight: 21 },
   // 마감 꼬리표 — 상태 라벨이라 본문 15sp 하한 대상이 아니다(복잡도 §4 "보조").
   dueRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
-  dueText: { fontSize: 13, fontWeight: '700', color: InkColors.ink3, lineHeight: 18 },
+  dueText: { fontSize: 13, fontWeight: '700', color: TextColor.secondary, lineHeight: 18 },
   // 지난번 결과 — 마감 꼬리표와 같은 급의 보조 표기(본문 15sp 하한 대상 아님).
-  lastText: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, lineHeight: 18 },
+  lastText: { fontSize: 13, fontWeight: '600', color: TextColor.secondary, lineHeight: 18 },
   btnRow: { flexDirection: 'row', gap: Space.sm, marginTop: Space.xs },
   softBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 48,
     paddingHorizontal: Space.md, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
   },
-  softBtnText: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
+  softBtnText: { fontWeight: '800', fontSize: Type.desc.fontSize, color: InkColors.ink },
   cta: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 48,
     borderRadius: Radius.md, backgroundColor: InkColors.ink,
   },
-  ctaText: { fontSize: 13.5, fontWeight: '800', color: '#FFFFFF' },
+  ctaText: { fontWeight: '800', fontSize: Type.desc.fontSize, color: '#FFFFFF' },
 
   expandRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
     borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: Space.xs, paddingVertical: Space.sm, minHeight: 40,
   },
-  expandText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
+  expandText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
   // 갈래 사이 간격. 행 간격은 group 이 갖는다(예전엔 여기 하나가 행 간격이었다).
   itemList: { gap: Space.md },
   group: { gap: Space.xs },
-  groupLabel: { fontSize: 12, fontWeight: '900', color: InkColors.ink3 },
+  groupLabel: { ...Type.tag, fontWeight: '900', color: TextColor.secondary },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.xs + 2, minHeight: 36 },
-  itemNum: { minWidth: 18, fontSize: 12, fontWeight: '800', color: InkColors.ink3, textAlign: 'center' },
-  itemText: { flex: 1, fontSize: 13.5, fontWeight: '600', color: InkColors.ink, minWidth: 0 },
+  itemNum: { ...Type.tag, minWidth: 18, fontWeight: '800', color: TextColor.secondary, textAlign: 'center' },
+  itemText: { flex: 1, fontWeight: '600', fontSize: Type.desc.fontSize, color: InkColors.ink, minWidth: 0 },
 });

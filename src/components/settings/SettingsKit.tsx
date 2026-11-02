@@ -3,7 +3,7 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
+import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { ChachakSwitch } from '@/components/ChachakSwitch';
@@ -24,7 +24,9 @@ export function SettingsSection({
   return (
     <View style={styles.section}>
       {title ? <SectionLabel icon={icon} title={title} flush /> : null}
-      <View style={styles.card}>{children}</View>
+      <View style={styles.card}>
+        <View style={styles.cardClip}>{children}</View>
+      </View>
     </View>
   );
 }
@@ -133,21 +135,25 @@ const styles = StyleSheet.create({
   // 섹션 사이 여백은 화면이 정한다(`<Screen>` 또는 스크롤 gap = Layout.sectionGap · 2026-11-02).
   //   옛 아래 여백 12 + SectionLabel 위 12 = 24 였다. 여기 여백을 남기면 Screen 의 gap 20 과 겹쳐 32 가 된다.
   section: { gap: 8 },
+  // 설정 카드도 그림자 e1(2026-11-02 사용자 결정). iOS 는 같은 뷰에 overflow hidden 이면 그림자가 잘려
+  // 바깥(그림자·모서리·선·흰 면)과 안쪽(모서리·잘라내기) 두 겹으로 나눴다. 안쪽 모서리 = 선 1px 안쪽.
   card: {
     backgroundColor: Surface.card,
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
-    overflow: 'hidden',
+    ...Elevation.e1,
   },
+  cardClip: { borderRadius: Radius.md - 1, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 15, minHeight: 52 },
   rowBorder: { borderTopWidth: 1, borderTopColor: InkColors.line },
   rowIcon: { width: 22, textAlign: 'center' },
   rowLabelWrap: { flex: 1 },
-  rowLabelText: { fontSize: 15, fontWeight: '600', color: InkColors.ink },
+  rowLabelText: { ...Type.body, fontWeight: '600' },
   // 행 설명 = 읽는 글자라 Type.desc(13/19 · secondary)(2026-11-02 결정표 '설정 행 설명').
   rowHint: { ...Type.desc, marginTop: 2, fontWeight: '400' },
-  rowValue: { fontSize: 14, color: InkColors.ink3, marginRight: 2 },
+  // 행 값("보통"·"2곳"·버전)도 읽는 글자라 secondary · 값 글자 14 → 15(2026-11-02 2차 글자 표).
+  rowValue: { fontSize: Type.body.fontSize, color: TextColor.secondary, marginRight: 2 },
   storeHead: { flexDirection: 'row', alignItems: 'center', gap: Space.md, padding: Space.lg },
   storeDot: { width: 20, height: 20, borderRadius: 10 },
   storeName: { fontSize: 17, fontWeight: '800', color: InkColors.ink },

@@ -25,6 +25,7 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 
 import { InkColors, TextColor } from '@/lib/theme/colors';
+import { Type } from '@/lib/theme/type';
 
 import type { Category } from '@/types';
 
@@ -270,7 +271,7 @@ export function JuniorAsk({ suggestEntry = true, seed, focusId }: { suggestEntry
             accessibilityRole="button"
             accessibilityLabel="이전 대화 더 보기"
           >
-            <Text style={{ fontSize: 12.5, fontWeight: '700', color: TextColor.secondary }}>⌃ 이전 대화 더 보기</Text>
+            <Text style={{ ...Type.tag, fontWeight: '700', color: TextColor.secondary }}>⌃ 이전 대화 더 보기</Text>
           </Pressable>
         )}
 

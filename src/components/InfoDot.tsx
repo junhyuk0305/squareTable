@@ -7,7 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
 import { InkColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 
 export function InfoDot({
   title,
@@ -74,17 +75,15 @@ const styles = StyleSheet.create({
   // 모양(배경·라운드·그림자·손잡이·하단 인셋)은 공용 BottomSheet 가 그린다.
   sheet: { paddingHorizontal: 16, paddingBottom: 20, gap: 12 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { fontSize: 17, fontWeight: '800', color: InkColors.ink, flex: 1 },
-  body: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
+  title: { ...Type.title, flex: 1 },
+  body: { ...Type.desc },
+  // 주 버튼 모양(52 · 모서리 16 · 가로 꽉). 색은 그대로(옅은 면 + 선).
   btn: {
+    ...ButtonStyles.primary,
     marginTop: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 13,
-    borderRadius: Radius.md,
     backgroundColor: InkColors.bgSoft,
     borderWidth: 1,
     borderColor: InkColors.line,
   },
-  btnText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  btnText: { ...ButtonTextStyles.primary, color: InkColors.ink },
 });

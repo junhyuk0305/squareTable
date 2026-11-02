@@ -20,6 +20,7 @@ import { useLegacyQuizOpen } from '@/lib/hooks/useLegacyQuizOpen';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 const EMPTY_IDS: string[] = [];
 
@@ -135,5 +136,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { fontSize: 10, fontWeight: '900', color: '#FFFFFF' },
+  badgeText: { ...Type.micro, fontWeight: '900', color: InkColors.bubbleText },
 });

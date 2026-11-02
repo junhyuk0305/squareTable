@@ -9,8 +9,9 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { shiftsOn, type ShiftTemplate, type SwapRequest, type ShiftException } from '@/lib/store/useScheduleStore';
 import { todayStr } from '@/lib/utils/attendance';
 import { addDays, fmtDateKo } from '@/lib/utils/schedule';
-import { InkColors } from '@/lib/theme/colors';
+import { InkColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
 
 export function MyShiftPicker({
   me,
@@ -73,13 +74,14 @@ export function MyShiftPicker({
 }
 
 const s = StyleSheet.create({
-  title: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: 16, paddingTop: 4 },
-  sub: { fontSize: 12.5, color: InkColors.ink3, lineHeight: 18, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
+  // 시트 안은 글자 크기·색 토큰만 맞춘다(2026-11-02 결정 — 시트 틀·안쪽 카드 모양은 그대로).
+  title: { ...Type.title, paddingHorizontal: 16, paddingTop: 4 },
+  sub: { ...Type.desc, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
 
   scroll: { paddingHorizontal: 16, paddingTop: 4 },
-  empty: { fontSize: 15, color: InkColors.ink2, lineHeight: 22, paddingVertical: 16, textAlign: 'center' },
+  empty: { ...Type.body, color: TextColor.secondary, lineHeight: 22, paddingVertical: 16, textAlign: 'center' },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingVertical: 13, paddingHorizontal: 13, backgroundColor: InkColors.bg, marginBottom: 8 },
   rowIcon: { width: 32, height: 32, borderRadius: Radius.sm, backgroundColor: InkColors.cream, alignItems: 'center', justifyContent: 'center' },
-  rowText: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  rowText: { ...Type.body, flex: 1, fontWeight: '700' },
 });

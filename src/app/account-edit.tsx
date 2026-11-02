@@ -8,10 +8,11 @@ import { Stack, Redirect } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { showToast } from '@/lib/store/useToastStore';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
-import { ButtonStyles } from '@/lib/theme/button';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
 import { ChipStyles } from '@/lib/theme/chip';
 import { isValidPhone, normalizePhone, formatPhone, passwordError } from '@/lib/utils/validation';
@@ -21,7 +22,7 @@ import { usePhoneOtp } from '@/lib/otp';
 import { BottomSheet } from '@/components/BottomSheet';
 import { INDUSTRIES, industryLabel } from '@/lib/config/industry';
 import { PasswordInput } from '@/components/PasswordInput';
-import { SectionLabel } from '@/components/SectionLabel';
+import { Section } from '@/components/Screen';
 import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -172,9 +173,7 @@ function AccountEditForm() {
       <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Appear delay={stagger(0)}>
-          <SectionLabel title="기본 정보" />
-        </Appear>
-        <Appear delay={stagger(1)}>
+        <Section title="기본 정보">
         <View style={styles.card}>
           <Text style={styles.label}>이름<Text style={styles.req}> *</Text></Text>
           <TextInput value={name} onChangeText={setName} placeholder="이름" placeholderTextColor={InkColors.ink3} autoComplete="name" textContentType="name" style={styles.input} />
@@ -214,17 +213,15 @@ function AccountEditForm() {
             </Pressable>
           </View>
           <Pressable disabled={busy || !canSaveProfile} onPress={saveProfile} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, (busy || !canSaveProfile) && { opacity: 0.5 }]}>
-            {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>프로필 저장</Text>}
+            {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>프로필 저장</Text>}
           </Pressable>
         </View>
+        </Section>
         </Appear>
 
         {role === 'owner' && (
-          <>
             <Appear delay={stagger(2)}>
-              <SectionLabel title="매장 정보" />
-            </Appear>
-            <Appear delay={stagger(3)}>
+            <Section title="매장 정보">
             {/* 매장 이름과 업종은 같은 매장 속성이라 한 카드 안 두 행으로 둔다 — 카드가 나뉘어 있으면
                 저장 버튼도 나뉘고, 사장 화면에 주 액션이 세 개가 된다(2026-08-06). */}
             <View style={[styles.card, styles.storeCard]}>
@@ -257,12 +254,14 @@ function AccountEditForm() {
                 {busy ? <ActivityIndicator color={InkColors.ink} /> : <Text style={styles.secondaryText}>매장 정보 저장</Text>}
               </Pressable>
             </View>
+            </Section>
             </Appear>
-          </>
         )}
 
         {/* 비밀번호 변경은 카드가 아니라 접힌 한 줄 — 이 화면에서 가장 드문 작업이고,
-            카드가 계속 이어지면 전부 같은 무게로 읽힌다(배치 규칙 ①). 2026-08-06 */}
+            카드가 계속 이어지면 전부 같은 무게로 읽힌다(배치 규칙 ①). 2026-08-06
+            여는 줄과 펼친 칸은 한 묶음이라 섹션 간격(20)이 아니라 안쪽 간격으로 붙인다(pwGroup). */}
+        <View style={styles.pwGroup}>
         <Appear delay={stagger(4)}>
           <Pressable
             onPress={togglePw}
@@ -333,8 +332,7 @@ function AccountEditForm() {
           </View>
           </Collapse>
         )}
-
-        <View style={{ height: 24 }} />
+        </View>
       </ScrollView>
       </KeyboardShift>
       <BottomSheet visible={phoneOpen} onClose={() => setPhoneOpen(false)}>
@@ -435,7 +433,7 @@ function PhoneChangeBody({ savedPhone, onDone }: { savedPhone: string; onDone: (
           testID="phone-change-submit"
           style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, (busy || code.length !== 6) && { opacity: 0.5 }]}
         >
-          {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>번호 바꾸기</Text>}
+          {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>번호 바꾸기</Text>}
         </Pressable>
       ) : null}
     </View>
@@ -443,32 +441,35 @@ function PhoneChangeBody({ savedPhone, onDone }: { savedPhone: string; onDone: (
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: 20, gap: 8 },
-  card: { ...CardStyles.list, gap: 8, marginBottom: 8 },
+  // 탭바 없는 하위 화면 — 아래 안전 영역은 SafeAreaView(bottom)가 든다. 바탕·스크롤 여백만 화면 틀 값을 쓴다.
+  safe: { flex: 1, backgroundColor: Surface.screen },
+  scroll: screenScrollStyle,
+  card: { ...CardStyles.list, gap: 8 },
   rowDivider: { height: 1, backgroundColor: InkColors.line, marginVertical: Space.xs },
-  label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2, marginTop: 4 },
+  label: { fontSize: 13, fontWeight: '700', color: TextColor.secondary, marginTop: 4 },
   req: { color: BrandColors.accentText, fontWeight: '900' },
   input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, color: InkColors.ink, backgroundColor: '#FFFFFF' },
   inputError: { borderColor: BrandColors.accent },
-  pwHint: { fontSize: 12, fontWeight: '600', marginTop: -2 },
+  pwHint: { ...Type.tag, fontWeight: '600', marginTop: -2 },
   // 번호 표시 줄 — 여기서 고칠 수 없는 값이라 입력칸 모양을 쓰지 않는다. 글자가 커지면 버튼이 아랫줄로 내려간다.
   phoneRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Space.sm, minHeight: 48 },
   phoneValue: { flexGrow: 1, flexShrink: 1, fontSize: 16, color: InkColors.ink },
   phoneEmpty: { color: InkColors.ink3 },
-  phoneBtn: { minHeight: 44, paddingHorizontal: 14, justifyContent: 'center', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bgSoft },
-  phoneBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  // 작은 버튼(48 알약 · 15/800 · 내용 폭). 색은 그대로.
+  phoneBtn: { ...ButtonStyles.small, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bgSoft },
+  phoneBtnText: { ...ButtonTextStyles.small, color: InkColors.ink },
   sheetBody: { paddingHorizontal: 20, paddingBottom: 20, gap: Space.sm },
-  sheetTitle: { fontSize: 18, fontWeight: '900', color: InkColors.ink },
-  sheetText: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
+  sheetTitle: { ...Type.title },
+  sheetText: { ...Type.desc },
   // 입력칸 기준 폭 120 — 글자가 커지면 버튼이 아랫줄로 내려간다(forgot-password 와 같은 규칙).
   otpRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, alignItems: 'center' },
   otpInput: { flexGrow: 1, flexShrink: 1, flexBasis: 120 },
   otpBtn: { minHeight: 48, paddingVertical: Space.sm, paddingHorizontal: 14, borderRadius: Radius.md, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center', minWidth: 118, flexShrink: 1 },
-  otpBtnText: { fontSize: 13.5, fontWeight: '800', color: InkColors.bubbleText, textAlign: 'center' },
-  err: { fontSize: 13.5, color: BrandColors.badText },
+  otpBtnText: { fontSize: Type.desc.fontSize, fontWeight: '800', color: InkColors.bubbleText, textAlign: 'center' },
+  err: { fontSize: Type.desc.fontSize, color: BrandColors.badText },
   pwOk: { color: BrandColors.goodText },
-  pwBad: { color: InkColors.ink3 },
+  // 비밀번호 조건 안내 = 읽는 글자라 secondary(ink3 는 아이콘·비활성만).
+  pwBad: { color: TextColor.secondary },
   storeCard: { borderColor: BrandColors.gold },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   chip: ChipStyles.chip,
@@ -477,8 +478,10 @@ const styles = StyleSheet.create({
   chipTextOn: ChipStyles.textOn,
   storeMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
   storeChip: { backgroundColor: BrandColors.brandSoft, borderRadius: Radius.pill, paddingVertical: 5, paddingHorizontal: 10 },
-  storeChipText: { fontSize: 11, fontWeight: '700', color: InkColors.ink2 },
-  storeRemain: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
+  storeChipText: { ...Type.micro, fontWeight: '700', color: TextColor.secondary },
+  storeRemain: { ...Type.tag, color: TextColor.secondary, fontWeight: '600' },
+  // 비밀번호 여는 줄 + 펼친 칸 — 한 묶음(안쪽 간격 8).
+  pwGroup: { gap: Space.sm },
   // 비밀번호 여는 줄 — 카드와 형태를 일부러 다르게 둔다(상하 보더만 있는 행 = 카드 아님).
   pwToggle: {
     flexDirection: 'row',
@@ -486,15 +489,16 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     minHeight: 52,
     paddingHorizontal: Space.xs,
-    marginTop: Space.sm,
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: InkColors.line,
   },
-  pwToggleText: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  pwToggleText: { ...Type.body, flex: 1, fontWeight: '800' },
   pwPanel: { gap: Space.sm, paddingHorizontal: Space.xs, paddingBottom: Space.sm },
   primary: { ...ButtonStyles.primary, marginTop: 12, backgroundColor: BrandColors.brand },
-  primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-  secondary: { marginTop: 12, backgroundColor: InkColors.bgSoft, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center', borderWidth: 1, borderColor: InkColors.line },
-  secondaryText: { color: InkColors.ink, fontSize: 15, fontWeight: '800' },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  // 보조 버튼 — 주 버튼과 같은 모양(52 · 모서리 16 · 16/800), 흰 면 + 선.
+  //   비밀번호 칸은 카드 밖(회색 바탕 Surface.screen)이라 옛 bgSoft 면은 바탕에 묻혔다.
+  secondary: { ...ButtonStyles.primary, marginTop: 12, backgroundColor: Surface.card, borderWidth: 1, borderColor: InkColors.line },
+  secondaryText: { ...ButtonTextStyles.primary, color: InkColors.ink },
 });

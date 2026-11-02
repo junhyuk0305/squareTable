@@ -23,9 +23,10 @@ import { showToast } from '@/lib/store/useToastStore';
 import { isBrandCopy } from '@/lib/brand/copy';
 import { UNSECTIONED, sectionOptions } from '@/lib/config/sections';
 import { getSectionMeta } from '@/lib/utils/category';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 import type { PlaybookEntry, SquareBlock, UnknownQuery } from '@/types';
 
 /**
@@ -317,7 +318,8 @@ function KnowhowDoc({ entry }: { entry: PlaybookEntry }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
+  // 화면 바탕(Surface.screen · 2026-11-02). 채팅 입력칸이 아래 안전 영역을 써야 해 SafeAreaView(bottom)는 그대로 둔다.
+  safe: { flex: 1, backgroundColor: Surface.screen },
   headerAction: {
     minWidth: 48, minHeight: 48, alignItems: 'flex-end', justifyContent: 'center',
     paddingLeft: Space.sm, marginRight: -4,
@@ -328,7 +330,7 @@ const styles = StyleSheet.create({
   docTitle: { fontSize: 17, fontWeight: '800', color: InkColors.ink, letterSpacing: -0.3 },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Space.xs },
   metaChip: {
-    fontSize: 11, fontWeight: '800', color: InkColors.ink2,
+    ...Type.micro, fontWeight: '800', color: InkColors.ink2,
     backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, overflow: 'hidden',
     paddingVertical: Space.xs, paddingHorizontal: Space.sm,
   },
@@ -350,14 +352,14 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm, paddingHorizontal: Space.md, minHeight: 40,
     borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, backgroundColor: InkColors.bg,
   },
-  quizBtnText: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
-  catBarLabel: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3 },
-  catBarValue: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
+  quizBtnText: { fontSize: Type.desc.fontSize, fontWeight: '800', color: InkColors.ink },
+  catBarLabel: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
+  catBarValue: { fontSize: Type.desc.fontSize, fontWeight: '800', color: InkColors.ink },
   catDot: { width: 8, height: 8, borderRadius: Radius.pill },
   catSheet: { maxHeight: '70%', paddingBottom: Space.xl },
   // 시트 좌우 여백은 lg(16) — 화면 거터(gutter 20)가 아니라 시트 표준을 따른다(kit 의 qst.body).
   catSheetTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: Space.lg, paddingTop: Space.sm },
-  catSheetHint: { fontSize: 12.5, color: InkColors.ink3, paddingHorizontal: Space.lg, marginTop: 2, marginBottom: Space.md },
+  catSheetHint: { ...Type.desc, paddingHorizontal: Space.lg, marginTop: 2, marginBottom: Space.md },
   catChips: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, paddingHorizontal: Space.lg },
   catChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40,
@@ -374,5 +376,5 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.ink, paddingVertical: 12, paddingHorizontal: 18, borderRadius: Radius.md, maxWidth: '90%',
   },
   toastCheck: { color: BrandColors.yellow, fontWeight: '800', fontSize: 16 },
-  toastText: { color: '#FFFFFF', fontWeight: '700', fontSize: 15 },
+  toastText: { ...Type.body, color: InkColors.bubbleText, fontWeight: '700' },
 });

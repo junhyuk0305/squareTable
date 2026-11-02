@@ -2,9 +2,11 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import type { AiAnswerRow as AiAnswer } from '@/lib/db';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
 
 /**
  * 'AI가 답함' 한 줄(2026-08-07) — 받은질문 세그먼트 ②.
@@ -71,18 +73,16 @@ function shortWhen(iso: string): string {
 }
 
 const st = StyleSheet.create({
-  row: {
-    backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
-    padding: Space.md, gap: Space.xs, marginBottom: Space.sm,
-  },
-  query: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 22 },
+  // 카드 = CardStyles.list(모서리 16 · 안쪽 16 · 그림자 e1 · 2026-11-02).
+  row: { ...CardStyles.list, gap: Space.xs, marginBottom: Space.sm },
+  query: { ...Type.body, fontWeight: '700', lineHeight: 22 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.xs },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%',
     backgroundColor: InkColors.paper, borderWidth: 1, borderColor: InkColors.line,
     borderRadius: Radius.pill, paddingVertical: 5, paddingHorizontal: 10,
   },
-  chipText: { flexShrink: 1, fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
-  gone: { fontSize: 12.5, fontWeight: '600', color: BrandColors.warnText },
-  meta: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
+  chipText: { ...Type.tag, flexShrink: 1, fontWeight: '700', color: InkColors.ink2 },
+  gone: { ...Type.desc, fontWeight: '600', color: BrandColors.warnText },
+  meta: { ...Type.tag, color: TextColor.secondary, fontWeight: '600' },
 });

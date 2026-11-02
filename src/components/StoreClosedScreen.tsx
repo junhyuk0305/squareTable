@@ -7,9 +7,11 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 
 export function StoreClosedScreen() {
   const router = useRouter();
@@ -42,12 +44,13 @@ export function StoreClosedScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream, alignItems: 'center', justifyContent: 'center', padding: Space.xl },
-  card: { alignItems: 'center', gap: Space.md, maxWidth: 420, padding: Space.xl, borderRadius: Radius.md, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: InkColors.line },
-  title: { fontSize: 18, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
-  body: { fontSize: 14, lineHeight: 21, color: InkColors.ink2, textAlign: 'center' },
-  btn: { minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.xl, borderRadius: Radius.md, backgroundColor: BrandColors.brand },
-  btnText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
+  safe: { flex: 1, backgroundColor: Surface.screen, alignItems: 'center', justifyContent: 'center', padding: Space.xl },
+  card: { ...CardStyles.list, alignItems: 'center', gap: Space.md, maxWidth: 420 },
+  title: { ...Type.title, textAlign: 'center' },
+  body: { ...Type.desc, textAlign: 'center' },
+  // 주 버튼(52 · 모서리 16 · 가로 꽉 · 16/800).
+  btn: { ...ButtonStyles.primary, backgroundColor: BrandColors.brand },
+  btnText: { ...ButtonTextStyles.primary, color: '#FFFFFF' },
   linkBtn: { paddingVertical: Space.sm, paddingHorizontal: Space.md },
-  link: { fontSize: 14, fontWeight: '700', color: InkColors.ink3, textDecorationLine: 'underline' },
+  link: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary, textDecorationLine: 'underline' },
 });

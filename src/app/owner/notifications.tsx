@@ -25,8 +25,11 @@ import { SegmentTabs } from '@/components/SegmentTabs';
 import { buildManagerNotifications, buildOwnerNotifications } from '@/lib/utils/notifications';
 import { honorific } from '@/lib/utils/roles';
 import { todayStr } from '@/lib/utils/attendance';
-import { InkColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
+import { InkColors, Surface } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
+import { screenScrollStyle } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
 
 // kind → 아이콘·틴트 매핑은 NotificationList 의 상수 공유(화면별 재정의 금지).
 // 매니저 목록에는 사장 축 + 개인 수신 축이 섞이므로 합성 맵(ALL_KIND_UI)을 쓴다 — 사장은 사장 축
@@ -148,7 +151,7 @@ export default function OwnerNotificationsScreen() {
       {!ready ? (
         <ScreenLoading label="알림을 불러오고 있어요…" />
       ) : (
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={screenScrollStyle} showsVerticalScrollIndicator={false}>
         {/* 맨 위 — 매장명 · 내 이름(정체성). 직원 알림 화면과 동일 구조.
             호칭은 세션 역할에서 파생한다(roles.honorific) — 매니저도 이 화면을 쓰기 때문에
             "사장님"을 하드코딩하면 매니저가 자기를 사장으로 부르게 된다(2026-08-08 수정). */}
@@ -221,7 +224,6 @@ export default function OwnerNotificationsScreen() {
           />
         )}
         </Appear>
-        <View style={{ height: 12 }} />
       </ScrollView>
       )}
     </SafeAreaView>
@@ -229,23 +231,12 @@ export default function OwnerNotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  truncNote: { textAlign: 'center', color: InkColors.ink3, fontSize: 15, paddingVertical: 8 },
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: 20, gap: 16 },
+  truncNote: { ...Type.desc, textAlign: 'center', paddingVertical: 8 },
+  // 화면 바탕(Surface.screen). 탭바가 없는 화면이라 아래 안전 영역을 SafeAreaView(bottom)가 그대로 든다 — Screen 은 edges 를 비운다.
+  safe: { flex: 1, backgroundColor: Surface.screen },
 
-  // 정체성 카드 — 직원 알림 화면(junior/notifications)과 동일 규격
-  idCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    ...Elevation.e1,
-  },
+  // 정체성 카드 — 직원 알림 화면(junior/notifications)과 동일 규격 · 목록 카드 모양.
+  idCard: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: {
     width: 42,
     height: 42,
@@ -254,7 +245,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { fontSize: 17, fontWeight: '900', color: '#FFFFFF' },
+  avatarText: { fontSize: 17, fontWeight: '900', color: InkColors.bubbleText },
   idStore: { fontSize: 16, fontWeight: '900', color: InkColors.ink },
-  idUser: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, marginTop: 2 },
+  idUser: { ...Type.desc, fontWeight: '600', marginTop: 2 },
 });

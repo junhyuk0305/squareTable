@@ -6,9 +6,11 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { emailChangedNotice } from '@/lib/account/findEmail';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { InkColors, BrandColors, Surface } from '@/lib/theme/colors';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
+import { CONTENT_MAX_WIDTH, Space } from '@/lib/theme/layout';
 
 export default function EmailChangedScreen() {
   const router = useRouter();
@@ -31,10 +33,10 @@ export default function EmailChangedScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream, alignItems: 'center', justifyContent: 'center', padding: Space.xl },
-  card: { alignItems: 'center', gap: Space.md, maxWidth: 420, padding: Space.xl, borderRadius: Radius.md, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: InkColors.line },
-  title: { fontSize: 18, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
-  body: { fontSize: 14, lineHeight: 21, color: InkColors.ink2, textAlign: 'center' },
-  btn: { minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.xl, borderRadius: Radius.md, backgroundColor: BrandColors.brand },
-  btnText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
+  safe: { flex: 1, backgroundColor: Surface.screen, alignItems: 'center', justifyContent: 'center', padding: Space.xl },
+  card: { ...CardStyles.list, alignItems: 'center', gap: Space.md, maxWidth: CONTENT_MAX_WIDTH },
+  title: { ...Type.title, textAlign: 'center' },
+  body: { ...Type.desc, textAlign: 'center' },
+  btn: { ...ButtonStyles.primary, backgroundColor: BrandColors.brand },
+  btnText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

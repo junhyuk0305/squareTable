@@ -20,10 +20,12 @@ import { foundAccountLine, googleAccountHint, resetDoneText, type FoundAccount }
 import { SHOW_SOCIAL_LOGIN } from '@/lib/config/store-policy';
 import { showToast } from '@/lib/store/useToastStore';
 import { formatPhone, isValidPhone, normalizePhone, passwordError } from '@/lib/utils/validation';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
-import { ButtonStyles } from '@/lib/theme/button';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
 
 type Role = 'owner' | 'junior';
 type Mode = 'email' | 'password';
@@ -269,14 +271,15 @@ export default function ForgotPasswordScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  body: { flexGrow: 1, padding: Space.xl, paddingTop: Space.sm, justifyContent: 'center' },
-  card: { backgroundColor: InkColors.bg, borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line, padding: Space.gutter, gap: Space.sm, alignItems: 'stretch' },
-  title: { fontSize: 19, fontWeight: '900', color: InkColors.ink },
-  text: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
-  hint: { fontSize: 13, lineHeight: 19, color: InkColors.ink3, marginTop: Space.xs },
-  label: { fontSize: 13.5, fontWeight: '700', color: InkColors.ink2, marginTop: Space.sm },
-  roleHint: { fontSize: 13, lineHeight: 19, color: InkColors.ink3 },
+  safe: { flex: 1, backgroundColor: Surface.screen },
+  // 여백 = 화면 틀 값. 카드 하나를 세로 가운데 두는 것은 이 화면 고유.
+  body: { ...screenScrollStyle, flexGrow: 1, justifyContent: 'center' },
+  card: { ...CardStyles.list, gap: Space.sm, alignItems: 'stretch' },
+  title: { ...Type.title },
+  text: { fontSize: 15, lineHeight: 22, color: TextColor.secondary },
+  hint: { ...Type.desc, marginTop: Space.xs },
+  label: { fontSize: Type.desc.fontSize, fontWeight: '700', color: TextColor.secondary, marginTop: Space.sm },
+  roleHint: { ...Type.desc },
   // 공용 SegmentTabs 의 바깥 여백(16·아래 8)을 끈다 — 카드 안 간격은 카드 gap 이 정한다.
   //   변마다 적는다: 네이티브(Yoga)는 개별 변(marginBottom)이 줄임 margin 보다 우선해 margin:0 만으로는 아래 8 이 남는다.
   segTabs: { marginTop: 0, marginBottom: 0, marginHorizontal: 0 },
@@ -286,8 +289,8 @@ const styles = StyleSheet.create({
   rowInput: { flexGrow: 1, flexShrink: 1, flexBasis: 120 },
   input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 12, paddingVertical: Space.md, minHeight: 48, fontSize: 16, color: InkColors.ink, backgroundColor: InkColors.bg },
   otpBtn: { minHeight: 48, paddingVertical: Space.sm, paddingHorizontal: 14, borderRadius: Radius.sm, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center', minWidth: 118, flexShrink: 1 },
-  otpBtnText: { fontSize: 13.5, fontWeight: '800', color: InkColors.bubbleText, textAlign: 'center' },
-  err: { fontSize: 13.5, color: BrandColors.badText },
+  otpBtnText: { fontSize: Type.desc.fontSize, fontWeight: '800', color: InkColors.bubbleText, textAlign: 'center' },
+  err: { fontSize: Type.desc.fontSize, color: BrandColors.badText },
   primary: { ...ButtonStyles.primary, marginTop: Space.sm, backgroundColor: BrandColors.brand },
-  primaryText: { fontSize: 16, fontWeight: '800', color: InkColors.bubbleText },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

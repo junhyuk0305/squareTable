@@ -17,9 +17,11 @@ import {
   dedupeQuery,
   SAME_SCORE_MIN,
 } from '@/lib/utils/knowhowSimilarity';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 import type { PlaybookEntry } from '@/types';
 
 /**
@@ -174,7 +176,7 @@ export function PublishConfirmSheet({
         )}
 
         <View style={styles.labeled}>
-        <SectionLabel title="카테고리" />
+        <SectionLabel flush title="카테고리" />
         <View style={styles.chips}>
           {options.map((name) => {
             const on = section === name;
@@ -258,7 +260,7 @@ export function PublishConfirmSheet({
         {partsEnabled && partsLoaded && (
           <>
             <View style={styles.labeled}>
-            <SectionLabel title="파트" />
+            <SectionLabel flush title="파트" />
             <View style={styles.chips}>
               {parts.map((p) => {
                 const on = partId === p.id;
@@ -370,17 +372,18 @@ const styles = StyleSheet.create({
   sheet: { maxHeight: '85%' },
   // 시트 좌우 여백은 lg(16) — 화면 거터(gutter 20)가 아니라 시트 표준을 따른다(kit 의 qst.body).
   body: { paddingHorizontal: Space.lg, paddingTop: Space.sm, paddingBottom: Space.xl, gap: Space.md },
-  labeled: { gap: Space.sm },
+  // 시트 안 간격은 그대로 둔다 — SectionLabel 이 들던 위 여백 12 를 여기로 옮겼다(flush · 2026-11-02).
+  labeled: { gap: Space.sm, marginTop: Space.md },
   title: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
 
   warnCard: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.md, gap: Space.sm },
   warnHead: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
-  warnTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  warnTitle: { ...Type.body, fontWeight: '800' },
   warnRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  warnExisting: { flex: 1, fontSize: 15, color: InkColors.ink2 },
+  warnExisting: { ...Type.body, flex: 1, color: InkColors.ink2 },
   warnCta: { paddingVertical: 6, paddingHorizontal: Space.md, borderRadius: Radius.pill, backgroundColor: InkColors.ink },
-  warnCtaText: { fontSize: 12, fontWeight: '800', color: '#FFFFFF' },
-  warnHint: { fontSize: 12, color: InkColors.ink3, lineHeight: 17 },
+  warnCtaText: { ...Type.tag, fontWeight: '800', color: InkColors.bubbleText },
+  warnHint: Type.desc,
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: Space.sm, paddingHorizontal: Space.md, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft },
@@ -393,25 +396,26 @@ const styles = StyleSheet.create({
     paddingVertical: Space.sm, paddingHorizontal: Space.md,
     borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line,
   },
-  chipAddText: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
+  chipAddText: { fontSize: 13, fontWeight: '700', color: TextColor.secondary },
 
   addBox: { gap: Space.sm },
   addInput: {
     borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm,
-    paddingHorizontal: Space.md, paddingVertical: Space.md, fontSize: 14, color: InkColors.ink,
+    paddingHorizontal: Space.md, paddingVertical: Space.md, ...Type.body,
   },
-  addWarn: { fontSize: 12, color: BrandColors.warnText, lineHeight: 17 },
+  addWarn: { ...Type.desc, color: BrandColors.warnText },
+  // 버튼 = 주 버튼 틀(52 · 모서리 16 · 16/800 · 2026-11-02). 둘이 반씩.
   addRow: { flexDirection: 'row', gap: Space.sm },
-  addUse: { flex: 1, paddingVertical: Space.md, borderRadius: Radius.sm, backgroundColor: BrandColors.yellow, alignItems: 'center' },
-  addUseText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
-  addOk: { flex: 1, paddingVertical: Space.md, borderRadius: Radius.sm, backgroundColor: InkColors.bgSoft, alignItems: 'center' },
-  addOkText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
+  addUse: { ...ButtonStyles.primary, flex: 1, backgroundColor: BrandColors.yellow },
+  addUseText: { ...ButtonTextStyles.primary, color: InkColors.ink },
+  addOk: { ...ButtonStyles.primary, flex: 1, backgroundColor: InkColors.bgSoft },
+  addOkText: { ...ButtonTextStyles.primary, color: InkColors.ink2 },
 
   foot: { flexDirection: 'row', gap: Space.sm, marginTop: Space.xs },
-  footBtn: { alignItems: 'center', justifyContent: 'center', paddingVertical: Space.lg, borderRadius: Radius.md },
+  footBtn: ButtonStyles.primary,
   // 취소는 고정폭(내용만큼), 저장이 남은 폭을 먹는다 — 저장 문구가 챕터명에 따라 길어지기 때문.
   cancel: { paddingHorizontal: Space.xl, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
-  cancelText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
+  cancelText: { ...ButtonTextStyles.primary, color: InkColors.ink2 },
   save: { flex: 1, backgroundColor: InkColors.ink },
-  saveText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
+  saveText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

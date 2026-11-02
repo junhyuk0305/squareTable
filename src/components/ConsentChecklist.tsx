@@ -2,6 +2,8 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { consentRows, type ConsentChecked, type ConsentKey } from '@/lib/config/consent';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
 
 /**
  * 가입 동의 체크리스트(J12). 가입 화면과 프로필 완성(구글 가입) 화면이 같이 쓴다.
@@ -56,9 +58,9 @@ export function ConsentChecklist({
 }
 
 const styles = StyleSheet.create({
-  consentBox: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: InkColors.line, borderRadius: 14, padding: 14, marginTop: 8, gap: 4 },
+  consentBox: { ...CardStyles.list, marginTop: 8, gap: 4 },
   consentAll: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 2 },
-  consentAllText: { flex: 1, fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  consentAllText: { ...Type.body, flex: 1, fontWeight: '800' },
   consentDivider: { height: 1, backgroundColor: InkColors.line, marginVertical: 6 },
   consentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   checkbox: {

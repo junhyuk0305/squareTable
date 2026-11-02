@@ -16,17 +16,19 @@ import { assignedTodayCount } from '@/lib/utils/crossStoreNotifs';
 import { roleNoun } from '@/lib/utils/roles';
 import { todayStr } from '@/lib/utils/attendance';
 import { fetchOwnerOverview, fetchMyLockedUnits, fetchMyCanAddStore, type MyUnitRow, type OwnerOverviewRow } from '@/lib/db';
-import { InkColors, BrandColors, Surface } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Type } from '@/lib/theme/type';
-import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { Radius } from '@/lib/theme/elevation';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Gap, Space, screenScrollStyle } from '@/lib/theme/layout';
 import { canUseMultistore } from '@/lib/config/tiers';
 import { showBillingEntry } from '@/lib/config/store-policy';
 import { HubTopBar } from '@/components/hub/HubTopBar';
 import { HubTabBar } from '@/components/HubTabBar';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
-import { SectionLabel } from '@/components/SectionLabel';
+import { Section } from '@/components/Screen';
 import { TwoPane, Pane } from '@/components/shell/TwoPane';
 import { useStoreEntryStore } from '@/lib/store/useStoreEntryStore';
 
@@ -255,11 +257,10 @@ export default function StoresHub() {
           <>
             {/* ── 매장 목록 ── */}
             <Appear delay={stagger(1)}>
-              <View style={styles.section}>
-                {/* 역할은 매장별(0093)이라 목록 전체를 한 단어로 부를 수 없다 — 전 매장이 같은 역할일
-                    때만 표기하고, 섞여 있으면(사장 매장 + 매니저 매장) 각 매장 줄에서 말한다.
-                    예전엔 "매니저 매장이 하나라도 있으면 매니저"라 사장 매장까지 매니저로 불렀다. */}
-                <SectionLabel title={`매장 ${storeCount}곳`} hint={uniformRole ? roleNoun(uniformRole) : undefined} />
+              {/* 역할은 매장별(0093)이라 목록 전체를 한 단어로 부를 수 없다 — 전 매장이 같은 역할일
+                  때만 표기하고, 섞여 있으면(사장 매장 + 매니저 매장) 각 매장 줄에서 말한다.
+                  예전엔 "매니저 매장이 하나라도 있으면 매니저"라 사장 매장까지 매니저로 불렀다. */}
+              <Section title={`매장 ${storeCount}곳`} hint={uniformRole ? roleNoun(uniformRole) : undefined}>
                 {/* 넓은 웹에서만 두 단 — 왼쪽 목록 / 오른쪽 '매장 추가'. 폰 폭에서는 지금 순서 그대로 한 줄씩이다. */}
                 <TwoPane gap={Space.md}>
                 <Pane side="main">
@@ -324,7 +325,7 @@ export default function StoresHub() {
                 </Pressable>
                 </Pane>
                 </TwoPane>
-              </View>
+              </Section>
             </Appear>
 
             {/* 요금제는 허브에 노출하지 않는다 — 확인·변경은 전체 계정 설정(구독 및 결제)에서. */}
@@ -348,43 +349,36 @@ function industryIcon(industry: string | null): keyof typeof Ionicons.glyphMap {
 const styles = StyleSheet.create({
   // 바탕 = 매장 안 화면과 같은 Surface.screen(2026-11-02 사용자 — 허브도 매장 내부와 같이).
   safe: { flex: 1, backgroundColor: Surface.screen },
-  scroll: { padding: Space.gutter, gap: Space.xl, paddingBottom: 40 },
+  // 첫 여백 16 · 좌우 20 · 블록 사이 20 = Screen 스크롤과 같은 값. 위 안전 영역은 SafeAreaView(top)가 든다 — 상단바가 스크롤 안에 있다.
+  scroll: screenScrollStyle,
 
-  titleBlock: { gap: 4 },
+  titleBlock: { gap: Gap.inline },
   title: { ...Type.pageTitle, color: InkColors.ink },
-  subtitle: { fontSize: 15, color: InkColors.ink2 },
+  subtitle: { ...Type.desc },
 
-  section: { gap: Space.sm },
-
-  // 카드 문법은 블록 v2(PickRow·RollupRows)와 같다 — Radius.md · 1px line · e1 · 좌우 lg/상하 md · 눌림 0.7.
+  // 카드 모양 = CardStyles.list(흰 면 · 선 · 모서리 16 · e1 · 안쪽 16). 눌림 0.7.
   card: {
+    ...CardStyles.list,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.md,
-    ...Elevation.e1,
   },
   pressed: { opacity: 0.7 },
   cardActive: { borderColor: BrandColors.yellowDeep },
   cardIcon: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  storeName: { flexShrink: 1, fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
-  recentBadge: { fontSize: 10, fontWeight: '900', color: '#7a5f10', backgroundColor: BrandColors.yellow, paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.pill, overflow: 'hidden' },
-  storeMeta: { fontSize: 13, color: InkColors.ink2, marginTop: 2 },
+  storeName: { ...Type.body, flexShrink: 1, lineHeight: 21, fontWeight: '800' },
+  recentBadge: { ...Type.micro, fontWeight: '900', color: '#7a5f10', backgroundColor: BrandColors.yellow, paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.pill, overflow: 'hidden' },
+  storeMeta: { ...Type.desc, marginTop: 2 },
   cardRight: { alignItems: 'flex-end', gap: Space.sm },
   needChip: {
-    fontSize: 11, fontWeight: '900', color: '#8a5a12',
+    ...Type.micro, fontWeight: '900', color: '#8a5a12',
     backgroundColor: BrandColors.warnSoft, borderWidth: 1, borderColor: BrandColors.warnBorder,
     paddingHorizontal: 8, paddingVertical: 1, borderRadius: Radius.pill, overflow: 'hidden',
   },
   // 받은질문(사장)/오늘 할일(직원) 칩 — 알림 칩(앰버)과 색을 벌려 "내 몫의 일"을 구분(노랑 계열).
   qChip: {
-    fontSize: 11, fontWeight: '900', color: '#7a5f10',
+    ...Type.micro, fontWeight: '900', color: '#7a5f10',
     backgroundColor: BrandColors.yellowSoft, borderWidth: 1, borderColor: BrandColors.gold,
     paddingHorizontal: 8, paddingVertical: 1, borderRadius: Radius.pill, overflow: 'hidden',
   },
@@ -402,16 +396,18 @@ const styles = StyleSheet.create({
     paddingVertical: Space.md,
   },
   addIcon: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
-  addTitle: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
-  addSub: { fontSize: 12, color: InkColors.ink2, marginTop: 2 },
+  addTitle: { ...Type.body, lineHeight: 21, fontWeight: '800' },
+  addSub: { ...Type.tag, color: TextColor.secondary, marginTop: 2 },
 
   empty: { alignItems: 'center', paddingVertical: Space.xl, gap: Space.md },
   emptyIcon: { width: 64, height: 64, borderRadius: Radius.lg, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
-  emptyTitle: { fontSize: 18, fontWeight: '900', color: InkColors.ink },
-  emptyBody: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22, maxWidth: 260 },
+  emptyTitle: { ...Type.title },
+  emptyBody: { fontSize: Type.body.fontSize, color: TextColor.secondary, textAlign: 'center', lineHeight: 22, maxWidth: 260 },
+  // 빈 화면 버튼 = 주 버튼(52 · 모서리 16 · 가로 꽉 · 16/800 · 그림자 없음). 색은 그대로(EmptyState 와 같은 규칙).
   emptyBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    backgroundColor: BrandColors.yellow, paddingHorizontal: 22, paddingVertical: 14, borderRadius: Radius.pill, ...Elevation.ey,
+    ...ButtonStyles.primary,
+    flexDirection: 'row', gap: 6,
+    backgroundColor: BrandColors.yellow,
   },
-  emptyBtnText: { fontSize: 15, fontWeight: '900', color: InkColors.ink },
+  emptyBtnText: { ...ButtonTextStyles.primary, color: InkColors.ink },
 });

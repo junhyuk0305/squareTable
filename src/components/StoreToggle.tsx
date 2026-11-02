@@ -11,9 +11,10 @@ import { Wordmark } from '@/components/Wordmark';
 import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
 import { USE_NATIVE_DRIVER } from '@/lib/anim';
-import { InkColors } from '@/lib/theme/colors';
+import { InkColors, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 // 상단바 좌상단 — **2칸 토글**(2026-08-08 상단바 C안). 허브 층·매장 층이 같은 것을 쓴다.
 //   [ 매장의 정석 | 신촌점 ▾ ]  회색 트랙 안에 두 칸, **지금 있는 층의 칸에만 흰 면**이 깔린다.
@@ -270,6 +271,7 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  rowText: { flexShrink: 1, fontSize: 14, fontWeight: '800', color: InkColors.ink },
-  rowNow: { fontSize: 11, fontWeight: '800', color: InkColors.ink3 },
+  rowText: { ...Type.body, flexShrink: 1, fontWeight: '800' },
+  // '현재 매장' = 읽는 꼬리표라 secondary(ink3 는 아이콘·비활성만).
+  rowNow: { ...Type.micro, fontWeight: '800', color: TextColor.secondary },
 });

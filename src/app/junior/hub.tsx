@@ -5,10 +5,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { InkColors, BrandColors, Surface } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
-import { ButtonStyles } from '@/lib/theme/button';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
+import { Gap, Space, screenScrollStyle } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
+import { SectionLabel } from '@/components/SectionLabel';
 import { Wordmark } from '@/components/Wordmark';
 import { Appear, stagger } from '@/components/Appear';
 import { PhoneVerifyBlock } from '@/components/PhoneVerifyBlock';
@@ -148,7 +151,7 @@ export default function JuniorHub() {
         onPress={join}
         style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}
       >
-        {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>합류하기</Text>}
+        {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>합류하기</Text>}
       </Pressable>
       <Text style={styles.codeHint}>코드가 없으신가요? 사장님께 요청하세요 (사장님: 설정 › 매장 관리).</Text>
     </View>
@@ -230,8 +233,9 @@ export default function JuniorHub() {
             ③에서는 이미 연결된 직원에게 코드 입력이 상시 노출됐다. */}
         <Appear delay={stagger(2)}>
         <View style={styles.section}>
-          {(pendingUnitId || hasStore) && <Text style={styles.sectionLabel}>내 매장</Text>}
+          {(pendingUnitId || hasStore) && <SectionLabel flush title="내 매장" />}
 
+          <View style={styles.sectionCards}>
           {!!pendingUnitId && (
             <View style={styles.pendingCard}>
               <View style={styles.pendingHead}>
@@ -293,6 +297,7 @@ export default function JuniorHub() {
 
           {/* ① 매장 0개면 곧바로 · ③ 매장 있으면 펼쳤을 때만 — 코드 입력 본문은 한 벌뿐이다(SSOT). */}
           {!pendingUnitId && (!hasStore || addOpen) && codeEntry}
+          </View>
         </View>
         </Appear>
 
@@ -333,33 +338,27 @@ const CELL_GAP = 8;
 const styles = StyleSheet.create({
   // 바탕 = 매장 안 화면과 같은 Surface.screen(2026-11-02 사용자 — 허브도 매장 내부와 같이).
   safe: { flex: 1, backgroundColor: Surface.screen },
-  scroll: { padding: Space.gutter, gap: Space.xl, paddingBottom: 40 },
+  // 첫 여백·좌우·섹션 사이 = screenScrollStyle(상단바도 스크롤 안에 있다).
+  scroll: screenScrollStyle,
 
   topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   topbarLeft: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  backBtn: { padding: 2 },
+  // 누르는 상자 48 — ScreenTitleHeader 뒤로가기와 같은 치수(RN-web 은 hitSlop 을 무시한다).
+  backBtn: { marginLeft: -4, minWidth: 48, minHeight: 48, alignItems: 'flex-start', justifyContent: 'center' },
 
-  greet: { gap: 4 },
-  hello: { fontSize: 22, fontWeight: '900', color: InkColors.ink },
-  helloSub: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
+  greet: { gap: Gap.inline },
+  // 허브 맨 위 제목 = Type.pageTitle(24/900).
+  hello: { ...Type.pageTitle, color: InkColors.ink },
+  helloSub: { ...Type.desc },
 
-  section: { gap: Space.md },
-  sectionLabel: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, marginLeft: 2 },
+  // 섹션 = 제목(카드 밖) + 카드 묶음. 제목 ↔ 카드 10(SectionLabel 아래 2 + 8) · 카드끼리 12.
+  section: { gap: Space.sm },
+  sectionCards: { gap: Space.md },
 
-  storeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.lg,
-    ...Elevation.e1,
-  },
+  storeCard: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: Space.md },
   storeIcon: { width: 40, height: 40, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
-  storeName: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  storeMeta: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
+  storeName: { ...Type.body, fontWeight: '800' },
+  storeMeta: { ...Type.tag, color: TextColor.secondary, marginTop: 2 },
 
   // '＋ 매장 추가하기' — 매장이 이미 있을 때 코드 입력을 접어두는 줄.
   // 매장 카드와 형태를 일부러 다르게 한다(카드가 아니라 점선 행) — 같은 형태가 이어지면 목록으로 읽힌다.
@@ -371,37 +370,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.lg,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: InkColors.line,
+    // 회색 바탕(Surface.screen) 위 점선은 line(#EAECEF)이면 안 보인다 → lineStrong.
+    borderColor: InkColors.lineStrong,
     borderStyle: 'dashed',
   },
-  addRowText: { flex: 1, fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
+  addRowText: { ...Type.body, flex: 1, fontWeight: '800', color: TextColor.secondary },
 
-  pendingCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.lg,
-    gap: Space.md,
-    ...Elevation.e1,
-  },
+  pendingCard: { ...CardStyles.list, gap: Space.md },
   pendingHead: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
-  pendingIcon: { width: 40, height: 40, borderRadius: Radius.md, backgroundColor: '#FBF3E2', alignItems: 'center', justifyContent: 'center' },
-  pendingMeta: { fontSize: 12, color: BrandColors.warnText, fontWeight: '700', marginTop: 2 },
-  pendingBody: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
+  pendingIcon: { width: 40, height: 40, borderRadius: Radius.md, backgroundColor: BrandColors.warnSoft, alignItems: 'center', justifyContent: 'center' },
+  pendingMeta: { ...Type.tag, color: BrandColors.warnText, fontWeight: '700', marginTop: 2 },
+  pendingBody: { ...Type.desc },
   pendingActions: { flexDirection: 'row', gap: Space.sm },
-  ghostBtn: { flex: 1, alignItems: 'center', paddingVertical: 11, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
-  ghostBtnText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
+  // 작은 버튼(48 알약 · 15/800). 두 개가 한 줄을 나눠 가지므로 폭만 flex 1.
+  ghostBtn: { ...ButtonStyles.small, flex: 1, alignSelf: 'auto', paddingHorizontal: Space.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
+  ghostBtnText: { ...ButtonTextStyles.small, color: TextColor.secondary },
 
-  codeCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.lg,
-    gap: Space.md,
-    ...Elevation.e1,
-  },
+  codeCard: { ...CardStyles.list, gap: Space.md },
   cells: { flexDirection: 'row', gap: CELL_GAP, position: 'relative' },
   cell: {
     flex: 1,
@@ -410,31 +395,24 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: InkColors.line,
     borderRadius: Radius.md,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Surface.input,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cellActive: { borderColor: BrandColors.brand },
-  cellText: { fontSize: 22, fontWeight: '900', color: InkColors.ink },
+  // 칸 숫자 = Type.numCell(22/27/900).
+  cellText: { ...Type.numCell, color: InkColors.ink },
   hiddenInput: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0, color: 'transparent' },
   err: { fontSize: 15, color: BrandColors.accentText, fontWeight: '600' },
   primary: { ...ButtonStyles.primary, backgroundColor: BrandColors.brand },
-  primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-  // 안내문 = 본문(simplicity-voice §4) → 꼬리표용 ink3(2.55:1) 금지.
-  codeHint: { fontSize: 12, color: InkColors.ink2, lineHeight: 18 },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  // 안내문 = 설명(Type.desc · secondary). 꼬리표용 ink3(2.55:1) 금지.
+  codeHint: { ...Type.desc },
 
   avatarSm: { width: 30, height: 30, borderRadius: Radius.pill, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
-  myRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: 12 },
-  // 카드 안 행이 아니라 단독 행 — 테두리·배경을 스스로 갖고 터치 타깃 48dp를 지킨다.
-  myRowSolo: {
-    minHeight: 48,
-    paddingHorizontal: Space.lg,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    ...Elevation.e1,
-  },
-  myRowText: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  avatarText: { color: InkColors.bubbleText, fontSize: 14, fontWeight: '900' },
+  myRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.md },
+  // 카드 안 행이 아니라 단독 행 — 행 목록 카드 모양을 스스로 갖고 터치 타깃 48dp를 지킨다.
+  myRowSolo: { ...CardStyles.rows, minHeight: 48 },
+  myRowText: { ...Type.body, flex: 1, fontWeight: '700' },
 });

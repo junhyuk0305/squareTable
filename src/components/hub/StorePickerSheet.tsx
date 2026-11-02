@@ -5,9 +5,10 @@ import { ScrollView, View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 export type StorePickerRow = {
   uid: string;
@@ -70,23 +71,23 @@ export function StorePickerSheet({
 const styles = StyleSheet.create({
   sheet: { maxHeight: '70%', paddingBottom: Space.xl },
   title: {
-    fontSize: 16, fontWeight: '900', color: InkColors.ink,
+    ...Type.title,
     // 시트 좌우 여백은 lg(16) — 화면 거터(gutter 20)가 아니라 시트 표준을 따른다(kit 의 qst.body).
     paddingHorizontal: Space.lg, paddingTop: Space.sm,
   },
-  hint: { fontSize: 12.5, color: InkColors.ink3, paddingHorizontal: Space.lg, marginTop: 2 },
+  hint: { ...Type.desc, paddingHorizontal: Space.lg, marginTop: 2 },
   list: { paddingHorizontal: Space.lg, marginTop: Space.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48 },
   rowTop: { borderTopWidth: 1, borderTopColor: InkColors.line },
-  rowTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
+  rowTitle: { ...Type.body, flex: 1, fontWeight: '700', minWidth: 0 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   currentBadge: {
-    fontSize: 11, fontWeight: '800', color: InkColors.ink2,
+    ...Type.micro, fontWeight: '800', color: TextColor.secondary,
     backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line,
     paddingHorizontal: Space.xs + 2, paddingVertical: 2, borderRadius: Radius.pill, overflow: 'hidden',
   },
   cnt: {
-    minWidth: 24, textAlign: 'center', fontSize: 11.5, fontWeight: '900', color: '#8a5a12',
+    ...Type.tag, minWidth: 24, textAlign: 'center', fontWeight: '900', color: '#8a5a12',
     backgroundColor: BrandColors.warnSoft, borderWidth: 1, borderColor: BrandColors.warnBorder,
     paddingHorizontal: Space.xs + 2, paddingVertical: 1, borderRadius: Radius.pill, overflow: 'hidden',
   },

@@ -49,9 +49,12 @@ import {
   makeQuizToken,
   quizLinkUrl,
 } from '@/lib/quiz/link';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
+import { Layout, Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 import { SheetHead, PrimaryButton, qst } from './kit';
 
@@ -197,9 +200,10 @@ export function QuizDeployPanel({ course, onOpenResult }: { course: TrainingCour
           </Text>
         </View>
       ) : (
-        <>
+        <View style={st.section}>
           {/* 이름은 '링크' 하나로 둔다(2026-09-13) — '열려 있는'은 힌트(지난 링크 N개)가 이미 말한다. */}
           <SectionLabel
+            flush
             title="링크"
             hint={closed > 0 ? `${live.length}개 · 지난 링크 ${closed}개` : `${live.length}개`}
           />
@@ -222,15 +226,15 @@ export function QuizDeployPanel({ course, onOpenResult }: { course: TrainingCour
               </View>
             ))}
           </View>
-        </>
+        </View>
       )}
 
       {/* 이 링크로 푼 사람 — 배포와 결과가 한 자리에 있어야 "또 내보낼까"를 여기서 정할 수 있다.
           ⛔ 채용 전환 액션(뽑기·합류 초대)은 두지 않는다 — 명시적으로 스코프 밖이다. */}
       {subs.length > 0 && (
-        <View style={st.results}>
+        <View style={st.section}>
           {/* N16: 같은 사람이 여러 번 낼 수 있다. 사람 수가 아니라 제출 건수다. */}
-          <SectionLabel title={guestSubmissionsLabel(subs.length)} />
+          <SectionLabel flush title={guestSubmissionsLabel(subs.length)} />
           <View style={st.list}>
             {subs.map((s, i) => (
               <Pressable
@@ -330,42 +334,40 @@ function RowAction({
 }
 
 const st = StyleSheet.create({
-  wrap: { gap: Space.sm },
+  // 묶음 사이 = 화면 틀과 같은 20 · 섹션 안 제목 ↔ 카드 = 8(SectionLabel flush · 2026-11-02).
+  wrap: { gap: Layout.sectionGap },
+  section: { gap: Space.sm },
   warnBox: {
     flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm,
     backgroundColor: BrandColors.warnSoft, borderRadius: Radius.md, padding: Space.md,
   },
-  warnText: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
+  // 안내 문장 = 설명(Type.desc 13/19 secondary).
+  warnText: { ...Type.desc, flex: 1, minWidth: 0, fontWeight: '600' },
 
-  empty: {
-    borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.lg, backgroundColor: '#FFFFFF',
-    padding: Space.lg, marginTop: Space.sm, ...Elevation.e1,
-  },
-  emptyText: { fontSize: 15, color: InkColors.ink2, lineHeight: 22, fontWeight: '600', textAlign: 'center' },
+  // 카드 = CardStyles(모서리 16 · 그림자 e1 · 2026-11-02. 옛 모서리 20).
+  empty: CardStyles.list,
+  emptyText: { ...Type.body, color: InkColors.ink2, lineHeight: 22, fontWeight: '600', textAlign: 'center' },
 
-  list: {
-    borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.lg,
-    backgroundColor: '#FFFFFF', paddingHorizontal: Space.lg, ...Elevation.e1,
-  },
+  list: CardStyles.rows,
   // 주소 줄과 버튼은 서로 다른 일이라 사이를 벌리고(gap), 버튼 아래는 행 경계라 좁힌다(2026-09-13).
   // 버튼 자체의 48dp 는 st.act 의 minHeight 가 지킨다 — 행 패딩으로 키우지 않는다.
   row: { paddingTop: Space.sm, paddingBottom: Space.xs, gap: Space.md },
   rowTop: { borderTopWidth: 1, borderTopColor: InkColors.line },
   rowHead: { gap: 1 },
-  url: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
-  meta: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
+  url: { ...Type.body, fontWeight: '700' },
+  meta: { ...Type.tag, color: TextColor.secondary, fontWeight: '600' },
   acts: { flexDirection: 'row', gap: Space.xs },
+  // 작은 버튼 = ButtonStyles.small(2026-11-02 결정으로 48 알약). 선·면 색은 자리 값 그대로.
   act: {
-    minHeight: 48, minWidth: 56, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.sm,
-    borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
+    ...ButtonStyles.small, minWidth: 56,
+    borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
   },
-  actText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
+  actText: { ...ButtonTextStyles.small, color: InkColors.ink2 },
 
-  results: { marginTop: Space.lg, gap: Space.sm },
   subRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 56, paddingVertical: Space.sm },
-  subName: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  subName: { ...Type.body, fontWeight: '700' },
   subScore: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
 
-  cta: { marginTop: Space.md, gap: Space.xs },
-  ctaHint: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', textAlign: 'center' },
+  cta: { gap: Space.xs },
+  ctaHint: { ...Type.desc, fontWeight: '600', textAlign: 'center' },
 });

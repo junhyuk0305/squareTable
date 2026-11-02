@@ -9,6 +9,7 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { Collapse } from '@/components/Collapse';
 import { SectionLabel } from '@/components/SectionLabel';
 import { InfoDot } from '@/components/InfoDot';
+import { SegmentTabs } from '@/components/SegmentTabs';
 import {
   KNOWHOW_TEMPLATES,
   templatesForIndustry,
@@ -18,10 +19,13 @@ import {
 import { getCategoryMeta } from '@/lib/utils/category';
 import { industryLabel } from '@/lib/config/industry';
 import { notifyAction } from '@/lib/utils/confirm';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
-import { Space } from '@/lib/theme/layout';
+import { Layout, Space, screenScrollStyle } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 
 const RECO_LIMIT = 6; // 검색 전 추천으로 띄울 개수
 const TAG_LIMIT = 10; // 빠른검색 칩 개수
@@ -277,22 +281,16 @@ export function TemplateLibrary() {
       {/* 업종 범위 토글 — 전체 팩에만 있는 템플릿이 있을 때만 */}
       {hasOtherIndustry ? (
         <Appear delay={stagger(2)}>
-        <View style={styles.scopeRow}>
-          <Pressable
-            onPress={() => setScope('mine')}
-            style={[styles.scopeChip, scope === 'mine' && styles.scopeChipOn]}
-          >
-            <Text style={[styles.scopeText, scope === 'mine' && styles.scopeTextOn]}>
-              우리 업종{industryLabel(industry) ? ` · ${industryLabel(industry)}` : ''}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setScope('all')}
-            style={[styles.scopeChip, scope === 'all' && styles.scopeChipOn]}
-          >
-            <Text style={[styles.scopeText, scope === 'all' && styles.scopeTextOn]}>전체 업종</Text>
-          </Pressable>
-        </View>
+        {/* 탭 스위처는 공용 SegmentTabs 하나(2026-11-02 결정표 · 화면 안 복제본 금지). */}
+        <SegmentTabs
+          style={styles.scopeTabs}
+          items={[
+            { key: 'mine', label: `우리 업종${industryLabel(industry) ? ` · ${industryLabel(industry)}` : ''}` },
+            { key: 'all', label: '전체 업종' },
+          ]}
+          value={scope}
+          onChange={(k) => setScope(k as typeof scope)}
+        />
         </Appear>
       ) : null}
 
@@ -304,7 +302,7 @@ export function TemplateLibrary() {
           {topTags.length > 0 ? (
             <Appear delay={stagger(3)}>
             <View style={styles.labeled}>
-              <SectionLabel icon="pricetags-outline" title="빠른 검색" />
+              <SectionLabel flush icon="pricetags-outline" title="빠른 검색" />
               <View style={styles.tagWrap}>
                 {topTags.map((tag) => (
                   <Pressable key={tag} onPress={() => setQuery(tag)} style={({ pressed }) => [styles.tag, pressed && { opacity: 0.7 }]}>
@@ -318,7 +316,7 @@ export function TemplateLibrary() {
 
           {recommended.length > 0 ? (
             <Appear delay={stagger(4)} style={styles.labeled}>
-              <SectionLabel icon="star-outline" title="추천 템플릿" />
+              <SectionLabel flush icon="star-outline" title="추천 템플릿" />
               <View style={styles.list}>{recommended.map(renderCard)}</View>
             </Appear>
           ) : null}
@@ -353,18 +351,16 @@ export function TemplateLibrary() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  scroll: { padding: Space.gutter, gap: Space.md },
+  // 첫 여백 16 · 좌우 20 · 블록 사이 20 = 화면 틀 값(2026-11-02).
+  scroll: screenScrollStyle,
 
   lead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  leadText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
+  // 화면 안내 한 줄 = 설명(Type.desc 13/19 secondary).
+  leadText: { ...Type.desc, fontWeight: '600' },
 
 
-  // 업종 범위 토글
-  scopeRow: { flexDirection: 'row', gap: Space.xs, backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, padding: 3, alignSelf: 'flex-start' },
-  scopeChip: { paddingVertical: 6, paddingHorizontal: 14, borderRadius: Radius.pill },
-  scopeChipOn: { backgroundColor: InkColors.ink },
-  scopeText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink3 },
-  scopeTextOn: { color: InkColors.bubbleText },
+  // 업종 범위 토글 — 바깥 여백은 스크롤 틀이 정한다(SegmentTabs 기본 margin 을 끈다).
+  scopeTabs: { margin: 0, marginBottom: 0 },
 
   block: { gap: Space.md },
   labeled: { gap: Space.sm },
@@ -375,42 +371,44 @@ const styles = StyleSheet.create({
   tagText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
 
   allHint: { paddingVertical: 8, alignItems: 'center' },
-  allHintText: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', textAlign: 'center' },
+  allHintText: { ...Type.desc, fontWeight: '600', textAlign: 'center' },
 
-  resultCount: { fontSize: 13, color: InkColors.ink3, fontWeight: '700' },
+  resultCount: { fontSize: 13, color: TextColor.secondary, fontWeight: '700' },
 
-  // 카드(아코디언)
+  // 카드(아코디언) = CardStyles(모서리 16 · 그림자 e1 · 2026-11-02). 안쪽은 머리·본문이 각자 16 을 든다.
   list: { gap: Space.sm },
-  card: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, overflow: 'hidden' },
-  cardOpen: { borderColor: InkColors.ink2, ...Elevation.e1 },
-  cardHead: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 14 },
+  // overflow hidden 을 두지 않는다 — iOS 에서 같은 뷰의 그림자가 잘린다. 모서리에 닿는 배경을 가진 자식이 없다.
+  card: { ...CardStyles.list, padding: 0 },
+  cardOpen: { borderColor: InkColors.ink2 },
+  cardHead: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: Layout.cardPad },
   dot: { width: 10, height: 10, borderRadius: Radius.pill },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  cardTitle: { ...Type.body, fontWeight: '700' },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3, flexWrap: 'wrap' },
-  metaCat: { fontSize: 12, color: InkColors.ink2, fontWeight: '700' },
-  metaSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
+  metaCat: { ...Type.tag, color: InkColors.ink2, fontWeight: '700' },
+  metaSub: { ...Type.tag, color: TextColor.secondary, fontWeight: '600' },
   addedBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, paddingVertical: 1, paddingHorizontal: 7 },
-  addedBadgeText: { fontSize: 10, fontWeight: '800', color: InkColors.ink2 },
+  addedBadgeText: { ...Type.micro, fontWeight: '800', color: InkColors.ink2 },
 
   // 펼친 본문 — 아래로 추가
-  body: { paddingHorizontal: 14, paddingBottom: 14, gap: 12, borderTopWidth: 1, borderTopColor: InkColors.line, paddingTop: 12 },
+  body: { paddingHorizontal: Layout.cardPad, paddingBottom: Layout.cardPad, gap: 12, borderTopWidth: 1, borderTopColor: InkColors.line, paddingTop: 12 },
   field: { gap: 4 },
-  fieldLabel: { fontSize: 11, fontWeight: '800', color: InkColors.ink3, letterSpacing: 0.2 },
-  fieldText: { fontSize: 14, color: InkColors.ink2, lineHeight: 21 },
-  stepText: { fontSize: 15, color: InkColors.ink, lineHeight: 22 },
-  scriptText: { fontSize: 15, color: InkColors.ink2, lineHeight: 22, fontStyle: 'italic' },
+  fieldLabel: { ...Type.tag, fontWeight: '800', color: TextColor.secondary, letterSpacing: 0.2 },
+  fieldText: { ...Type.body, color: InkColors.ink2, lineHeight: 21 },
+  stepText: { ...Type.body, lineHeight: 22 },
+  scriptText: { ...Type.body, color: InkColors.ink2, lineHeight: 22, fontStyle: 'italic' },
 
-  // 가져오기 버튼
+  // 가져오기 버튼 = 주 버튼 틀(52 · 모서리 16 · 16/800 · 2026-11-02).
   importBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
-    marginTop: 2, paddingVertical: 11, borderRadius: Radius.sm, backgroundColor: InkColors.ink,
+    ...ButtonStyles.primary,
+    flexDirection: 'row', gap: 5,
+    marginTop: 2, backgroundColor: InkColors.ink,
   },
-  importBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.bubbleText },
+  importBtnText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   importBtnDone: { backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
-  importBtnDoneText: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
+  importBtnDoneText: { ...ButtonTextStyles.primary, color: InkColors.ink3 },
 
   // 빈 결과
   empty: { alignItems: 'center', gap: 6, paddingVertical: 40 },
-  emptyText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
+  emptyText: { ...Type.body, fontWeight: '700', color: InkColors.ink2 },
   resetLink: { fontSize: 13, fontWeight: '800', color: BrandColors.brand, marginTop: 4, textDecorationLine: 'underline' },
 });

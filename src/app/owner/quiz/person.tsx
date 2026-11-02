@@ -13,9 +13,10 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { EmptyState } from '@/components/EmptyState';
 import { AttemptItemBlock, attemptListStyle } from '@/components/owner/quiz/AttemptItemBlock';
 import { takenDayLabel } from '@/lib/quiz/guestResult';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
 
 /**
  * 직원 한 명의 이 퀴즈 상세 결과 — 작은 대시보드 + 문항별 정오(2026-09-13 사장 요청).
@@ -131,7 +132,7 @@ export default function QuizPersonResultScreen() {
             {/* 응시가 여러 번이면 회차별 점수를 짧게 — 늘었나 줄었나가 여기서 읽힌다. */}
             {attempts.length > 1 ? (
               <Appear delay={60} style={{ gap: Space.sm }}>
-                <SectionLabel title="제출 기록" hint={submissionsLabel(attempts.length)} />
+                <SectionLabel flush title="제출 기록" hint={submissionsLabel(attempts.length)} />
                 <View style={st.listCard}>
                   {attempts.map((a, i) => (
                     <View key={a.submissionId} style={[st.tryRow, i > 0 && st.tryRowTop]}>
@@ -152,6 +153,7 @@ export default function QuizPersonResultScreen() {
             ) : (
               <Appear delay={120} style={{ gap: Space.sm }}>
                 <SectionLabel
+                  flush
                   title="문항별"
                   hint={attempts.length > 1 ? `문항마다 마지막 답 · ${latest.length}문제` : `${latest.length}문제`}
                 />
@@ -187,29 +189,25 @@ function Cell({ label, value, tone }: { label: string; value: string; tone?: 'ra
 }
 
 const st = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.paper },
+  // 바탕 = Surface.screen · 첫 여백 16 · 좌우 20 · 블록 사이 20(2026-11-02 화면 틀 값).
+  safe: { flex: 1, backgroundColor: Surface.screen },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.sm },
-  loadingText: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },
-  scroll: { padding: Space.gutter, paddingBottom: Space.xl, gap: Space.md, flexGrow: 1 },
+  loadingText: { fontSize: 13, fontWeight: '600', color: TextColor.secondary },
+  scroll: { ...screenScrollStyle, flexGrow: 1 },
 
   board: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
-  cell: {
-    flexGrow: 1, flexBasis: '46%', minWidth: 0, gap: 2,
-    backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
-    paddingHorizontal: Space.md, paddingVertical: Space.sm + 2,
-  },
-  cellLabel: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
-  cellValue: { fontSize: 20, lineHeight: 26, fontWeight: '900' },
+  // 칸 = 카드 모양(CardStyles.list · 모서리 16 · 안쪽 16 · 그림자 e1 · 2026-11-02).
+  cell: { ...CardStyles.list, flexGrow: 1, flexBasis: '46%', minWidth: 0, gap: 2 },
+  cellLabel: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
+  // 칸 숫자 = Type.numCell(22/27 · 2026-11-02). 색은 칸마다(Cell tone).
+  cellValue: Type.numCell,
 
-  listCard: {
-    backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
-    paddingHorizontal: Space.lg,
-  },
+  listCard: CardStyles.rows,
   tryRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 44 },
   tryRowTop: { borderTopWidth: 1, borderTopColor: InkColors.line },
-  tryDay: { flex: 1, minWidth: 0, fontSize: 14, fontWeight: '700', color: InkColors.ink },
+  tryDay: { ...Type.body, flex: 1, minWidth: 0, fontWeight: '700' },
   tryScore: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
 
   list: attemptListStyle,
-  noteText: { fontSize: 14, fontWeight: '600', color: InkColors.ink3, lineHeight: 21 },
+  noteText: { ...Type.desc, fontWeight: '600' },
 });

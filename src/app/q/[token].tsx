@@ -33,10 +33,11 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import { track } from '@/lib/analytics/track';
 import { formatPhone, isValidPhone, normalizePhone } from '@/lib/utils/validation';
 import { genId } from '@/lib/utils/id';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
-import { ButtonStyles } from '@/lib/theme/button';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 import type { QuizItem, QuizResponse } from '@/lib/quiz/types';
 import { LINK_SUBMIT_MESSAGE, type LinkSubmitResult } from '@/lib/quiz/errors';
 
@@ -508,7 +509,8 @@ function LinkQuizBody({
 }
 
 const st = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.paper },
+  // 바탕 = Surface.screen(2026-11-02). 헤더 없는 단독 화면이라 위·아래 안전 영역을 여기서 든다.
+  safe: { flex: 1, backgroundColor: Surface.screen },
   body: { padding: Space.gutter, paddingBottom: Space.xl, gap: Space.sm },
   // Appear 로 감싼 문항 묶음 — 바깥 gap 은 래퍼 하나에만 걸리므로 안쪽 간격을 여기서 준다.
   qWrap: { gap: Space.sm },
@@ -518,40 +520,41 @@ const st = StyleSheet.create({
   centerText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600', textAlign: 'center', lineHeight: 23 },
   doneText: { fontSize: 17, fontWeight: '800', color: InkColors.ink, textAlign: 'center', lineHeight: 25 },
 
-  kicker: { fontSize: 13, fontWeight: '800', color: InkColors.ink3 },
+  kicker: { fontSize: 13, fontWeight: '800', color: TextColor.secondary },
   // 화면당 굵은 잉크는 하나(R4-1) — 제목만 잉크, 나머지는 ink2/ink3.
   title: { fontSize: 24, fontWeight: '900', color: InkColors.ink, lineHeight: 34 },
   lead: { fontSize: 17, fontWeight: '700', color: InkColors.ink2, lineHeight: 25, marginTop: Space.sm },
   sub: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
   input: {
-    marginTop: Space.lg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md,
+    // 카드 없이 회색 바탕에 바로 놓인 칸 — 흰 면 + 진한 선(lineStrong · 2026-11-02 결정).
+    marginTop: Space.lg, borderWidth: 1, borderColor: InkColors.lineStrong, borderRadius: Radius.md,
     backgroundColor: InkColors.bg, paddingHorizontal: Space.md, paddingVertical: Space.md,
     fontSize: 17, color: InkColors.ink, minHeight: 52,
   },
-  hint: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, lineHeight: 20, marginTop: Space.sm },
+  hint: { ...Type.desc, fontWeight: '600', marginTop: Space.sm },
   otpBox: { marginTop: Space.md, gap: Space.sm },
   otpRow: { flexDirection: 'row', gap: Space.sm },
   otpInput: { flex: 1, marginTop: 0 },
   otpBtn: {
     minWidth: 116, paddingHorizontal: Space.md, borderRadius: Radius.md, borderWidth: 1,
-    borderColor: InkColors.line, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center',
+    borderColor: InkColors.line, backgroundColor: InkColors.bg, alignItems: 'center', justifyContent: 'center',
     minHeight: 52,
   },
   otpBtnText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
   otpMsg: { fontSize: 13, fontWeight: '600', color: BrandColors.warn, lineHeight: 20 },
   otpOk: { fontSize: 13, fontWeight: '700', color: BrandColors.good, lineHeight: 20, marginTop: Space.sm },
-  footHint: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, textAlign: 'center', marginTop: Space.sm },
-  consent: { fontSize: 12, fontWeight: '600', color: InkColors.ink3, lineHeight: 18, textAlign: 'center' },
+  footHint: { ...Type.desc, fontWeight: '600', textAlign: 'center', marginTop: Space.sm },
+  consent: { ...Type.desc, fontWeight: '600', textAlign: 'center' },
   // 링크는 글자만이지만 터치 타깃은 hitSlop 으로 넓힌다 — RN-web 이 hitSlop 을 무시하므로 minHeight 도 같이.
   consentLinkHit: { alignSelf: 'center', minHeight: 32, justifyContent: 'center', marginBottom: Space.xs },
-  consentLink: { fontSize: 12, fontWeight: '800', color: InkColors.ink2, textDecorationLine: 'underline' },
+  consentLink: { ...Type.tag, fontWeight: '800', color: InkColors.ink2, textDecorationLine: 'underline' },
 
   // 응시 중 상단 고정 머리 — 스크롤 밖이라 문항이 길어도 매장·진행이 남는다.
   qHead: {
     paddingHorizontal: Space.gutter, paddingTop: Space.md, paddingBottom: Space.sm,
     gap: Space.sm, borderBottomWidth: 1, borderBottomColor: InkColors.line,
   },
-  qHeadStore: { fontSize: 12, fontWeight: '800', color: InkColors.ink3 },
+  qHeadStore: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
   // 지금 문항이 아닌 것은 자리도 차지하지 않는다(마운트는 유지 — 고른 답을 들고 있어야 한다).
   hidden: { display: 'none' },
   ask: { fontSize: 17, fontWeight: '800', color: InkColors.ink, lineHeight: 25, marginBottom: Space.sm },
@@ -561,12 +564,13 @@ const st = StyleSheet.create({
   footNote: { fontSize: 13, fontWeight: '700', color: BrandColors.warnText, textAlign: 'center', marginBottom: Space.sm },
   navRow: { flexDirection: 'row', alignItems: 'stretch', gap: Space.sm },
   // 되돌아가기는 보조 동작이라 흰 버튼이다 — Primary 는 화면당 하나(오른쪽)다.
+  // 보조 버튼도 주 버튼과 같은 틀(52 · 모서리 16 · 16/800 · 2026-11-02), 색만 흰 면.
   navBack: {
-    minWidth: 92, minHeight: 56, paddingHorizontal: Space.lg, borderRadius: Radius.md, borderWidth: 1,
-    borderColor: InkColors.line, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center',
+    ...ButtonStyles.primary, minWidth: 92, borderWidth: 1,
+    borderColor: InkColors.line, backgroundColor: InkColors.bg,
   },
-  navBackText: { fontSize: 16, fontWeight: '800', color: InkColors.ink2 },
+  navBackText: { ...ButtonTextStyles.primary, color: InkColors.ink2 },
   navNext: { flex: 1 },
   cta: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
-  ctaText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  ctaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

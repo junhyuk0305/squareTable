@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet, Animated, Easing, type ViewStyle, ty
 import { InkColors, BrandColors, Surface } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 /** 트랙 안쪽 여백 — 선택 칸이 트랙 선에서 떨어지는 거리. */
 const TRACK_PAD = Space.xs;
@@ -156,7 +157,7 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.ink,
   },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  segText: { fontSize: 14, fontWeight: '700' },
+  segText: { fontSize: Type.body.fontSize, fontWeight: '700' },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: BrandColors.yellowDeep },
   count: {
     minWidth: 16,
@@ -172,6 +173,6 @@ const styles = StyleSheet.create({
   },
   // 켜진 칸은 검정 알약 위라 옛 검정 배지가 묻힌다 → 흰 배지 + 검정 글자로 뒤집는다(2026-11-02).
   countOn: { backgroundColor: InkColors.bubbleText },
-  countText: { fontSize: 10, fontWeight: '800', color: InkColors.bubbleText },
+  countText: { ...Type.micro, fontWeight: '800', color: InkColors.bubbleText },
   countTextOn: { color: InkColors.ink },
 });

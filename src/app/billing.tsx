@@ -36,9 +36,13 @@ import { Collapse } from '@/components/Collapse';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { IapPurchasePanel } from '@/components/IapPurchasePanel';
 import { CardBillingPanel } from '@/components/CardBillingPanel';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
+import { Section } from '@/components/Screen';
 
 // 무료 이용 코드(0092) — RPC named 에러 → 화면 문구 판정은 여기 한 곳(§② SSOT).
 const PROMO_ERROR_TEXT: Record<string, string> = {
@@ -465,7 +469,8 @@ function BillingBody() {
     // 켜져 있으면 여기는 '사실 고지 화면'이 아니라 **구매 화면**이다.
     const selling = showIapSurface(iapEnabled, freeMode) && isOwner;
     return (
-      <SafeAreaView style={styles.safe} edges={['bottom']}>
+      // 헤더가 없을 때(페이월 모드)는 위 안전 영역도 여기서 든다 — 웹 분기(아래)와 같은 규칙.
+      <SafeAreaView style={styles.safe} edges={entitledAtMount ? ['bottom'] : ['top', 'bottom']}>
         <Stack.Screen options={{ headerShown: false }} />
         {/* ★2026-09-13: 여기 뒤로가기가 **없었다.** 웹 분기만 헤더를 갖고 있어서, 설정·매장 추가에서
             자발적으로 들어온 사장은 로그아웃 말고 나갈 길이 없는 막다른 길에 갇혔다.
@@ -651,8 +656,7 @@ function BillingBody() {
 
             {/* 요금제 선택(3티어, SSOT=tiers.ts). 선택에 따라 아래 금액이 계산된다. */}
             <Appear delay={stagger(2)}>
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>요금제</Text>
+            <Section title="요금제">
               <View style={styles.planList}>
                 {PLAN_ORDER.map((pid) => {
                   const def = PLANS[pid];
@@ -707,15 +711,14 @@ function BillingBody() {
                 })}
               </View>
               <Text style={[styles.hint, { marginLeft: 2 }]}>{VAT_NOTE_SENTENCE}</Text>
-            </View>
+            </Section>
             </Appear>
 
             {/* 몇 개분을 살지 — 이게 결제의 입력이다(0130 store_count). 카드·계좌이체·카드 요금 변경이 같은 값을 쓴다.
                 한 번에 여러 개를 사도 되고, 나중에 하나씩 더 사도 된다. */}
             {selectedPlan === 'multi' && !(iapSub && iapSub.status !== 'canceled') && (
               <Appear delay={stagger(3)}>
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>매장 개수</Text>
+              <Section title="매장 개수">
                 <View style={styles.card}>
                   <View style={styles.stepper}>
                     <Pressable
@@ -745,7 +748,7 @@ function BillingBody() {
                     {ownedCount > 0 ? ` 지금 매장 ${ownedCount}개를 갖고 계세요.` : ''}
                   </Text>
                 </View>
-              </View>
+              </Section>
               </Appear>
             )}
 
@@ -805,8 +808,7 @@ function BillingBody() {
                 {/* 결제 방법 — 카드 자동결제(0208)가 열린 웹에서만 고른다. 키가 없으면 계좌이체만(종전과 같다). */}
                 {SHOW_CARD_BILLING && !claimPending && (
                   <Appear delay={stagger(3)}>
-                  <View style={styles.section}>
-                    <Text style={styles.sectionLabel}>결제 방법</Text>
+                  <Section title="결제 방법">
                     <View style={styles.planList}>
                       {([
                         { id: 'card', name: '카드 자동결제', desc: '결제하면 바로 열리고, 한 달마다 자동으로 결제돼요. 언제든 해지할 수 있어요.' },
@@ -835,7 +837,7 @@ function BillingBody() {
                         );
                       })}
                     </View>
-                  </View>
+                  </Section>
                   </Appear>
                 )}
                 {payMethod === 'card' && !claimPending ? (
@@ -854,8 +856,7 @@ function BillingBody() {
                     (배치규칙① 위반 · 실브라우저 실측 카드런 3). 셋은 "입금하기" 한 동작이라
                     — 계좌를 보고 이체한 뒤 그 이름을 적는다 — 한 카드로 합친다. 행은 하나도 안 없앴다. */}
                 <Appear delay={stagger(3)}>
-                <View style={styles.section}>
-                  <Text style={styles.sectionLabel}>입금하기</Text>
+                <Section title="입금하기">
                   <View style={styles.card}>
                     <Text style={styles.body}>
                       {lapsed
@@ -906,7 +907,7 @@ function BillingBody() {
                       보내는 분 이름이 매장명·사장님 성함과 다르면 확인이 늦어져요. 실제로 이체한 이름을 적어주세요.
                     </Text>
                   </View>
-                </View>
+                </Section>
                 </Appear>
 
                 {/* 직전 신고 상태 — '냈는데 아무 반응 없다'를 없애는 자리. 승인은 폴링이 앱으로 넘긴다. */}
@@ -943,8 +944,7 @@ function BillingBody() {
                 ) : (
                   // 펼침의 정본은 Collapse 다 — Appear(등장)로 펼치면 아래 내용이 순간이동한다.
                   <Collapse>
-                  <View style={styles.section}>
-                    <Text style={styles.sectionLabel}>세금계산서</Text>
+                  <Section title="세금계산서">
                     <View style={styles.card}>
                       <TextInput
                         value={bizNo}
@@ -972,7 +972,7 @@ function BillingBody() {
                       />
                       <Text style={styles.hint}>입금 확인 후 적어주신 주소로 보내드려요.</Text>
                     </View>
-                  </View>
+                  </Section>
                   </Collapse>
                 )}
 
@@ -1003,7 +1003,7 @@ function BillingBody() {
                   style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, claiming && { opacity: 0.6 }]}
                 >
                   {claiming ? (
-                    <ActivityIndicator color="#FFFFFF" />
+                    <ActivityIndicator color={InkColors.bubbleText} />
                   ) : (
                     <Text style={styles.primaryText}>{latestClaim?.status === 'pending' ? '입금 정보 다시 보내기' : '입금 완료했어요'}</Text>
                   )}
@@ -1034,8 +1034,7 @@ function BillingBody() {
                 <Text style={styles.promoToggleText}>무료 이용 코드가 있으신가요?</Text>
               </Pressable>
             ) : (
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>무료 이용 코드</Text>
+              <Section title="무료 이용 코드">
                 <View style={styles.card}>
                   <TextInput
                     value={promoCode}
@@ -1058,7 +1057,7 @@ function BillingBody() {
                     {redeeming ? <ActivityIndicator color={InkColors.ink2} /> : <Text style={styles.ghostText}>코드 사용</Text>}
                   </Pressable>
                 </View>
-              </View>
+              </Section>
             )}
           </>
         )}
@@ -1099,8 +1098,9 @@ function Row({ label, value, strong, onCopy }: { label: string; value: string; s
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: Space.gutter, gap: Space.xl, paddingBottom: 40, flexGrow: 1 },
+  // 아래 안전 영역은 SafeAreaView(bottom)가 든다(헤더가 없을 때는 top 도). 바탕·스크롤 여백만 화면 틀 값.
+  safe: { flex: 1, backgroundColor: Surface.screen },
+  scroll: { ...screenScrollStyle, flexGrow: 1 },
 
   hero: { alignItems: 'center', gap: Space.sm, marginTop: Space.lg },
 
@@ -1110,72 +1110,56 @@ const styles = StyleSheet.create({
     backgroundColor: BrandColors.goodSoft,
     borderWidth: 1,
     borderColor: InkColors.line,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     padding: Space.lg,
   },
   promoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm },
-  promoText: { flex: 1, fontSize: 15, color: InkColors.ink, lineHeight: 22 },
-  promoNote: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
+  promoText: { ...Type.body, flex: 1, lineHeight: 22 },
+  promoNote: { ...Type.desc },
   iconWrap: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FBF3E2', alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 21, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
-  store: { fontSize: 14, color: InkColors.ink2, fontWeight: '600' },
+  title: { ...Type.title, textAlign: 'center' },
+  store: { ...Type.desc, fontWeight: '600' },
 
-  section: { gap: Space.md },
-  sectionLabel: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, marginLeft: 2 },
   // '입금하기' 한 카드 안에서 안내 / 계좌 / 입금자명을 가르는 선. 카드를 셋으로 나누는 대신
   // 한 카드 안 구분선으로 리듬을 만든다(2026-08-06).
   payDivider: { height: 1, backgroundColor: InkColors.line, marginVertical: Space.md },
-  payFieldLabel: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, marginBottom: Space.xs },
+  payFieldLabel: { fontSize: 13, fontWeight: '800', color: TextColor.secondary, marginBottom: Space.xs },
 
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.lg,
-    gap: Space.md,
-    ...Elevation.e1,
-  },
-  body: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
-  hint: { fontSize: 12, color: InkColors.ink3, lineHeight: 18 },
+  // 카드 모양 = CardStyles.list(모서리 16 · e1 · 안쪽 16).
+  card: { ...CardStyles.list, gap: Space.md },
+  body: { ...Type.desc },
+  hint: { ...Type.desc },
 
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.md },
-  rowLabel: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
+  rowLabel: { fontSize: 13, color: TextColor.secondary, fontWeight: '600' },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  rowValue: { fontSize: 14, color: InkColors.ink, fontWeight: '700' },
-  rowValueStrong: { fontSize: 15, fontWeight: '900' },
+  rowValue: { ...Type.body, fontWeight: '700' },
+  rowValueStrong: { fontSize: Type.body.fontSize, fontWeight: '900' },
   copyBtn: { padding: 2 },
 
   // 요금제 선택 카드(라디오 리스트) — 선택 시 잉크 보더로 강조.
   planList: { gap: Space.sm },
-  planCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.lg,
-    gap: Space.xs,
-    ...Elevation.e1,
-  },
+  planCard: { ...CardStyles.list, gap: Space.xs },
   planCardSelected: { borderColor: InkColors.ink, borderWidth: 1.5 },
   planHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  planName: { fontSize: 15, fontWeight: '900', color: InkColors.ink },
+  planName: { ...Type.body, fontWeight: '900' },
   planBadge: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: InkColors.line },
-  planBadgeText: { fontSize: 10.5, fontWeight: '800', color: InkColors.ink2 },
-  planPrice: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
-  planPriceRegular: { fontSize: 12, fontWeight: '600', color: InkColors.ink3, textDecorationLine: 'line-through', marginRight: Space.xs },
-  planTagline: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink2, marginTop: 2 },
-  planFeatures: { fontSize: 11.5, fontWeight: '600', color: InkColors.ink3, lineHeight: 17 },
+  planBadgeText: { ...Type.micro, fontWeight: '800', color: TextColor.secondary },
+  planPrice: { fontSize: Type.desc.fontSize, fontWeight: '800', color: InkColors.ink },
+  // 지운 정가 — 일부러 흐리게 둔다(지운 값 = 비활성 글자).
+  planPriceRegular: { ...Type.tag, fontWeight: '600', color: InkColors.ink3, textDecorationLine: 'line-through', marginRight: Space.xs },
+  planTagline: { ...Type.desc, fontWeight: '600', marginTop: 2 },
+  planFeatures: { ...Type.tag, fontWeight: '600', color: TextColor.secondary, lineHeight: 17 },
   // 단일 잠금(0342) — 내용만 흐리게 하고 이유 줄은 그대로 읽히게 둔다.
   planBody: { gap: Space.xs },
   planLocked: { opacity: 0.4 },
-  planLockedNote: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: BrandColors.warnText, marginTop: Space.xs },
+  planLockedNote: { fontSize: Type.body.fontSize, lineHeight: 22, fontWeight: '600', color: BrandColors.warnText, marginTop: Space.xs },
 
   // 입금 신고 상태 카드 — 확인 중(중립) / 반려(경고 보더). 배경은 카드 기본 흰색 유지.
   claimPending: { borderColor: InkColors.ink3 },
   claimRejected: { borderColor: BrandColors.warn },
   claimHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  claimTitle: { fontSize: 14, fontWeight: '900', color: InkColors.ink },
+  claimTitle: { ...Type.body, fontWeight: '900' },
 
   // 입금자명 입력 — 고정 height 대신 minHeight(글자 크기 배율에서 잘림 방지).
   input: {
@@ -1185,7 +1169,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.sm,
-    fontSize: 15,
+    fontSize: Type.body.fontSize,
     fontWeight: '700',
     color: InkColors.ink,
     backgroundColor: InkColors.bgSoft,
@@ -1207,19 +1191,21 @@ const styles = StyleSheet.create({
 
   // 주문 시점 동의 체크 — 48dp 터치 타깃(체크박스 단독이 아니라 행 전체가 눌린다).
   consentRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingHorizontal: 2 },
-  consentText: { flex: 1, fontSize: 15, lineHeight: 22, color: InkColors.ink2, fontWeight: '600' },
+  consentText: { flex: 1, fontSize: Type.body.fontSize, lineHeight: 22, color: TextColor.secondary, fontWeight: '600' },
 
   mailRow: { alignItems: 'center', paddingVertical: Space.sm },
-  mailText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3 },
+  mailText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
 
   // 무료 이용 코드 — 접힘 상태 토글(보조 링크 톤, mailRow 계열).
   promoToggle: { alignItems: 'center', paddingVertical: Space.sm },
-  promoToggleText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3, textDecorationLine: 'underline' },
+  promoToggleText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary, textDecorationLine: 'underline' },
 
-  primary: { backgroundColor: BrandColors.brand, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center' },
-  primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-  ghost: { paddingVertical: 13, borderRadius: Radius.md, alignItems: 'center', backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
-  ghostText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
+  // 주 버튼(52 · 모서리 16 · 가로 꽉 · 16/800).
+  primary: { ...ButtonStyles.primary, backgroundColor: BrandColors.brand },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  // 보조 버튼 — 주 버튼과 같은 모양, 흰 면 + 선. 옛 bgSoft 면은 회색 바탕(Surface.screen) 위에서 묻혔다.
+  ghost: { ...ButtonStyles.primary, backgroundColor: Surface.card, borderWidth: 1, borderColor: InkColors.line },
+  ghostText: { ...ButtonTextStyles.primary, color: TextColor.secondary },
   logoutRow: { alignItems: 'center', paddingVertical: 4 },
-  logoutText: { fontSize: 13, color: InkColors.ink3, fontWeight: '700' },
+  logoutText: { fontSize: 13, color: TextColor.secondary, fontWeight: '700' },
 });

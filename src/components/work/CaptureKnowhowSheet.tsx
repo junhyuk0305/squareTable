@@ -3,8 +3,10 @@ import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-
 import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
-import { InkColors } from '@/lib/theme/colors';
+import { InkColors, TextColor } from '@/lib/theme/colors';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Radius } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
 
 /**
  * CaptureKnowhowSheet — 반복 업무를 처음 완료한 직후 뜨는 1턴 캡처(S1 ②).
@@ -72,18 +74,20 @@ const s = StyleSheet.create({
   // flexGrow 0 — ScrollView 기본값(flexGrow 1)이면 시트 최소 높이만큼 늘어나 버튼이 시트 바닥으로 내려간다.
   scroll: { flexGrow: 0 },
   body: { paddingHorizontal: 16, paddingTop: 4 },
-  title: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: InkColors.ink },
-  sub: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink3, fontWeight: '600', marginTop: 4 },
-  subStrong: { color: InkColors.ink2, fontWeight: '800' },
+  title: { ...Type.title, lineHeight: 25 },
+  sub: { ...Type.desc, fontWeight: '600', marginTop: 4 },
+  subStrong: { color: TextColor.secondary, fontWeight: '800' },
   inp: {
+    ...Type.body,
     marginTop: 12, minHeight: 72, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md,
-    paddingHorizontal: 13, paddingVertical: 11, fontSize: 14, lineHeight: 20, color: InkColors.ink,
+    paddingHorizontal: 13, paddingVertical: 11, lineHeight: 21,
     backgroundColor: InkColors.cream, textAlignVertical: 'top',
   },
-  hint: { fontSize: 11.5, color: InkColors.ink3, marginTop: 8, paddingHorizontal: 2 },
+  hint: { ...Type.desc, marginTop: 8, paddingHorizontal: 2 },
   foot: { flexDirection: 'row', alignItems: 'stretch', gap: 8, marginTop: 14, marginHorizontal: 16, marginBottom: 18 },
-  skip: { paddingHorizontal: 18, justifyContent: 'center', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
-  skipText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
-  cta: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14 },
-  ctaText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  // 버튼 두 개 = 주 버튼 모양(52 · 모서리 16). 한 줄을 나눠 쓰므로 건너뛰기는 내용 폭, 저장이 나머지.
+  skip: { ...ButtonStyles.primary, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
+  skipText: { ...ButtonTextStyles.primary, color: TextColor.secondary },
+  cta: { ...ButtonStyles.primary, flex: 1, flexDirection: 'row', gap: 6, backgroundColor: InkColors.ink },
+  ctaText: { ...ButtonTextStyles.primary, color: '#fff' },
 });

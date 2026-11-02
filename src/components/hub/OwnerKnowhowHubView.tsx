@@ -21,7 +21,7 @@ import { storeColor } from '@/lib/utils/storeColor';
 import { sortByUrgency } from '@/lib/utils/unknownQuery';
 import { formatAsked } from '@/lib/utils/time';
 import { StorePickerSheet, type StorePickerRow } from '@/components/hub/StorePickerSheet';
-import { SectionLabel } from '@/components/SectionLabel';
+import { Section } from '@/components/Screen';
 import { ActionRow } from '@/components/blocks/ActionRow';
 import { FocusCard } from '@/components/blocks/FocusCard';
 import { ProgressPill } from '@/components/blocks/ProgressPill';
@@ -30,11 +30,12 @@ import { RollupRows, type RollupRow } from '@/components/blocks/RollupRows';
 import { AlertRow } from '@/components/blocks/AlertRow';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { Appear, stagger } from '@/components/Appear';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Type } from '@/lib/theme/type';
-import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { Radius } from '@/lib/theme/elevation';
+import { Layout, Space } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import type { Href } from 'expo-router';
 
 export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
@@ -179,8 +180,8 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
     <>
     {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
     {header}
-    {/* 카드↔카드 = md(12). 제목 달린 섹션 앞의 추가 여백은 SectionLabel 자신이 든다(2026-09-03). */}
-    <View style={{ gap: Space.md }}>
+    {/* 블록 사이 = Layout.sectionGap(20 · 2026-11-02 화면 틀). 제목 달린 묶음은 <Section> 이라 제목이 위 여백을 따로 들지 않는다. */}
+    <View style={{ gap: Layout.sectionGap }}>
       {/* ── 노하우 0 매장 = 담기가 먼저(빈 화면 행동 버튼).
              2026-08-07: **단일 매장에서만** 그린다. 다점포에서는 아래 '매장별 노하우' 카드가
              0개인 매장까지 전부 행으로 보여주므로, 여기에 또 세우면 같은 매장이 두 번 나온다. ── */}
@@ -366,7 +367,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
              목록으로 가는 길은 위 ActionRow '노하우 목록'이 대신한다 — 도달 경로 손실 0. ── */}
       {overview.length > 1 && (
         <Appear delay={stagger(4)}>
-          <SectionLabel title="매장별 노하우" />
+          <Section title="매장별 노하우">
           <View style={styles.card}>
             {/* 0개인 매장도 뺴지 않는다 — "어느 매장이 비었나"가 이 카드의 존재 이유다.
                 착지는 매장을 가리지 않고 노하우 목록 하나로 통일한다(빈 목록 화면이 담기를 안내한다). */}
@@ -401,6 +402,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
               </Pressable>
             )}
           </View>
+          </Section>
         </Appear>
       )}
 
@@ -412,9 +414,8 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
              '직원 질문'은 현황 탭의 '답 기다리는 질문'과 같은 수(pending_q)다 — 같은 이름으로 부른다. ── */}
       {!(allClear && totals.knowhow > 0) && (
         <Appear delay={stagger(5)}>
-          <SectionLabel title="고칠 노하우" hint={`${totals.pending + totals.review + totals.stale}건`} />
-          {/* 제목과 카드 사이 = 다른 섹션 카드의 marginTop(Space.sm)과 같게 — 블록 자체엔 바깥 여백이 없다. */}
-          <View style={{ marginTop: Space.sm }}>
+          {/* 제목과 카드 사이 = <Section> 이 든다(다른 섹션과 같은 10) — 블록 자체엔 바깥 여백이 없다. */}
+          <Section title="고칠 노하우" hint={`${totals.pending + totals.review + totals.stale}건`}>
           {(() => {
             const reviewRow: RollupRow = {
               key: 'review',
@@ -459,7 +460,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
             };
             return <RollupRows rows={[pendingRow, reviewRow, staleRow].filter((r) => r.count > 0)} />;
           })()}
-          </View>
+          </Section>
         </Appear>
       )}
 
@@ -492,26 +493,21 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
 
 const styles = StyleSheet.create({
   loading: { paddingVertical: Space.xl * 2, alignItems: 'center' },
-  card: { ...CardStyles.list, marginTop: Space.sm },
+  // 제목 ↔ 카드 간격은 <Section> 이 든다 — 카드가 위 여백을 따로 들지 않는다.
+  card: { ...CardStyles.list },
 
-  // 히어로 카드(H3′) — 링 + 범례. 데모 §4 `card.hero` 20/20/16.
+  // 히어로 카드(H3′) — 링 + 범례. 카드 모양 = CardStyles.list(모서리 16 · e1 · 안쪽 16).
   heroCard: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.gutter,
+    ...CardStyles.list,
     // 하단 여백은 점 인디케이터 상자(48dp 터치 타깃)가 겸한다 — lg(16)를 더 두면 점 아래가 붕 떴다(2026-09-03).
     paddingBottom: 0,
-    ...Elevation.e2,
   },
   lgRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm + 1 },
   lgDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   lgDot: { width: 9, height: 9, borderRadius: Radius.pill },
   lgDotBorder: { borderWidth: 1, borderColor: InkColors.line },
   // 범례는 꼬리표(보조)라 본문 15sp 하한 대상이 아니다.
-  lgText: { flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 17, fontWeight: '700', color: InkColors.ink2 },
+  lgText: { ...Type.tag, flex: 1, minWidth: 0, lineHeight: 17, fontWeight: '700', color: TextColor.secondary },
   // 급한 값의 주황 글자색(lgHot)은 2026-09-03 폐기 — 값은 전부 ink.
   lgValue: { fontSize: 17, lineHeight: 22, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.4 },
   // 뒷면(V4 큰숫자형) — 급한 값 두 개만 크게.
@@ -519,27 +515,26 @@ const styles = StyleSheet.create({
   // 숫자는 왼쪽에 붙인다(2026-11-02 사용자) — 옛 폭 52 오른쪽 정렬 상자가 글자 자리를 먹어 라벨이 잘렸다.
   bnValue: { ...Type.numHero, color: InkColors.ink },
 
-  emptyTitle: { fontSize: 15, fontWeight: '900', color: InkColors.ink, paddingTop: Space.xs },
-  emptyBody: { fontSize: 15, color: InkColors.ink2, lineHeight: 22, marginTop: 2 },
+  emptyTitle: { ...Type.body, fontWeight: '900', paddingTop: Space.xs },
+  // 제목(본문 15) 바로 아래 둘째 줄 = 설명 13/19(본문 15 두 줄 연속 금지 · 2026-11-02).
+  emptyBody: { ...Type.desc, marginTop: 2 },
+  // 주 버튼 모양(52 · 모서리 16 · 가로 꽉 · 16/800). 색은 그대로(옅은 노랑).
   emptyBtn: {
+    ...ButtonStyles.primary,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: 6,
     backgroundColor: BrandColors.yellowSoft,
-    borderRadius: Radius.md,
-    paddingVertical: Space.md,
     marginTop: Space.md,
     marginBottom: Space.xs,
   },
-  emptyBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  emptyBtnText: { ...ButtonTextStyles.primary, color: InkColors.ink },
 
   // 빈 상태 문구 = 본문(simplicity-voice §4) → 꼬리표용 ink3(2.55:1)를 쓰지 않는다.
-  allClearText: { fontSize: 13, color: InkColors.ink2, textAlign: 'center' },
+  allClearText: { ...Type.desc, textAlign: 'center' },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm + 2 },
-  rowTitle: { flex: 1, fontSize: 13.5, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
+  rowTitle: { flex: 1, fontSize: Type.desc.fontSize, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
   importRow: { borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: Space.xs },
-  importText: { flex: 1, fontSize: 13.5, fontWeight: '700', color: InkColors.ink2, minWidth: 0 },
+  importText: { flex: 1, fontSize: Type.desc.fontSize, fontWeight: '700', color: TextColor.secondary, minWidth: 0 },
   dot: { width: 8, height: 8, borderRadius: 4 },
 });

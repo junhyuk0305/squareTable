@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-nativ
 import { Ionicons } from '@expo/vector-icons';
 
 import { getSectionMeta } from '@/lib/utils/category';
-import { InkColors } from '@/lib/theme/colors';
+import { InkColors, TextColor } from '@/lib/theme/colors';
+import { Type } from '@/lib/theme/type';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
@@ -148,7 +149,7 @@ const styles = StyleSheet.create({
   wrap: { gap: 18, paddingTop: 2 },
   block: { gap: 8 },
   // 섹션 힌트는 '보조'라 15sp 하한 대상이 아니다(simplicity-voice §4).
-  hint: { fontSize: 12, fontWeight: '800', color: InkColors.ink3, letterSpacing: 0.2, paddingHorizontal: 2 },
+  hint: { ...Type.tag, fontWeight: '800', color: TextColor.secondary, letterSpacing: 0.2, paddingHorizontal: 2 },
 
   // 배너 창 — 넘치는 칩을 잘라야 흐르는 것처럼 보인다(RN 기본은 visible).
   marquee: { overflow: 'hidden' },
@@ -168,7 +169,7 @@ const styles = StyleSheet.create({
     ...Elevation.e1,
   },
   // 읽어서 판단하는 문장이라 본문 하한 15sp.
-  chipText: { flexShrink: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink2 },
+  chipText: { ...Type.body, flexShrink: 1, fontWeight: '600', color: InkColors.ink2 },
 
   recentRow: {
     flexDirection: 'row',
@@ -179,8 +180,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
     borderWidth: 1,
     borderColor: InkColors.line,
-    backgroundColor: InkColors.bgSoft,
+    // 흰 면 — 회색 바탕(Surface.screen) 위에서 묻히지 않게(2026-11-02. 옛 bgSoft).
+    backgroundColor: InkColors.bg,
   },
   recentDot: { width: 8, height: 8, borderRadius: Radius.pill },
-  recentText: { flex: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink2 },
+  recentText: { ...Type.body, flex: 1, fontWeight: '600', color: InkColors.ink2 },
 });

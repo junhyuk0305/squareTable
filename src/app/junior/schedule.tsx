@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { RoleTabBar } from '@/components/RoleTabBar';
+import { Screen, SectionStack } from '@/components/Screen';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
@@ -30,9 +29,12 @@ import type { Junior } from '@/types';
 import { todayStr } from '@/lib/utils/attendance';
 import { mondayOf, fmtDateKo, closedDaysLabel, addDays, shiftAppliesOn } from '@/lib/utils/schedule';
 import { formatAsked } from '@/lib/utils/time';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { Gap, Layout, Space, screenScrollStyle } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { EmptyStyles } from '@/lib/theme/empty';
 
 const STATUS_META: Record<
@@ -43,7 +45,7 @@ const STATUS_META: Record<
   accepted: { label: '사장님 승인 대기', color: BrandColors.warnText, bg: BrandColors.warnSoft },
   approved: { label: '확정', color: BrandColors.goodText, bg: BrandColors.goodSoft },
   rejected: { label: '사장님 반려', color: BrandColors.badText, bg: BrandColors.accentSoft },
-  cancelled: { label: '취소됨', color: InkColors.ink3, bg: InkColors.bgSoft },
+  cancelled: { label: '취소됨', color: TextColor.secondary, bg: InkColors.bgSoft },
 };
 
 export default function JuniorScheduleScreen() {
@@ -134,11 +136,13 @@ export default function JuniorScheduleScreen() {
   const ready = scheduleLoaded && staffLoaded;
 
   return (
-    <SafeAreaView style={styles.safe} edges={[]}>
+    <>
+    {/* 바탕·헤더·탭바 = Screen. 세그먼트를 스크롤 위에 고정하려고 스크롤은 직접 둔다(여백은 screenScrollStyle). 시트는 Screen 밖 형제. */}
+    <Screen scroll={false} tabBar="junior" header={<ScreenTitleHeader title="근무표" backFallback />}>
       <Stack.Screen options={{ title: '근무표' }} />
-      <ScreenTitleHeader title="근무표" backFallback />
 
       <SegmentTabs
+        style={styles.topTabs}
         items={[
           { key: 'week', label: '근무표' },
           { key: 'swap', label: '교대 요청', count: incoming.length || undefined },
@@ -147,7 +151,7 @@ export default function JuniorScheduleScreen() {
         onChange={(k) => setTab(k as 'week' | 'swap')}
       />
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={screenScrollStyle} showsVerticalScrollIndicator={false}>
         {!ready ? (
           <ScreenLoading label="근무표를 불러오고 있어요…" />
         ) : scheduleLoadError ? (
@@ -176,7 +180,7 @@ export default function JuniorScheduleScreen() {
                   accessibilityLabel="교대 요청하기"
                   style={({ pressed }) => [styles.heroCta, pressed && { opacity: 0.85 }]}
                 >
-                  <Ionicons name="swap-horizontal-outline" size={16} color="#fff" />
+                  <Ionicons name="swap-horizontal-outline" size={16} color={InkColors.bubbleText} />
                   <Text style={styles.heroCtaText}>교대 요청하기</Text>
                 </Pressable>
               </View>
@@ -209,7 +213,7 @@ export default function JuniorScheduleScreen() {
             </Appear>
           </>
         ) : (
-          <View style={{ gap: 18 }}>
+          <SectionStack>
             {/* 교대 요청 올리기 — 이 탭의 유일한 Primary(카드 안 수락 버튼은 보조 형태로 내렸다) */}
             <Appear delay={stagger(0)}>
             <Pressable
@@ -218,7 +222,7 @@ export default function JuniorScheduleScreen() {
               accessibilityLabel="교대 요청하기"
               style={({ pressed }) => [styles.reqBtn, pressed && { opacity: 0.85 }]}
             >
-              <Ionicons name="add-circle-outline" size={18} color="#fff" />
+              <Ionicons name="add-circle-outline" size={18} color={InkColors.bubbleText} />
               <Text style={styles.reqText}>교대 요청하기</Text>
             </Pressable>
             </Appear>
@@ -332,7 +336,7 @@ export default function JuniorScheduleScreen() {
               </View>
               </Appear>
             )}
-          </View>
+          </SectionStack>
         )}
 
         {/* 가게 기본 정보 — 보조로 강등(하단 한 줄 칩) */}
@@ -343,11 +347,10 @@ export default function JuniorScheduleScreen() {
           </Text>
         </View>
         {!!config.note && <Text style={styles.infoNote}>{config.note}</Text>}
-
-        <View style={{ height: 12 }} />
           </>
         )}
       </ScrollView>
+    </Screen>
 
       {picking && (
         <MyShiftPicker
@@ -386,9 +389,7 @@ export default function JuniorScheduleScreen() {
           onClose={() => setComposer(null)}
         />
       )}
-
-      <RoleTabBar role="junior" />
-    </SafeAreaView>
+    </>
   );
 }
 
@@ -402,9 +403,10 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <View style={{ gap: Space.sm }}>
-      <SectionLabel icon={icon} title={title} />
-      <View style={{ gap: 10 }}>{children}</View>
+    // 제목 ↔ 카드 10(SectionLabel 아래 2 + 8) · 카드끼리 Gap.item. 섹션 사이는 SectionStack 이 정한다(flush).
+    <View style={styles.section}>
+      <SectionLabel flush icon={icon} title={title} />
+      <View style={styles.sectionCards}>{children}</View>
     </View>
   );
 }
@@ -490,7 +492,7 @@ function SwapCard({
     <View style={styles.card}>
       <View style={styles.cardHead}>
         <View style={[styles.kindTag, r.kind === 'swap' && styles.kindTagSwap]}>
-          <Text style={[styles.kindTagText, r.kind === 'swap' && { color: '#fff' }]}>
+          <Text style={[styles.kindTagText, r.kind === 'swap' && { color: InkColors.bubbleText }]}>
             {r.kind === 'cover' ? '대타' : '맞교환'}
           </Text>
         </View>
@@ -590,61 +592,68 @@ function SwapRow({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { paddingHorizontal: 20, paddingBottom: 8, gap: 14 },
+  // 세그먼트 = 스크롤 위 고정. 좌우는 화면 거터, 위는 첫 여백(사장 퀴즈·노하우 탭과 같은 값).
+  topTabs: { marginHorizontal: Space.gutter, marginTop: Layout.screenTop, marginBottom: 0 },
+  section: { gap: Space.sm },
+  sectionCards: { gap: Gap.item },
 
-  // 내 다음 근무 히어로(노랑) — 격자 위 단일 강조.
-  hero: { backgroundColor: BrandColors.yellow, borderRadius: Radius.lg, paddingVertical: 16, paddingHorizontal: 16, ...Elevation.e2 },
-  heroTitle: { fontSize: 12.5, fontWeight: '800', color: '#7a6712' },
+  // 내 다음 근무 히어로(노랑) — 격자 위 단일 강조. 모서리·안쪽·그림자 = 카드 값(16 · 16 · e1).
+  //   노랑 면 위 글자색 두 개(#7a6712·#6f5f2a)는 맞는 토큰이 없어 그대로 둔다.
+  hero: { backgroundColor: BrandColors.yellow, borderRadius: Radius.md, padding: Layout.cardPad, ...Elevation.e1 },
+  heroTitle: { ...Type.tag, fontWeight: '800', color: '#7a6712' },
   heroBig: { fontSize: 17, fontWeight: '900', color: InkColors.ink, marginTop: 6, letterSpacing: -0.2 },
-  heroSub: { fontSize: 12.5, fontWeight: '600', color: '#6f5f2a', marginTop: 3 },
-  heroCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 11, marginTop: 13 },
-  heroCtaText: { fontSize: 13.5, fontWeight: '800', color: '#fff' },
-  heroEmpty: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 14, paddingHorizontal: 14, ...Elevation.e1 },
-  heroEmptyText: { flex: 1, fontSize: 15, lineHeight: 21, fontWeight: '700', color: InkColors.ink2 },
+  heroSub: { ...Type.tag, fontWeight: '600', color: '#6f5f2a', marginTop: 3 },
+  // 노랑 면 위 주 버튼 = 검정.
+  heroCta: { ...ButtonStyles.primary, flexDirection: 'row', gap: 6, backgroundColor: InkColors.ink, marginTop: Space.md },
+  heroCtaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  heroEmpty: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  heroEmptyText: { ...Type.body, flex: 1, lineHeight: 21, fontWeight: '700', color: TextColor.secondary },
 
-  infoNote: { fontSize: 12, color: InkColors.ink3, paddingHorizontal: 2 },
+  infoNote: { ...Type.desc, paddingHorizontal: 2 },
   storeChip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: InkColors.cream, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 10, paddingHorizontal: 12 },
-  storeChipText: { flex: 1, fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
+  storeChipText: { ...Type.tag, flex: 1, fontWeight: '700', color: TextColor.secondary },
 
-  tip: { fontSize: 12, color: InkColors.ink3, marginTop: 10, textAlign: 'center' },
+  tip: { ...Type.desc, textAlign: 'center' },
 
-  reqBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, ...Elevation.e1 },
-  reqText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  // 주 버튼 — 그림자 없음(결정표).
+  reqBtn: { ...ButtonStyles.primary, flexDirection: 'row', gap: 7, backgroundColor: InkColors.ink },
+  reqText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 
-  card: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 14, gap: 6, ...Elevation.e1 },
+  card: { ...CardStyles.list, gap: 6 },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   kindTag: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3 },
   kindTagSwap: { backgroundColor: InkColors.ink },
-  kindTagText: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
+  kindTagText: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
   statusTag: { borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3 },
-  statusText: { fontSize: 11, fontWeight: '800' },
-  cardTime: { marginLeft: 'auto', fontSize: 11.5, color: InkColors.ink3, fontWeight: '600' },
+  statusText: { ...Type.tag, fontWeight: '800' },
+  cardTime: { ...Type.tag, marginLeft: 'auto', color: TextColor.secondary, fontWeight: '600' },
 
-  cardLine: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
+  cardLine: { ...Type.desc },
   cardStrong: { fontWeight: '800', color: InkColors.ink },
-  cardAccepted: { fontSize: 12.5, fontWeight: '700', color: BrandColors.goodText },
-  forMe: { fontSize: 12.5, fontWeight: '800', color: BrandColors.goodText },
-  cardPart: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
-  cardNote: { fontSize: 15, color: InkColors.ink2, fontStyle: 'italic', backgroundColor: InkColors.cream, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8 },
+  cardAccepted: { ...Type.tag, fontWeight: '700', color: BrandColors.goodText },
+  forMe: { ...Type.tag, fontWeight: '800', color: BrandColors.goodText },
+  cardPart: { fontSize: 13, fontWeight: '700', color: TextColor.secondary },
+  cardNote: { ...Type.body, color: TextColor.secondary, fontStyle: 'italic', backgroundColor: InkColors.cream, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8 },
 
   conflict: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: BrandColors.accentSoft, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8, marginTop: 2 },
   conflictText: { flex: 1, fontSize: 15, color: BrandColors.badText, fontWeight: '700', lineHeight: 21 },
   // 카드 안 수락은 목록마다 반복돼 Primary가 될 수 없다 → 잉크 솔리드에서 초록 틴트(면 50 + 글자 800)로.
   acceptBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: BrandColors.goodSoft, borderRadius: Radius.md, minHeight: 48, paddingVertical: 12, marginTop: 4 },
-  acceptText: { fontSize: 14, fontWeight: '800', color: BrandColors.goodText },
-  cancelBtn: { alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md, minHeight: 48, paddingHorizontal: Space.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
-  cancelText: { fontSize: 13.5, fontWeight: '700', color: InkColors.ink2 },
+  acceptText: { fontSize: Type.body.fontSize, fontWeight: '800', color: BrandColors.goodText },
+  // 행 옆 작은 버튼 = 48 알약 · 15/800.
+  cancelBtn: { ...ButtonStyles.small, alignSelf: 'auto', paddingHorizontal: Space.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
+  cancelText: { ...ButtonTextStyles.small, color: TextColor.secondary },
 
   // 행(카드 아님) — 배경·보더·그림자 없이 구분선만. 우측에 행 액션(요청 취소)이 붙는다.
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.md },
   rowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   rowMain: { flex: 1, gap: Space.xs },
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  rowKind: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
-  rowNote: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, fontStyle: 'italic' },
+  rowKind: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
+  rowNote: { ...Type.body, lineHeight: 22, color: TextColor.secondary, fontStyle: 'italic' },
 
-  disclosure: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48, paddingHorizontal: Space.lg, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft },
-  disclosureText: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
-  historyMore: { fontSize: 12, color: InkColors.ink3, paddingVertical: Space.sm, textAlign: 'center' },
+  // 접기 행 — 바탕이 회색(#F4F5F7)이 되면서 옛 회색 면이 바탕에 묻혀 흰 행 카드로 바꿨다.
+  disclosure: { ...CardStyles.rows, flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48 },
+  disclosureText: { ...Type.body, flex: 1, fontWeight: '700', color: TextColor.secondary },
+  historyMore: { ...Type.desc, paddingVertical: Space.sm, textAlign: 'center' },
 });

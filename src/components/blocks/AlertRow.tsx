@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 /** 블록 X2 — 인라인 경고행. 터치 타깃(48dp 하한)보다 한 단계 큰 행 높이. */
 const ROW_MIN_HEIGHT = 52;
@@ -113,12 +114,12 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bubbleText,
   },
   pillText: {
-    fontSize: 12,
+    ...Type.tag,
     fontWeight: '800',
     color: BrandColors.badText,
   },
   // 미리보기는 아이콘 열을 비워 라벨과 같은 x 에서 시작한다.
   preview: { marginTop: Space.sm, marginLeft: ICON_SIZE + Space.md, gap: Space.xs },
   // 대표 항목은 꼬리표(보조)라 본문 15sp 하한 대상이 아니다.
-  previewText: { fontSize: 12.5, lineHeight: 17, color: BrandColors.badText, opacity: 0.82 },
+  previewText: { ...Type.tag, lineHeight: 17, color: BrandColors.badText, opacity: 0.82 },
 });

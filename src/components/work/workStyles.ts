@@ -1,6 +1,7 @@
 import { StyleSheet } from 'react-native';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
 
 /** 업무 탭(채팅·공지·할일·리액션) 공용 스타일. WorkBoard와 각 슬롯 컴포넌트가 공유한다. */
 export const styles = StyleSheet.create({
@@ -119,8 +120,8 @@ export const styles = StyleSheet.create({
   },
   reactChipMine: { borderColor: BrandColors.brand, backgroundColor: InkColors.bg },
   reactEmoji: { fontSize: 14 },
-  reactCount: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
-  reactWho: { fontSize: 11, color: InkColors.ink3 },
+  reactCount: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
+  reactWho: { ...Type.micro, color: TextColor.secondary },
   reactAdd: {
     width: 26,
     height: 26,

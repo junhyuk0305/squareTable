@@ -1,8 +1,9 @@
 import { View, Text, StyleSheet } from 'react-native';
 
-import { InkColors } from '@/lib/theme/colors';
+import { InkColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 /** 막대 두께·조각 사이 간격 — 도형 치수라 간격 토큰(Space) 대상이 아니다. */
 const BAR_H = 8;
@@ -71,6 +72,6 @@ const styles = StyleSheet.create({
   seg: { height: '100%', borderRadius: SEG_GAP },
   cap: { flexDirection: 'row', gap: Space.sm + Space.xs, marginTop: Space.xs, flexWrap: 'wrap' },
   // 캡션은 상태 꼬리표라 본문 15sp 하한 대상이 아니다(simplicity-voice §4 '보조').
-  capText: { fontSize: 10, lineHeight: 14, color: InkColors.ink3 },
+  capText: { ...Type.micro, lineHeight: 15, color: TextColor.secondary },
   capN: { fontWeight: '800', color: InkColors.ink2 },
 });

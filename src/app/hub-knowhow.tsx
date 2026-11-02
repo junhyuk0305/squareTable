@@ -9,14 +9,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { fetchOwnerKnowhowEntries } from '@/lib/db';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
-import { SectionLabel } from '@/components/SectionLabel';
+import { Section } from '@/components/Screen';
 import { EmptyState } from '@/components/EmptyState';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
-import { InkColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
+import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
-import { Space } from '@/lib/theme/layout';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
 import type { PlaybookEntry } from '@/types';
 
 /**
@@ -179,9 +180,8 @@ export default function HubKnowhowScreen() {
           ) : (
             groups.map((g, gi) => (
               <Appear key={g.uid} delay={stagger(gi + 2)}>
-              <View style={st.group}>
-                {/* 0은 "0개"가 아니라 "없어요" (워딩 §5). */}
-                <SectionLabel title={g.name} hint={g.items.length === 0 ? '없어요' : `${g.items.length}개`} />
+              {/* 0은 "0개"가 아니라 "없어요" (워딩 §5). */}
+              <Section title={g.name} hint={g.items.length === 0 ? '없어요' : `${g.items.length}개`}>
                 <View style={st.card}>
                   {g.items.length === 0 ? (
                     // 빈 매장을 이름만 세워 두면 막다른 길이 된다 — 채우러 갈 곳을 준다(복잡도 §4 빈 화면 규칙).
@@ -218,11 +218,10 @@ export default function HubKnowhowScreen() {
                     </Pressable>
                   ))}
                 </View>
-              </View>
+              </Section>
               </Appear>
             ))
           )}
-          <View style={{ height: Space.xl }} />
         </ScrollView>
         </KeyboardShift>
       )}
@@ -231,23 +230,20 @@ export default function HubKnowhowScreen() {
 }
 
 const st = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.paper },
-  scroll: { padding: Space.gutter, gap: Space.md },
+  // 탭바 없는 하위 화면 — 아래 안전 영역은 SafeAreaView(bottom)가 든다. 바탕·스크롤 여백만 화면 틀 값을 쓴다.
+  safe: { flex: 1, backgroundColor: Surface.screen },
+  scroll: screenScrollStyle,
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.xl * 2 },
-  centerText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
-  resetText: { fontSize: 15, fontWeight: '800', color: InkColors.ink, textDecorationLine: 'underline' },
+  centerText: { ...Type.body, color: TextColor.secondary, fontWeight: '600' },
+  resetText: { fontSize: Type.body.fontSize, fontWeight: '800', color: InkColors.ink, textDecorationLine: 'underline' },
 
-  countLabel: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+  countLabel: { fontSize: Type.desc.fontSize, fontWeight: '700', color: TextColor.secondary },
 
-  group: { gap: Space.sm },
-  card: {
-    backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line,
-    paddingHorizontal: Space.lg, paddingVertical: Space.xs, ...Elevation.e2,
-  },
+  card: { ...CardStyles.rows, paddingVertical: Space.xs },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.sm + 2, minHeight: 56 },
   rowTop: { borderTopWidth: 1, borderTopColor: InkColors.line },
-  rowTitle: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
-  rowSub: { fontSize: 12, color: InkColors.ink3, marginTop: 1 },
+  rowTitle: { ...Type.body, fontWeight: '700' },
+  rowSub: { ...Type.tag, color: TextColor.secondary, marginTop: 1 },
   // 0건 매장 행 — 제목이 안내문(본문)이라 15sp 하한 적용(복잡도 §4).
-  emptyTitle: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
+  emptyTitle: { ...Type.body, fontWeight: '700', color: TextColor.secondary },
 });

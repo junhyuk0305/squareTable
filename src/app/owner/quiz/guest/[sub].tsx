@@ -18,9 +18,10 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { PrimaryButton, GhostButton, qst } from '@/components/owner/quiz/kit';
 import { AttemptItemBlock, attemptListStyle } from '@/components/owner/quiz/AttemptItemBlock';
 import { maskTail4, scoreText, takenDayLabel } from '@/lib/quiz/guestResult';
-import { InkColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
 
 /**
  * 링크 응시 한 건의 문항별 결과 — 사장 전용.
@@ -121,7 +122,7 @@ export default function GuestQuizResultScreen() {
               <Text style={qst.emptyText}>{'문항별 기록이 없어요.\n예전 링크로 푼 결과는 점수만 남아 있어요.'}</Text>
             ) : (
               <View style={st.labeled}>
-                <SectionLabel title="문항별" hint={`${items.length}문제`} />
+                <SectionLabel flush title="문항별" hint={`${items.length}문제`} />
                 <View style={st.list}>
                   {items.map((it, i) => (
                     <Appear key={it.id} delay={stagger(i)}>
@@ -147,23 +148,17 @@ export default function GuestQuizResultScreen() {
 }
 
 const st = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.paper },
+  // 바탕 = Surface.screen · 첫 여백 16 · 좌우 20 · 블록 사이 20(2026-11-02 화면 틀 값).
+  safe: { flex: 1, backgroundColor: Surface.screen },
   loadingWrap: { alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.xl * 2 },
-  loadingText: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },
-  scroll: { padding: Space.gutter, paddingBottom: Space.xl, gap: Space.md, flexGrow: 1 },
+  loadingText: { fontSize: 13, fontWeight: '600', color: TextColor.secondary },
+  scroll: { ...screenScrollStyle, flexGrow: 1 },
   labeled: { gap: Space.sm },
 
-  head: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.lg,
-    gap: Space.xs,
-  },
-  headWho: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
-  headScore: { fontSize: 22, lineHeight: 28, fontWeight: '900', color: InkColors.ink },
-  headMeta: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },
+  head: { ...CardStyles.list, gap: Space.xs },
+  headWho: { ...Type.body, lineHeight: 21, fontWeight: '800' },
+  headScore: { ...Type.numCell, color: InkColors.ink },
+  headMeta: { fontSize: 13, fontWeight: '600', color: TextColor.secondary },
 
   // 문항 목록 상자·문항 블록 스타일은 공용(AttemptItemBlock)으로 옮겼다 — 두 화면이 같은 상자를 쓴다.
   list: attemptListStyle,
@@ -177,5 +172,5 @@ const st = StyleSheet.create({
     backgroundColor: InkColors.bg,
     gap: Space.sm,
   },
-  footNote: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, textAlign: 'center' },
+  footNote: { ...Type.desc, fontWeight: '600', textAlign: 'center' },
 });

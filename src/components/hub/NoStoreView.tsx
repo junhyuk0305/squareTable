@@ -5,10 +5,11 @@ import { useRouter } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { fetchMyGuestQuizHistory, type MyGuestQuizRow } from '@/lib/db';
 import { EmptyState } from '@/components/EmptyState';
-import { SectionLabel } from '@/components/SectionLabel';
+import { Section } from '@/components/Screen';
 import { Appear } from '@/components/Appear';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
 import { Space } from '@/lib/theme/layout';
 
 /**
@@ -94,8 +95,7 @@ function GuestQuizHistory() {
 
   return (
     <Appear>
-      <View style={styles.section}>
-        <SectionLabel title="내가 푼 퀴즈" hint={`${rows.length}건`} />
+      <Section title="내가 푼 퀴즈" hint={`${rows.length}건`}>
         {rows.map((r) => (
           <View key={r.submissionId} style={styles.card}>
             <View style={styles.headRow}>
@@ -119,27 +119,20 @@ function GuestQuizHistory() {
         <Text style={styles.note}>
           문항과 정답은 볼 수 없어요 · 사장님이 정리하기 전까지 보여요
         </Text>
-      </View>
+      </Section>
     </Appear>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { gap: Space.lg },
-  section: { gap: Space.sm },
-  card: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    padding: Space.lg,
-    gap: Space.xs,
-    ...Elevation.e1,
-  },
+  card: { ...CardStyles.list, gap: Space.xs },
   headRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  store: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink, letterSpacing: -0.2 },
-  date: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
-  score: { fontSize: 15, color: InkColors.ink2 },
+  store: { ...Type.body, flex: 1, fontWeight: '800', letterSpacing: -0.2 },
+  date: { ...Type.tag, color: TextColor.secondary, fontWeight: '600' },
+  score: { ...Type.body, color: TextColor.secondary },
   scoreNum: { color: InkColors.ink, fontWeight: '800' },
-  weak: { fontSize: 15, lineHeight: 22, color: BrandColors.warnText },
+  weak: { fontSize: Type.body.fontSize, lineHeight: 22, color: BrandColors.warnText },
   // 카드 밖 각주 — 목록 전체에 걸리는 말이라 카드 안에 넣지 않는다.
-  note: { fontSize: 13, lineHeight: 20, color: InkColors.ink3, fontWeight: '600' },
+  note: { ...Type.desc, fontWeight: '600' },
 });

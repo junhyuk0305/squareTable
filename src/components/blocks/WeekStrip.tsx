@@ -1,8 +1,9 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 
-import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { BrandColors, InkColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 /** 점 지름 — "그날 뭔가 있다"만 뜻하는 표식이라 작게. */
 const DOT = 4;
@@ -90,7 +91,7 @@ const styles = StyleSheet.create({
   cellToday: { backgroundColor: InkColors.bgSoft },
   cellDim: { opacity: 0.45 },
   pressed: { backgroundColor: InkColors.bgSoft },
-  dow: { fontSize: 10, fontWeight: '700', color: InkColors.ink2 },
+  dow: { ...Type.micro, fontWeight: '700', color: TextColor.secondary },
   dowOn: { color: InkColors.bubbleText, opacity: 0.6 },
   date: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
   dateOn: { color: InkColors.bubbleText },

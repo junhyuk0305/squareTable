@@ -52,6 +52,6 @@ const styles = StyleSheet.create({
   // 섹션 제목 = Type.section(16/800). 줄높이는 옛 15/21 비율(1.4)을 지켜 22.
   title: { ...Type.section, lineHeight: 22, letterSpacing: -0.2 },
   // 오른쪽 보조문구도 읽는 글자라 secondary(2026-11-02 결정표 '읽는 회색 글자').
-  hint: { marginLeft: 'auto', fontSize: 12, color: TextColor.secondary, fontWeight: '600' },
+  hint: { ...Type.tag, marginLeft: 'auto', color: TextColor.secondary, fontWeight: '600' },
   trailing: { marginLeft: 'auto' },
 });

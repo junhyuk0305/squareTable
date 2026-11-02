@@ -18,7 +18,7 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useBackIntercept } from '@/lib/hooks/useBackIntercept';
 import { showToast } from '@/lib/store/useToastStore';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { ButtonStyles } from '@/lib/theme/button';
@@ -478,7 +478,8 @@ function SegmentCard({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
+  // 화면 바탕만 맞춘다(Surface.screen · 2026-11-02). 이 경로는 킬스위치 롤백용이라 나머지 모양은 그대로 둔다.
+  safe: { flex: 1, backgroundColor: Surface.screen },
   scroll: { padding: Space.gutter, gap: Space.md, paddingBottom: 32 },
 
   uploadZone: {

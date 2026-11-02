@@ -1,9 +1,11 @@
 import { Component, type ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { reportError } from '@/lib/analytics/track';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Space, frameCapStyle } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 
 /**
  * 전역 안전망 — 하위 트리에서 던져진 렌더 예외를 잡아 앱 전체 화이트아웃을 막는다.
@@ -63,29 +65,23 @@ export class ErrorBoundary extends Component<Props, State> {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: InkColors.cream,
+    backgroundColor: Surface.screen,
     alignItems: 'center',
     justifyContent: 'center',
     padding: Space.gutter,
   },
   card: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.xl,
+    ...CardStyles.list,
     alignItems: 'center',
     gap: Space.md,
-    ...Elevation.e2,
   },
-  title: { fontSize: 18, fontWeight: '800', color: InkColors.ink },
-  body: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
+  title: { ...Type.title },
+  body: { fontSize: 15, color: TextColor.secondary, textAlign: 'center', lineHeight: 22 },
+  // 주 버튼(52 · 모서리 16 · 가로 꽉 · 16/800).
   btn: {
+    ...ButtonStyles.primary,
     marginTop: Space.xs,
     backgroundColor: BrandColors.brand,
-    paddingVertical: 13,
-    paddingHorizontal: Space.xl,
-    borderRadius: Radius.md,
   },
-  btnText: { color: InkColors.bubbleText, fontSize: 15, fontWeight: '800' },
+  btnText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

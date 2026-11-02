@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 /** 색이 곧 판정이다 — 행을 열지 않아도 상태를 안다. */
 export type ProgressTone = 'done' | 'progress' | 'behind' | 'neutral';
@@ -47,5 +48,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.sm,
     borderRadius: Radius.pill,
   },
-  text: { fontSize: 12, fontWeight: '800' },
+  text: { ...Type.tag, fontWeight: '800' },
 });

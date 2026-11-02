@@ -1,6 +1,5 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
@@ -8,13 +7,16 @@ import { fetchAttendanceEdits, type AttendanceEdit } from '@/lib/db';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { reconcileSchedule } from '@/lib/utils/reconcile';
 import { useScheduleStore, scheduledShiftsFor, pendingTimeRequests } from '@/lib/store/useScheduleStore';
-import { RoleTabBar } from '@/components/RoleTabBar';
+import { Screen } from '@/components/Screen';
 import { Appear, stagger } from '@/components/Appear';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { ScreenLoading } from '@/components/ScreenLoading';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 import { BadgeStyles } from '@/lib/theme/badge';
 import { fmtDuration, hhmm, todayStr, normalizeTime, shiftMonth, daysInMonth, maskHHMM } from '@/lib/utils/attendance';
 import { checkShiftTime, isOvernight, monthDates } from '@/lib/utils/schedule';
@@ -190,31 +192,35 @@ export function TimesheetView({ staffId, editedBy, badgeLabel, badgeTone = 'ink'
   const badgeStyle = badgeTone === 'accent' ? styles.badgeAccent : styles.badgeInk;
   const badgeTextStyle = badgeTone === 'accent' ? styles.badgeAccentText : styles.badgeInkText;
 
-  // 화면 골격(SafeArea·탭바)은 즉시 서고 본문만 로딩 — 훅을 전부 부른 뒤의 early return.
+  // 화면 골격(바탕·탭바)은 즉시 서고 본문만 로딩 — 훅을 전부 부른 뒤의 early return.
+  // 바탕·탭바 = Screen(2026-11-02). 헤더는 호출부가 이 부품 위에 그린다. 키보드 밀어올림 때문에 스크롤은 직접 둔다.
   if (!ready) {
     return (
-      <SafeAreaView style={styles.safe} edges={[]}>
+      <Screen tabBar={role} scroll={false}>
         <ScreenLoading label="출퇴근 기록을 불러오고 있어요…" />
-        <RoleTabBar role={role} />
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={[]}>
+    <Screen tabBar={role} scroll={false}>
       <KeyboardShift>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={screenScrollStyle} showsVerticalScrollIndicator={false}>
         {topHeader && <Appear delay={stagger(0)}>{topHeader}</Appear>}
 
         {/* 월 네비 */}
         <Appear delay={stagger(1)}>
         <View style={styles.monthBar}>
           <Pressable onPress={() => setYm((v) => shiftMonth(v, -1))} hitSlop={8} style={styles.monthArrow}>
-            <Ionicons name="chevron-back" size={20} color={InkColors.ink2} />
+            <View style={styles.monthCircle}>
+              <Ionicons name="chevron-back" size={20} color={InkColors.ink2} />
+            </View>
           </Pressable>
           <Text style={styles.monthLabel}>{month}월</Text>
           <Pressable onPress={() => setYm((v) => shiftMonth(v, 1))} hitSlop={8} style={styles.monthArrow}>
-            <Ionicons name="chevron-forward" size={20} color={InkColors.ink2} />
+            <View style={styles.monthCircle}>
+              <Ionicons name="chevron-forward" size={20} color={InkColors.ink2} />
+            </View>
           </Pressable>
         </View>
         </Appear>
@@ -296,7 +302,8 @@ export function TimesheetView({ staffId, editedBy, badgeLabel, badgeTone = 'ink'
         )}
         </Appear>
 
-        {/* 날짜별 기록 */}
+        {/* 날짜별 기록 — 제목 ↔ 카드는 한 묶음(10). 섹션 사이(20)는 스크롤 틀이 정한다. */}
+        <View style={styles.group}>
         <Appear delay={stagger(5)}>
         <Text style={styles.sectionTitle}>
           날짜별 기록 <Text style={styles.sectionHint}>· 탭하면 수정</Text>
@@ -378,15 +385,14 @@ export function TimesheetView({ staffId, editedBy, badgeLabel, badgeTone = 'ink'
           ))}
         </View>
         </Appear>
+        </View>
 
         <Appear delay={stagger(7)}>
         <Text style={styles.demoNote}>{footerNote}</Text>
         </Appear>
-        <View style={{ height: 8 }} />
       </ScrollView>
       </KeyboardShift>
-      <RoleTabBar role={role} />
-    </SafeAreaView>
+    </Screen>
   );
 }
 
@@ -412,68 +418,69 @@ function TimeEditRow({ cin, cout, onCin, onCout }: { cin: string; cout: string; 
 
 const styles = StyleSheet.create({
   waitRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingHorizontal: 4, paddingTop: Space.xs },
-  waitText: { flex: 1, fontSize: 12, fontWeight: '700', color: BrandColors.warnText, lineHeight: 17 },
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: 20, gap: 14 },
+  waitText: { ...Type.desc, flex: 1, fontWeight: '700', color: BrandColors.warnText },
 
   monthBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },
-  monthArrow: { padding: 4 },
+  // 월 이동 = 흰 원 버튼(ButtonStyles.iconCircle · 2026-11-02 결정). 누르는 상자 48(RN-web 은 hitSlop 을 무시한다).
+  monthArrow: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  monthCircle: { ...ButtonStyles.iconCircle },
   monthLabel: { fontSize: 17, fontWeight: '800', color: InkColors.ink, minWidth: 48, textAlign: 'center' },
 
-  summary: { flexDirection: 'row', backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 16 },
+  summary: { ...CardStyles.list, flexDirection: 'row' },
   sumCol: { flex: 1, alignItems: 'center', gap: 4 },
   sumDivider: { width: 1, backgroundColor: InkColors.line, marginVertical: 4 },
-  sumLabel: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
+  sumLabel: { ...Type.tag, color: TextColor.secondary, fontWeight: '600' },
   sumValue: { fontSize: 16, color: InkColors.ink, fontWeight: '800' },
-  mismatch: { marginTop: 12, gap: 6, padding: 13, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.warnBorder, backgroundColor: BrandColors.warnSoft },
+  mismatch: { gap: 6, padding: 13, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.warnBorder, backgroundColor: BrandColors.warnSoft },
   mismatchHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   mismatchTitle: { fontSize: 13, fontWeight: '800', color: BrandColors.warnText },
-  mismatchLine: { fontSize: 13, color: InkColors.ink2, fontWeight: '600', lineHeight: 19 },
-  mismatchMore: { fontSize: 12, color: InkColors.ink3, fontWeight: '700' },
+  mismatchLine: { ...Type.desc, fontWeight: '600' },
+  mismatchMore: { ...Type.tag, color: TextColor.secondary, fontWeight: '700' },
 
+  // 주 버튼 모양(52 · 모서리 16 · 가로 꽉). 점선 테두리·흰 면은 그대로.
   addBtn: {
+    ...ButtonStyles.primary,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Surface.card,
     borderWidth: 1,
     borderColor: InkColors.line,
     borderStyle: 'dashed',
-    borderRadius: Radius.md,
-    paddingVertical: 14,
   },
-  addText: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
+  addText: { ...Type.body, fontWeight: '700' },
 
-  sectionTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink2, marginTop: 2 },
-  sectionHint: { fontSize: 12, fontWeight: '600', color: InkColors.ink3 },
-  list: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
-  empty: { fontSize: 15, color: InkColors.ink2, paddingVertical: 16, textAlign: 'center' },
+  // 섹션 제목 = 16/800 검정(결정표). 제목 ↔ 카드 10 = group 간격 8 + 아래 2(SectionLabel 과 같은 값).
+  group: { gap: Space.sm },
+  sectionTitle: { ...Type.section, marginBottom: 2 },
+  sectionHint: { ...Type.tag, fontWeight: '600', color: TextColor.secondary },
+  list: { ...CardStyles.rows },
+  empty: { ...Type.body, color: TextColor.secondary, paddingVertical: 16, textAlign: 'center' },
 
   recWrap: { borderBottomWidth: 1, borderBottomColor: InkColors.line },
   recRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   // min 크기 — 글자가 커지면 날짜·요일 두 줄이 상자 밖으로 삐져나가지 않고 상자가 커진다(기본은 42×42 그대로).
   dateBadge: { minWidth: 42, minHeight: 42, paddingVertical: Space.xs, borderRadius: Radius.sm, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
   dateNum: { fontSize: 16, fontWeight: '800', color: InkColors.ink, lineHeight: 18 },
-  dateWd: { fontSize: 10, color: InkColors.ink3, fontWeight: '700' },
+  dateWd: { ...Type.micro, color: TextColor.secondary, fontWeight: '700' },
   recTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  recTime: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
-  recDur: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
-  recOrigin: { fontSize: 12, color: BrandColors.accent, marginTop: 2 },
-  recDeleted: { fontSize: 12, color: BrandColors.accent, paddingVertical: 6 },
+  recTime: { ...Type.body, fontWeight: '700' },
+  recDur: { ...Type.tag, color: TextColor.secondary, marginTop: 2 },
+  recOrigin: { ...Type.tag, color: BrandColors.accent, marginTop: 2 },
+  recDeleted: { ...Type.tag, color: BrandColors.accent, paddingVertical: 6 },
   badgeInk: { ...BadgeStyles.box, backgroundColor: BrandColors.brandSoft },
   badgeInkText: { ...BadgeStyles.text, color: InkColors.ink2 },
   badgeAccent: { ...BadgeStyles.box, backgroundColor: BrandColors.accentSoft },
   badgeAccentText: { ...BadgeStyles.text, color: BrandColors.accentText },
 
   editInline: { paddingBottom: 14, gap: 12 },
-  editCard: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.brand, padding: 16, gap: 12 },
-  editTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  // 편집 중인 카드 — 카드 모양은 공용, 선만 검정으로 덮어 "지금 고치는 중"을 말한다.
+  editCard: { ...CardStyles.list, borderColor: BrandColors.brand, gap: 12 },
+  editTitle: { ...Type.body, fontWeight: '800' },
   errText: { fontSize: 15, color: BrandColors.accentText, fontWeight: '600' },
   editRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  editFieldLabel: { fontSize: 13, color: InkColors.ink2, fontWeight: '700' },
-  editTilde: { fontSize: 14, color: InkColors.ink3, marginHorizontal: 2 },
-  editSuffix: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
+  editFieldLabel: { fontSize: 13, color: TextColor.secondary, fontWeight: '700' },
+  editTilde: { fontSize: Type.body.fontSize, color: InkColors.ink3, marginHorizontal: 2 },
+  editSuffix: { fontSize: 13, color: TextColor.secondary, fontWeight: '600' },
   timeInput: {
     minWidth: 72,
     textAlign: 'center',
@@ -489,10 +496,11 @@ const styles = StyleSheet.create({
   editActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   delBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 8, paddingHorizontal: 10 },
   delText: { fontSize: 13, fontWeight: '700', color: BrandColors.accentText },
-  cancelBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line },
-  cancelText: { fontSize: 14, fontWeight: '700', color: InkColors.ink3 },
-  saveBtn: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: Radius.sm, backgroundColor: BrandColors.brand },
-  saveText: { fontSize: 14, fontWeight: '800', color: '#FFFFFF' },
+  // 작은 버튼(48 알약 · 15/800 · 내용 폭).
+  cancelBtn: { ...ButtonStyles.small, borderWidth: 1, borderColor: InkColors.line },
+  cancelText: { ...ButtonTextStyles.small, color: TextColor.secondary },
+  saveBtn: { ...ButtonStyles.small, backgroundColor: BrandColors.brand },
+  saveText: { ...ButtonTextStyles.small, color: '#FFFFFF' },
 
-  demoNote: { fontSize: 12, color: InkColors.ink3, marginTop: 4 },
+  demoNote: { ...Type.desc },
 });

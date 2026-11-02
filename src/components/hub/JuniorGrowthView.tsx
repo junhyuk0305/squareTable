@@ -16,16 +16,18 @@ import { fetchMyTrainingHistory, type TrainingHistoryRow } from '@/lib/db';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
 import { storeColor } from '@/lib/utils/storeColor';
-import { SectionLabel } from '@/components/SectionLabel';
+import { Section } from '@/components/Screen';
 import { ProgressRing } from '@/components/blocks/ProgressRing';
 import { RollupRows } from '@/components/blocks/RollupRows';
 import { StatCard, StatCardGrid } from '@/components/blocks/StatCardGrid';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { Appear, stagger } from '@/components/Appear';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
+import { Layout, Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
 import type { PlaybookEntry } from '@/types';
 
 const ENTRY_LIST_FIRST = 5; // 리스트 첫 노출 5±2 — 넘치면 "나머지 보기"로 아래로 펼침
@@ -122,7 +124,7 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
       <>
       {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
       {header}
-      <View style={{ gap: Space.md }}>
+      <View style={{ gap: Layout.sectionGap }}>
         <Appear delay={stagger(0)}>
           <View style={styles.card}>
             <Text style={styles.emptyTitle}>여기에 내가 남긴 것이 쌓여요</Text>
@@ -155,7 +157,8 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
     <>
     {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
     {header}
-    <View style={{ gap: Space.md }}>
+    {/* 블록 사이 = Layout.sectionGap(20 · 2026-11-02 화면 틀). 제목 달린 묶음은 <Section>. */}
+    <View style={{ gap: Layout.sectionGap }}>
       {/* ── 히어로(H3′ · 블록어휘 §7-2) — "우리 매장 노하우 중 내가 아는 것".
              ★2026-08-27 오밀조밀 확산 6-1 B안. 옛 판본은 노랑 '가르침' 카드가 맨 위였는데,
              taught 는 대부분 0이라 화면 첫인상이 "아직 없음"이었다. 히어로는 신입 첫날에도
@@ -221,8 +224,8 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
       </Appear>
 
       {/* ── 내가 남긴 것 ── */}
-      <Appear delay={stagger(1)} style={{ gap: Space.sm }}>
-        <SectionLabel title="내가 남긴 것" />
+      <Appear delay={stagger(1)}>
+        <Section title="내가 남긴 것">
         {/* 블록 L4(§7-2) — MiniStats(숫자 3칸 나열)를 2열 지표 카드로 갈아탔다(2026-08-27).
             숫자 옆에 대상·근거가 붙는다(R2): '내가 만든 노하우'는 참조 횟수를 보조줄로 데리고 오고,
             0건일 때 큰 숫자를 세우던 '최근 30일 참조' 칸은 사라진다.
@@ -291,6 +294,7 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
           )}
         </View>
         )}
+        </Section>
       </Appear>
 
       {/* ── 매장별 축적 — 합계는 위 L4로 올라갔다. 여기 남는 건 매장별 분해뿐이라
@@ -299,8 +303,8 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
                가질 수 있는 모양이라(그 매장에서 가장 최근에 통과한 노하우) §7-4 B 그대로다.
              숙련 주장 없음(완료 ≠ 숙련). ── */}
       {growth.length > 1 && (
-      <Appear delay={stagger(2)} style={{ gap: Space.sm }}>
-        <SectionLabel title="매장별" />
+      <Appear delay={stagger(2)}>
+        <Section title="매장별">
         <RollupRows
           rows={growth.map((r) => {
             const last = latestByUnit.get(r.unit_id);
@@ -319,15 +323,17 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
             };
           })}
         />
+        </Section>
       </Appear>
       )}
 
       {trainingError && (
         <Appear delay={stagger(3)}>
-          <SectionLabel title="퀴즈로 확인한 노하우" />
+          <Section title="퀴즈로 확인한 노하우">
           <View style={styles.card}>
             <Text style={styles.emptyBody}>퀴즈 기록을 불러오지 못했어요. 잠시 뒤 다시 열어 주세요.</Text>
           </View>
+          </Section>
         </Appear>
       )}
       {/* ── 훈련 통과 이력(0104) — 있을 때만. 통과 사실만 말하고 점수·등급을 만들지 않는다 ── */}
@@ -335,7 +341,7 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
         <Appear delay={stagger(3)}>
           {/* 제목이 히어로와 같은 말을 쓴다 — 위 링의 분자가 곧 이 목록이다(되물음 테스트: "퀴즈"만으론
               뭘 통과했는지 안 읽힌다). */}
-          <SectionLabel title="퀴즈로 확인한 노하우" hint={`${trainingHistory.length}개`} />
+          <Section title="퀴즈로 확인한 노하우" hint={`${trainingHistory.length}개`}>
           <View style={styles.card}>
             {(showAllTraining ? trainingHistory : trainingHistory.slice(0, ENTRY_LIST_FIRST)).map((h) => (
               <View key={`${h.unitId}_${h.entryId}`} style={styles.row}>
@@ -357,6 +363,7 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
               </Pressable>
             )}
           </View>
+          </Section>
         </Appear>
       )}
 
@@ -372,59 +379,44 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
 
 const styles = StyleSheet.create({
   loading: { paddingVertical: Space.xl * 2, alignItems: 'center' },
+  // 카드 모양 = CardStyles(모서리 16 · e1). 제목 ↔ 카드 간격은 <Section> 이 든다.
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingHorizontal: Space.lg,
+    ...CardStyles.rows,
     paddingVertical: Space.md,
-    marginTop: Space.sm,
-    ...Elevation.e2,
   },
 
   // 빈 상태
-  emptyTitle: { fontSize: 17, fontWeight: '900', color: InkColors.ink, paddingTop: Space.xs },
-  emptyBody: { fontSize: 15, color: InkColors.ink2, lineHeight: 22, marginTop: Space.xs },
+  emptyTitle: { ...Type.title, paddingTop: Space.xs },
+  emptyBody: { fontSize: Type.body.fontSize, color: TextColor.secondary, lineHeight: 22, marginTop: Space.xs },
   // 스켈레톤 카드 — 가짜 수치가 없으므로 opacity 로 흐리지 않는다(흐림 = 가짜 표시였다).
   ghostCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingHorizontal: Space.lg,
+    ...CardStyles.rows,
     paddingVertical: Space.md,
     gap: Space.xs,
   },
-  ghostTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
+  ghostTitle: { ...Type.body, fontWeight: '800', color: TextColor.secondary },
   // 숫자가 올 자리 — 값을 지어내지 않고 '여기에 온다'만 표시한다.
   ghostBar: { width: 64, height: 22, borderRadius: Radius.sm, backgroundColor: InkColors.bgSoft },
-  ghostBody: { fontSize: 12.5, color: InkColors.ink2 },
+  ghostBody: { ...Type.desc },
 
-  // 히어로 카드(H3′) — 링 + 우측 슬롯. 노하우 허브 heroCard 와 같은 여백(데모 §4 `card.hero` 20/20/16).
+  // 히어로 카드(H3′) — 링 + 우측 슬롯. 노하우 허브 heroCard 와 같은 모양(CardStyles.list).
   heroCard: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.gutter,
+    ...CardStyles.list,
     // 하단 여백은 점 인디케이터 상자(48dp)가 겸한다 — 사장 노하우 탭 히어로와 같은 값(2026-09-03).
     paddingBottom: 0,
-    ...Elevation.e2,
   },
   // 앞면(V1 범례) — 꼬리표라 본문 15sp 하한 대상이 아니다.
   lgRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm + 1 },
   lgDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   lgDot: { width: 9, height: 9, borderRadius: Radius.pill },
   lgDotBorder: { borderWidth: 1, borderColor: InkColors.line },
-  lgText: { flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 17, fontWeight: '700', color: InkColors.ink2 },
+  lgText: { ...Type.tag, flex: 1, minWidth: 0, lineHeight: 17, fontWeight: '700', color: TextColor.secondary },
   lgValue: { fontSize: 17, lineHeight: 22, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.4 },
   // 뒷면(V2 대상형) — 최근 통과 노하우 제목. 원장에 제목이 있어 대상을 말할 수 있다(R2).
-  faceLabel: { fontSize: 11.5, lineHeight: 16, fontWeight: '800', color: InkColors.ink3, marginBottom: 2 },
+  faceLabel: { ...Type.tag, lineHeight: 16, fontWeight: '800', color: TextColor.secondary, marginBottom: 2 },
   tgRow: { paddingVertical: Space.sm, minWidth: 0 },
   tgTitle: { fontSize: 13, lineHeight: 18, fontWeight: '800', color: InkColors.ink },
-  tgSub: { fontSize: 11.5, lineHeight: 16, color: InkColors.ink3, marginTop: 1 },
+  tgSub: { ...Type.tag, lineHeight: 16, color: TextColor.secondary, marginTop: 1 },
 
   statRow: { flexDirection: 'row', paddingVertical: Space.xs },
   statCell: { flex: 1, alignItems: 'center', gap: 2 },
@@ -435,8 +427,8 @@ const styles = StyleSheet.create({
 
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm + 2, borderTopWidth: 1, borderTopColor: InkColors.line },
   moreBtn: { alignItems: 'center', paddingVertical: Space.sm + 2, borderTopWidth: 1, borderTopColor: InkColors.line },
-  moreBtnText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
-  rowTitle: { flex: 1, fontSize: 13.5, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
-  rowSub: { fontSize: 12, color: InkColors.ink3 },
+  moreBtnText: { fontSize: 13, fontWeight: '700', color: TextColor.secondary },
+  rowTitle: { flex: 1, fontSize: Type.desc.fontSize, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
+  rowSub: { ...Type.tag, color: TextColor.secondary },
   dot: { width: 8, height: 8, borderRadius: 4 },
 });

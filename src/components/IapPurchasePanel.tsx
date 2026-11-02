@@ -34,9 +34,12 @@ import { Collapse } from '@/components/Collapse';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { PLANS } from '@/lib/config/tiers';
 import { CANCEL_PATH_TEXT, UPGRADE_CREDIT } from '@/lib/config/store-policy';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 import { rpcChooseIapRelease, rpcClearIapRelease, type IapSubscriptionRow } from '@/lib/db';
 import { releaseRule } from '@/lib/iap/release';
 import { fmtDay, otherPaidNote, otherStoreNote, prepaidGuardNote } from '@/lib/iap/notes';
@@ -602,41 +605,35 @@ export function IapPurchasePanel({
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.lg,
-    marginBottom: Space.md,
-  },
+  // 카드 모양 = CardStyles.list(모서리 16 · e1 · 안쪽 16).
+  card: { ...CardStyles.list, marginBottom: Space.md },
   heading: { fontSize: 17, fontWeight: '700', color: InkColors.ink, marginBottom: Space.md },
-  body: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
-  note: { fontSize: 14, lineHeight: 20, color: InkColors.ink3, marginTop: Space.sm },
-  hint: { fontSize: 13, lineHeight: 19, color: InkColors.ink3, marginTop: Space.xs },
+  body: { ...Type.desc },
+  note: { ...Type.desc, marginTop: Space.sm },
+  hint: { ...Type.desc, marginTop: Space.xs },
 
   // 결제 후 반영 대기 · 완료
   waitCard: { borderColor: BrandColors.warn },
   doneCard: { borderColor: BrandColors.good },
   waitHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: 6 },
-  waitTitle: { fontSize: 15, fontWeight: '900', color: InkColors.ink },
+  waitTitle: { ...Type.body, fontWeight: '900' },
   closeHit: { minWidth: 48, minHeight: 48, alignItems: 'flex-end', justifyContent: 'center', marginRight: -Space.sm, marginVertical: -Space.md },
 
   // 현재 구독
   curTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink, lineHeight: 23, marginBottom: Space.xs },
-  pendingNote: { fontSize: 14, lineHeight: 20, color: BrandColors.warnText, fontWeight: '600', marginTop: Space.xs },
+  pendingNote: { ...Type.desc, color: BrandColors.warnText, fontWeight: '600', marginTop: Space.xs },
 
   // 무료 ↔ 이용권 대비
   diffRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.md, marginBottom: Space.sm },
   diffLabel: {
     fontSize: 13,
     fontWeight: '700',
-    color: InkColors.ink3,
+    color: TextColor.secondary,
     minWidth: 52,
     paddingVertical: 2,
   },
   diffLabelOn: { color: InkColors.ink },
-  diffText: { flex: 1, fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
+  diffText: { flex: 1, fontSize: Type.body.fontSize, lineHeight: 22, color: TextColor.secondary },
   diffTextOn: { color: InkColors.ink, fontWeight: '600' },
 
   // 매장 수 고르기
@@ -651,7 +648,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
     marginBottom: Space.sm,
   },
-  moreText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
+  moreText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
   moreList: { gap: Space.sm, marginBottom: Space.lg },
   offer: {
     flexDirection: 'row',
@@ -665,44 +662,37 @@ const styles = StyleSheet.create({
   },
   offerOn: { borderColor: InkColors.ink, borderWidth: 2 },
   offerLeft: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, flex: 1 },
-  offerTitle: { fontSize: 15, fontWeight: '600', color: InkColors.ink, flexShrink: 1 },
-  offerTag: { fontSize: 12, color: InkColors.ink3 },
-  offerPrice: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  offerTitle: { ...Type.body, fontWeight: '600', flexShrink: 1 },
+  offerTag: { ...Type.tag, color: TextColor.secondary },
+  offerPrice: { fontSize: Type.body.fontSize, fontWeight: '700', color: InkColors.ink },
 
   // 늘리기 자세히 · 줄이기 닫을 매장
   detailBox: { gap: Space.sm, marginBottom: Space.lg, padding: Space.md, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft },
-  detailTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  detailBody: { fontSize: 14, lineHeight: 21, color: InkColors.ink2 },
+  detailTitle: { ...Type.body, fontWeight: '800' },
+  detailBody: { ...Type.desc },
   releaseBox: { gap: Space.sm, marginBottom: Space.lg },
 
-  primary: {
-    minHeight: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: Radius.md,
-    backgroundColor: InkColors.ink,
-  },
-  primaryText: { fontSize: 16, fontWeight: '900', color: '#FFFFFF' },
+  // 주 버튼(52 · 모서리 16 · 가로 꽉 · 16/800).
+  primary: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 
-  warnNote: { fontSize: 14, lineHeight: 20, color: BrandColors.warnText, marginTop: Space.md, fontWeight: '600' },
-  legal: { fontSize: 12, lineHeight: 18, color: InkColors.ink3, marginTop: Space.md },
+  warnNote: { ...Type.desc, color: BrandColors.warnText, marginTop: Space.md, fontWeight: '600' },
+  legal: { ...Type.desc, marginTop: Space.md },
   legalLinks: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: 2 },
   legalHit: { minHeight: 48, justifyContent: 'center' },
-  legalLink: { fontSize: 12, color: InkColors.ink2, fontWeight: '700', textDecorationLine: 'underline' },
-  legalDot: { fontSize: 12, color: InkColors.ink3 },
+  legalLink: { ...Type.tag, color: TextColor.secondary, fontWeight: '700', textDecorationLine: 'underline' },
+  legalDot: { ...Type.tag, color: InkColors.ink3 },
 
+  // 보조 버튼 — 주 버튼과 같은 모양(52 · 모서리 16 · 16/800), 색만 옅게. 카드 안에만 놓인다.
   ghost: {
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: Radius.md,
+    ...ButtonStyles.primary,
     borderWidth: 1,
     borderColor: InkColors.line,
     backgroundColor: InkColors.bgSoft,
     marginTop: Space.md,
   },
-  ghostText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
+  ghostText: { ...ButtonTextStyles.primary, color: TextColor.secondary },
 
   restoreHit: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  restoreText: { fontSize: 13, color: InkColors.ink3, fontWeight: '700', textDecorationLine: 'underline' },
+  restoreText: { fontSize: 13, color: TextColor.secondary, fontWeight: '700', textDecorationLine: 'underline' },
 });

@@ -16,7 +16,8 @@ import { FORMATS } from '@/lib/quiz/formats';
 import { previewAnswer } from '@/lib/quiz/preview';
 import { QUIZ_RENDERERS } from '@/components/work/quiz';
 import { BottomSheet } from '@/components/BottomSheet';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { Type } from '@/lib/theme/type';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
@@ -93,12 +94,14 @@ export function QuizPreviewSheet({ quiz, onClose }: { quiz: QuizPreviewTarget; o
 }
 
 const pst = StyleSheet.create({
-  kicker: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink3, marginTop: Space.xs },
+  kicker: { ...Type.tag, fontWeight: '800', color: TextColor.secondary, marginTop: Space.xs },
   ask: { fontSize: 16, fontWeight: '800', color: InkColors.ink, lineHeight: 24, marginBottom: Space.xs },
   gradeBox: {
     borderRadius: Radius.md, backgroundColor: InkColors.bgSoft,
     padding: Space.lg, marginTop: Space.lg, gap: Space.xs,
   },
-  gradeTitle: { fontSize: 15, fontWeight: '800', lineHeight: 22 },
-  gradeText: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
+  // 색은 채점 결과마다 자리에서 정한다(그래서 Type.body 를 펼치지 않고 크기만).
+  gradeTitle: { fontSize: Type.body.fontSize, fontWeight: '800', lineHeight: 22 },
+  // 제목 15 아래 둘째 줄 = 설명 13/19 — 본문 15 두 줄 연속 금지(2026-11-02).
+  gradeText: { ...Type.desc, fontWeight: '600' },
 });

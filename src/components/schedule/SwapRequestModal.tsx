@@ -9,8 +9,10 @@ import { useScheduleStore, shiftsOn, type ShiftTemplate, type SwapKind } from '@
 import type { Junior } from '@/types';
 import { todayStr, maskHHMM } from '@/lib/utils/attendance';
 import { addDays, fmtDateKo, splitShift } from '@/lib/utils/schedule';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 type Candidate = { date: string; template: ShiftTemplate };
 
@@ -127,7 +129,7 @@ export function SwapRequestModal({
                   const on = o.k === kind;
                   return (
                     <Pressable key={o.k} onPress={() => setKind(o.k)} style={[s.segO, on && s.segOn]}>
-                      <Text style={[s.segText, on && { color: '#fff' }]}>{o.l}</Text>
+                      <Text style={[s.segText, on && { color: InkColors.bubbleText }]}>{o.l}</Text>
                     </Pressable>
                   );
                 })}
@@ -155,7 +157,7 @@ export function SwapRequestModal({
                         onPress={() => toggleTarget(p.id)}
                         style={[s.chip, on && s.chipOn]}
                       >
-                        <Text style={[s.chipText, on && { color: '#fff' }]}>{p.name}</Text>
+                        <Text style={[s.chipText, on && { color: InkColors.bubbleText }]}>{p.name}</Text>
                       </Pressable>
                     );
                   })}
@@ -177,7 +179,7 @@ export function SwapRequestModal({
                   style={({ pressed }) => [s.checkRow, pressed && { opacity: 0.7 }]}
                 >
                   <View style={[s.check, partial && s.checkOn]}>
-                    {partial && <Ionicons name="checkmark" size={14} color="#fff" />}
+                    {partial && <Ionicons name="checkmark" size={14} color={InkColors.bubbleText} />}
                   </View>
                   <Text style={s.checkLabel}>일부 시간만 넘기기</Text>
                 </Pressable>
@@ -239,7 +241,7 @@ export function SwapRequestModal({
                             }}
                             style={[s.chip, on && s.chipOn]}
                           >
-                            <Text style={[s.chipText, on && { color: '#fff' }]}>{p.name}</Text>
+                            <Text style={[s.chipText, on && { color: InkColors.bubbleText }]}>{p.name}</Text>
                           </Pressable>
                         );
                       })}
@@ -307,47 +309,48 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const s = StyleSheet.create({
-  title: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: 16, paddingBottom: 10 },
+  // 시트 안은 버튼·글자 크기·색 토큰만 맞춘다(2026-11-02 결정 — 시트 틀·칩·행 모양은 그대로).
+  title: { ...Type.title, paddingHorizontal: 16, paddingBottom: 10 },
 
   myShift: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 6, paddingVertical: 12, paddingHorizontal: 14, backgroundColor: InkColors.cream, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line },
-  myShiftText: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
+  myShiftText: { ...Type.body, fontWeight: '700' },
 
   scroll: { flex: 1, paddingHorizontal: 16, paddingTop: 6 },
   fld: { marginBottom: 14 },
-  fldLabel: { fontSize: 11.5, fontWeight: '800', color: InkColors.ink2, marginBottom: 7 },
-  inp: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.cream, minHeight: 44, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
+  fldLabel: { ...Type.tag, fontWeight: '800', color: TextColor.secondary, marginBottom: 7 },
+  inp: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: Type.body.fontSize, color: InkColors.ink, backgroundColor: InkColors.cream, minHeight: 44, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
 
   seg: { flexDirection: 'row', gap: 6 },
   segO: { flex: 1, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingVertical: 10, alignItems: 'center', backgroundColor: InkColors.bg },
   segOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  segText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
-  hint: { fontSize: 12, color: InkColors.ink3, lineHeight: 18, marginTop: 8 },
+  segText: { fontSize: 13, fontWeight: '800', color: TextColor.secondary },
+  hint: { ...Type.desc, marginTop: 8 },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 15, paddingVertical: 9, backgroundColor: InkColors.bg },
   chipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  chipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+  chipText: { fontSize: 13, fontWeight: '700', color: TextColor.secondary },
 
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
   check: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: InkColors.line, alignItems: 'center', justifyContent: 'center', backgroundColor: InkColors.bg },
   checkOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  checkLabel: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
+  checkLabel: { ...Type.body, fontWeight: '700' },
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
-  timeInp: { flex: 1, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, minHeight: 44, fontSize: 15, fontWeight: '700', color: InkColors.ink, backgroundColor: InkColors.cream, textAlign: 'center', ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
+  timeInp: { flex: 1, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, minHeight: 44, fontSize: Type.body.fontSize, fontWeight: '700', color: InkColors.ink, backgroundColor: InkColors.cream, textAlign: 'center', ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
   timeInpBad: { borderColor: BrandColors.badText },
-  tilde: { fontSize: 15, color: InkColors.ink3, fontWeight: '700' },
+  tilde: { fontSize: Type.body.fontSize, color: InkColors.ink3, fontWeight: '700' },
   preview: { marginTop: 10, gap: 4, paddingVertical: 10, paddingHorizontal: 13, backgroundColor: InkColors.cream, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line },
-  previewLine: { fontSize: 13, color: InkColors.ink2, fontWeight: '700' },
-  warn: { fontSize: 12, color: BrandColors.badText, fontWeight: '700', marginTop: 8 },
+  previewLine: { fontSize: 13, color: TextColor.secondary, fontWeight: '700' },
+  warn: { ...Type.desc, color: BrandColors.badText, fontWeight: '700', marginTop: 8 },
 
   candList: { gap: 8 },
   candRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingVertical: 12, paddingHorizontal: 13, backgroundColor: InkColors.bg },
   candRowOn: { borderColor: InkColors.ink, backgroundColor: InkColors.cream },
-  candText: { fontSize: 13.5, color: InkColors.ink2, fontWeight: '600' },
+  candText: { fontSize: Type.desc.fontSize, color: TextColor.secondary, fontWeight: '600' },
 
-  empty: { fontSize: 15, color: InkColors.ink2, lineHeight: 22, paddingVertical: 4 },
+  empty: { ...Type.body, color: TextColor.secondary, lineHeight: 22, paddingVertical: 4 },
 
   foot: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: InkColors.line },
-  cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center' },
-  ctaText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  cta: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
+  ctaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

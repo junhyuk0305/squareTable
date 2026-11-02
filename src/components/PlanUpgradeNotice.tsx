@@ -5,6 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, frameCapStyle } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 import { showBillingEntry } from '@/lib/config/store-policy';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
@@ -50,10 +52,11 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: InkColors.line, ...Elevation.e1,
   },
   title: { fontSize: 16, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
-  desc: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
+  desc: { ...Type.desc, fontWeight: '600', textAlign: 'center' },
+  // 빈 화면 버튼과 같은 주 버튼(52 · 모서리 16 · 가로 꽉 · 16/800).
   cta: {
+    ...ButtonStyles.primary,
     marginTop: Space.md, backgroundColor: BrandColors.brand,
-    paddingVertical: 12, paddingHorizontal: Space.xl, borderRadius: Radius.md,
   },
-  ctaText: { fontSize: 14, fontWeight: '800', color: '#FFFFFF' },
+  ctaText: { ...ButtonTextStyles.primary, color: '#FFFFFF' },
 });

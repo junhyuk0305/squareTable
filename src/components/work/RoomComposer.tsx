@@ -9,9 +9,10 @@ import { pickImageNative } from '@/lib/media/pickImage';
 import { uploadPhoto, uploadPhotoNative } from '@/lib/db';
 import { showToast } from '@/lib/store/useToastStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
-import { InkColors } from '@/lib/theme/colors';
+import { InkColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 import { ROOM_COLORS } from '@/lib/utils/room';
 import { roleNoun } from '@/lib/utils/roles';
 import type { Member } from '@/components/work/MentionInput';
@@ -235,12 +236,12 @@ const s = StyleSheet.create({
   //   안 넣으면 글자가 시트 모서리에 붙는다(2026-08-19 실측).
   sheet: { maxHeight: '86%', paddingBottom: Space.lg },
   // 시트 좌우 여백은 lg(16) — 화면 거터(gutter 20)가 아니라 시트 표준을 따른다(kit 의 qst.body).
-  title: { fontSize: 17, fontWeight: '800', color: InkColors.ink, paddingHorizontal: Space.lg, paddingBottom: Space.md },
+  title: { ...Type.title, paddingHorizontal: Space.lg, paddingBottom: Space.md },
   scroll: { flexGrow: 0, paddingHorizontal: Space.lg },
 
   // 안내박스는 기존 형태(TaskComposerModal.infoNote)를 그대로 쓴다 — 새 색을 만들지 않는다.
   personalNote: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: Space.md, marginBottom: Space.lg },
-  personalNoteText: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink2, lineHeight: 21 },
+  personalNoteText: { ...Type.desc, flex: 1, fontWeight: '700' },
 
   lookRow: { flexDirection: 'row', alignItems: 'center', gap: Space.lg, paddingBottom: Space.lg },
   avatarBtn: { width: 64, height: 64 },
@@ -248,24 +249,24 @@ const s = StyleSheet.create({
   avatarText: { fontSize: 26, fontWeight: '800', color: InkColors.bubbleText },
   camera: { position: 'absolute', right: -3, bottom: -3, width: 24, height: 24, borderRadius: Radius.pill, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
   colors: { flex: 1, gap: Space.sm },
-  colorLabel: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
+  colorLabel: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
   colorRow: { flexDirection: 'row', gap: Space.sm },
   swatch: { width: 36, height: 36, borderRadius: Radius.pill, borderWidth: 2, borderColor: 'transparent' },
   swatchOn: { borderColor: InkColors.ink },
-  clearPhoto: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3, paddingVertical: Space.xs },
+  clearPhoto: { ...Type.tag, fontWeight: '700', color: TextColor.secondary, paddingVertical: Space.xs },
 
   field: { paddingBottom: Space.lg, gap: Space.sm },
-  fieldLabel: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
-  inp: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.bg },
-  empty: { fontSize: 15, color: InkColors.ink3, fontWeight: '600' },
-  hint: { fontSize: 15, lineHeight: 21, color: InkColors.ink3, fontWeight: '600' },
+  fieldLabel: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
+  inp: { ...Type.body, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: Space.md, paddingVertical: Space.md, backgroundColor: InkColors.bg },
+  empty: { ...Type.body, color: TextColor.secondary, fontWeight: '600' },
+  hint: { ...Type.desc, fontWeight: '600' },
 
   memberRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.md, minHeight: 48 },
-  memberName: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink },
-  memberRole: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
+  memberName: { ...Type.body, flex: 1, fontWeight: '700' },
+  memberRole: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
 
   reset: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.md, minHeight: 48 },
-  resetText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
+  resetText: { fontWeight: '700', fontSize: Type.body.fontSize, color: TextColor.secondary },
 
   cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: Space.lg, alignItems: 'center', justifyContent: 'center', marginTop: Space.sm, marginHorizontal: Space.gutter, minHeight: 56 },
   ctaText: { fontSize: 15, fontWeight: '800', color: InkColors.bubbleText },

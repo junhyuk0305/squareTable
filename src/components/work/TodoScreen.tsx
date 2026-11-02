@@ -9,9 +9,11 @@ import { StoredImage } from '@/components/StoredImage';
 import { StackBar } from '@/components/blocks/StackBar';
 import { WeekStrip, type WeekDay } from '@/components/blocks/WeekStrip';
 import { useDayparts, isRoutineTaskId, occursOn, taskVisibleTo, assigneesOf, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
-import { InkColors, BrandColors, CategoryColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, CategoryColors, TextColor } from '@/lib/theme/colors';
+import { CardStyles } from '@/lib/theme/card';
 import { Elevation, Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { Layout, Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 import { hhmm } from '@/lib/utils/attendance';
 import { confirmAction } from '@/lib/utils/confirm';
 
@@ -353,7 +355,7 @@ export function TodoScreen({
               { n: dayTasks.filter((t) => !dayDone[t.id]).length, label: '남음', color: BrandColors.warnSoft },
             ]}
           />
-          <SectionLabel title={selected === today ? '오늘 업무 배정' : '업무 배정'} />
+          <SectionLabel flush title={selected === today ? '오늘 업무 배정' : '업무 배정'} />
         </Appear>
       )}
 
@@ -505,7 +507,7 @@ const s = StyleSheet.create({
   // RN-web 은 hitSlop 을 무시한다 — 눌리는 상자를 44 로 만든다(아이콘은 그대로).
   navBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   iconBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  month: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  month: { ...Type.body, fontWeight: '800' },
   // 오른쪽 액션 묶음 — marginLeft:auto 를 **여기 하나만** 둔다(버튼마다 주면 auto 끼리 여백을 나눠 가져 벌어진다).
   calActions: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   // 보이는 알약은 낮게(위아래 4 · 2026-11-02 사용자), 누르는 상자는 44 — RN-web 은 hitSlop 을 무시한다.
@@ -517,7 +519,7 @@ const s = StyleSheet.create({
 
   calGrid: { paddingHorizontal: 10, paddingBottom: 8 },
   weekRow: { flexDirection: 'row', paddingVertical: 4 },
-  weekCell: { flex: 1, textAlign: 'center', fontSize: 11, fontWeight: '800', color: InkColors.ink3 },
+  weekCell: { ...Type.micro, flex: 1, textAlign: 'center', fontWeight: '800', color: InkColors.ink3 },
   daysWrap: { flexDirection: 'row', flexWrap: 'wrap' },
   cell: { width: `${100 / 7}%`, minHeight: 42, alignItems: 'center', justifyContent: 'center', gap: 3, borderRadius: Radius.sm, paddingVertical: 3 },
   cellToday: { backgroundColor: InkColors.bg, ...Elevation.e1 },
@@ -535,32 +537,33 @@ const s = StyleSheet.create({
   legendDot: { width: 10, height: 10, borderRadius: 3 },
 
   dayBar: { flexDirection: 'row', alignItems: 'baseline', gap: 8, paddingHorizontal: 15, paddingTop: 6, paddingBottom: 4, backgroundColor: InkColors.paper },
-  // 아래 0 = 라벨 아래 2 + 목록 위 8 로 제목→카드 10.
-  gauge: { paddingHorizontal: 15, paddingTop: Space.xs, paddingBottom: 0, gap: Space.sm, backgroundColor: InkColors.paper },
-  dayTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
-  dayCount: { fontSize: 12, fontWeight: '700', color: InkColors.ink2 },
+  // 게이지 ↔ 섹션 제목 = 섹션 간격(라벨은 flush). 아래 0 = 라벨 아래 2 + 목록 위 8 로 제목→카드 10.
+  gauge: { paddingHorizontal: 15, paddingTop: Space.xs, paddingBottom: 0, gap: Layout.sectionGap, backgroundColor: InkColors.paper },
+  dayTitle: { ...Type.section },
+  dayCount: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
   legendInline: { flexDirection: 'row', alignItems: 'center', gap: 10, marginLeft: 'auto' },
   legendChip: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  legendChipText: { fontSize: 10.5, fontWeight: '700', color: InkColors.ink2 },
+  legendChipText: { ...Type.micro, fontWeight: '700', color: TextColor.secondary },
 
   listScroll: { paddingHorizontal: 13, paddingTop: 8, gap: 11 },
-  empty: { textAlign: 'center', color: InkColors.ink2, fontSize: 15, marginTop: 30 },
-  group: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, ...Elevation.e1 },
-  groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, minHeight: 46 },
-  groupName: { fontWeight: '800', fontSize: 13.5, color: InkColors.ink },
-  groupCnt: { fontSize: 11, fontWeight: '700', color: InkColors.ink3 },
-  groupList: { paddingHorizontal: 10, paddingBottom: 6 },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: InkColors.paper },
+  empty: { ...Type.body, textAlign: 'center', color: TextColor.secondary, marginTop: 30 },
+  // 데이파트 그룹 = 행 목록 카드(좌우 16). 머리·행은 안쪽 8을 같이 둬 글자 줄을 맞춘다(내 할일 틴트가 그 8 안에 칠해진다).
+  group: { ...CardStyles.rows },
+  groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: Space.sm, minHeight: 46 },
+  groupName: { fontWeight: '800', fontSize: Type.desc.fontSize, color: InkColors.ink },
+  groupCnt: { ...Type.micro, fontWeight: '700', color: TextColor.secondary },
+  groupList: { paddingBottom: 6 },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: Space.sm, borderBottomWidth: 1, borderBottomColor: InkColors.paper },
   // 내 할일 = 옅은 테라코타 틴트로 한눈에 구분(스코프 바·태그와 같은 색 계열).
   itemMine: { backgroundColor: CategoryColors.Event + '12', borderRadius: Radius.sm },
   scopeBar: { width: 4, height: 22, borderRadius: Radius.pill },
   box: { width: 21, height: 21, borderRadius: 6, borderWidth: 1.6, borderColor: InkColors.line, alignItems: 'center', justifyContent: 'center', backgroundColor: InkColors.bg },
   boxOn: { backgroundColor: BrandColors.yellow, borderColor: BrandColors.yellowDeep },
-  itemText: { fontSize: 15, fontWeight: '500', color: InkColors.ink },
+  itemText: { ...Type.body, fontWeight: '500' },
   itemTextOn: { color: InkColors.ink3, textDecorationLine: 'line-through' },
-  itemDesc: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink3, marginTop: 2 },
+  itemDesc: { ...Type.desc, marginTop: 2 },
   itemDescOn: { color: InkColors.ink3 },
-  itemMeta: { fontSize: 11, color: InkColors.ink3, marginTop: 2 },
+  itemMeta: { ...Type.tag, color: TextColor.secondary, marginTop: 2 },
   // '매일 반복' — 반복이라는 사실만 알리는 부제. 경고가 아니라 정보라 파랑 계열.
   repeatTag: { fontWeight: '800', color: BrandColors.mentionText },
   // 본문 앞에 붙는 시각 꼬리표 — 상태색이 아니라 굵기로만 구분한다(빨강은 경고로 읽힌다).
@@ -568,17 +571,17 @@ const s = StyleSheet.create({
   // 첨부 노하우 칩 — 카드 본문 아래, 탭하면 원문 열람. 옅은 크림 필로 업무 텍스트와 구분.
   khRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 5 },
   khChip: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: Space.sm, minHeight: 40, backgroundColor: InkColors.cream },
-  khChipText: { flexShrink: 1, fontSize: 11, fontWeight: '700', color: InkColors.ink2 },
+  khChipText: { ...Type.tag, flexShrink: 1, fontWeight: '700', color: TextColor.secondary },
   // ④ 이해 확인 배지(통과자) — 초록 톤, 카드 본문 아래. 노하우 칩과 구분.
   uBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 5, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: '#E6F1EA' },
-  uBadgeText: { flexShrink: 1, fontSize: 10.5, fontWeight: '800', color: BrandColors.goodText },
+  uBadgeText: { ...Type.micro, flexShrink: 1, fontWeight: '800', color: BrandColors.goodText },
   // ④ '혼자 할 수 있어요' 자청 버튼(직원, 미통과) — 옅은 노랑 필로 눈에 띄되 가볍게.
   selfBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', marginTop: 5, borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: BrandColors.yellowSoft, borderWidth: 1, borderColor: BrandColors.yellowDeep },
-  selfBtnText: { fontSize: 11.5, fontWeight: '800', color: InkColors.ink },
+  selfBtnText: { ...Type.tag, fontWeight: '800', color: InkColors.ink },
   thumb: { width: 32, height: 32, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bgSoft },
-  mineTag: { fontSize: 10, fontWeight: '800', color: MINE, backgroundColor: CategoryColors.Event + '1f', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },
-  assignTag: { fontSize: 10, fontWeight: '800', color: SHARED, backgroundColor: CategoryColors.Routine + '1f', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },
-  routineTag: { fontSize: 10, fontWeight: '800', color: InkColors.ink2, backgroundColor: InkColors.bgSoft, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },
+  mineTag: { ...Type.micro, fontWeight: '800', color: MINE, backgroundColor: CategoryColors.Event + '1f', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },
+  assignTag: { ...Type.micro, fontWeight: '800', color: SHARED, backgroundColor: CategoryColors.Routine + '1f', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },
+  routineTag: { ...Type.micro, fontWeight: '800', color: TextColor.secondary, backgroundColor: InkColors.bgSoft, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },
 
   // 할일 추가 FAB — 이 화면의 Primary. 노하우 탭 FAB와 같은 옐로 원형이되 지름만 작다.
   fab: {

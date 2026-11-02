@@ -1,17 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
 
-import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
 import { EmptyState } from '@/components/EmptyState';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
-import { SectionLabel } from '@/components/SectionLabel';
+import { Screen, Section } from '@/components/Screen';
 import { WeekStrip, type WeekDay } from '@/components/blocks/WeekStrip';
 import { DayTimeline, type TimelineRow } from '@/components/schedule/DayTimeline';
 import { ShiftQuickSheet, type ShiftEditTarget } from '@/components/schedule/ShiftQuickSheet';
@@ -49,13 +47,14 @@ import {
   swapOverlap,
   WEEKDAY_LABELS,
 } from '@/lib/utils/schedule';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { EmptyStyles } from '@/lib/theme/empty';
 
-/** 주 이동 아이콘 버튼 한 변. */
-const NAV_BTN = 36;
 /** 알림으로 들어온 요청 카드로 스크롤하기 전 등장 애니메이션이 가라앉는 시간(NoticePanel · TodoScreen 과 같다). */
 const FOCUS_SETTLE_MS = 520;
 
@@ -226,33 +225,34 @@ export default function OwnerScheduleScreen() {
   );
 
   // 훅을 전부 부른 뒤의 early return — 헤더·탭바는 게이트 밖(화면 골격은 즉시 선다).
+  //   (2026-11-02 틀 이관: 로딩·실패 상태에도 같은 헤더를 세운다 — 전엔 헤더 없이 스피너만 떴다.)
+  const header = <ScreenTitleHeader title="근무표" backFallback />;
   if (!ready) {
     return (
-      <SafeAreaView style={styles.safe} edges={[]}>
+      <Screen header={header} tabBar="owner" scroll={false}>
         <Stack.Screen options={{ title: '근무표' }} />
         <ScreenLoading label="근무표를 불러오고 있어요…" />
-        <RoleTabBar role="owner" />
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   // 실패를 "승인할 교대 요청이 없어요"·빈 근무표로 위장하지 않는다(#44).
   if (scheduleLoadError) {
     return (
-      <SafeAreaView style={styles.safe} edges={[]}>
+      <Screen header={header} tabBar="owner" scroll={false}>
         <Stack.Screen options={{ title: '근무표' }} />
         <LoadErrorState title="근무표를 불러오지 못했어요" onRetry={() => void retrySchedule()} />
-        <RoleTabBar role="owner" />
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={[]}>
-      <ScreenTitleHeader title="근무표" backFallback />
+    <>
+    {/* 바탕·헤더·탭바 = Screen. 스크롤은 직접 둔다 — 알림 착지 스크롤(scrollRef)과 시트를 스크롤 밖 형제로 두기 위해. */}
+    <Screen header={header} tabBar="owner" scroll={false}>
       <Stack.Screen options={{ title: '근무표' }} />
 
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} contentContainerStyle={screenScrollStyle} showsVerticalScrollIndicator={false}>
         {/* ① 주간 날짜 스트립 — 하루 이동을 이 화면 안에서 끝낸다 */}
         <Appear delay={stagger(0)}>
         <View style={styles.section}>
@@ -264,7 +264,9 @@ export default function OwnerScheduleScreen() {
               accessibilityLabel="지난 주"
               style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.6 }]}
             >
-              <Ionicons name="chevron-back" size={18} color={InkColors.ink2} />
+              <View style={styles.navCircle}>
+                <Ionicons name="chevron-back" size={18} color={InkColors.ink2} />
+              </View>
             </Pressable>
             <View style={styles.weekNavCenter}>
               <Text style={styles.weekRange}>{fmtWeekRange(monday)}</Text>
@@ -281,7 +283,9 @@ export default function OwnerScheduleScreen() {
               accessibilityLabel="다음 주"
               style={({ pressed }) => [styles.navBtn, pressed && { opacity: 0.6 }]}
             >
-              <Ionicons name="chevron-forward" size={18} color={InkColors.ink2} />
+              <View style={styles.navCircle}>
+                <Ionicons name="chevron-forward" size={18} color={InkColors.ink2} />
+              </View>
             </Pressable>
           </View>
           <WeekStrip days={days} selectedKey={selected} todayKey={today} onSelect={setSelected} />
@@ -291,18 +295,17 @@ export default function OwnerScheduleScreen() {
         {/* ② 컨펌 대기 — 사장의 핵심 액션. 제목은 카드 밖, 대기 건수는 우측 뱃지 */}
         <View onLayout={(e) => { focusY.current.section = e.nativeEvent.layout.y; }}>
         <Appear delay={stagger(1)}>
-        <View style={styles.section}>
-          <SectionLabel
-            icon="swap-horizontal-outline"
-            title="승인할 요청"
-            trailing={
-              approvalCount > 0 ? (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText} maxFontSizeMultiplier={1.3}>{approvalCount}</Text>
-                </View>
-              ) : undefined
-            }
-          />
+        <Section
+          icon="swap-horizontal-outline"
+          title="승인할 요청"
+          trailing={
+            approvalCount > 0 ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText} maxFontSizeMultiplier={1.3}>{approvalCount}</Text>
+              </View>
+            ) : undefined
+          }
+        >
           {approvalCount === 0 ? (
             <View style={styles.emptyBox}>
               <Text style={styles.emptyText}>
@@ -343,21 +346,20 @@ export default function OwnerScheduleScreen() {
               ))}
             </View>
           )}
-        </View>
+        </Section>
         </Appear>
         </View>
 
         {/* ③ 하루 근무 — 운영시간 축 하나 위에 사람마다 바. 추가는 이 카드 안에서 끝낸다 */}
         <Appear delay={stagger(2)}>
-        <View style={styles.section}>
-          <SectionLabel
-            title={fmtDateKo(selected)}
-            trailing={
-              <Text style={styles.total}>
-                {closedToday ? '정기 휴무' : totalMin > 0 ? hoursLabel(totalMin) : '근무 없음'}
-              </Text>
-            }
-          />
+        <Section
+          title={fmtDateKo(selected)}
+          trailing={
+            <Text style={styles.total}>
+              {closedToday ? '정기 휴무' : totalMin > 0 ? hoursLabel(totalMin) : '근무 없음'}
+            </Text>
+          }
+        >
           {staff.length === 0 ? (
             /* "직원 관리로 가세요"라고 쓰고 이동을 안 주면 사장이 메뉴를 찾아 헤맨다(복잡도 원칙 P6). */
             <EmptyState
@@ -409,7 +411,7 @@ export default function OwnerScheduleScreen() {
               </Pressable>
             </View>
           )}
-        </View>
+        </Section>
         </Appear>
 
         {/* ④ 가게 기본 정보 (사장만) */}
@@ -432,9 +434,8 @@ export default function OwnerScheduleScreen() {
         </Pressable>
         </Appear>
         ) : null}
-
-        <View style={{ height: Space.md }} />
       </ScrollView>
+    </Screen>
 
       {sheet && (
         <ShiftQuickSheet
@@ -445,9 +446,7 @@ export default function OwnerScheduleScreen() {
           onClose={() => setSheet(null)}
         />
       )}
-
-      <RoleTabBar role="owner" />
-    </SafeAreaView>
+    </>
   );
 }
 
@@ -576,62 +575,63 @@ function PendingCard({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: Space.gutter, gap: Space.lg },
   section: { gap: Space.sm },
 
   badge: { minWidth: 22, height: 22, paddingHorizontal: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.accentSolid, alignItems: 'center', justifyContent: 'center' },
-  badgeText: { fontSize: 12, fontWeight: '900', color: InkColors.bubbleText },
+  badgeText: { ...Type.tag, fontWeight: '900', color: InkColors.bubbleText },
 
   emptyBox: EmptyStyles.box,
   emptyText: EmptyStyles.text,
 
   // 주 이동 네비 — 스트립 위 한 줄
   weekNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  navBtn: { width: NAV_BTN, height: NAV_BTN, alignItems: 'center', justifyContent: 'center' },
+  // 주 이동 = 흰 원 버튼(ButtonStyles.iconCircle · 2026-11-02 결정). 누르는 상자 48(RN-web 은 hitSlop 을 무시한다).
+  navBtn: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  navCircle: { ...ButtonStyles.iconCircle },
   weekNavCenter: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  weekRange: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
-  todayText: { fontSize: 12, fontWeight: '800', color: BrandColors.warnText },
+  weekRange: { ...Type.body, lineHeight: 21, fontWeight: '800' },
+  todayText: { ...Type.tag, fontWeight: '800', color: BrandColors.warnText },
 
   // 하루 타임라인
-  total: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
-  dayCard: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: Space.md, ...Elevation.e1 },
-  dayNone: { fontSize: 15, lineHeight: 21, color: InkColors.ink2, textAlign: 'center', paddingVertical: Space.lg },
-  offText: { fontSize: 12, fontWeight: '700', color: InkColors.ink3, paddingTop: Space.sm },
+  total: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
+  dayCard: CardStyles.list,
+  dayNone: { ...Type.body, lineHeight: 21, color: TextColor.secondary, textAlign: 'center', paddingVertical: Space.lg },
+  offText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary, paddingTop: Space.sm },
   excRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingTop: Space.sm },
-  excText: { flex: 1, fontSize: 12, fontWeight: '700', color: InkColors.ink3, lineHeight: 17 },
+  excText: { ...Type.tag, flex: 1, fontWeight: '700', color: TextColor.secondary, lineHeight: 17 },
   excBtn: { minHeight: 34, justifyContent: 'center', paddingHorizontal: 10, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line },
-  excBtnText: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
+  excBtnText: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
   addRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, minHeight: 48, marginTop: Space.sm, borderRadius: Radius.sm, borderWidth: 1, borderStyle: 'dashed', borderColor: InkColors.line },
-  addText: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
+  addText: { ...Type.body, lineHeight: 21, fontWeight: '800' },
 
-  // 컨펌 카드
-  card: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.yellowDeep, padding: Space.md, gap: Space.sm, ...Elevation.e1 },
+  // 컨펌 카드 — 목록 카드 모양 + 노랑 테두리(승인 대기 표시).
+  card: { ...CardStyles.list, borderColor: BrandColors.yellowDeep, gap: Space.sm },
   // 알림(?request=)으로 들어온 요청 카드 강조 — 명부(?member=)·공지 패널(?feed=)과 같은 테두리.
   focusCard: { borderWidth: 2, borderColor: BrandColors.accentSolid, borderRadius: Radius.md },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   kindTag: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3 },
   kindTagSwap: { backgroundColor: InkColors.ink },
-  kindTagText: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
-  cardWait: { fontSize: 11.5, fontWeight: '800', color: BrandColors.warnText },
+  kindTagText: { ...Type.micro, fontWeight: '800', color: TextColor.secondary },
+  cardWait: { ...Type.tag, fontWeight: '800', color: BrandColors.warnText },
 
   flow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.sm },
   flowCol: { flex: 1, gap: 2 },
-  flowLabel: { fontSize: 11, fontWeight: '800', color: InkColors.ink3 },
-  flowName: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  flowWhen: { fontSize: 12, color: InkColors.ink2, lineHeight: 17, fontWeight: '700' },
-  cardNote: { fontSize: 15, color: InkColors.ink2, fontStyle: 'italic', backgroundColor: InkColors.cream, borderRadius: Radius.sm, paddingHorizontal: Space.sm, paddingVertical: Space.sm },
+  flowLabel: { ...Type.micro, fontWeight: '800', color: TextColor.secondary },
+  flowName: { ...Type.body, fontWeight: '800' },
+  flowWhen: { ...Type.tag, color: TextColor.secondary, lineHeight: 17, fontWeight: '700' },
+  cardNote: { ...Type.body, color: TextColor.secondary, fontStyle: 'italic', backgroundColor: InkColors.cream, borderRadius: Radius.sm, paddingHorizontal: Space.sm, paddingVertical: Space.sm },
 
   actions: { flexDirection: 'row', gap: Space.sm },
-  actBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, paddingVertical: Space.md, borderRadius: Radius.md },
+  // 승인·반려 = 주 버튼 모양(52 · 모서리 16) 두 개를 나란히.
+  actBtn: { ...ButtonStyles.primary, flex: 1, flexDirection: 'row', gap: Space.xs },
   rejectBtn: { backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
-  rejectText: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
+  rejectText: { ...ButtonTextStyles.primary, color: TextColor.secondary },
   approveBtn: { backgroundColor: InkColors.ink },
-  approveText: { fontSize: 15, fontWeight: '800', color: InkColors.bubbleText },
+  approveText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 
   // 가게 정보
-  infoCard: { flexDirection: 'row', alignItems: 'center', gap: Space.md, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: Space.md, ...Elevation.e1 },
+  infoCard: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: Space.md },
   infoIcon: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
-  infoTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  infoSub: { fontSize: 12.5, color: InkColors.ink3, marginTop: 2, fontWeight: '700' },
+  infoTitle: { ...Type.body, fontWeight: '800' },
+  infoSub: { ...Type.desc, marginTop: 2, fontWeight: '700' },
 });

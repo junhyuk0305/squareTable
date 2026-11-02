@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 /**
  * 우측 담기 원 32px — 도형 치수. ★RN-web 은 hitSlop 을 무시하므로(2026-08-26 실측) 터치 영역은
@@ -129,11 +130,11 @@ const styles = StyleSheet.create({
   divider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   pressed: { opacity: 0.7 },
   body: { flex: 1, minWidth: 0 },
-  title: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
+  title: { ...Type.body, lineHeight: 21, fontWeight: '800' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.xs, marginTop: Space.xs },
   chip: { paddingHorizontal: Space.sm - 2, paddingVertical: 1, borderRadius: Radius.pill },
   // 칩은 꼬리표(보조)라 본문 15sp 하한 대상이 아니다.
-  chipText: { fontSize: 10.5, lineHeight: 15, fontWeight: '800' },
+  chipText: { ...Type.micro, lineHeight: 15, fontWeight: '800' },
   discBox: { width: DISC_BOX, height: DISC_BOX, alignItems: 'center', justifyContent: 'center' },
   disc: { width: DISC, height: DISC, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
   discAdd: { backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep },

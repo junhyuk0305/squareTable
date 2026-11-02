@@ -25,4 +25,8 @@ export const Type = {
   numCell: { fontSize: 22, lineHeight: 27, fontWeight: '900' } as TextStyle,
   /** 꼬리표(배지 · 분류 칩 · 목록 줄 아래 작은 글자). 굵기는 자리마다 정한다. */
   tag: { fontSize: 12 } as TextStyle,
+  /** 가장 작은 글자(알림 숫자 배지 · 요일 · 메시지 시간). 9·10 을 쓰지 않는다(2026-11-02 2차 결정). */
+  micro: { fontSize: 11 } as TextStyle,
+  /** 시트·모달·빈 화면 제목. 18·19·20·21 로 갈라졌던 것을 하나로(2026-11-02 2차 결정). */
+  title: { fontSize: 18, fontWeight: '900', color: InkColors.ink } as TextStyle,
 };

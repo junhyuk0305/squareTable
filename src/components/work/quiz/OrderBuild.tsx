@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 import { qs } from './quizStyles';
 import type { QuizRendererProps } from './types';
 
@@ -105,5 +106,5 @@ const st = StyleSheet.create({
   markOn: { borderColor: InkColors.ink, backgroundColor: InkColors.ink },
   markText: { fontSize: 13, fontWeight: '900', color: InkColors.ink3 },
   markTextOn: { color: InkColors.bubbleText },
-  rightAt: { fontSize: 12, fontWeight: '900', color: BrandColors.badText, marginLeft: Space.xs },
+  rightAt: { ...Type.tag, fontWeight: '900', color: BrandColors.badText, marginLeft: Space.xs },
 });

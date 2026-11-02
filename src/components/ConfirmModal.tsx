@@ -3,9 +3,11 @@
 // 경고 강도를 높인다(아이콘 원·확인 버튼). 레이아웃 불변식: frameCapStyle로 딤·시트를 가둔다.
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { frameCapStyle } from '@/lib/theme/layout';
 import { Radius } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -111,15 +113,16 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   iconCircleDanger: { backgroundColor: BrandColors.accentSoft },
-  title: { fontSize: 18, fontWeight: '800', color: InkColors.ink, textAlign: 'center' },
+  title: { ...Type.title, textAlign: 'center' },
   titleDanger: { color: BrandColors.badText },
-  message: { fontSize: 15, color: InkColors.ink2, marginTop: 8, lineHeight: 22, textAlign: 'center' },
+  message: { ...Type.desc, marginTop: 8, textAlign: 'center' },
   accent: { fontSize: 13, color: BrandColors.badText, fontWeight: '700', marginTop: 8, lineHeight: 20, textAlign: 'center' },
   actions: { flexDirection: 'row', gap: 10, marginTop: 22, alignSelf: 'stretch' },
-  btn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 13, borderRadius: 12 },
+  // 취소·확인 = 주 버튼 모양(52 · 모서리 16) 두 개를 나란히. 색은 아래 변형이 정한다.
+  btn: { ...ButtonStyles.primary, flex: 1 },
   btnGhost: { backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
-  btnGhostText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
+  btnGhostText: { ...ButtonTextStyles.primary, color: TextColor.secondary },
   btnSolid: { backgroundColor: BrandColors.brand },
   btnDanger: { backgroundColor: BrandColors.badSolid },
-  btnSolidText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
+  btnSolidText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

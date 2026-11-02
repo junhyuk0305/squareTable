@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
   heroWithNav: { borderTopLeftRadius: Radius.md, borderTopRightRadius: Radius.md },
   heroAlone: { borderRadius: Radius.md },
   label: {
-    fontSize: 12,
+    ...Type.tag,
     fontWeight: '700',
     color: InkColors.bubbleText,
     opacity: 0.65,
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   caption: {
     // 사장 홈에서 이 자리는 직원 질문 원문이다 — 읽어서 판단하는 문장이라 본문 15sp 하한 대상.
     // (정본 HTML의 12~13.5px은 웹 목업 값이다.)
-    fontSize: 15,
+    ...Type.body,
     lineHeight: 22,
     color: InkColors.bubbleText,
     opacity: 0.82,
@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xs,
     minHeight: 48,
   },
-  cellLabel: { fontSize: 11, fontWeight: '700', color: InkColors.ink2 },
+  cellLabel: { ...Type.micro, fontWeight: '700', color: InkColors.ink2 },
   badge: {
     position: 'absolute',
     top: -4,
@@ -186,5 +186,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { fontSize: 9, fontWeight: '900', color: InkColors.bubbleText },
+  // 가장 작은 글자 = Type.micro(11 · 2026-11-02. 옛 9). 줄높이를 배지 높이에 맞춰 위아래로 넘치지 않게.
+  badgeText: { ...Type.micro, lineHeight: BADGE_SIZE, fontWeight: '900', color: InkColors.bubbleText },
 });

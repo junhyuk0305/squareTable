@@ -11,9 +11,12 @@ import { track } from '@/lib/analytics/track';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { rotateInviteCode } from '@/lib/db';
 import { inviteExpiryLabel, INVITE_ROTATE_LABEL, INVITE_ASK_OWNER_TEXT } from '@/lib/invite/inviteExpiry';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 /**
  * 직원 초대 블록 — 코드 하나만 던져주던 자리를 "무엇을 어떻게 전하면 되는가"까지로 넓힌 공용 컴포넌트.
@@ -97,7 +100,7 @@ export function InviteBlock({
 
   return (
     <View style={[s.root, style]}>
-      <SectionLabel title="직원 초대" />
+      <SectionLabel title="직원 초대" flush />
       <View style={s.card}>
         <View style={s.head}>
           <Text style={s.howTitle}>초대코드</Text>
@@ -158,24 +161,18 @@ export function InviteBlock({
 }
 
 const s = StyleSheet.create({
-  // 라벨↔카드 8 — 다른 섹션(SectionLabel + 부모 gap sm)과 같은 간격.
+  // 라벨↔카드 = `<Section>` 과 같은 간격(SectionLabel flush 아래 2 + gap 8 = 10). 섹션 사이는 부모 화면 틀이 정한다.
   root: { gap: Space.sm },
-  // 모서리 16 — 다른 카드와 한 벌(2026-11-02 사용자. 옛 20).
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.lg,
-    gap: Space.md,
-  },
-  howTitle: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
+  // 목록 카드 모양(모서리 16 · 그림자 e1 · 안쪽 16) — 다른 카드와 한 벌.
+  card: { ...CardStyles.list, gap: Space.md },
+  howTitle: { ...Type.body, lineHeight: 21, fontWeight: '800' },
   head: { gap: Space.xs },
-  desc: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: InkColors.ink2 },
+  desc: { ...Type.desc, fontWeight: '600' },
 
   codeRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
   codeCol: { flex: 1, minWidth: 0 },
-  code: { fontSize: 22, lineHeight: 30, fontWeight: '900', color: InkColors.ink, letterSpacing: 3 },
+  // 코드 6자리 = 칸 숫자(22/27/900).
+  code: { ...Type.numCell, color: InkColors.ink, letterSpacing: 3 },
   copyBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
     minHeight: 48, paddingHorizontal: Space.md,
@@ -183,19 +180,14 @@ const s = StyleSheet.create({
   },
   copyText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
 
-  primary: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    minHeight: 48, borderRadius: Radius.md, backgroundColor: BrandColors.brand,
-  },
-  primaryText: { fontSize: 15, fontWeight: '900', color: InkColors.bubbleText },
+  // 주 버튼(52 · 모서리 16 · 가로 꽉).
+  primary: { ...ButtonStyles.primary, flexDirection: 'row', gap: 6, backgroundColor: BrandColors.brand },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 
   dim: { opacity: 0.4 },
-  expiry: { marginTop: 2, fontSize: 12, lineHeight: 17, fontWeight: '700', color: InkColors.ink2 },
+  expiry: { ...Type.tag, marginTop: 2, lineHeight: 17, fontWeight: '700', color: TextColor.secondary },
   expiryWarn: { color: BrandColors.warnText },
-  rotate: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    minHeight: 48, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line,
-  },
-  rotateText: { fontSize: 15, fontWeight: '900', color: InkColors.ink },
-  ask: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: InkColors.ink2, textAlign: 'center' },
+  rotate: { ...ButtonStyles.primary, flexDirection: 'row', gap: 6, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
+  rotateText: { ...ButtonTextStyles.primary, color: InkColors.ink },
+  ask: { ...Type.desc, fontWeight: '700', textAlign: 'center' },
 });

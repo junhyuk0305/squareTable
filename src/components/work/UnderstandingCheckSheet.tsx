@@ -7,9 +7,11 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { QUIZ_RENDERERS } from '@/components/work/quiz';
 import { generateQuiz } from '@/lib/ai/client';
 import { fetchQuizItemsForAttempt, gradeQuiz, recordQuizStats, recordStaffQuizAttempt } from '@/lib/db';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 import type { QuizInput, QuizQuestion } from '@/lib/ai/types';
 import { genId } from '@/lib/utils/id';
 import type { QuizGrade, QuizItem, QuizResponse } from '@/lib/quiz/types';
@@ -656,50 +658,52 @@ const s = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 10 },
   kicker: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 24 },
-  centerText: { fontSize: 14, color: InkColors.ink2, fontWeight: '600', textAlign: 'center', lineHeight: 21 },
-  noticeText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600', textAlign: 'center', lineHeight: 23 },
-  // 시작 고지 — 이 화면에서 유일하게 굵은 잉크(R4-1). 아래 안내 한 줄은 ink2.
-  startLead: { fontSize: 17, fontWeight: '800', color: InkColors.ink, textAlign: 'center', lineHeight: 25 },
+  centerText: { ...Type.desc, fontWeight: '600', textAlign: 'center' },
+  noticeText: { ...Type.desc, fontWeight: '600', textAlign: 'center' },
+  // 시작 고지 — 이 화면에서 유일하게 굵은 잉크(R4-1). 아래 안내 한 줄은 secondary.
+  startLead: { ...Type.title, textAlign: 'center', lineHeight: 25 },
   scroll: { flex: 1, paddingHorizontal: 16 },
-  intro: { fontSize: 12.5, color: InkColors.ink3, fontWeight: '600', marginBottom: 14, lineHeight: 18 },
+  intro: { ...Type.desc, fontWeight: '600', marginBottom: 14 },
 
   // 저장된 문항 경로
-  step: { fontSize: 12, fontWeight: '800', color: InkColors.ink3, marginBottom: Space.xs },
+  step: { ...Type.tag, fontWeight: '800', color: TextColor.secondary, marginBottom: Space.xs },
   ask: { fontSize: 16, fontWeight: '800', color: InkColors.ink, lineHeight: 24, marginBottom: Space.md },
   gradeBox: { borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, padding: Space.lg, marginTop: Space.lg, gap: Space.xs },
-  gradeTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
-  gradeText: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
+  gradeTitle: { ...Type.body, fontWeight: '800', lineHeight: 22 },
+  gradeText: { ...Type.desc, fontWeight: '600' },
   footWait: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.sm, minHeight: 48 },
-  footWaitText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
+  footWaitText: { fontSize: 15, fontWeight: '700', color: TextColor.secondary },
 
   qBlock: { marginBottom: 18 },
-  qAsk: { fontSize: 14.5, fontWeight: '800', color: InkColors.ink, marginBottom: 9, lineHeight: 21 },
+  qAsk: { ...Type.body, fontWeight: '800', marginBottom: 9, lineHeight: 21 },
   choice: { flexDirection: 'row', alignItems: 'center', gap: 9, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 13, paddingVertical: 12, marginBottom: 7, backgroundColor: InkColors.bg },
   choiceOn: { borderColor: InkColors.ink, backgroundColor: InkColors.cream },
   choiceRight: { borderColor: BrandColors.good, backgroundColor: '#E6F1EA' },
   choiceWrong: { borderColor: BrandColors.bad, backgroundColor: '#FBECEC' },
-  choiceText: { flex: 1, fontSize: 13.5, fontWeight: '600', color: InkColors.ink2, lineHeight: 19 },
-  explain: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', marginTop: 4, paddingHorizontal: 4, lineHeight: 17 },
+  choiceText: { flex: 1, fontWeight: '600', fontSize: Type.desc.fontSize, color: TextColor.secondary, lineHeight: 19 },
+  explain: { ...Type.desc, fontWeight: '600', marginTop: 4, paddingHorizontal: 4 },
 
   resultBox: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: Radius.md, padding: 14, marginTop: 4 },
   resultPass: { backgroundColor: '#E6F1EA' },
   resultFail: { backgroundColor: BrandColors.warnSoft },
-  resultText: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
-  submittedNote: { fontSize: 13, color: InkColors.ink2, fontWeight: '600', marginTop: 8, paddingHorizontal: 2, lineHeight: 18 },
+  resultText: { ...Type.body, flex: 1, fontWeight: '800', lineHeight: 22 },
+  submittedNote: { ...Type.desc, fontWeight: '600', marginTop: 8, paddingHorizontal: 2 },
 
   missBox: { marginTop: 12, paddingHorizontal: 2 },
-  missLead: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, marginBottom: 6 },
-  missItem: { fontSize: 15, color: InkColors.ink, lineHeight: 23 },
+  missLead: { fontSize: 13, fontWeight: '800', color: TextColor.secondary, marginBottom: 6 },
+  missItem: { ...Type.body, lineHeight: 23 },
 
   foot: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: InkColors.line },
   // 물어보기는 부차 경로 — Primary('다시 하기')와 경쟁하지 않게 링크 형태로 둔다.
   askLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, marginBottom: 2 },
-  askLinkText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
+  askLinkText: { fontWeight: '700', fontSize: Type.body.fontSize, color: TextColor.secondary },
   footRow: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
-  cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center' },
-  ctaText: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  softBtn: { marginTop: 6, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 22, paddingVertical: 11, backgroundColor: InkColors.bg },
-  softBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
+  // 주 버튼 모양(52 · 모서리 16 · 16/800 · 가로 꽉).
+  cta: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
+  ctaText: { ...ButtonTextStyles.primary, color: '#fff' },
+  // 빈 화면·오류 안의 버튼도 주 버튼 모양(가로 꽉 · 2026-11-02). 색만 흰 면 + 선.
+  softBtn: { ...ButtonStyles.primary, marginTop: 6, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
+  softBtnText: { ...ButtonTextStyles.primary, color: TextColor.secondary },
   softBtnFlat: { justifyContent: 'center', paddingHorizontal: 20, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
   softBtnFlatText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
 });

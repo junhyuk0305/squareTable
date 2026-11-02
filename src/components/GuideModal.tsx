@@ -5,9 +5,11 @@ import { useState } from 'react';
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
 
 import { Appear, stagger } from '@/components/Appear';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { frameCapStyle } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 import type { Guide } from '@/lib/guides/guideContent';
 
 export function GuideModal({
@@ -99,24 +101,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: InkColors.line,
   },
-  title: { fontSize: 18, fontWeight: '800', color: InkColors.ink, lineHeight: 26 },
+  title: { ...Type.title, lineHeight: 26 },
   // 본문은 '읽어서 판단하는 문장' = 15sp(복잡도·워딩 표준).
   body: { fontSize: 15, lineHeight: 23, color: InkColors.ink2, marginTop: 8 },
   footer: { flexDirection: 'row', alignItems: 'center', marginTop: 22, gap: 10 },
   // ★48dp 는 상자 크기로 — hitSlop 은 RN-web 에서 안 먹는다(실측 36dp 였다, 2026-09-11).
   skip: { minHeight: 48, justifyContent: 'center', paddingRight: 4 },
-  skipText: { fontSize: 14, fontWeight: '700', color: InkColors.ink3 },
+  skipText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
   dots: { flex: 1, flexDirection: 'row', justifyContent: 'center', gap: 6 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: InkColors.line },
   dotOn: { backgroundColor: InkColors.ink },
+  // 작은 버튼(48 알약 · 15/800 · 내용 폭).
   nextBtn: {
+    ...ButtonStyles.small,
     minWidth: 92,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
     backgroundColor: BrandColors.brand,
   },
-  nextText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
+  nextText: { ...ButtonTextStyles.small, color: '#FFFFFF' },
 });

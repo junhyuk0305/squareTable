@@ -11,6 +11,7 @@ import { useOwnerBrandStore } from '@/lib/store/useOwnerBrandStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 export function BrandInviteCard() {
   const router = useRouter();
@@ -56,6 +57,6 @@ const styles = StyleSheet.create({
     ...Elevation.e1,
   },
   icon: { width: 36, height: 36, borderRadius: Radius.sm, backgroundColor: BrandColors.yellow, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 14.5, fontWeight: '800', color: InkColors.ink },
-  sub: { fontSize: 12.5, lineHeight: 17, color: InkColors.ink2, marginTop: 2 },
+  title: { fontSize: Type.body.fontSize, fontWeight: '800', color: InkColors.ink },
+  sub: { ...Type.desc, marginTop: 2 },
 });

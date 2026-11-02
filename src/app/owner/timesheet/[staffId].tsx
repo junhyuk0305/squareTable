@@ -1,19 +1,19 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { TimesheetView } from '@/components/TimesheetView';
-import { RoleTabBar } from '@/components/RoleTabBar';
+import { Screen } from '@/components/Screen';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { Avatar } from '@/components/Avatar';
-import { InkColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
+import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { EmptyStyles } from '@/lib/theme/empty';
 
 // 직원 관리에서 직원 행 탭 시 진입. 사장이 직원 출근기록을 보정.
@@ -35,36 +35,34 @@ export default function OwnerTimesheetScreen() {
   const staff = useStaffStore((s) => s.staff.find((m) => m.id === staffId));
   const staffLoadError = useStaffStore((s) => s.loadError);
 
+  // 게이트 화면 3개의 바탕·헤더·탭바 = Screen. 기록 화면 본체는 TimesheetView 가 자기 틀을 든다.
+  const header = <ScreenTitleHeader title="출근 기록" backFallback />;
+
   if (!ready) {
     return (
-      <SafeAreaView style={styles.safe} edges={[]}>
+      <Screen header={header} tabBar="owner" scroll={false}>
         <Stack.Screen options={{ title: '출근 기록' }} />
-        <ScreenTitleHeader title="출근 기록" backFallback />
         <ScreenLoading label="출근 기록을 불러오고 있어요…" />
-        <RoleTabBar role="owner" />
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   // 명부를 못 읽었으면(활성 매장 어긋남 포함) 빈 명부다 — "없는 직원"이 아니라 "못 불러왔다"로 말한다.
   if (!staff && staffLoadError) {
     return (
-      <SafeAreaView style={styles.safe} edges={[]}>
+      <Screen header={header} tabBar="owner" scroll={false}>
         <Stack.Screen options={{ title: '출근 기록' }} />
-        <ScreenTitleHeader title="출근 기록" backFallback />
         <LoadErrorState title="직원 정보를 불러오지 못했어요" onRetry={() => void useStaffStore.getState().hydrate()} />
-        <RoleTabBar role="owner" />
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   if (!staff) {
     return (
-      <SafeAreaView style={styles.safe} edges={[]}>
+      <Screen header={header} tabBar="owner">
         <Stack.Screen options={{ title: '출근 기록' }} />
-        <ScreenTitleHeader title="출근 기록" backFallback />
         {/* 막다른 길 금지 — 빈/오류 상태에도 다음 행동 하나를 준다(복잡도 원칙 P6). */}
-        <View style={styles.empty}>
+        <View style={EmptyStyles.box}>
           <Text style={EmptyStyles.text}>직원을 찾을 수 없어요.{'\n'}내보냈거나 아직 합류하지 않은 직원이에요.</Text>
         </View>
         {/* 직원 관리는 사장 전용 — 매니저에겐 이 버튼을 그리지 않는다. */}
@@ -77,8 +75,7 @@ export default function OwnerTimesheetScreen() {
           <Text style={styles.backBtnText}>직원 목록 보기</Text>
         </Pressable>
         ) : null}
-        <RoleTabBar role="owner" />
-      </SafeAreaView>
+      </Screen>
     );
   }
 
@@ -109,11 +106,10 @@ export default function OwnerTimesheetScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  empty: { ...EmptyStyles.box, margin: Space.gutter },
-  backBtn: { alignSelf: 'center', minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.xl, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF' },
-  backBtnText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  staffCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 14 },
+  // 보조 버튼 = 작은 버튼(48 알약 · 내용 폭). 빈 카드 아래 가운데.
+  backBtn: { ...ButtonStyles.small, alignSelf: 'center', borderWidth: 1, borderColor: InkColors.line, backgroundColor: Surface.card },
+  backBtnText: { ...ButtonTextStyles.small, color: InkColors.ink },
+  staffCard: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: 12 },
   staffName: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
-  staffMeta: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
+  staffMeta: { ...Type.tag, color: TextColor.secondary, marginTop: 2 },
 });

@@ -5,9 +5,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { SHOW_SOCIAL_LOGIN } from '@/lib/config/store-policy';
-import { InkColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
+import { BrandColors, InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 /**
  * 소셜 로그인 버튼 묶음(로그인·가입 공용 SSOT).
@@ -79,18 +80,16 @@ const styles = StyleSheet.create({
   wrap: { gap: Space.sm },
   divider: { flexDirection: 'row', alignItems: 'center', gap: Space.md, marginVertical: Space.xs },
   line: { flex: 1, height: 1, backgroundColor: InkColors.line },
-  dividerText: { fontSize: 12, lineHeight: 17, color: InkColors.ink3, fontWeight: '700' },
+  dividerText: { ...Type.tag, lineHeight: 17, color: TextColor.secondary, fontWeight: '700' },
   btn: {
+    ...ButtonStyles.primary,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: Space.sm,
     borderWidth: 1,
     borderColor: InkColors.line,
-    borderRadius: Radius.md,
-    paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Surface.card,
   },
-  btnText: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
-  err: { fontSize: 15, lineHeight: 22, color: '#D14343', fontWeight: '700', textAlign: 'center' },
+  btnText: { ...ButtonTextStyles.primary, color: InkColors.ink },
+  // 글자색은 800(흰 바탕 AA). 옛 #D14343 는 토큰 밖 값이었다.
+  err: { fontSize: 15, lineHeight: 22, color: BrandColors.accentText, fontWeight: '700', textAlign: 'center' },
 });

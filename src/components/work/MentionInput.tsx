@@ -4,8 +4,9 @@ import { View, Text, Pressable, TextInput, Platform, StyleSheet } from 'react-na
 import { ProgressPill } from '@/components/blocks/ProgressPill';
 import { showToast } from '@/lib/store/useToastStore';
 import { roleNoun, type MemberRole } from '@/lib/utils/roles';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
 
 export type Member = {
   id: string;
@@ -219,6 +220,7 @@ const s = StyleSheet.create({
   wrap: { flex: 1, position: 'relative' },
   field: { flex: 1, position: 'relative', justifyContent: 'center' },
   input: {
+    ...Type.body,
     flex: 1,
     backgroundColor: InkColors.bg,
     borderWidth: 1,
@@ -226,8 +228,6 @@ const s = StyleSheet.create({
     borderRadius: Radius.pill,
     paddingHorizontal: 15,
     paddingVertical: 10,
-    fontSize: 14,
-    color: InkColors.ink,
   },
   // 웹 오버레이 — 아래층에서 박스(s.input의 배경·테두리)와 색입힌 글자를 그린다.
   overlay: {
@@ -254,21 +254,21 @@ const s = StyleSheet.create({
     padding: 6,
     ...Elevation.e3,
   },
-  popHead: { fontSize: 10.5, fontWeight: '800', color: InkColors.ink3, paddingHorizontal: 9, paddingVertical: 6 },
+  popHead: { ...Type.micro, fontWeight: '800', color: TextColor.secondary, paddingHorizontal: 9, paddingVertical: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 5, paddingHorizontal: 6, borderRadius: Radius.sm },
   rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9, padding: 3, borderRadius: Radius.sm },
   rowTop: { backgroundColor: InkColors.paper },
   // 이 방에 없는 사람 — 지우지 않고 흐리게. 옆의 '불가' 알약이 색 없이도 상태를 말한다.
   rowBlocked: { opacity: 0.45 },
   nameCol: { flexShrink: 1 },
-  blockedSub: { fontSize: 11, fontWeight: '700', color: InkColors.ink3, marginTop: 1 },
+  blockedSub: { ...Type.micro, fontWeight: '700', color: TextColor.secondary, marginTop: 1 },
   // 읽어서 판단하는 안내 문장 — 본문 하한 15sp(simplicity-voice §4). 라벨·배지가 아니다.
-  inviteHint: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, paddingHorizontal: 9, paddingTop: 4, paddingBottom: 6 },
+  inviteHint: { ...Type.desc, paddingHorizontal: 9, paddingTop: 4, paddingBottom: 6 },
   assignPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: BrandColors.yellowSoft, borderWidth: 1, borderColor: BrandColors.yellowDeep, borderRadius: Radius.pill, paddingHorizontal: 11, paddingVertical: 6 },
-  assignPillText: { fontSize: 11.5, fontWeight: '800', color: InkColors.ink },
+  assignPillText: { ...Type.tag, fontWeight: '800', color: InkColors.ink },
   av: { width: 29, height: 29, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
-  avTx: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
+  avTx: { ...Type.micro, fontWeight: '800', color: TextColor.secondary },
   name: { fontSize: 13, fontWeight: '700', color: InkColors.ink },
-  tabHint: { fontSize: 9.5, fontWeight: '800', color: InkColors.ink3, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.tail, paddingHorizontal: 4, paddingVertical: 1 },
-  role: { marginLeft: 'auto', fontSize: 10, fontWeight: '700', color: InkColors.ink3 },
+  tabHint: { ...Type.micro, fontWeight: '800', color: InkColors.ink3, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.tail, paddingHorizontal: 4, paddingVertical: 1 },
+  role: { ...Type.micro, marginLeft: 'auto', fontWeight: '700', color: TextColor.secondary },
 });

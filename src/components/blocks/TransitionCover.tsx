@@ -6,6 +6,7 @@ import { USE_NATIVE_DRIVER } from '@/lib/anim';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 /** 아이콘 타일 — 도형 치수라 간격 토큰 대상이 아니다. */
 const TILE = 56;
@@ -92,7 +93,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink, textAlign: 'center' },
+  title: { ...Type.body, lineHeight: 21, fontWeight: '800', textAlign: 'center' },
   track: {
     width: TRACK_WIDTH,
     height: TRACK_HEIGHT,
@@ -106,5 +107,6 @@ const styles = StyleSheet.create({
     borderRadius: TRACK_HEIGHT / 2,
     backgroundColor: InkColors.ink,
   },
-  caption: { fontSize: 12, lineHeight: 17, color: InkColors.ink2, textAlign: 'center' },
+  // 제목 아래 설명 = Type.desc(13/19 secondary · 2026-11-02).
+  caption: { ...Type.desc, textAlign: 'center' },
 });

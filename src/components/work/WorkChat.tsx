@@ -8,9 +8,10 @@ import { StoredImage } from '@/components/StoredImage';
 import { Ionicons } from '@expo/vector-icons';
 
 import { type FeedItem, REACTIONS } from '@/lib/store/useWorkStore';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 import { hhmm } from '@/lib/utils/attendance';
 import { ReactionBar } from './ReactionBar';
 import { MentionInput, extractMentions, type Member } from './MentionInput';
@@ -686,8 +687,8 @@ const s = StyleSheet.create({
   },
   // RN-web 은 hitSlop 을 무시한다 — 상자 자체를 44 로.
   hdrBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  searchInp: { flex: 1, fontSize: 15, color: InkColors.ink, paddingVertical: Space.xs },
-  matchCount: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
+  searchInp: { ...Type.body, flex: 1, paddingVertical: Space.xs },
+  matchCount: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
   hdrDot: { position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: Radius.pill, backgroundColor: BrandColors.bad },
   // 상단 고정 공지 1줄 — 헤더·칩바와 같은 알약, 공지 틴트. 누르는 줄이라 높이는 터치 최소 48(NOTICE_LINE_H).
   noticeLine: {
@@ -701,24 +702,24 @@ const s = StyleSheet.create({
   hit: { backgroundColor: BrandColors.yellow, color: InkColors.ink, fontWeight: '800' },
   bubbleActive: { borderWidth: 2, borderColor: BrandColors.yellowDeep },
   searchFoot: { alignItems: 'center', gap: Space.sm, paddingVertical: Space.md },
-  searchFootText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
+  searchFootText: { ...Type.desc, fontWeight: '600' },
   searchMore: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 13, paddingVertical: Space.sm, minHeight: 40 },
-  searchMoreText: { fontSize: 13, color: InkColors.ink2, fontWeight: '700' },
-  empty: { textAlign: 'center', color: InkColors.ink2, fontSize: 15, marginTop: 40 },
+  searchMoreText: { fontSize: 13, color: TextColor.secondary, fontWeight: '700' },
+  empty: { ...Type.body, textAlign: 'center', color: TextColor.secondary, marginTop: 40 },
   loadMore: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: InkColors.scrim, borderRadius: Radius.pill, paddingHorizontal: 13, paddingVertical: 6, marginBottom: 2 },
-  loadMoreText: { fontSize: 11.5, color: InkColors.ink3, fontWeight: '700' },
+  loadMoreText: { ...Type.tag, color: TextColor.secondary, fontWeight: '700' },
   divider: { alignItems: 'center', marginVertical: 2 },
-  dividerText: { fontSize: 11, color: InkColors.ink3, fontWeight: '700', backgroundColor: InkColors.scrim, paddingHorizontal: 12, paddingVertical: 3, borderRadius: Radius.pill },
+  dividerText: { ...Type.micro, color: TextColor.secondary, fontWeight: '700', backgroundColor: InkColors.scrim, paddingHorizontal: 12, paddingVertical: 3, borderRadius: Radius.pill },
 
   doneRow: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: InkColors.cream, borderRadius: Radius.md, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: InkColors.line, borderStyle: 'dashed', maxWidth: '92%' },
-  doneText: { fontSize: 12, color: InkColors.ink2, fontWeight: '600' },
+  doneText: { ...Type.tag, color: TextColor.secondary, fontWeight: '600' },
 
   // maxWidth 만 주고 alignSelf 를 안 주면 부모(스트림)가 stretch 로 행을 왼쪽에 고정해
   // 내 메시지가 프레임 오른쪽 끝까지 못 가고 가운데로 밀린다. 행 자체를 좌/우로 붙인다.
   msgRow: { maxWidth: '82%', gap: 2 },
   msgRowMine: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   msgRowOther: { alignSelf: 'flex-start' },
-  msgAuthor: { fontSize: 11, color: InkColors.ink2, fontWeight: '700', paddingLeft: 4 },
+  msgAuthor: { ...Type.micro, color: TextColor.secondary, fontWeight: '700', paddingLeft: 4 },
   // 말풍선+시간 한 줄. 시간은 말풍선 하단 baseline에 붙는다(flex-end). 말풍선이 길면 flexShrink로 양보.
   bubbleLine: { flexDirection: 'row', alignItems: 'flex-end', gap: 5 },
   bubbleLineMine: { justifyContent: 'flex-end' },
@@ -729,17 +730,17 @@ const s = StyleSheet.create({
   msgImageWithText: { marginBottom: 6 },
   msgCaption: { paddingHorizontal: 8, paddingBottom: 5, paddingTop: 1 },
   // 스트림 전역 user-select:none 위에서, 말풍선 본문 텍스트만 선택/복사 가능하게 복원(웹).
-  msgText: { fontSize: 14, color: InkColors.ink, lineHeight: 21, ...(Platform.OS === 'web' ? ({ userSelect: 'text' } as object) : null) },
+  msgText: { ...Type.body, lineHeight: 21, ...(Platform.OS === 'web' ? ({ userSelect: 'text' } as object) : null) },
   mention: { color: BrandColors.mentionText, fontWeight: '800' },
   mentionMine: { color: BrandColors.yellow },
   // 인라인 시간: 말풍선 옆에 붙어 하단 baseline에 앉는다. 줄바꿈 방지로 flexShrink 0.
-  msgTime: { flexShrink: 0, fontSize: 10, color: InkColors.ink3, paddingBottom: 1 },
+  msgTime: { ...Type.micro, flexShrink: 0, color: TextColor.secondary, paddingBottom: 1 },
   // 기능2 ambient 승격 넛지 칩 — 리액션 받은 사장 답변 아래에 옅은 옐로 필로 제안.
   promoteChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: BrandColors.yellowSoft, borderWidth: 1, borderColor: BrandColors.yellowDeep, borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3, marginTop: 3 },
-  promoteChipText: { fontSize: 11, fontWeight: '800', color: BrandColors.yellowDeep },
+  promoteChipText: { ...Type.micro, fontWeight: '800', color: BrandColors.yellowDeep },
   // 승격 완료 정적 표시 — 넛지가 아니라 확인용이라 옅게(테두리 없음).
   promotedTag: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
-  promotedTagText: { fontSize: 10.5, fontWeight: '700', color: InkColors.ink3 },
+  promotedTagText: { ...Type.micro, fontWeight: '700', color: TextColor.secondary },
 
   // 입력바(떠 있는 알약)는 공용 ChatComposerBar 가 그린다 — 코치·물어보기와 같은 형태.
   inputFlat: { backgroundColor: 'transparent', borderColor: 'transparent', paddingHorizontal: Space.sm },
@@ -751,10 +752,10 @@ const s = StyleSheet.create({
   mi: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 11, borderRadius: Radius.sm },
   miTop: { borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: 3, paddingTop: 12 },
   miIc: { width: 30, height: 30, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
-  miLabel: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
-  miSub: { fontSize: 10.5, color: InkColors.ink3 },
+  miLabel: { ...Type.body, fontWeight: '700' },
+  miSub: { ...Type.micro, color: TextColor.secondary },
   menuInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 11, paddingTop: 8, paddingBottom: 2, borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: 4 },
-  menuInfoText: { flex: 1, fontSize: 10.5, color: InkColors.ink3, fontWeight: '600' },
+  menuInfoText: { ...Type.micro, flex: 1, color: TextColor.secondary, fontWeight: '600' },
 
   // 롱프레스 액션 시트 — 모양(배경·라운드·그림자·손잡이·하단 인셋)은 공용 BottomSheet 가 그린다.
   sheet: { paddingHorizontal: 12, paddingBottom: 20, gap: 4 },
@@ -762,12 +763,12 @@ const s = StyleSheet.create({
   sheetReact: { width: 48, height: 48, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
   sheetReactEmoji: { fontSize: 26 },
   sheetItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 12, borderRadius: Radius.md },
-  sheetItemText: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  sheetItemText: { ...Type.body, fontWeight: '700' },
   sheetCancel: { marginTop: 4, alignItems: 'center', paddingVertical: 13, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
-  sheetCancelText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  editInput: { minHeight: 80, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 12, fontSize: 15, color: InkColors.ink, textAlignVertical: 'top' },
+  sheetCancelText: { ...Type.body, fontWeight: '800' },
+  editInput: { ...Type.body, minHeight: 80, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 12, textAlignVertical: 'top' },
   failRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
-  failText: { fontSize: 12, fontWeight: '700', color: BrandColors.badText },
+  failText: { ...Type.tag, fontWeight: '700', color: BrandColors.badText },
   failBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
-  failBtnText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2, textDecorationLine: 'underline' },
+  failBtnText: { fontSize: 13, fontWeight: '700', color: TextColor.secondary, textDecorationLine: 'underline' },
 });

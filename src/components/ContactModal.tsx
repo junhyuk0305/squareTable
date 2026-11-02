@@ -6,6 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { frameCapStyle } from '@/lib/theme/layout';
 import { Radius } from '@/lib/theme/elevation';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { BUSINESS_INFO } from '@/lib/config/business';
 
@@ -67,8 +69,8 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(31,29,26,0.45)', alignItems: 'center', justifyContent: 'center', padding: 28 },
   card: { width: '100%', maxWidth: 360, backgroundColor: '#FFFFFF', borderRadius: Radius.lg, padding: 22, borderWidth: 1, borderColor: InkColors.line, alignItems: 'center' },
   iconCircle: { width: 52, height: 52, borderRadius: 26, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
-  title: { fontSize: 18, fontWeight: '800', color: InkColors.ink, textAlign: 'center' },
-  message: { fontSize: 15, color: InkColors.ink2, marginTop: 8, lineHeight: 22, textAlign: 'center' },
+  title: { ...Type.title, textAlign: 'center' },
+  message: { ...Type.desc, marginTop: 8, textAlign: 'center' },
   emailRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -84,11 +86,12 @@ const styles = StyleSheet.create({
     borderColor: InkColors.line,
   },
   email: { fontSize: 15, fontWeight: '800', color: InkColors.ink, flexShrink: 1 },
-  copyHint: { fontSize: 11.5, color: InkColors.ink3, fontWeight: '600', marginTop: 7 },
+  copyHint: { ...Type.desc, fontWeight: '600', marginTop: 7 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 20, alignSelf: 'stretch' },
-  btn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 13, borderRadius: 12 },
+  // 주 버튼 모양 두 개를 반씩 나눠 쓴다(52 · 모서리 16 · 16/800).
+  btn: { ...ButtonStyles.primary, flex: 1 },
   btnGhost: { backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
-  btnGhostText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
+  btnGhostText: { ...ButtonTextStyles.primary, color: InkColors.ink2 },
   btnSolid: { backgroundColor: BrandColors.brand },
-  btnSolidText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
+  btnSolidText: { ...ButtonTextStyles.primary, color: '#FFFFFF' },
 });

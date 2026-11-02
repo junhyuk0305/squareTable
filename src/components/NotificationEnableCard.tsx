@@ -30,8 +30,11 @@ import {
 } from '@/lib/push/nativepush';
 import { SHOW_PWA_INSTALL, WEB_PUSH_ENABLED } from '@/lib/config/store-policy';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
+import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 
 export function NotificationEnableCard() {
   const userId = useSessionStore((s) => s.userId);
@@ -128,22 +131,19 @@ export function NotificationEnableCard() {
 }
 
 const styles = StyleSheet.create({
+  // 카드 모양 = CardStyles.list. 켜기 유도 카드만 면·선 색을 노랑으로 덮는다.
   card: {
+    ...CardStyles.list,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    ...Elevation.e1,
   },
   cta: { backgroundColor: BrandColors.yellowSoft, borderColor: BrandColors.yellow },
   info: { backgroundColor: InkColors.bg, borderColor: InkColors.line },
-  title: { fontSize: 15, fontWeight: '900', color: InkColors.ink },
-  sub: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink3, marginTop: 3, lineHeight: 18 },
+  title: { ...Type.body, fontWeight: '900' },
+  sub: { ...Type.desc, fontWeight: '600', marginTop: 3 },
   ctaBtn: {
-    fontSize: 14,
+    ...ButtonTextStyles.small,
     fontWeight: '900',
     color: InkColors.ink,
     backgroundColor: '#FFFFFF',

@@ -20,7 +20,7 @@ import { starterGraduated } from '@/lib/utils/starterProgress';
 import { PlanUpgradeNotice } from '@/components/PlanUpgradeNotice';
 import { StarterChecklist } from '@/components/hub/StarterChecklist';
 import { StorePickerSheet, type StorePickerRow } from '@/components/hub/StorePickerSheet';
-import { SectionLabel } from '@/components/SectionLabel';
+import { Section } from '@/components/Screen';
 import { BottomSheet } from '@/components/BottomSheet';
 import { SheetHead } from '@/components/owner/quiz/kit';
 import { AlertRow } from '@/components/blocks/AlertRow';
@@ -31,10 +31,11 @@ import { StatCardGrid, type StatCardItem } from '@/components/blocks/StatCardGri
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { Appear, stagger } from '@/components/Appear';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { Layout, Space } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
 import type { Href } from 'expo-router';
 
 type SortKey = 'pending_q' | 'working' | 'uncovered';
@@ -277,8 +278,8 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
     <>
       {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
       {header}
-      {/* 카드↔카드 = md(12). 제목 달린 섹션 앞의 추가 여백은 SectionLabel 자신이 든다(2026-09-03). */}
-      <View style={{ gap: Space.md }}>
+      {/* 블록 사이 = Layout.sectionGap(20 · 2026-11-02 화면 틀). 제목 달린 묶음은 <Section> 이라 제목이 위 여백을 따로 들지 않는다. */}
+      <View style={{ gap: Layout.sectionGap }}>
       {/* ── 0) 본사 연결 요청(P3, 정본 §4-E ①) — 요청이 없으면 카드 자체가 없다(미연결 매장 diff 0). ── */}
       <BrandInviteCard />
       {starterRow && (
@@ -342,16 +343,15 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
              '직원이 아는 노하우' 칸은 **읽기 진입**(D6 확정: 현황엔 지표 칸만, 관리는 노하우 탭).
              받은질문은 맨 위 AlertRow(2026-08-06) — 여기서 다시 세지 않는다. ── */}
       <Appear delay={stagger(3)}>
-        <SectionLabel title="매장 상태" />
-        <View style={{ marginTop: Space.sm }}>
+        <Section title="매장 상태">
           <StatCardGrid items={gridItems} />
-        </View>
+        </Section>
       </Appear>
 
       {/* ── 3) 매장 비교(다점포) / 단일 매장 요약 ── */}
       {multi && (
         <Appear delay={stagger(4)}>
-          <SectionLabel title="매장 비교" />
+          <Section title="매장 비교">
           {canUseMultistore(plan, freeMode) ? (
             <View style={styles.card}>
               <View style={styles.thRow}>
@@ -383,14 +383,15 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
           ) : (
             <PlanUpgradeNotice description="전체 매장을 지표로 비교하는 표는 다점포 요금제 기능이에요." />
           )}
+          </Section>
         </Appear>
       )}
 
       {/* ── 4) 이번달 매장별 내역 — 다점포에서만. ── */}
       {multi && (
       <Appear delay={stagger(5)}>
-        <SectionLabel title="이번달 매장별" />
-          <View style={[styles.card, { marginTop: Space.sm }]}>
+        <Section title="이번달 매장별">
+          <View style={styles.card}>
             {overview.map((r) => (
               <View key={r.unit_id} style={[styles.row, styles.rowTop]}>
                 <View style={[styles.dot, { backgroundColor: colorOf(r.unit_id) }]} />
@@ -401,6 +402,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
               </View>
             ))}
           </View>
+        </Section>
       </Appear>
       )}
 
@@ -451,7 +453,8 @@ function SortTh({ label, k, cur, onPress }: { label: string; k: SortKey; cur: So
 
 const styles = StyleSheet.create({
   loading: { minHeight: LOADING_MIN_HEIGHT, paddingVertical: Space.xl * 2, alignItems: 'center', justifyContent: 'center' },
-  card: { ...CardStyles.list, marginTop: Space.sm },
+  // 제목 ↔ 카드 간격은 <Section> 이 든다 — 카드가 위 여백을 따로 들지 않는다.
+  card: { ...CardStyles.list },
   statRow: { flexDirection: 'row', paddingVertical: Space.xs },
   statCell: { flex: 1, alignItems: 'center', gap: 2 },
   statDivider: { borderLeftWidth: 1, borderLeftColor: InkColors.line },
@@ -465,8 +468,8 @@ const styles = StyleSheet.create({
     width: 28, height: 28, borderRadius: Radius.sm, backgroundColor: InkColors.bgSoft,
     alignItems: 'center', justifyContent: 'center',
   },
-  rowTitle: { flex: 1, fontSize: 13.5, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
-  rowSub: { fontSize: 12, color: InkColors.ink3 },
+  rowTitle: { flex: 1, fontSize: Type.desc.fontSize, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
+  rowSub: { ...Type.tag, color: TextColor.secondary },
   onair: { color: BrandColors.goodText, fontWeight: '800' },
   dot: { width: 8, height: 8, borderRadius: 4 },
   emptyText: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', paddingVertical: Space.sm },
@@ -475,7 +478,7 @@ const styles = StyleSheet.create({
   // 비교 표 — 이름 열 flex, 수치 열 고정폭 우측 정렬(웹·네이티브 공통 문법)
   thRow: { flexDirection: 'row', alignItems: 'center', paddingBottom: Space.xs, gap: 2 },
   thCell: { width: 52, alignItems: 'flex-end' },
-  th: { fontSize: 11, fontWeight: '800', color: InkColors.ink3 },
+  th: { ...Type.micro, fontWeight: '800', color: TextColor.secondary },
   thOn: { color: InkColors.ink },
   thName: { flex: 1 },
   tdRow: {
@@ -484,7 +487,7 @@ const styles = StyleSheet.create({
   },
   tdName: { flex: 1, minWidth: 0 },
   tdNameText: { fontSize: 13, fontWeight: '700', color: InkColors.ink, flexShrink: 1 },
-  td: { width: 52, textAlign: 'right', fontSize: 12.5, fontWeight: '600', color: InkColors.ink2 },
+  td: { ...Type.tag, width: 52, textAlign: 'right', fontWeight: '600', color: TextColor.secondary },
   // 주황 글자색은 2026-09-03 폐기 — 굵기만으로 강조한다.
   tdHot: { color: InkColors.ink, fontWeight: '900' },
 });

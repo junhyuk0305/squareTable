@@ -3,8 +3,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Appear, stagger } from '@/components/Appear';
 import { formatAsked } from '@/lib/utils/time';
 import type { JuniorNotifKind, OwnerNotifKind } from '@/lib/utils/notifications';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
 import type React from 'react';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -192,13 +193,13 @@ const styles = StyleSheet.create({
   rowUnread: { backgroundColor: BrandColors.yellowSoft + '55' },
   storeRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   storeDot: { width: 6, height: 6, borderRadius: Radius.pill },
-  storeText: { flexShrink: 1, fontSize: 11, fontWeight: '700', color: InkColors.ink3 },
+  storeText: { ...Type.micro, flexShrink: 1, fontWeight: '700', color: TextColor.secondary },
   iconWrap: { width: 36, height: 36, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
-  rowTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
-  rowBody: { fontSize: 13, color: InkColors.ink2, lineHeight: 19 },
-  rowTime: { fontSize: 11.5, color: InkColors.ink3, fontWeight: '600', marginTop: 1 },
+  rowTitle: { ...Type.body, fontWeight: '800' },
+  rowBody: { ...Type.desc },
+  rowTime: { ...Type.tag, color: TextColor.secondary, fontWeight: '600', marginTop: 1 },
   unreadDot: { width: 8, height: 8, borderRadius: Radius.pill, backgroundColor: BrandColors.accent },
   empty: { alignItems: 'center', gap: 8, paddingVertical: 48 },
   emptyText: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
-  emptySub: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
+  emptySub: { ...Type.desc, textAlign: 'center' },
 });

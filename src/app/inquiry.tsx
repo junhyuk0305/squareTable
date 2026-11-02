@@ -7,9 +7,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { insertSalesInquiry } from '@/lib/db';
 import { BUSINESS_INFO } from '@/lib/config/business';
 import { showToast } from '@/lib/store/useToastStore';
-import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { BrandColors, InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { Appear } from '@/components/Appear';
 
@@ -150,7 +153,7 @@ export default function InquiryScreen() {
                 onPress={() => void submit()}
                 style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}
               >
-                {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>문의 보내기</Text>}
+                {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>문의 보내기</Text>}
               </Pressable>
 
               {msg && <Text style={styles.msg}>{msg}</Text>}
@@ -170,49 +173,36 @@ export default function InquiryScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
+  safe: { flex: 1, backgroundColor: Surface.screen },
   topbar: { height: 48, justifyContent: 'center' },
-  scroll: { flexGrow: 1, padding: Space.xl, paddingTop: Space.xs, gap: Space.xl },
+  // 좌우·아래 = 화면 틀 값. 위는 뒤로가기 줄 바로 아래라 좁게, 블록 사이 24 는 그대로.
+  scroll: { ...screenScrollStyle, flexGrow: 1, paddingTop: Space.xs, gap: Space.xl },
   header: { gap: Space.sm },
-  title: { fontSize: 21, fontWeight: '900', color: InkColors.ink },
-  sub: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
+  title: { ...Type.title },
+  sub: { ...Type.desc },
 
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.gutter,
-    gap: Space.sm,
-  },
-  label: { fontSize: 13, lineHeight: 19, fontWeight: '700', color: InkColors.ink2, marginTop: Space.xs },
+  card: { ...CardStyles.list, gap: Space.sm },
+  label: { fontSize: 13, lineHeight: 19, fontWeight: '700', color: TextColor.secondary, marginTop: Space.xs },
   input: {
+    ...Type.body,
     borderWidth: 1,
     borderColor: InkColors.line,
     borderRadius: Radius.md,
     paddingHorizontal: 14,
     paddingVertical: 13,
-    fontSize: 15,
-    color: InkColors.ink,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Surface.input,
   },
   inputMulti: { minHeight: 96, textAlignVertical: 'top' },
-  primary: {
-    marginTop: Space.md,
-    backgroundColor: BrandColors.brand,
-    paddingVertical: 16,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-  },
-  primaryText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22, fontWeight: '800' },
+  primary: { ...ButtonStyles.primary, marginTop: Space.md, backgroundColor: BrandColors.brand },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   msg: { fontSize: 15, lineHeight: 22, color: BrandColors.accentText, fontWeight: '700', textAlign: 'center', marginTop: 2 },
 
   doneHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  doneTitle: { fontSize: 17, fontWeight: '900', color: InkColors.ink },
-  body: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
-  ghost: { marginTop: Space.md, paddingVertical: 13, borderRadius: Radius.md, alignItems: 'center', backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
-  ghostText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
+  doneTitle: { ...Type.title },
+  body: { ...Type.desc },
+  ghost: { ...ButtonStyles.primary, marginTop: Space.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
+  ghostText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
 
   mailRow: { alignItems: 'center', paddingVertical: Space.sm },
-  mailText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3 },
+  mailText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
 });

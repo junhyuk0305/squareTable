@@ -7,9 +7,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { logout } from '@/lib/auth';
 import { Appear, stagger } from '@/components/Appear';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { screenScrollStyle } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 // 가입했지만 아직 매장에 합류하지 않은 알바를 위한 화면.
 // (매직링크 로그인·초대 전 가입·매장 종료로 unit_id가 비는 경우) — 빈 챗으로 떨어뜨리지 않고 여기로 유도.
@@ -64,7 +67,7 @@ export default function JuniorOnboarding() {
           />
           {err && <Text style={styles.err}>{err}</Text>}
           <Pressable disabled={busy} onPress={join} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}>
-            {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>합류하기</Text>}
+            {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>합류하기</Text>}
           </Pressable>
         </View>
         </Appear>
@@ -90,22 +93,26 @@ export default function JuniorOnboarding() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { flexGrow: 1, padding: 24, justifyContent: 'center', gap: 22 },
+  // 화면 바탕(Surface.screen). 헤더가 없는 가입 흐름 화면이라 위·아래 안전 영역을 SafeAreaView 가 그대로 든다.
+  safe: { flex: 1, backgroundColor: Surface.screen },
+  // 좌우·섹션 사이 = screenScrollStyle. 내용이 짧아 세로 가운데에 둔다.
+  scroll: { ...screenScrollStyle, flexGrow: 1, justifyContent: 'center' },
   hero: { alignItems: 'center', gap: 10 },
   iconWrap: { width: 64, height: 64, borderRadius: Radius.sheet, backgroundColor: BrandColors.brandSoft, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 22, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
-  sub: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
+  sub: { ...Type.desc, textAlign: 'center' },
   strong: { fontWeight: '800', color: InkColors.ink },
   card: { ...CardStyles.list, gap: 10 },
-  label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
-  input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 14, fontSize: 20, fontWeight: '800', letterSpacing: 4, textAlign: 'center', color: InkColors.ink, backgroundColor: '#FFFFFF' },
+  label: { fontSize: 13, fontWeight: '700', color: TextColor.secondary },
+  input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 14, fontSize: 20, fontWeight: '800', letterSpacing: 4, textAlign: 'center', color: InkColors.ink, backgroundColor: Surface.input },
   err: { fontSize: 15, color: BrandColors.accentText, fontWeight: '600' },
-  primary: { marginTop: 6, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center' },
-  primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
-  helpBox: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: 16, gap: 4 },
-  helpTitle: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
-  helpBody: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
-  logoutRow: { alignItems: 'center', paddingVertical: 4 },
-  logoutText: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
+  primary: { ...ButtonStyles.primary, marginTop: 6, backgroundColor: BrandColors.brand },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  // 안내 상자 — 바탕이 회색(#F4F5F7)이 되면서 옛 회색 면이 바탕에 묻혀 흰 목록 카드로 바꿨다.
+  helpBox: { ...CardStyles.list, gap: 4 },
+  helpTitle: { fontSize: 13, fontWeight: '800', color: TextColor.secondary },
+  helpBody: { ...Type.desc },
+  // 누르는 상자 48(RN-web 은 hitSlop 을 무시한다).
+  logoutRow: { alignItems: 'center', justifyContent: 'center', minHeight: 48 },
+  logoutText: { fontSize: 13, color: TextColor.secondary, fontWeight: '600' },
 });

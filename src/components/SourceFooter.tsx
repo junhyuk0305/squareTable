@@ -1,7 +1,8 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { KnowhowRows } from '@/components/blocks/KnowhowRows';
-import { InkColors } from '@/lib/theme/colors';
+import { InkColors, TextColor } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 import { fmtDateKo } from '@/lib/utils/schedule';
 
 type Props = {
@@ -57,10 +58,10 @@ export function SourceFooter({ creatorName, title, version, updatedAt, onPress }
 
 const styles = StyleSheet.create({
   value: { gap: Space.xs },
-  creator: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
-  title: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
+  creator: { ...Type.body, fontWeight: '700' },
+  title: { ...Type.body, color: TextColor.secondary, fontWeight: '600' },
   metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.sm },
-  meta: { fontSize: 13, color: InkColors.ink3 },
+  meta: { fontSize: Type.desc.fontSize, color: TextColor.secondary },
   // ★골드(#F0D000)를 글자색으로 쓰지 않는다 — 크림 면이 사라진 흰 배경에서는 대비가 1.6 수준이다.
   //   색 규칙("color: 에 500을 쓰지 않는다")대로 중립 800으로 내린다.
   openHint: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },

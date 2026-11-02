@@ -10,9 +10,12 @@ import { SHOW_HQ_CONSOLE } from '@/lib/config/store-policy';
 import { PLANS } from '@/lib/config/tiers';
 import { landingFor } from '@/lib/nav/landing';
 import { isLostOAuthReturn, OAUTH_LOST_HREF } from '@/lib/auth/googleRedirect';
-import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { BrandColors, InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, Gap, SCREEN_GUTTER } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Appear, stagger } from '@/components/Appear';
 import { Wordmark } from '@/components/Wordmark';
 
@@ -106,9 +109,9 @@ function OfflineBoot() {
       <Pressable
         onPress={() => void retry()}
         disabled={busy}
-        style={({ pressed }) => [styles.offerCta, styles.offlineBtn, pressed && { opacity: 0.88 }]}
+        style={({ pressed }) => [styles.offerCta, pressed && { opacity: 0.88 }]}
       >
-        {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.offerCtaText}>다시 시도</Text>}
+        {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.offerCtaText}>다시 시도</Text>}
       </Pressable>
       <Pressable onPress={() => void signOut()} hitSlop={8} style={styles.offerLogin}>
         <Text style={styles.offlineLink}>다른 계정으로 로그인</Text>
@@ -276,7 +279,7 @@ export default function LandingScreen() {
 
               <Pressable onPress={goSignup} style={({ pressed }) => [styles.offerCta, pressed && { opacity: 0.88 }]}>
                 <Text style={styles.offerCtaText}>무료로 시작하기</Text>
-                <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
+                <Ionicons name="arrow-forward" size={17} color={InkColors.bubbleText} />
               </Pressable>
 
               <Pressable onPress={goLogin} hitSlop={8} style={styles.offerLogin}>
@@ -299,10 +302,10 @@ export default function LandingScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: InkColors.cream },
+  root: { flex: 1, backgroundColor: Surface.screen },
 
   topbar: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: SCREEN_GUTTER, paddingBottom: Space.sm },
-  topLogin: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: InkColors.ink2 },
+  topLogin: { fontSize: Type.body.fontSize, lineHeight: 20, fontWeight: '700', color: TextColor.secondary },
 
   scroll: { paddingHorizontal: SCREEN_GUTTER, gap: Gap.section },
 
@@ -321,33 +324,23 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
   },
   badgeDot: { width: 7, height: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.yellowDeep },
-  badgeText: { fontSize: 12, lineHeight: 17, fontWeight: '800', color: InkColors.ink },
+  badgeText: { ...Type.tag, lineHeight: 17, fontWeight: '800', color: InkColors.ink },
   wordmark: { marginTop: Space.xs },
   h1: { fontSize: 27, lineHeight: 38, fontWeight: '900', color: InkColors.ink, textAlign: 'center', letterSpacing: -0.6 },
   h1Strong: { color: InkColors.ink },
-  heroSub: { fontSize: 15, lineHeight: 24, color: InkColors.ink2, textAlign: 'center', fontWeight: '600' },
+  heroSub: { fontSize: 15, lineHeight: 24, color: TextColor.secondary, textAlign: 'center', fontWeight: '600' },
   scrollCue: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: Space.xs },
-  scrollCueText: { fontSize: 12, lineHeight: 17, color: InkColors.ink3, fontWeight: '600' },
+  scrollCueText: { ...Type.tag, lineHeight: 17, color: TextColor.secondary, fontWeight: '600' },
 
   // ── SECTION 공통 ──
   section: { gap: Gap.group },
-  kicker: { fontSize: 13, lineHeight: 19, fontWeight: '800', color: InkColors.ink3, letterSpacing: -0.2 },
+  kicker: { fontSize: 13, lineHeight: 19, fontWeight: '800', color: TextColor.secondary, letterSpacing: -0.2 },
   kickerInk: { color: BrandColors.yellowDeep },
   h2: { fontSize: 21, lineHeight: 30, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.4, marginTop: 2 },
   stack: { gap: Gap.item },
 
   // ── PROBLEM ──
-  painCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.lg,
-    ...Elevation.e1,
-  },
+  painCard: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: Space.md },
   painChip: {
     width: 44,
     height: 44,
@@ -358,20 +351,10 @@ const styles = StyleSheet.create({
   },
   painText: { flex: 1, gap: Gap.inline },
   painTitle: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: InkColors.ink },
-  painBody: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
+  painBody: { fontSize: 15, lineHeight: 22, color: TextColor.secondary },
 
   // ── SOLUTION ──
-  featCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.lg,
-    ...Elevation.e2,
-  },
+  featCard: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: Space.md },
   featChip: {
     width: 46,
     height: 46,
@@ -381,43 +364,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   featTitle: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: InkColors.ink },
-  featBody: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
+  featBody: { fontSize: 15, lineHeight: 22, color: TextColor.secondary },
 
-  // ── OFFER ──
-  offerCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.sheet,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.xl,
-    gap: Space.md,
-    ...Elevation.e2,
-  },
+  // ── OFFER ── 안쪽 24 는 이 카드 고유(가격 안내 한 장). 모서리·선·그림자는 공용 카드.
+  offerCard: { ...CardStyles.list, padding: Space.xl, gap: Space.md },
   offerTitle: { fontSize: 22, lineHeight: 31, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.4, marginTop: 2 },
-  offerBody: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, fontWeight: '600' },
+  offerBody: { fontSize: 15, lineHeight: 22, color: TextColor.secondary, fontWeight: '600' },
   offerList: { gap: Space.sm, marginTop: Space.xs },
   offerRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  offerRowText: { fontSize: 14, lineHeight: 21, color: InkColors.ink, fontWeight: '700' },
+  offerRowText: { ...Type.body, lineHeight: 21, fontWeight: '700' },
   offerCta: {
+    ...ButtonStyles.primary,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: 6,
     backgroundColor: BrandColors.brand,
-    paddingVertical: 16,
-    borderRadius: Radius.md,
     marginTop: Space.sm,
   },
-  offerCtaText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22, fontWeight: '800' },
+  offerCtaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   offerLogin: { alignItems: 'center', paddingVertical: Space.xs },
-  offerLoginText: { fontSize: 13, lineHeight: 19, color: InkColors.ink3 },
+  offerLoginText: { ...Type.desc },
   offerLoginStrong: { color: InkColors.ink, fontWeight: '800' },
 
   // ── 연결 안내(Q26) ──
-  offlineRoot: { flex: 1, backgroundColor: InkColors.cream, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SCREEN_GUTTER, gap: Space.md },
+  offlineRoot: { flex: 1, backgroundColor: Surface.screen, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SCREEN_GUTTER, gap: Space.md },
   offlineText: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: InkColors.ink, textAlign: 'center' },
-  offlineBtn: { alignSelf: 'stretch', minHeight: 54 },
-  offlineLink: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: InkColors.ink2 },
+  offlineLink: { fontSize: Type.body.fontSize, lineHeight: 20, fontWeight: '700', color: TextColor.secondary },
 
   // ── FAB ──
   fabWrap: { position: 'absolute', right: SCREEN_GUTTER },

@@ -3,8 +3,10 @@ import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { getCategoryMeta } from '@/lib/utils/category';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 
 import type { StructuredSegment } from '@/lib/ai';
 
@@ -102,7 +104,8 @@ export function SplitProposal({
 const splitStyles = StyleSheet.create({
   box: {
     backgroundColor: InkColors.bg,
-    borderRadius: Radius.lg,
+    // 모서리 20 카드는 없앤다 — 16(2026-11-02 결정표).
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
     borderTopWidth: 4,
@@ -111,8 +114,8 @@ const splitStyles = StyleSheet.create({
     gap: 12,
     ...Elevation.e1,
   },
-  head: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  hint: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', marginTop: -6 },
+  head: { ...Type.body, fontWeight: '800' },
+  hint: { ...Type.desc, fontWeight: '600', marginTop: -6 },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -126,11 +129,10 @@ const splitStyles = StyleSheet.create({
     backgroundColor: InkColors.bg,
   },
   titleRow: { flexDirection: 'row', alignItems: 'center' },
-  itemTitle: { flexShrink: 1, fontSize: 14, fontWeight: '700', color: InkColors.ink },
+  itemTitle: { ...Type.body, flexShrink: 1, fontWeight: '700' },
   titleInput: {
-    fontSize: 14,
+    ...Type.body,
     fontWeight: '700',
-    color: InkColors.ink,
     paddingVertical: 2,
     paddingHorizontal: 6,
     borderRadius: Radius.sm,
@@ -138,10 +140,11 @@ const splitStyles = StyleSheet.create({
     borderColor: BrandColors.yellowDeep,
     backgroundColor: BrandColors.yellowSoft,
   },
-  itemSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', marginTop: 1 },
+  itemSub: { ...Type.tag, color: TextColor.secondary, fontWeight: '600', marginTop: 1 },
+  // 버튼 = 주 버튼 틀(52 · 모서리 16 · 16/800 · 2026-11-02). 합치기는 내용 폭 흰 면, 각각 저장은 나머지 폭.
   actions: { flexDirection: 'row', gap: 8 },
-  mergeBtn: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
-  mergeTxt: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
-  eachBtn: { flex: 1, paddingVertical: 12, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: InkColors.ink },
-  eachTxt: { fontSize: 14, fontWeight: '800', color: InkColors.bubbleText },
+  mergeBtn: { ...ButtonStyles.primary, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
+  mergeTxt: { ...ButtonTextStyles.primary, color: TextColor.secondary },
+  eachBtn: { ...ButtonStyles.primary, flex: 1, backgroundColor: InkColors.ink },
+  eachTxt: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

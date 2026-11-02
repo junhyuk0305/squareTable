@@ -20,9 +20,12 @@ import { useChatStore } from '@/lib/store/useChatStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { isServable } from '@/lib/utils/entryStatus';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space, SCREEN_GUTTER, CONTENT_MAX_WIDTH, frameCapStyle } from '@/lib/theme/layout';
+import { Space, SCREEN_GUTTER, CONTENT_MAX_WIDTH, frameCapStyle, screenScrollStyle } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import type { Category } from '@/types';
 
 export function OwnerFirstAsk({ onNext, nextLabel }: { onNext: () => void; nextLabel: string }) {
@@ -188,55 +191,38 @@ export function OwnerFirstAsk({ onNext, nextLabel }: { onNext: () => void; nextL
 }
 
 const styles = StyleSheet.create({
+  // 첫 여백·좌우·블록 사이 = screenScrollStyle. 넓은 웹에서 콘텐츠 폭만 가둔다.
   scroll: {
-    padding: SCREEN_GUTTER,
-    paddingTop: Space.lg,
-    gap: Space.lg,
+    ...screenScrollStyle,
     maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: 'center',
     width: '100%',
   },
   intro: { gap: Space.sm, paddingTop: Space.sm },
-  introTitle: { fontSize: 24, fontWeight: '900', color: InkColors.ink, lineHeight: 32 },
-  introBody: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
+  introTitle: { ...Type.pageTitle, color: InkColors.ink, lineHeight: 32 },
+  introBody: { ...Type.desc },
 
   chipWrap: { gap: Space.sm },
-  chip: {
-    backgroundColor: InkColors.bg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: Radius.md,
-    paddingVertical: Space.md,
-    paddingHorizontal: Space.lg,
-    ...Elevation.e1,
-  },
-  chipText: { fontSize: 14.5, fontWeight: '700', color: InkColors.ink },
+  chip: CardStyles.list,
+  chipText: { ...Type.body, fontWeight: '700' },
 
   turn: { gap: Space.md },
+  // 노랑 안내 상자 — 모서리 20 → 16(결정표: 모서리 20 카드 없음).
   deflectCard: {
     backgroundColor: BrandColors.yellowSoft,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     padding: Space.lg,
     gap: Space.sm,
     ...Elevation.e1,
   },
-  deflectTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  deflectBody: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
-  deflectBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    paddingVertical: Space.md,
-    marginTop: Space.xs,
-  },
-  deflectBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
-  deflectDoneText: { fontSize: 13.5, fontWeight: '700', color: InkColors.ink2, marginTop: Space.xs },
+  deflectTitle: { ...Type.body, fontWeight: '800' },
+  deflectBody: { ...Type.desc },
+  deflectBtn: { ...ButtonStyles.primary, flexDirection: 'row', gap: 6, backgroundColor: InkColors.bg, marginTop: Space.xs },
+  deflectBtnText: { fontSize: Type.body.fontSize, fontWeight: '800', color: InkColors.ink },
+  deflectDoneText: { ...Type.desc, fontWeight: '700', marginTop: Space.xs },
 
   loading: { paddingVertical: Space.md, alignItems: 'center' },
-  loadingText: { fontSize: 13.5, color: InkColors.ink3 },
+  loadingText: Type.desc,
 
   errorRow: {
     flexDirection: 'row',
@@ -248,8 +234,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     padding: Space.md,
   },
-  errorText: { flex: 1, fontSize: 13.5, color: InkColors.ink2, lineHeight: 19 },
-  errorRetry: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
+  errorText: { ...Type.desc, flex: 1 },
+  errorRetry: { fontSize: Type.desc.fontSize, fontWeight: '800', color: InkColors.ink },
 
   barWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center' },
   bar: {
@@ -271,7 +257,7 @@ const styles = StyleSheet.create({
     borderColor: InkColors.line,
     paddingVertical: Space.md,
     paddingHorizontal: Space.lg,
-    fontSize: 15,
+    fontSize: Type.body.fontSize,
     color: InkColors.ink,
   },
   sendBtn: {
@@ -283,14 +269,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sendBtnOff: { backgroundColor: InkColors.line },
-  nextBtn: {
-    backgroundColor: InkColors.ink,
-    paddingVertical: Space.lg,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    ...Elevation.e2,
-  },
-  nextText: { fontSize: 16, fontWeight: '800', color: InkColors.bubbleText },
+  // 주 버튼(52 · 모서리 16 · 가로 꽉 · 그림자 없음).
+  nextBtn: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
+  nextText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   skip: { alignSelf: 'center', paddingVertical: Space.sm, paddingHorizontal: Space.lg },
-  skipText: { fontSize: 14, fontWeight: '700', color: InkColors.ink3 },
+  skipText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
 });

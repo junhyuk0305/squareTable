@@ -9,9 +9,11 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { starterSteps } from '@/lib/utils/starterProgress';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
-import { SectionLabel } from '@/components/SectionLabel';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Section } from '@/components/Screen';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
+import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
 import { Space } from '@/lib/theme/layout';
 import type { OwnerOverviewRow } from '@/lib/db';
 import type { StarterStepId } from '@/lib/utils/starterProgress';
@@ -32,8 +34,7 @@ export function StarterChecklist({ row }: { row: OwnerOverviewRow }) {
   const nextId = steps.find((s) => !s.done)?.id;
 
   return (
-    <View>
-      <SectionLabel title="시작하기" />
+    <Section title="시작하기">
       <View style={styles.card}>
         <View style={styles.headRow}>
           <Text style={styles.headText}>매장이 채워지는 중이에요</Text>
@@ -70,24 +71,18 @@ export function StarterChecklist({ row }: { row: OwnerOverviewRow }) {
           );
         })}
       </View>
-    </View>
+    </Section>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingHorizontal: Space.lg,
+    ...CardStyles.rows,
     paddingVertical: Space.md,
-    marginTop: Space.sm,
-    ...Elevation.e2,
   },
   headRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: Space.xs },
-  headText: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  headCount: { fontSize: 13, fontWeight: '800', color: InkColors.ink3 },
+  headText: { ...Type.body, flex: 1, fontWeight: '800' },
+  headCount: { fontSize: 13, fontWeight: '800', color: TextColor.secondary },
   barTrack: {
     height: 6,
     borderRadius: Radius.pill,
@@ -109,7 +104,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkOn: { backgroundColor: BrandColors.yellow, borderColor: BrandColors.yellowDeep },
-  rowTitle: { fontSize: 13.5, fontWeight: '700', color: InkColors.ink },
+  rowTitle: { fontSize: Type.desc.fontSize, fontWeight: '700', color: InkColors.ink },
   rowTitleDone: { color: InkColors.ink3 },
-  rowHint: { fontSize: 12, color: InkColors.ink3, marginTop: 1, lineHeight: 17 },
+  rowHint: { ...Type.desc, marginTop: 1 },
 });

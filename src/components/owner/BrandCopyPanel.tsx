@@ -21,6 +21,8 @@ import { confirmAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 
 type Kind = 'entry' | 'course';
 const NOUN: Record<Kind, string> = { entry: '노하우', course: '퀴즈' };
@@ -187,8 +189,8 @@ const styles = StyleSheet.create({
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   // 고정 높이를 주지 않는다 — 문장이 길어지면 늘어난다(메모리 feedback_fixed_height_text_overflow).
-  body: { fontSize: 13.5, lineHeight: 20, color: InkColors.ink2 },
-  err: { fontSize: 13, lineHeight: 19, color: BrandColors.badText, fontWeight: '600' },
+  body: Type.desc,
+  err: { ...Type.desc, color: BrandColors.badText, fontWeight: '600' },
   btns: { flexDirection: 'row', gap: Space.xs, flexWrap: 'wrap' },
 
   btn: {
@@ -204,10 +206,11 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bg,
   },
   btnPri: { backgroundColor: BrandColors.yellow, borderColor: BrandColors.yellowDeep },
-  btnText: { fontSize: 14.5, fontWeight: '700', color: InkColors.ink },
+  // 작은 알약 버튼 글자(15/800 · 2026-11-02). 모양(48 알약)은 원래 작은 버튼과 같다.
+  btnText: { ...ButtonTextStyles.small, color: InkColors.ink },
 
-  sheetTitle: { fontSize: 18, fontWeight: '900', color: InkColors.ink, marginBottom: 5 },
-  sheetHint: { fontSize: 13.5, lineHeight: 20, color: InkColors.ink2, marginBottom: 16 },
+  sheetTitle: { ...Type.title, marginBottom: 5 },
+  sheetHint: { ...Type.desc, marginBottom: 16 },
   sheetBtns: { gap: 7 },
-  sheetNote: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink3, marginBottom: 9, marginLeft: 4 },
+  sheetNote: { ...Type.desc, marginBottom: 9, marginLeft: 4 },
 });

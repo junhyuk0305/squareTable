@@ -83,7 +83,7 @@ const st = StyleSheet.create({
     minHeight: 132,
     borderWidth: 1,
     borderColor: InkColors.line,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     backgroundColor: InkColors.bg,
     alignItems: 'center',
     justifyContent: 'center',

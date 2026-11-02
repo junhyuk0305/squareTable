@@ -15,8 +15,10 @@ import {
 import { useRouter, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
+import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
 
 export type FeatureCard = {
   key: string;
@@ -167,16 +169,13 @@ export function FeatureCarousel({ cards }: { cards: FeatureCard[] }) {
 }
 
 const styles = StyleSheet.create({
+  // 카드 모양 = CardStyles.list(모서리 16 · 안쪽 16 · e1). 선만 노랑으로 덮는다.
   card: {
+    ...CardStyles.list,
     flexDirection: 'row',
     gap: 14,
     marginHorizontal: Space.sm, // 페이지 안 좌우 인셋 — 카드 섀도/테두리가 스크롤 경계에 잘리지 않게(대칭)
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
     borderColor: BrandColors.yellowDeep,
-    padding: 18,
-    ...Elevation.e1,
   },
   iconWrap: {
     width: 44,
@@ -187,8 +186,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   body: { flex: 1, gap: 4 },
-  title: { fontSize: 15.5, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.3 },
-  desc: { fontSize: 15, color: InkColors.ink2, lineHeight: 22, fontWeight: '500' },
+  title: { fontSize: 16, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.3 },
+  desc: { ...Type.desc, fontWeight: '500' },
   ctaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
   ctaText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
 

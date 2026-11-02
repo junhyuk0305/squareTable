@@ -2,6 +2,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { getCategoryMeta } from '@/lib/utils/category';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { Radius } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
 
 type Props = {
   category: string; // 기본 4종 키 또는 매장 커스텀 카테고리 id
@@ -73,7 +74,8 @@ export function CategoryChip({ category, size = 'md', count, selected, onPress, 
 }
 
 const SIZES = {
-  sm: { padV: 3, padH: 8,  dot: 6, label: 11, count: 10 },
+  // 숫자 배지 최소 11(Type.micro · 2026-11-02. 옛 10).
+  sm: { padV: 3, padH: 8,  dot: 6, label: Type.micro.fontSize, count: Type.micro.fontSize },
   md: { padV: 6, padH: 12, dot: 7, label: 13, count: 11 },
   lg: { padV: 12, padH: 20, dot: 9, label: 18, count: 14 },
 } as const;

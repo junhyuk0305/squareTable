@@ -3,8 +3,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
 import { usePreferencesStore, TEXT_SCALE_FACTOR, type TextScale } from '@/lib/store/usePreferencesStore';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 const OPTIONS: { key: TextScale; label: string; sub: string }[] = [
   { key: 'small', label: '작게', sub: '한 화면에 더 많이' },
@@ -64,14 +66,15 @@ export function TextScaleModal({ visible, onClose }: { visible: boolean; onClose
 }
 
 const s = StyleSheet.create({
-  title: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: 16, paddingBottom: 4 },
-  lead: { fontSize: 12.5, color: InkColors.ink2, paddingHorizontal: 16, paddingBottom: 12, lineHeight: 18 },
+  title: { ...Type.title, paddingHorizontal: 16, paddingBottom: 4 },
+  lead: { ...Type.desc, paddingHorizontal: 16, paddingBottom: 12 },
   list: { paddingHorizontal: 16, gap: 8, flexGrow: 1 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 14, paddingVertical: 14, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
   rowOn: { borderColor: InkColors.ink, backgroundColor: BrandColors.yellowSoft },
   sample: { fontWeight: '800', color: InkColors.ink, minWidth: 92 },
-  rowLabel: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  rowSub: { fontSize: 12, color: InkColors.ink3, marginTop: 1 },
-  doneBtn: { marginHorizontal: 16, marginTop: 12, marginBottom: 18, backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center' },
-  doneText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  rowLabel: { ...Type.body, fontWeight: '800' },
+  rowSub: { ...Type.tag, color: TextColor.secondary, marginTop: 1 },
+  // 닫기 = 주 버튼(52 · 모서리 16 · 16/800). 시트 안 자리 잡기(margin)는 그대로.
+  doneBtn: { ...ButtonStyles.primary, marginHorizontal: 16, marginTop: 12, marginBottom: 18, backgroundColor: InkColors.ink },
+  doneText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

@@ -17,14 +17,15 @@ import { useForegroundRefresh } from '@/lib/app/useForegroundRefresh';
 import { storeColor } from '@/lib/utils/storeColor';
 import { todayStr } from '@/lib/utils/attendance';
 import { isPendingAssignment, isUnreadMention } from '@/lib/utils/notifications';
-import { SectionLabel } from '@/components/SectionLabel';
+import { Section } from '@/components/Screen';
 import { FocusCard } from '@/components/blocks/FocusCard';
 import { StatCard } from '@/components/blocks/StatCardGrid';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { Appear, stagger } from '@/components/Appear';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { Layout, Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
 import { EmptyStyles } from '@/lib/theme/empty';
 
@@ -148,7 +149,8 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
     <>
       {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
       {header}
-      <View style={{ gap: Space.md }}>
+      {/* 블록 사이 = Layout.sectionGap(20 · 2026-11-02 화면 틀). 제목 달린 묶음은 <Section>. */}
+      <View style={{ gap: Layout.sectionGap }}>
       {/* ── 0) 히어로 — 가장 급한 1건(§7-4 A). 없으면 안 그린다. ── */}
       {hero && (
         <Appear delay={stagger(0)}>
@@ -166,7 +168,7 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
 
       {/* ── 1) 오늘 근무 ── */}
       <Appear delay={stagger(1)}>
-        <SectionLabel title="오늘 근무" />
+        <Section title="오늘 근무">
         <View style={styles.card}>
           {todayShifts.length > 0 ? (
             todayShifts.map((s) => (
@@ -200,6 +202,7 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
           )}
           <Text style={styles.caption}>바뀐 교대는 매장 근무표에서 확인해요</Text>
         </View>
+        </Section>
       </Appear>
 
       {/* ── 2) 남은 할 일 — 히어로로 올라간 1건은 여기서 뺀다(같은 것을 두 번 그리지 않는다).
@@ -207,10 +210,10 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
                바로 위 히어로와 정면으로 모순된다. ── */}
       {(!hero || restTodos.length > 0) && (
       <Appear delay={stagger(2)}>
-        <SectionLabel
+        <Section
           title={hero ? '남은 할 일' : '오늘 할 일'}
           hint={restTodos.length > 0 ? `${restTodos.length}건` : undefined}
-        />
+        >
         <View style={styles.card}>
           {restTodos.length === 0 ? (
             <Text style={styles.emptyText}>오늘 처리할 일이 없어요</Text>
@@ -261,6 +264,7 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
             </>
           )}
         </View>
+        </Section>
       </Appear>
       )}
 
@@ -271,8 +275,8 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
                매장이 2곳↑이면 매장별 분해가 실제 구성이지만 그건 바로 아래 카드가 이미 말한다.
              ★2026-11-02 급여 제거로 '예상 급여' 칸이 빠져 한 칸만 남았다. 출퇴근 화면과 같이
                그리드 대신 칸 하나(StatCard)를 전체 폭으로 그린다(반 폭이면 보조줄이 잘린다). ── */}
-      <Appear delay={stagger(3)} style={{ gap: Space.sm }}>
-        <SectionLabel title="이번달" />
+      <Appear delay={stagger(3)}>
+        <Section title="이번달">
         <StatCard
           item={{
             key: 'hours',
@@ -292,6 +296,7 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
             ))}
           </View>
         )}
+        </Section>
       </Appear>
       </View>
     </>
@@ -300,21 +305,22 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
 
 const styles = StyleSheet.create({
   loading: { paddingVertical: Space.xl * 2, alignItems: 'center' },
-  card: { ...CardStyles.list, marginTop: Space.sm },
+  // 제목 ↔ 카드 간격은 <Section> 이 든다 — 카드가 위 여백을 따로 들지 않는다.
+  card: { ...CardStyles.list },
 
   shiftRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.sm },
   shiftIcon: { width: 40, height: 40, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
-  shiftTitle: { fontSize: 15, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.3 },
-  shiftSub: { fontSize: 11.5, color: InkColors.ink3, marginTop: 1 },
+  shiftTitle: { ...Type.body, fontWeight: '900', letterSpacing: -0.3 },
+  shiftSub: { ...Type.tag, color: TextColor.secondary, marginTop: 1 },
 
-  todoText: { fontSize: 15, fontWeight: '600', color: InkColors.ink, lineHeight: 20 },
+  todoText: { ...Type.body, fontWeight: '600', lineHeight: 20 },
   subLine: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, marginTop: 1 },
   subDot: { width: 6, height: 6, borderRadius: 3 },
   moreRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
     borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: Space.xs, paddingVertical: Space.sm,
   },
-  moreText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
+  moreText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
 
   statRow: { flexDirection: 'row', paddingVertical: Space.xs },
   statCell: { flex: 1, alignItems: 'center', gap: 2 },
@@ -328,9 +334,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: InkColors.line, paddingVertical: Space.sm + 2,
   },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  storeName: { flex: 1, fontSize: 13.5, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
-  storeMeta: { fontSize: 12, color: InkColors.ink3 },
+  storeName: { flex: 1, fontSize: Type.desc.fontSize, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
+  storeMeta: { ...Type.tag, color: TextColor.secondary },
 
   emptyText: EmptyStyles.text,
-  caption: { fontSize: 11.5, color: InkColors.ink3, marginTop: Space.sm, textAlign: 'center' },
+  // 카드 안 안내 문장 = 설명(13/19 secondary · 2026-11-02 2차 글자 표).
+  caption: { ...Type.desc, marginTop: Space.sm, textAlign: 'center' },
 });

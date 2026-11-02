@@ -6,6 +6,7 @@ import { formatPhone, normalizePhone } from '@/lib/utils/validation';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 /**
  * 전화번호 인증 한 벌 — **서버가 `PHONE_NOT_VERIFIED` 로 막았을 때만** 화면이 연다.
@@ -139,9 +140,10 @@ const styles = StyleSheet.create({
     padding: Space.lg,
     gap: Space.sm,
   },
-  label: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  label: { ...Type.body, fontWeight: '700' },
   req: { color: BrandColors.badText },
-  guide: { fontSize: 15, color: InkColors.ink2, lineHeight: 21 },
+  // 제목(본문 15) 아래 안내 한 줄 = 설명 13/19(본문 두 줄 연속 금지).
+  guide: { ...Type.desc },
   row: { flexDirection: 'row', gap: Space.sm, alignItems: 'center' },
   flex: { flex: 1 },
   input: {

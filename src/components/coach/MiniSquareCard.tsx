@@ -3,9 +3,12 @@ import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
 
 import { SquareRowsEditor } from '@/components/coach/SquareRowsEditor';
 import { isSquarePublishable } from '@/lib/utils/buildEntry';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 
 import type { SquareBlock } from '@/types';
 
@@ -149,15 +152,8 @@ export function MiniSquareCard({
 }
 
 const cardStyles = StyleSheet.create({
-  card: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.lg,
-    gap: Space.sm,
-    ...Elevation.e1,
-  },
+  // 카드 = CardStyles.list(모서리 16 · 안쪽 16 · 그림자 e1 · 2026-11-02. 옛 모서리 20).
+  card: { ...CardStyles.list, gap: Space.sm },
   title: { fontSize: 18, fontWeight: '800', color: InkColors.ink, letterSpacing: -0.3 },
   titleEdit: {
     borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm,
@@ -166,26 +162,27 @@ const cardStyles = StyleSheet.create({
   },
 
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, marginTop: 2 },
+  // 버튼 = 주 버튼 틀(52 · 모서리 16 · 16/800 · 2026-11-02). 보조는 내용 폭 흰 면, 저장은 나머지 폭 노랑.
   editBtn: {
-    minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.md, borderRadius: Radius.sm,
+    ...ButtonStyles.primary,
     borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
   },
-  editText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
+  editText: { ...ButtonTextStyles.primary, color: InkColors.ink2 },
   okBtn: {
-    flex: 1, minWidth: 112, minHeight: 48, borderRadius: Radius.sm,
-    alignItems: 'center', justifyContent: 'center', backgroundColor: BrandColors.yellow,
+    ...ButtonStyles.primary,
+    flex: 1, minWidth: 112, backgroundColor: BrandColors.yellow,
   },
   // 옐로 면 위 글자는 검정이다(흰 글자는 대비가 안 나온다).
-  okText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  okText: { ...ButtonTextStyles.primary, color: InkColors.ink },
 
   // 정도 기준 게이지(노란 바)
   gaugeBox: { gap: 6, paddingVertical: 2 },
   gaugeHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  gaugeLabel: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
-  gaugeVal: { fontSize: 14, fontWeight: '900', color: InkColors.ink },
+  gaugeLabel: { ...Type.tag, fontWeight: '800', color: InkColors.ink2 },
+  gaugeVal: { ...Type.body, fontWeight: '900' },
   gaugeTrack: { height: 10, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, position: 'relative', justifyContent: 'center' },
   gaugeFill: { height: '100%', borderRadius: Radius.pill, backgroundColor: BrandColors.yellow },
   gaugeKnob: { position: 'absolute', top: -4, width: 18, height: 18, borderRadius: Radius.pill, backgroundColor: InkColors.ink, borderWidth: 3, borderColor: BrandColors.yellow, marginLeft: -9 },
   gaugeEnds: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
-  gaugeEndTxt: { fontSize: 11.5, fontWeight: '700', color: InkColors.ink3 },
+  gaugeEndTxt: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
 });

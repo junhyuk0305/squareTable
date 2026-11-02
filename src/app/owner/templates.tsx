@@ -1,11 +1,8 @@
-import { StyleSheet } from 'react-native';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { TemplateLibrary } from '@/components/owner/TemplateLibrary';
-import { RoleTabBar } from '@/components/RoleTabBar';
-import { InkColors } from '@/lib/theme/colors';
+import { Screen } from '@/components/Screen';
 
 /**
  * '노하우 템플릿 둘러보기' — 업종 표준 템플릿을 검색하고 내 노하우로 가져오는 백-가능 서브화면.
@@ -14,16 +11,11 @@ import { InkColors } from '@/lib/theme/colors';
  */
 export default function OwnerTemplatesScreen() {
   return (
-    <SafeAreaView style={styles.safe} edges={[]}>
-      <ScreenTitleHeader title="노하우 템플릿" backFallback />
+    // 바탕·탭바 = Screen. 목록이 자기 스크롤을 가져 scroll={false}.
+    <Screen header={<ScreenTitleHeader title="노하우 템플릿" backFallback />} tabBar="owner" scroll={false}>
       <KeyboardShift>
         <TemplateLibrary />
       </KeyboardShift>
-      <RoleTabBar role="owner" />
-    </SafeAreaView>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-});

@@ -30,7 +30,8 @@ import { buildDirectUq, buildPlaybookEntryFromSquare } from '@/lib/utils/buildEn
 import { genId } from '@/lib/utils/id';
 import { authStorage } from '@/lib/storage/authStorage';
 import { BottomSheet } from '@/components/BottomSheet';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { Type } from '@/lib/theme/type';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import type { PlaybookEntry, SquareBlock } from '@/types';
@@ -547,29 +548,29 @@ export function QuizEditorSheet({
 }
 
 const est = StyleSheet.create({
-  lead: { fontSize: 15, fontWeight: '700', color: InkColors.ink, marginTop: Space.xs, lineHeight: 21 },
-  note: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', marginTop: Space.xs },
+  lead: { ...Type.body, fontWeight: '700', marginTop: Space.xs, lineHeight: 21 },
+  note: { ...Type.desc, fontWeight: '600', marginTop: Space.xs },
 
   formatBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.sm,
     backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, paddingHorizontal: Space.md, paddingVertical: Space.sm, minHeight: 44,
   },
-  formatText: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  formatText: { ...Type.body, flex: 1, fontWeight: '800' },
   formatChange: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, textDecorationLine: 'underline' },
 
   linkBox: {
     marginTop: Space.lg, gap: Space.sm, backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.md,
   },
-  linkText: { fontSize: 13, color: InkColors.ink2, fontWeight: '600', lineHeight: 19 },
-  restored: { fontSize: 13, color: InkColors.ink3, fontWeight: '600', lineHeight: 19, marginBottom: Space.xs },
+  linkText: { ...Type.desc, fontWeight: '600' },
+  restored: { ...Type.desc, fontWeight: '600', marginBottom: Space.xs },
 
   draftCard: {
     backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line,
     padding: Space.lg, gap: Space.xs, marginTop: Space.sm,
   },
-  draftFormat: { fontSize: 12, fontWeight: '800', color: InkColors.ink3 },
-  draftAsk: { fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
-  draftAnswer: { fontSize: 15, fontWeight: '700', color: BrandColors.goodText, lineHeight: 21 },
-  draftExplain: { fontSize: 13, color: InkColors.ink2, lineHeight: 19 },
+  draftFormat: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
+  draftAsk: { ...Type.body, fontWeight: '800', lineHeight: 22 },
+  draftAnswer: { ...Type.body, fontWeight: '700', color: BrandColors.goodText, lineHeight: 21 },
+  draftExplain: Type.desc,
   draftActions: { flexDirection: 'row', gap: Space.sm, marginTop: Space.xs },
 });

@@ -13,8 +13,9 @@
 import { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
 import { Space } from '@/lib/theme/layout';
 import type { QuizResponse } from '@/lib/quiz/types';
 
@@ -234,28 +235,23 @@ function readItem(item: AttemptItemLike): ItemView {
 }
 
 /** 문항 목록을 담는 흰 카드 — 두 화면이 같은 상자를 쓴다. */
-export const attemptListStyle = {
-  backgroundColor: InkColors.bg,
-  borderRadius: Radius.md,
-  borderWidth: 1,
-  borderColor: InkColors.line,
-  paddingHorizontal: Space.lg,
-} as const;
+/** 모양 = 행 목록 카드(CardStyles.rows · 모서리 16 · 좌우 16 · 그림자 e1 · 2026-11-02). */
+export const attemptListStyle = CardStyles.rows;
 
 const s = StyleSheet.create({
   block: { paddingVertical: Space.md, gap: Space.xs },
   blockTop: { borderTopWidth: 1, borderTopColor: InkColors.line },
   blockHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  blockNo: { fontSize: 13, fontWeight: '800', color: InkColors.ink3 },
+  blockNo: { fontSize: 13, fontWeight: '800', color: TextColor.secondary },
   blockMark: { fontSize: 13, fontWeight: '800' },
-  ask: { fontSize: 15, lineHeight: 22, fontWeight: '700', color: InkColors.ink },
+  ask: { ...Type.body, lineHeight: 22, fontWeight: '700' },
 
   lines: { gap: Space.xs, marginTop: Space.xs },
   line: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm, minHeight: 24 },
-  lineText: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 22, color: InkColors.ink2, fontWeight: '600' },
+  lineText: { ...Type.body, flex: 1, minWidth: 0, lineHeight: 22, color: InkColors.ink2, fontWeight: '600' },
   lineAnswer: { color: InkColors.ink, fontWeight: '800' },
-  lineTag: { fontSize: 12, fontWeight: '800', paddingTop: 2 },
+  lineTag: { ...Type.tag, fontWeight: '800', paddingTop: 2 },
 
-  pairText: { fontSize: 15, lineHeight: 22, color: InkColors.ink, fontWeight: '600' },
-  pairLabel: { fontWeight: '800', color: InkColors.ink3 },
+  pairText: { ...Type.body, lineHeight: 22, fontWeight: '600' },
+  pairLabel: { fontWeight: '800', color: TextColor.secondary },
 });

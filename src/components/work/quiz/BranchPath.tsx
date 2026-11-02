@@ -141,7 +141,7 @@ const st = StyleSheet.create({
   pastAsk: { fontSize: 15, fontWeight: '700', color: InkColors.ink2, lineHeight: 22 },
   pastAnswer: { fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
   result: {
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.ink,
     backgroundColor: InkColors.bg,

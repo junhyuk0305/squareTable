@@ -17,9 +17,11 @@ import { ConsentChecklist } from '@/components/ConsentChecklist';
 import { allConsented, consentPayload, UNDER_14_TEXT, type ConsentChecked } from '@/lib/config/consent';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
-import { BrandColors, InkColors } from '@/lib/theme/colors';
-import { Space } from '@/lib/theme/layout';
+import { BrandColors, InkColors, Surface, TextColor } from '@/lib/theme/colors';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { ChipStyles } from '@/lib/theme/chip';
 import type { Role } from '@/types';
 
@@ -345,7 +347,7 @@ function CompleteProfileForm() {
 
         <Appear delay={stagger(9)}>
         <Pressable onPress={submit} disabled={busy} style={({ pressed }) => [styles.primary, busy && styles.primaryDisabled, pressed && !busy && { opacity: 0.88 }]}>
-          {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{role === 'owner' ? (storeRetry ? '매장 다시 만들기' : '매장 만들고 시작하기') : '저장하고 시작하기'}</Text>}
+          {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>{role === 'owner' ? (storeRetry ? '매장 다시 만들기' : '매장 만들고 시작하기') : '저장하고 시작하기'}</Text>}
         </Pressable>
         </Appear>
 
@@ -398,48 +400,52 @@ function Field({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: 24, gap: 14 },
+  // 탭바 없는 하위 화면 — 아래 안전 영역은 SafeAreaView(bottom)가 든다. 바탕·첫 여백·좌우는 화면 틀 값.
+  //   입력칸 사이(14)는 폼 한 묶음 안의 간격이라 그대로 둔다.
+  safe: { flex: 1, backgroundColor: Surface.screen },
+  scroll: { ...screenScrollStyle, gap: 14 },
   intro: { gap: 4, marginBottom: 2 },
-  introTitle: { fontSize: 20, fontWeight: '900', color: InkColors.ink },
-  introSub: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
-  roleQ: { fontSize: 16, fontWeight: '800', color: InkColors.ink, marginBottom: 2 },
+  introTitle: { ...Type.title },
+  introSub: { ...Type.desc },
+  roleQ: { ...Type.section, marginBottom: 2 },
   roleRow: { flexDirection: 'row', gap: 12, marginBottom: 4 },
-  roleCard: { flex: 1, backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: InkColors.line, borderRadius: 16, padding: 16, gap: 4 },
+  roleCard: { flex: 1, backgroundColor: Surface.card, borderWidth: 2, borderColor: InkColors.line, borderRadius: Radius.md, padding: 16, gap: 4 },
   roleCardOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB', ...Elevation.e1 },
   // 그림 이모지 금지(워딩 §2.3) — Ionicons로 교체. 아이콘도 Text 기반이라 글자 크기 설정에 함께 반응한다.
   roleIcon: { marginBottom: 4 },
-  roleLabel: { fontSize: 16, fontWeight: '800', color: InkColors.ink2, marginTop: 4 },
+  roleLabel: { fontSize: 16, fontWeight: '800', color: TextColor.secondary, marginTop: 4 },
   roleLabelOn: { color: BrandColors.brand },
-  roleDesc: { fontSize: 12, color: InkColors.ink3, lineHeight: 17 },
+  roleDesc: { ...Type.desc },
   roleCheck: { position: 'absolute', top: 10, right: 10, width: 20, height: 20, borderRadius: 10, backgroundColor: BrandColors.brand, alignItems: 'center', justifyContent: 'center' },
   roleCheckMark: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
   field: { gap: 6 },
-  label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+  label: { fontSize: 13, fontWeight: '700', color: TextColor.secondary },
   req: { color: BrandColors.accentText, fontWeight: '900' },
-  input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: InkColors.ink, backgroundColor: '#FFFFFF' },
-  hint: { fontSize: 12, fontWeight: '600', marginTop: -2 },
+  // 카드 없이 회색 바탕(Surface.screen)에 바로 놓인 칸 — 흰 면 + 진한 선(lineStrong · 2026-11-02 결정).
+  input: { borderWidth: 1, borderColor: InkColors.lineStrong, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, fontSize: Type.body.fontSize, color: InkColors.ink, backgroundColor: Surface.input },
+  hint: { ...Type.tag, fontWeight: '600', marginTop: -2 },
   hintOk: { color: BrandColors.goodText },
-  hintBad: { color: InkColors.ink3 },
+  // 조건 안내 = 읽는 글자라 secondary(ink3 는 아이콘·비활성만).
+  hintBad: { color: TextColor.secondary },
   otpRow: { flexDirection: 'row', gap: Space.sm },
   otpInput: { flex: 1 },
   otpBtn: { minWidth: 116, paddingHorizontal: Space.md, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   otpBtnDim: { opacity: 0.5 },
-  otpBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
-  otpMsg: { fontSize: 12, fontWeight: '600', color: BrandColors.accentText, marginTop: -2 },
+  otpBtnText: { fontSize: Type.body.fontSize, fontWeight: '800', color: TextColor.secondary },
+  otpMsg: { ...Type.tag, fontWeight: '600', color: BrandColors.accentText, marginTop: -2 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   chip: ChipStyles.chip,
   chipOn: ChipStyles.chipOn,
   chipText: ChipStyles.text,
   chipTextOn: ChipStyles.textOn,
   joinNote: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm, backgroundColor: BrandColors.brandSoft, borderRadius: Radius.md, padding: 14 },
-  joinNoteText: { flex: 1, fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
+  joinNoteText: { ...Type.desc, flex: 1 },
   joinNoteStrong: { fontWeight: '800', color: InkColors.ink },
-  err: { color: BrandColors.accentText, fontSize: 15, fontWeight: '700', lineHeight: 22 },
-  primary: { marginTop: Space.sm, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center' },
+  err: { color: BrandColors.accentText, fontSize: Type.body.fontSize, fontWeight: '700', lineHeight: 22 },
+  primary: { ...ButtonStyles.primary, marginTop: Space.sm, backgroundColor: BrandColors.brand },
   primaryDisabled: { opacity: 0.6 },
-  primaryText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22, fontWeight: '800' },
+  primaryText: { ...ButtonTextStyles.primary, lineHeight: 22, color: InkColors.bubbleText },
   logoutRow: { alignItems: 'center', paddingVertical: 10 },
-  logoutText: { fontSize: 14, lineHeight: 20, color: InkColors.ink3 },
+  logoutText: { fontSize: Type.body.fontSize, lineHeight: 20, color: TextColor.secondary },
   logoutStrong: { color: InkColors.ink, fontWeight: '800' },
 });

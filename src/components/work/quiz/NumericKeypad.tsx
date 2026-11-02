@@ -4,6 +4,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 import { NUMERIC_MAX } from '@/lib/quiz/formats/numericEntry';
 import { qs } from './quizStyles';
 import type { QuizRendererProps } from './types';
@@ -101,7 +102,7 @@ export function NumericKeypad({ payload, disabled, result, onAnswer }: QuizRende
 
 const st = StyleSheet.create({
   display: {
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     backgroundColor: InkColors.bgSoft,
     paddingHorizontal: Space.lg,
     paddingVertical: Space.xl,
@@ -109,7 +110,7 @@ const st = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  value: { fontSize: 34, fontWeight: '900', color: InkColors.ink, lineHeight: 44, letterSpacing: 2 },
+  value: { ...Type.numHero, color: InkColors.ink, letterSpacing: 2 },
   answerLine: { fontSize: 15, fontWeight: '800', color: BrandColors.badText, textAlign: 'center' },
   keypad: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   key: {

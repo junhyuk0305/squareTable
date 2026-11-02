@@ -14,8 +14,9 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { canManage } from '@/lib/utils/roles';
 import { knowhowSourceLabel } from '@/lib/utils/knowhowSource';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
 
 import type { ChatQuery, PlaybookEntry } from '@/types';
 
@@ -277,7 +278,7 @@ const turnStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: InkColors.line,
   },
-  smalltalkText: { fontSize: 14, color: InkColors.ink, fontWeight: '600', lineHeight: 21 },
+  smalltalkText: { ...Type.body, fontWeight: '600', lineHeight: 21 },
   // 조건 커버리지 partial 고지 — 미커버 조건 한 문장 + 사장님께 물어보기 1탭.
   caveatNote: {
     marginTop: 8,
@@ -290,7 +291,7 @@ const turnStyles = StyleSheet.create({
     gap: 8,
   },
   caveatRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
-  caveatText: { flex: 1, fontSize: 12, color: InkColors.ink2, fontWeight: '600', lineHeight: 17 },
+  caveatText: { ...Type.desc, flex: 1, fontWeight: '600' },
   caveatBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -303,9 +304,9 @@ const turnStyles = StyleSheet.create({
     borderColor: InkColors.line,
     backgroundColor: InkColors.bg,
   },
-  caveatBtnText: { fontSize: 12, fontWeight: '700', color: InkColors.ink },
+  caveatBtnText: { ...Type.tag, fontWeight: '700', color: InkColors.ink },
   caveatDone: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  caveatDoneText: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
+  caveatDoneText: { ...Type.desc, fontWeight: '600' },
   degradedNote: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -318,7 +319,7 @@ const turnStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: InkColors.line,
   },
-  degradedText: { flex: 1, fontSize: 12, color: InkColors.ink2, fontWeight: '600', lineHeight: 17 },
+  degradedText: { ...Type.desc, flex: 1, fontWeight: '600' },
   composedNote: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -331,10 +332,10 @@ const turnStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: InkColors.line,
   },
-  composedText: { flex: 1, fontSize: 12, color: InkColors.ink2, fontWeight: '600', lineHeight: 17 },
+  composedText: { ...Type.desc, flex: 1, fontWeight: '600' },
   // generated 다중 참고 출처 — SquareCard 아래 "참고한 노하우 N개: 칩 칩 칩".
   srcChips: { marginTop: 8, gap: 6 },
-  srcChipsLabel: { fontSize: 11, fontWeight: '800', color: InkColors.ink3, paddingLeft: 2 },
+  srcChipsLabel: { ...Type.micro, fontWeight: '800', color: TextColor.secondary, paddingLeft: 2 },
   srcChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   srcChip: {
     flexDirection: 'row',
@@ -348,7 +349,7 @@ const turnStyles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 10,
   },
-  srcChipText: { fontSize: 11.5, fontWeight: '700', color: InkColors.ink2, flexShrink: 1 },
+  srcChipText: { ...Type.tag, fontWeight: '700', color: InkColors.ink2, flexShrink: 1 },
   srcChipGone: { opacity: 0.6, backgroundColor: InkColors.paper },
   improveLink: {
     flexDirection: 'row',
@@ -363,5 +364,5 @@ const turnStyles = StyleSheet.create({
     borderColor: InkColors.line,
     backgroundColor: InkColors.bgSoft,
   },
-  improveText: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
+  improveText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
 });

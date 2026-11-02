@@ -16,9 +16,12 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { fetchMyPreviousUnits, fetchReopenKeepsRecords, rpcReopenStore, type PreviousUnitRow } from '@/lib/db';
 import { reopenStoreMessage } from '@/lib/account/storeCopy';
-import { InkColors } from '@/lib/theme/colors';
+import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles } from '@/lib/theme/button';
 import { industryLabel } from '@/lib/config/industry';
 
 function fmtDay(iso: string): string {
@@ -137,30 +140,18 @@ export default function PreviousStores() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: Space.gutter, gap: Space.md },
-  lead: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, marginBottom: Space.xs },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.lg,
-    gap: Space.md,
-  },
+  // 화면 바탕(Surface.screen). 탭바가 없는 화면이라 아래 안전 영역을 SafeAreaView(bottom)가 그대로 든다.
+  safe: { flex: 1, backgroundColor: Surface.screen },
+  // 첫 여백·좌우 = screenScrollStyle. 같은 종류 카드가 이어지는 목록이라 사이는 섹션 간격이 아니라 12.
+  scroll: { ...screenScrollStyle, gap: Space.md },
+  lead: { ...Type.desc, marginBottom: Space.xs },
+  card: { ...CardStyles.list, gap: Space.md },
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
   icon: { width: 40, height: 40, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
   name: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
-  meta: { fontSize: 13, color: InkColors.ink3, marginTop: 2 },
-  body: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
-  ghost: {
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    backgroundColor: InkColors.bgSoft,
-  },
-  ghostText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
+  meta: { fontSize: 13, color: TextColor.secondary, marginTop: 2 },
+  body: { ...Type.body, lineHeight: 22, color: TextColor.secondary },
+  // 카드 안 보조 버튼 = 주 버튼 모양(52 · 모서리 16) + 회색 면·선.
+  ghost: { ...ButtonStyles.primary, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bgSoft },
+  ghostText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
 });

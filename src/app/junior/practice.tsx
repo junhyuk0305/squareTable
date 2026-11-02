@@ -9,10 +9,11 @@ import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { StepProgress } from '@/components/blocks/StepProgress';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
-import { ButtonStyles } from '@/lib/theme/button';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
+import { Layout, Space } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
 import type { PlaybookEntry } from '@/types';
 
 /**
@@ -269,28 +270,25 @@ export default function JuniorTermPracticeScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.bg },
-  body: { flex: 1, paddingHorizontal: Space.gutter, paddingTop: Space.lg, gap: Space.lg },
+  // 화면 바탕(Surface.screen). 스크롤이 없는 몰입형이라 여백만 화면 틀 값(Layout)을 그대로 읽는다.
+  safe: { flex: 1, backgroundColor: Surface.screen },
+  body: { flex: 1, paddingHorizontal: Layout.screenX, paddingTop: Layout.screenTop, gap: Layout.sectionGap },
 
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingHorizontal: Space.lg,
+    ...CardStyles.list,
     paddingVertical: Space.xl,
     // 앞뒤 내용 길이가 달라도 카드가 튀지 않게 바닥을 잡는다. 글자 배율이 올라가면 늘어나야 하므로 minHeight.
     minHeight: 180,
     alignItems: 'center',
     justifyContent: 'center',
     gap: Space.sm,
-    ...Elevation.e2,
   },
   clue: { fontSize: 17, lineHeight: 25, fontWeight: '800', color: InkColors.ink, textAlign: 'center' },
-  label: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, textAlign: 'center' },
-  hint: { fontSize: 12.5, color: InkColors.ink3, marginTop: Space.sm },
-  backClue: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, textAlign: 'center' },
-  answer: { fontSize: 26, lineHeight: 34, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
+  label: { ...Type.body, lineHeight: 22, color: TextColor.secondary, textAlign: 'center' },
+  hint: { ...Type.desc, marginTop: Space.sm },
+  backClue: { ...Type.body, lineHeight: 22, color: TextColor.secondary, textAlign: 'center' },
+  // 답 = 대표 숫자(Type.numHero 32/40/900).
+  answer: { ...Type.numHero, color: InkColors.ink, textAlign: 'center' },
 
   selfRow: { flexDirection: 'row', gap: Space.sm },
   selfBtn: { flex: 1 },
@@ -300,28 +298,18 @@ const styles = StyleSheet.create({
     ...ButtonStyles.primary,
     backgroundColor: BrandColors.brand,
   },
-  primaryText: { fontSize: 15, fontWeight: '800', color: InkColors.bubbleText },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  // 보조 버튼 — 주 버튼과 같은 모양(52 · 모서리 16)에 흰 면 + 선.
   softBtn: {
+    ...ButtonStyles.primary,
     backgroundColor: InkColors.bg,
     borderWidth: 1,
     borderColor: InkColors.line,
-    borderRadius: Radius.md,
-    paddingVertical: Space.lg,
-    alignItems: 'center',
   },
-  softText: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
+  softText: { ...ButtonTextStyles.primary, color: TextColor.secondary },
   pressed: { opacity: 0.85 },
 
-  doneCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.lg,
-    gap: Space.xs,
-    ...Elevation.e2,
-  },
-  doneTitle: { fontSize: 17, fontWeight: '900', color: InkColors.ink },
-  doneBody: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
+  doneCard: { ...CardStyles.list, gap: Space.xs },
+  doneTitle: { ...Type.title },
+  doneBody: { ...Type.desc },
 });

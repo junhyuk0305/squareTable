@@ -2,8 +2,10 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { getSectionMeta } from '@/lib/utils/category';
-import { InkColors } from '@/lib/theme/colors';
+import { InkColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { ButtonStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 
 import type { PlaybookEntry } from '@/types';
 
@@ -77,7 +79,7 @@ const styles = StyleSheet.create({
   },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   title: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
-  subtitle: { fontSize: 15, color: InkColors.ink2, fontWeight: '500' },
+  subtitle: { ...Type.desc, fontWeight: '500' },
 
   list: { gap: 8 },
   item: {
@@ -92,19 +94,18 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     paddingHorizontal: 12,
   },
-  itemTitle: { fontSize: 14.5, fontWeight: '700', color: InkColors.ink },
-  itemPreview: { fontSize: 12.5, color: InkColors.ink3 },
+  itemTitle: { ...Type.body, fontWeight: '700' },
+  itemPreview: { ...Type.tag, color: TextColor.secondary },
 
   divider: { height: 1, backgroundColor: InkColors.line },
 
+  // 작은 버튼(48 알약)을 카드 폭으로. 글자는 문구가 길어 13 을 지킨다(15 면 좁은 폰에서 두 줄).
   registerBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 11,
-    borderRadius: Radius.pill,
+    ...ButtonStyles.small,
+    alignSelf: 'stretch',
     borderWidth: 1,
     borderColor: InkColors.line,
     backgroundColor: InkColors.bg,
   },
-  registerText: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink2 },
+  registerText: { fontSize: Type.desc.fontSize, fontWeight: '800', color: InkColors.ink2 },
 });

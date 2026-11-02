@@ -4,6 +4,7 @@ import { View, Text, Pressable, Animated, AccessibilityInfo, PanResponder, Style
 import { USE_NATIVE_DRIVER } from '@/lib/anim';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 /** 링 지름·두께 — 도형 자체의 치수라 간격 토큰(Space) 대상이 아니다. */
 const RING_SIZE = 64;
@@ -289,11 +290,12 @@ const styles = StyleSheet.create({
   ringCenter: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   textStack: { alignSelf: 'stretch', alignItems: 'center', gap: Space.xs },
   centerText: { textAlign: 'center' },
-  count: { fontSize: 26, lineHeight: 32, fontWeight: '900', color: InkColors.ink, letterSpacing: -1 },
-  countHero: { fontSize: 34, lineHeight: 42, fontWeight: '900', color: InkColors.ink, letterSpacing: -1 },
-  countRight: { fontSize: 25, lineHeight: 31, fontWeight: '900', color: InkColors.ink, letterSpacing: -1 },
+  // 링 숫자 = 대표 숫자(32/40/900). 26·34·25 로 갈라져 있었다(2026-11-02 2차).
+  count: { ...Type.numHero, color: InkColors.ink },
+  countHero: { ...Type.numHero, color: InkColors.ink },
+  countRight: { ...Type.numHero, color: InkColors.ink },
   label: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: InkColors.ink },
-  sub: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: InkColors.ink2 },
+  sub: { ...Type.desc, fontWeight: '600' },
   // 우측 슬롯 — 세로 가운데. 두 면은 절대 배치로 겹치고 minHeight 가 긴 면을 받는다.
   slot: { flex: 1, minWidth: 0, justifyContent: 'center' },
   // 페이지 슬라이드 — viewport 가 폭을 재고 자르며, track(가로 행)이 두 페이지를 나란히 든다.
@@ -301,7 +303,7 @@ const styles = StyleSheet.create({
   pages: { flexDirection: 'row', alignItems: 'stretch' },
   page: { flexShrink: 0 },
   capBox: { marginTop: Space.lg, paddingTop: Space.md, borderTopWidth: 1, borderTopColor: InkColors.line },
-  capText: { fontSize: 13, lineHeight: 19, color: InkColors.ink2 },
+  capText: { ...Type.desc },
   // 위 여백 0 — 캡션과 점 사이·점 아래(48dp 상자의 남는 높이)가 합쳐져 너무 넓었다(2026-09-03, 절반으로).
   dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Space.xs + 1, minHeight: 48 },
   dotsPressed: { opacity: 0.6 },

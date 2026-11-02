@@ -6,10 +6,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { BrandColors, InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
+import { SegmentTabs } from '@/components/SegmentTabs';
 import { Appear } from '@/components/Appear';
 import { Wordmark } from '@/components/Wordmark';
 import { PasswordInput } from '@/components/PasswordInput';
@@ -107,14 +111,14 @@ export default function LoginScreen() {
 
         <Appear delay={60}>
         <View style={styles.card}>
+          {/* 데모 전용 역할 고르기 — 공용 탭 스위처(옛 복제본 회색 트랙). */}
           {!HAS_SUPABASE && (
-            <View style={styles.seg}>
-              {(['owner', 'junior'] as Role[]).map((r) => (
-                <Pressable key={r} onPress={() => setRole(r)} style={[styles.segBtn, role === r && styles.segBtnOn]}>
-                  <Text style={[styles.segText, role === r && styles.segTextOn]}>{r === 'owner' ? '사장님' : '직원'}</Text>
-                </Pressable>
-              ))}
-            </View>
+            <SegmentTabs
+              items={[{ key: 'owner', label: '사장님' }, { key: 'junior', label: '직원' }]}
+              value={role}
+              onChange={(k) => setRole(k as Role)}
+              style={styles.segTabs}
+            />
           )}
 
           <Text style={styles.label}>이메일</Text>
@@ -143,7 +147,7 @@ export default function LoginScreen() {
           />
 
           <Pressable disabled={busy} onPress={login} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}>
-            {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>로그인</Text>}
+            {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>로그인</Text>}
           </Pressable>
 
           {/* 안내/실패 문구 — 로그인 버튼 바로 아래. 실패는 빨강으로 시선 유도. */}
@@ -187,62 +191,42 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
+  safe: { flex: 1, backgroundColor: Surface.screen },
   topbar: { height: 48, justifyContent: 'center' },
-  scroll: { flexGrow: 1, padding: Space.xl, paddingTop: Space.xs, justifyContent: 'center', gap: 28 },
+  // 좌우·아래 = 화면 틀 값. 위는 웹 뒤로가기 줄 바로 아래라 좁게, 세로 가운데 정렬·블록 사이 28 은 이 화면 고유.
+  scroll: { ...screenScrollStyle, flexGrow: 1, paddingTop: Space.xs, justifyContent: 'center', gap: 28 },
   header: { alignItems: 'center', gap: Space.md },
-  tagline: { fontSize: 13, lineHeight: 19, color: InkColors.ink3, textAlign: 'center' },
+  tagline: { ...Type.desc, textAlign: 'center' },
 
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.gutter,
-    gap: Space.sm,
-  },
-  seg: { flexDirection: 'row', backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.xs, marginBottom: 6 },
-  segBtn: { flex: 1, paddingVertical: 10, borderRadius: Radius.sm, alignItems: 'center' },
-  segBtnOn: { backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-  segText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: InkColors.ink3 },
-  segTextOn: { color: InkColors.ink },
+  card: { ...CardStyles.list, gap: Space.sm },
+  // 공용 SegmentTabs 의 바깥 여백(16·아래 8)을 끈다. 변마다 적는다(네이티브는 개별 변이 줄임 margin 보다 우선).
+  segTabs: { marginTop: 0, marginHorizontal: 0, marginBottom: Space.xs },
 
-  label: { fontSize: 13, lineHeight: 19, fontWeight: '700', color: InkColors.ink2, marginTop: Space.xs },
+  label: { fontSize: 13, lineHeight: 19, fontWeight: '700', color: TextColor.secondary, marginTop: Space.xs },
   input: {
+    ...Type.body,
     borderWidth: 1,
     borderColor: InkColors.line,
     borderRadius: Radius.md,
     paddingHorizontal: 14,
     paddingVertical: 13,
-    fontSize: 15,
-    color: InkColors.ink,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Surface.input,
   },
-  primary: {
-    marginTop: Space.md,
-    backgroundColor: BrandColors.brand,
-    paddingVertical: 16,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-  },
-  primaryText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22, fontWeight: '800' },
-  msg: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, textAlign: 'center', marginTop: 2 },
+  primary: { ...ButtonStyles.primary, marginTop: Space.md, backgroundColor: BrandColors.brand },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  msg: { fontSize: 15, lineHeight: 22, color: TextColor.secondary, textAlign: 'center', marginTop: 2 },
   msgErr: { color: BrandColors.accentText, fontWeight: '700' },
-  demoNote: { fontSize: 12, lineHeight: 18, color: InkColors.ink3, textAlign: 'center' },
+  demoNote: { ...Type.desc, textAlign: 'center' },
   forgotRow: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', paddingHorizontal: Space.sm },
-  forgotText: { fontSize: 13, fontWeight: '600', color: InkColors.ink2, textDecorationLine: 'underline' },
-  googleHint: { fontSize: 12, lineHeight: 18, color: InkColors.ink3, textAlign: 'center' },
+  forgotText: { fontSize: 13, fontWeight: '600', color: TextColor.secondary, textDecorationLine: 'underline' },
+  googleHint: { ...Type.desc, textAlign: 'center' },
   signupBlock: { alignItems: 'center', gap: Space.md },
-  signupLead: { fontSize: 13, lineHeight: 19, color: InkColors.ink3 },
+  signupLead: { ...Type.desc },
   signupBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'stretch',
-    paddingVertical: 15,
-    borderRadius: Radius.md,
+    ...ButtonStyles.primary,
     borderWidth: 1.5,
     borderColor: InkColors.ink,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Surface.card,
   },
-  signupBtnText: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
+  signupBtnText: { ...ButtonTextStyles.primary, color: InkColors.ink },
 });

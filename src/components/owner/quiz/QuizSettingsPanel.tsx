@@ -32,9 +32,11 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { MiniCalendar } from '@/components/blocks/MiniCalendar';
 import { QuizDeployPanel } from '@/components/owner/quiz/QuizDeployPanel';
 import { PrimaryButton, GhostButton, qst } from '@/components/owner/quiz/kit';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
 import type { QuizAssignment, TrainingCourse } from '@/lib/quiz/types';
 
 /** 사장이 직접 정한 고정 주기 — 만들기(B5)·상세와 같은 값이어야 화면끼리 어긋나지 않는다. */
@@ -259,7 +261,7 @@ export function QuizSettingsPanel({
 
       {/* ── 배포 ─────────────────────────────────────────────────────────── */}
       <View style={s.labeled}>
-      <SectionLabel icon="send-outline" title="배포" />
+      <SectionLabel flush icon="send-outline" title="배포" />
       {audience == null ? (
         <View style={s.card}>
           <Text style={qst.fieldLabel}>누구에게 낼 퀴즈예요?</Text>
@@ -350,36 +352,31 @@ export function QuizSettingsPanel({
 
 const s = StyleSheet.create({
   wrap: { gap: Space.md },
-  labeled: { gap: Space.sm },
-  card: {
-    gap: Space.xs,
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.md,
-    ...Elevation.e1,
-  },
+  // 배포 섹션 — 위 카드와의 사이 = wrap 12 + 8 = 20(섹션 사이 · 2026-11-02). 제목 ↔ 카드 8(SectionLabel flush).
+  labeled: { gap: Space.sm, marginTop: Space.sm },
+  // 카드 = CardStyles.list(모서리 16 · 안쪽 16 · 그림자 e1 · 2026-11-02).
+  card: { ...CardStyles.list, gap: Space.xs },
   people: { gap: Space.xs, marginTop: Space.xs },
   person: {
     flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48,
     paddingHorizontal: Space.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
     backgroundColor: InkColors.bg,
   },
-  personOn: { borderColor: InkColors.ink2 },
+  // 고른 사람 = 브랜드 노랑 면(글자 ink 그대로 · 2026-11-02 사용자 요청). 안 고른 사람 = 흰 면 + 선(person).
+  personOn: { backgroundColor: BrandColors.yellow, borderColor: BrandColors.yellow },
   personLocked: { backgroundColor: InkColors.bgSoft },
   check: {
     width: 22, height: 22, borderRadius: Radius.sm, borderWidth: 1.5, borderColor: InkColors.line,
     alignItems: 'center', justifyContent: 'center', backgroundColor: InkColors.paper,
   },
   checkOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  personName: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '700', color: InkColors.ink },
-  lockText: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
-  emptyText: { fontSize: 14, fontWeight: '600', color: InkColors.ink3, paddingVertical: Space.sm },
-  warnText: { fontSize: 12.5, fontWeight: '700', color: BrandColors.warnText, marginTop: Space.xs },
+  personName: { ...Type.body, flex: 1, minWidth: 0, fontWeight: '700' },
+  lockText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
+  emptyText: { ...Type.desc, fontWeight: '600', paddingVertical: Space.sm },
+  warnText: { ...Type.desc, fontWeight: '700', color: BrandColors.warnText, marginTop: Space.xs },
   remind: { marginTop: Space.sm },
   foot: { paddingTop: Space.xs },
   // 만들기 5단계의 textAction 과 같은 모양(달력 아래 한 줄 글자 버튼 · 48dp 하한).
   textAction: { minHeight: 48, justifyContent: 'center', alignSelf: 'flex-start' },
-  textActionText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
+  textActionText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
 });

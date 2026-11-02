@@ -4,6 +4,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 import { qs } from './quizStyles';
 import type { QuizRendererProps } from './types';
 
@@ -76,7 +77,7 @@ export function FillCount({ payload, disabled, result, onAnswer }: QuizRendererP
 
 const st = StyleSheet.create({
   gauge: {
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     backgroundColor: InkColors.bgSoft,
     paddingHorizontal: Space.lg,
     paddingVertical: Space.xl,
@@ -85,7 +86,7 @@ const st = StyleSheet.create({
     justifyContent: 'center',
     gap: Space.md,
   },
-  count: { fontSize: 34, fontWeight: '900', color: InkColors.ink, lineHeight: 44 },
+  count: { ...Type.numHero, color: InkColors.ink },
   blocks: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: Space.xs, minHeight: 18 },
   block: { width: 18, height: 18, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowDeep },
   answerLine: { fontSize: 15, fontWeight: '800', textAlign: 'center' },

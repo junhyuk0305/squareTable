@@ -41,10 +41,9 @@ export const styles = StyleSheet.create({
     letterSpacing: -0.3,
     zIndex: 1,
   },
+  // 제목 아래 설명 = Type.desc(13/19 secondary · 2026-11-02 2차. 옛 14/20).
   emptySub: {
-    fontSize: 14,
-    color: TextColor.secondary, // 읽는 회색(2026-11-02) — ink3 는 아이콘·비활성·placeholder 에만
-    lineHeight: 20,
+    ...Type.desc,
     marginBottom: 8,
   },
   // 근거 한 줄 — 추천 칩이 어디서 나왔는지("우리 매장 노하우 n개")를 칩 바로 위에 붙인다.
@@ -71,8 +70,8 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   suggestText: {
+    ...Type.body,
     flex: 1,
-    fontSize: 15,
     color: InkColors.ink2,
     fontWeight: '600',
   },
@@ -118,16 +117,15 @@ export const styles = StyleSheet.create({
   },
   errorText: { flex: 1, fontSize: 13, color: BrandColors.accentText, fontWeight: '600' },
   retryBtn: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: Radius.pill, backgroundColor: BrandColors.accentSolid },
-  retryText: { fontSize: 12, fontWeight: '800', color: InkColors.bubbleText },
-  errorClose: { fontSize: 14, fontWeight: '800', color: BrandColors.accentText },
+  retryText: { ...Type.tag, fontWeight: '800', color: InkColors.bubbleText },
+  errorClose: { fontSize: 15, fontWeight: '800', color: BrandColors.accentText },
 
   // 입력바(떠 있는 알약)는 공용 ChatComposerBar 가 그린다 — ＋·입력칸·보내기 = 업무 채팅(WorkChat)과
   // 같은 치수·색(2026-09-03). 알약 안에 들어가므로 입력칸은 자기 배경·테두리를 두지 않는다.
   input: {
     flex: 1,
     minHeight: 44,
-    fontSize: 15,
-    color: InkColors.ink,
+    ...Type.body,
     paddingHorizontal: Space.sm,
     paddingVertical: Platform.OS === 'ios' ? 10 : 6,
     ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),
@@ -140,6 +138,6 @@ export const styles = StyleSheet.create({
   menu: { position: 'absolute', left: Space.md, bottom: COMPOSER_BAR_H(44) + 4, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 6, width: 220, ...Elevation.e3 },
   mi: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 11, borderRadius: Radius.sm },
   miIc: { width: 30, height: 30, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
-  miLabel: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
-  miSub: { fontSize: 10.5, color: TextColor.secondary },
+  miLabel: { ...Type.body, fontWeight: '700' },
+  miSub: { ...Type.micro, color: TextColor.secondary },
 });

@@ -11,10 +11,13 @@ import { StepProgress } from '@/components/blocks/StepProgress';
 import { InfoDot } from '@/components/InfoDot';
 import { Appear } from '@/components/Appear';
 import { notifyAction } from '@/lib/utils/confirm';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
-import { Space } from '@/lib/theme/layout';
+import { Layout, Space, screenScrollStyle } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 
 // RPC 예외 → 사장이 읽을 수 있는 문구. (definer RPC 의 raise 메시지 코드 매핑)
 const ERR_MSG: Record<string, string> = {
@@ -196,7 +199,7 @@ export function OwnerKnowhowImport() {
       <ScrollView keyboardShouldPersistTaps="handled" style={styles.flex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* ── 1단계 · 매장 고르기 ───────────────────────────────────────────────── */}
         {step === 1 ? (
-          <Appear delay={0} style={styles.block}>
+          <Appear delay={0} style={styles.stepOne}>
             <View style={styles.lead}>
               <Text style={styles.leadText}>한 매장의 노하우를 다른 매장으로 복사해요</Text>
               <InfoDot
@@ -205,7 +208,9 @@ export function OwnerKnowhowImport() {
               />
             </View>
 
-            <SectionLabel icon="arrow-up-circle-outline" title="어느 매장에서 보낼까요?" />
+            {/* 제목 + 칩 = 한 섹션(제목 ↔ 칩 8 · 섹션 사이 20 · 2026-11-02). */}
+            <View style={styles.block}>
+            <SectionLabel flush icon="arrow-up-circle-outline" title="어느 매장에서 보낼까요?" />
             <View style={styles.sourceWrap}>
               {owned.map((s) => {
                 const on = fromId === s.unit_id;
@@ -224,8 +229,10 @@ export function OwnerKnowhowImport() {
                 );
               })}
             </View>
+            </View>
 
-            <SectionLabel icon="arrow-down-circle-outline" title="어느 매장이 받을까요?" />
+            <View style={styles.block}>
+            <SectionLabel flush icon="arrow-down-circle-outline" title="어느 매장이 받을까요?" />
             <View style={styles.sourceWrap}>
               {owned
                 // 보내는 매장은 받는 후보에서 뺀다 — 고를 수 있게 두면 눌러 보고 나서 거절당한다.
@@ -254,6 +261,7 @@ export function OwnerKnowhowImport() {
             ) : (
               <Text style={styles.wayText}>{nameOf(fromId)} → {nameOf(toId)}</Text>
             )}
+            </View>
           </Appear>
         ) : null}
 
@@ -469,12 +477,16 @@ export function OwnerKnowhowImport() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  scroll: { padding: Space.gutter, gap: Space.md },
+  // 첫 여백 16 · 좌우 20 · 블록 사이 20 = 화면 틀 값(2026-11-02).
+  scroll: screenScrollStyle,
 
   lead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  leadText: { flex: 1, fontSize: 15, color: InkColors.ink2, fontWeight: '600', lineHeight: 22 },
+  // 화면 안내 한 줄 = 설명(Type.desc 13/19 secondary).
+  leadText: { ...Type.desc, flex: 1, fontWeight: '600' },
 
   block: { gap: Space.sm },
+  // 1단계 = 안내 + 섹션 둘. 섹션 사이는 화면 틀과 같은 20.
+  stepOne: { gap: Layout.sectionGap },
 
   // 매장 칩(보내는 쪽·받는 쪽 같은 모양 — 다른 것은 위 라벨이 말한다)
   sourceWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
@@ -484,45 +496,42 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill, paddingVertical: 9, paddingHorizontal: 14,
   },
   sourceChipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  sourceText: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink2, flexShrink: 1 },
+  sourceText: { fontSize: Type.desc.fontSize, fontWeight: '800', color: InkColors.ink2, flexShrink: 1 },
   sourceTextOn: { color: InkColors.bubbleText },
 
-  hintText: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
+  hintText: { ...Type.desc, fontWeight: '600' },
   // 방향 한 줄 — 2단계에서 "지금 어디서 어디로"를 잃지 않게 계속 보여준다.
-  wayText: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink2 },
+  wayText: { fontSize: Type.desc.fontSize, fontWeight: '800', color: InkColors.ink2 },
   center: { paddingVertical: 40, alignItems: 'center', gap: 8 },
 
-  hiddenNote: { fontSize: 12.5, color: InkColors.ink2, fontWeight: '600', lineHeight: 18 },
+  hiddenNote: { ...Type.desc, fontWeight: '600' },
 
   // 목록
   listHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  listCount: { fontSize: 13, color: InkColors.ink3, fontWeight: '700' },
+  listCount: { fontSize: 13, color: TextColor.secondary, fontWeight: '700' },
   selectAll: { fontSize: 13, fontWeight: '800', color: BrandColors.brand },
   list: { gap: Space.sm },
-  row: {
-    flexDirection: 'row', alignItems: 'center', gap: 11,
-    backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
-    padding: 13,
-  },
-  rowOn: { borderColor: InkColors.ink2, ...Elevation.e1 },
+  // 카드 = CardStyles.list(모서리 16 · 안쪽 16 · 그림자 e1 · 2026-11-02).
+  row: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  rowOn: { borderColor: InkColors.ink2 },
   check: {
     width: 22, height: 22, borderRadius: Radius.sm, borderWidth: 1.5, borderColor: InkColors.line,
     alignItems: 'center', justifyContent: 'center', backgroundColor: InkColors.paper,
   },
   checkOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  rowTitle: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  rowTitle: { ...Type.body, fontWeight: '700' },
   rowMeta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
-  rowSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', flexShrink: 1 },
-  rowPreview: { fontSize: 12.5, color: InkColors.ink3, fontWeight: '500', marginTop: 4, lineHeight: 17 },
+  rowSub: { ...Type.tag, color: TextColor.secondary, fontWeight: '600', flexShrink: 1 },
+  rowPreview: { ...Type.desc, fontWeight: '500', marginTop: 4 },
 
   retryLink: { fontSize: 13, fontWeight: '800', color: BrandColors.brand, textDecorationLine: 'underline' },
 
   // 3단계 완료
   doneHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   doneTitle: { flex: 1, fontSize: 16, fontWeight: '800', color: InkColors.ink, lineHeight: 23 },
-  doneSub: { fontSize: 13.5, color: InkColors.ink2, fontWeight: '600', lineHeight: 20 },
+  doneSub: { ...Type.desc, fontWeight: '600' },
   // 유실 안내 — 성공 화면 안의 경고라 색이 아니라 말로 먼저 말하고, 색은 보조다(워딩 P9).
-  doneWarn: { fontSize: 13.5, color: BrandColors.warnText, fontWeight: '700', lineHeight: 20 },
+  doneWarn: { ...Type.desc, color: BrandColors.warnText, fontWeight: '700' },
 
   // 하단 도크
   dock: {
@@ -530,17 +539,18 @@ const styles = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: InkColors.line, backgroundColor: InkColors.cream,
   },
   dockRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+  // 주 버튼(52 · 모서리 16 · 16/800 · 그림자 없음 · 2026-11-02). 되돌아가기도 같은 틀에 흰 면.
   importBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
-    paddingVertical: 14, borderRadius: Radius.md, backgroundColor: InkColors.ink, ...Elevation.e2,
+    ...ButtonStyles.primary,
+    flexDirection: 'row', gap: 7, backgroundColor: InkColors.ink,
   },
   importBtnFill: { flex: 1, minWidth: 0 },
-  importBtnText: { fontSize: 15, fontWeight: '800', color: InkColors.bubbleText },
+  importBtnText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   backBtn: {
-    alignItems: 'center', justifyContent: 'center', minHeight: 48, paddingHorizontal: Space.lg,
-    borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
+    ...ButtonStyles.primary,
+    borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
   },
-  backBtnText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  backBtnText: { ...ButtonTextStyles.primary, color: InkColors.ink },
 
   // 빈 상태(단일 매장)
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: Space.xl },

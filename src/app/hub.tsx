@@ -14,7 +14,7 @@ import { todayStr } from '@/lib/utils/attendance';
 import { weekdayOf } from '@/lib/utils/schedule';
 import { InkColors, Surface } from '@/lib/theme/colors';
 import { Type } from '@/lib/theme/type';
-import { Space } from '@/lib/theme/layout';
+import { Gap, screenScrollStyle } from '@/lib/theme/layout';
 
 // ── 허브 랜딩 탭: 사장 '현황' / 직원 '오늘' (기획 v2 확정, 2026-07-24) ─────────────────────
 // 로그인 직후 착지 화면(랜딩 = 현황/오늘 — 시장 표준: 관리자 앱은 대시보드가 홈).
@@ -78,8 +78,9 @@ export default function HubScreen() {
 const styles = StyleSheet.create({
   // 바탕 = 매장 안 화면과 같은 Surface.screen(2026-11-02 사용자 — 허브도 매장 내부와 같이).
   safe: { flex: 1, backgroundColor: Surface.screen },
-  scroll: { padding: Space.gutter, gap: Space.lg, paddingBottom: 40 },
-  titleBlock: { gap: 4 },
+  // 첫 여백 16 · 좌우 20 · 블록 사이 20 = Screen 스크롤과 같은 값. 위 안전 영역은 SafeAreaView(top)가 든다 — 상단바가 스크롤 안에 있다.
+  scroll: screenScrollStyle,
+  titleBlock: { gap: Gap.inline },
   title: { ...Type.pageTitle, color: InkColors.ink },
-  subtitle: { fontSize: 15, color: InkColors.ink2 },
+  subtitle: { ...Type.desc },
 });

@@ -74,5 +74,5 @@ const styles = StyleSheet.create({
   value: { ...Type.numCell, color: InkColors.ink, letterSpacing: -0.5 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 3, maxWidth: '100%' },
   labelText: { flexShrink: 1 },
-  label: { fontSize: 12, lineHeight: 17, fontWeight: '700', color: InkColors.ink2 },
+  label: { ...Type.tag, lineHeight: 17, fontWeight: '700', color: InkColors.ink2 },
 });

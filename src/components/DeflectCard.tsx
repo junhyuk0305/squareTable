@@ -1,7 +1,9 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { BrandColors, InkColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 
 type Props = {
   aiGeneralAnswer?: string;
@@ -122,8 +124,7 @@ const styles = StyleSheet.create({
     color: InkColors.ink,
   },
   subtitle: {
-    fontSize: 13,
-    color: InkColors.ink3,
+    ...Type.desc,
     fontWeight: '500',
   },
   row: {
@@ -138,7 +139,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     backgroundColor: BrandColors.yellowSoft,
   },
-  similarText: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
+  similarText: { ...Type.micro, fontWeight: '800', color: InkColors.ink2 },
   divider: {
     height: 1,
     backgroundColor: InkColors.line,
@@ -149,12 +150,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  // 작은 버튼(48 알약) 두 개를 반씩 나눠 쓴다 — 폭만 flex 로 바꾼다.
   btn: {
+    ...ButtonStyles.small,
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 11,
-    borderRadius: Radius.pill,
   },
   btnPrimary: {
     backgroundColor: BrandColors.yellow, // 노랑 = 권장 액션(검정 글자로 대비)
@@ -166,7 +165,7 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bg,
   },
   btnGhostText: { color: InkColors.ink2 },
-  btnText: { fontSize: 14, fontWeight: '800' },
+  btnText: { ...ButtonTextStyles.small },
   reRegister: {
     alignSelf: 'flex-start',
     paddingVertical: 7,
@@ -176,7 +175,7 @@ const styles = StyleSheet.create({
     borderColor: InkColors.line,
     backgroundColor: InkColors.bg,
   },
-  reRegisterText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
+  reRegisterText: { ...Type.tag, fontWeight: '700', color: InkColors.ink2 },
   notifyRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -188,8 +187,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   notifyText: {
-    fontSize: 13,
-    color: InkColors.ink2,
+    ...Type.desc,
     fontWeight: '600',
     flex: 1,
   },
@@ -202,15 +200,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   generalLabel: {
-    fontSize: 10,
+    ...Type.micro,
     fontWeight: '800',
     letterSpacing: 1.2,
-    color: InkColors.ink3,
+    color: TextColor.secondary,
     textTransform: 'uppercase',
   },
   generalText: {
-    fontSize: 13,
-    color: InkColors.ink2,
-    lineHeight: 19,
+    ...Type.desc,
   },
 });

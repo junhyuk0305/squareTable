@@ -25,8 +25,10 @@ import {
   compactRange,
   WEEKDAY_LABELS,
 } from '@/lib/utils/schedule';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
+import { ButtonStyles } from '@/lib/theme/button';
 
 export function ScheduleWeek({
   monday,
@@ -72,7 +74,9 @@ export function ScheduleWeek({
       {!hideNav && (
         <View style={s.nav}>
           <Pressable onPress={() => setMonday(addDays(monday, -7))} hitSlop={8} style={({ pressed }) => [s.navBtn, pressed && { opacity: 0.6 }]}>
-            <Ionicons name="chevron-back" size={20} color={InkColors.ink2} />
+            <View style={s.navCircle}>
+              <Ionicons name="chevron-back" size={20} color={InkColors.ink2} />
+            </View>
           </Pressable>
           <View style={s.navCenter}>
             <Text style={s.navRange}>{fmtWeekRange(monday)}</Text>
@@ -85,7 +89,9 @@ export function ScheduleWeek({
             )}
           </View>
           <Pressable onPress={() => setMonday(addDays(monday, 7))} hitSlop={8} style={({ pressed }) => [s.navBtn, pressed && { opacity: 0.6 }]}>
-            <Ionicons name="chevron-forward" size={20} color={InkColors.ink2} />
+            <View style={s.navCircle}>
+              <Ionicons name="chevron-forward" size={20} color={InkColors.ink2} />
+            </View>
           </Pressable>
         </View>
       )}
@@ -164,11 +170,13 @@ export function ScheduleWeek({
 
 const s = StyleSheet.create({
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4, marginBottom: 12 },
-  navBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  // 주 이동 = 흰 원 버튼(ButtonStyles.iconCircle · 2026-11-02 결정). 누르는 상자 48(RN-web 은 hitSlop 을 무시한다).
+  navBtn: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  navCircle: { ...ButtonStyles.iconCircle },
   navCenter: { alignItems: 'center', gap: 2 },
   navRange: { fontSize: 16, fontWeight: '900', color: InkColors.ink },
-  navThis: { fontSize: 12, fontWeight: '700', color: BrandColors.warnText },
-  navToday: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
+  navThis: { ...Type.tag, fontWeight: '700', color: BrandColors.warnText },
+  navToday: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
 
   // 7칼럼 그리드
   grid: { flexDirection: 'row', gap: 3, alignItems: 'flex-start' },
@@ -177,20 +185,22 @@ const s = StyleSheet.create({
 
   colHead: { alignItems: 'center', paddingVertical: 5, gap: 1, backgroundColor: InkColors.cream, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   colHeadToday: { backgroundColor: InkColors.ink, borderBottomColor: InkColors.ink },
-  colDow: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
+  // 요일·휴무·칩 글자 = Type.micro(11). 9·10·10.5 를 쓰지 않는다(2026-11-02 2차 결정).
+  colDow: { ...Type.micro, fontWeight: '800', color: TextColor.secondary },
   colDate: { fontSize: 13, fontWeight: '900', color: InkColors.ink },
   sun: { color: BrandColors.badText },
-  headTextToday: { color: '#fff' },
+  headTextToday: { color: InkColors.bubbleText },
 
   colBody: { padding: 3, gap: 3, minHeight: 44 },
-  rest: { fontSize: 10.5, fontWeight: '700', color: InkColors.ink3, textAlign: 'center', paddingVertical: 8 },
+  rest: { ...Type.micro, fontWeight: '700', color: TextColor.secondary, textAlign: 'center', paddingVertical: 8 },
   none: { fontSize: 13, color: InkColors.ink3, textAlign: 'center', paddingVertical: 8 },
 
   chip: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.sm, paddingVertical: 4, paddingHorizontal: 3, alignItems: 'center', gap: 1 },
   chipMine: { backgroundColor: BrandColors.yellow },
   chipPending: { borderWidth: 1, borderColor: BrandColors.warn },
-  chipName: { fontSize: 11, fontWeight: '800', color: InkColors.ink, textAlign: 'center' },
-  chipTime: { fontSize: 10, fontWeight: '700', color: InkColors.ink2, textAlign: 'center' },
+  chipName: { ...Type.micro, fontWeight: '800', color: InkColors.ink, textAlign: 'center' },
+  // 예외: 칩 시간만 10. 7칸 격자 한 칸 안쪽이 약 44px 라 11 이면 "7:30-16" 이 말줄임으로 잘린다(2026-11-02 캡처 확인).
+  chipTime: { fontSize: 10, fontWeight: '700', color: TextColor.secondary, textAlign: 'center' },
   chipTimeMine: { color: InkColors.ink },
   dot: { position: 'absolute', top: 3, right: 3, width: 6, height: 6, borderRadius: 3, backgroundColor: BrandColors.warn },
 
@@ -198,5 +208,5 @@ const s = StyleSheet.create({
   legItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legSwatch: { width: 12, height: 12, borderRadius: 4 },
   legDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: BrandColors.warn },
-  legText: { fontSize: 11.5, fontWeight: '700', color: InkColors.ink3 },
+  legText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
 });

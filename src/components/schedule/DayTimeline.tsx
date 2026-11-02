@@ -5,9 +5,10 @@
 // 표시 전용: props로 받은 비율(left·width)만 그린다 — 시간 계산은 lib/utils/schedule.ts(barSpan).
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 
-import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { BrandColors, InkColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 /** 바 트랙 높이 — 이름 줄보다 얇아야 '이름이 주, 바는 보조'로 읽힌다. */
 const TRACK_H = 10;
@@ -86,7 +87,7 @@ const s = StyleSheet.create({
   wrap: { gap: Space.sm },
 
   axis: { flexDirection: 'row', justifyContent: 'space-between' },
-  axisText: { flex: 1, fontSize: 11, fontWeight: '700', color: InkColors.ink3 },
+  axisText: { ...Type.micro, flex: 1, fontWeight: '700', color: TextColor.secondary },
   axisMid: { textAlign: 'center' },
   axisEnd: { textAlign: 'right' },
 
@@ -94,12 +95,12 @@ const s = StyleSheet.create({
   rowPressed: { opacity: 0.6 },
   head: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   spacer: { flex: 1 },
-  name: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink, flexShrink: 1 },
-  time: { fontSize: 12, fontWeight: '700', color: InkColors.ink2 },
-  hours: { fontSize: 12, fontWeight: '700', color: InkColors.ink3, marginLeft: Space.xs },
+  name: { ...Type.body, lineHeight: 21, fontWeight: '800', flexShrink: 1 },
+  time: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
+  hours: { ...Type.tag, fontWeight: '700', color: TextColor.secondary, marginLeft: Space.xs },
 
   tag: { paddingHorizontal: Space.sm, paddingVertical: 2, borderRadius: Radius.pill, backgroundColor: BrandColors.warnSoft },
-  tagText: { fontSize: 11, fontWeight: '800', color: BrandColors.warnText },
+  tagText: { ...Type.micro, fontWeight: '800', color: BrandColors.warnText },
 
   track: { height: TRACK_H, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
   // 색만으로 상태를 가르지 않는다 — '변경 중'은 위 태그 텍스트가 함께 말한다.

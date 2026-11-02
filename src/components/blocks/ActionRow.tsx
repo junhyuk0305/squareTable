@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BrandColors, InkColors, TextColor } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 /** 디스크 치수 — 도형 크기라 간격 토큰 대상이 아니다. 터치 타깃은 칸(item) 전체라 48dp 를 넘긴다. */
 const DISC = 38;
@@ -99,8 +100,8 @@ const styles = StyleSheet.create({
   },
   discPrimary: { backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep },
   // 라벨·상태 한 줄은 꼬리표(보조)라 본문 15sp 하한 대상이 아니다.
-  label: { marginTop: Space.xs + 2, fontSize: 12, lineHeight: 17, fontWeight: '800', color: InkColors.ink },
-  hint: { fontSize: 10.5, lineHeight: 15, color: TextColor.secondary },
+  label: { ...Type.tag, marginTop: Space.xs + 2, lineHeight: 17, fontWeight: '800', color: InkColors.ink },
+  hint: { ...Type.micro, lineHeight: 15, color: TextColor.secondary },
   pressed: { opacity: 0.7 },
 
   // 벨·허브 카드와 같은 규격(액센트 원형). 흰 숫자 11sp를 얹으므로 면은 500이 아니라 Solid(800).
@@ -119,5 +120,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { fontSize: 11, fontWeight: '900', color: InkColors.bubbleText },
+  badgeText: { ...Type.micro, fontWeight: '900', color: InkColors.bubbleText },
 });

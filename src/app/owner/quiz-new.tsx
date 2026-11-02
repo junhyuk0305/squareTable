@@ -46,11 +46,12 @@ import { ProgressRing } from '@/components/blocks/ProgressRing';
 import { MiniCalendar } from '@/components/blocks/MiniCalendar';
 import { EmptyState } from '@/components/EmptyState';
 import { ScreenLoading } from '@/components/ScreenLoading';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
-import { Space } from '@/lib/theme/layout';
-import { ButtonStyles } from '@/lib/theme/button';
+import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
 import { ChipStyles } from '@/lib/theme/chip';
 import { EmptyStyles } from '@/lib/theme/empty';
@@ -1261,20 +1262,23 @@ function Ghost({ label, onPress }: { label: string; onPress: () => void }) {
 }
 
 const st = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.paper },
-  scroll: { padding: Space.gutter, paddingBottom: Space.xl, gap: Space.md },
+  // 바탕 = Surface.screen(2026-11-02). 바닥 버튼 줄이 아래 안전 영역을 써야 해 SafeAreaView(bottom)는 그대로.
+  safe: { flex: 1, backgroundColor: Surface.screen },
+  // 첫 여백 16 · 좌우 20 = 화면 틀 값. 간격은 12 그대로 — 4단계 문항 카드가 스크롤 바로 아래 줄줄이 서서(같은 종류 사이).
+  scroll: { ...screenScrollStyle, gap: Space.md },
   stepBadge: { fontSize: 13, fontWeight: '800', color: InkColors.ink3, marginRight: Space.gutter },
 
   lead: { fontSize: 17, fontWeight: '900', color: InkColors.ink, lineHeight: 24 },
-  leadSub: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 21, marginTop: -Space.sm },
+  // 제목 아래 부제 = 설명(Type.desc 13/19 secondary · 2026-11-02).
+  leadSub: { ...Type.desc, fontWeight: '600', marginTop: -Space.sm },
   label: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, marginTop: Space.xs },
-  hint: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, lineHeight: 18, marginTop: -Space.xs },
+  hint: { ...Type.desc, fontWeight: '600', marginTop: -Space.xs },
   emptyLine: EmptyStyles.line,
 
   input: {
     borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm,
-    paddingHorizontal: Space.md, minHeight: 48, fontSize: 15, fontWeight: '700', color: InkColors.ink,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: Space.md, minHeight: 48, ...Type.body, fontWeight: '700',
+    backgroundColor: InkColors.bg,
   },
 
   listCard: CardStyles.rows,
@@ -1282,8 +1286,8 @@ const st = StyleSheet.create({
   chk: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 56, paddingVertical: Space.sm },
   rowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   rowText: { flex: 1, minWidth: 0, gap: 2 },
-  rowTitle: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
-  rowSub: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: InkColors.ink3 },
+  rowTitle: { ...Type.body, lineHeight: 21, fontWeight: '800' },
+  rowSub: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: TextColor.secondary },
   tick: { fontSize: 13, fontWeight: '800', color: InkColors.ink3 },
 
   box: {
@@ -1292,37 +1296,36 @@ const st = StyleSheet.create({
   },
   boxOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
 
-  qcard: {
-    backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
-    padding: Space.lg, gap: Space.xs, ...Elevation.e2,
-  },
-  qFormat: { fontSize: 12, fontWeight: '800', color: BrandColors.mentionText },
-  qAsk: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 22 },
-  qSource: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },
+  // 카드 = CardStyles.list(모서리 16 · 안쪽 16 · 그림자 e1 · 2026-11-02. 옛 e2).
+  qcard: { ...CardStyles.list, gap: Space.xs },
+  qFormat: { ...Type.tag, fontWeight: '800', color: BrandColors.mentionText },
+  qAsk: { ...Type.body, fontWeight: '700', lineHeight: 22 },
+  qSource: { fontSize: 13, fontWeight: '600', color: TextColor.secondary },
   // 근거 줄과 버튼 사이를 띄운다 — 붙어 있으면 버튼이 본문의 일부처럼 읽힌다(2026-09-11).
   qActs: { flexDirection: 'row', gap: Space.sm, marginTop: Space.md },
-  // ★납작한 직사각형으로(2026-09-11 지시). 44dp 가 하한이다 — 더 낮추면 터치 타깃 규칙(48dp)에서
-  //   너무 멀어지고 `qa:quiz-ui` 의 L3 검사(44dp+)가 빨강이 된다. 대신 좌우를 넓혀 비율을 만든다.
+  // 작은 버튼 = ButtonStyles.small(48 알약 · 2026-11-02 결정으로 48 알약. 옛 9월 납작한 직사각형 44).
+  //   선·면 색은 자리 값 그대로. `qa:quiz-ui` 의 L3 검사(44dp+)는 48 이라 통과한다.
   smallAct: {
-    minHeight: 44, justifyContent: 'center', paddingHorizontal: Space.lg,
-    borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', ...Elevation.e1,
+    ...ButtonStyles.small,
+    borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', ...Elevation.e1,
   },
-  smallActText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
+  smallActText: { ...ButtonTextStyles.small, color: InkColors.ink2 },
 
   warnBox: {
     backgroundColor: BrandColors.warnSoft, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.warnBorder,
     padding: Space.lg, gap: Space.xs, ...Elevation.e1,
   },
-  warnTitle: { fontSize: 15, fontWeight: '800', color: BrandColors.warnText, lineHeight: 22 },
-  warnBody: { fontSize: 15, fontWeight: '600', color: InkColors.ink, lineHeight: 22 },
+  // 제목 15 아래 둘째 줄은 설명 13/19 — 본문 15 두 줄 연속 금지(2026-11-02). 주황 띠 위라 글자색은 검정 그대로.
+  warnTitle: { ...Type.body, fontWeight: '800', color: BrandColors.warnText, lineHeight: 22 },
+  warnBody: { ...Type.desc, fontWeight: '600', color: InkColors.ink },
 
   thinBox: {
     backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.lg, gap: Space.sm, ...Elevation.e1,
   },
-  thinTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
-  thinBody: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
+  thinTitle: { ...Type.body, fontWeight: '800', lineHeight: 22 },
+  thinBody: { ...Type.desc, fontWeight: '600' },
   thinRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  thinName: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  thinName: { ...Type.body, flex: 1, minWidth: 0, fontWeight: '700' },
 
   addBox: { gap: Space.sm },
 
@@ -1352,7 +1355,7 @@ const st = StyleSheet.create({
 
   // 도착 전 자리 — 빈 상태가 스치지 않게 덮는다(전체 화면을 바꾸는 것이 아니라 이 구획만).
   waiting: { alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.xl * 2 },
-  waitingText: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },
+  waitingText: { fontSize: 13, fontWeight: '600', color: TextColor.secondary },
 
   makingHead: { alignItems: 'center', paddingVertical: Space.sm },
   rowTitleWaiting: { color: InkColors.ink3 },
@@ -1364,29 +1367,27 @@ const st = StyleSheet.create({
     flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm,
     backgroundColor: BrandColors.warnSoft, borderRadius: Radius.md, padding: Space.md, ...Elevation.e1,
   },
-  noteText: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
+  noteText: { ...Type.desc, flex: 1, minWidth: 0, fontWeight: '600' },
 
   doneHead: { alignItems: 'center', gap: Space.xs, paddingVertical: Space.lg },
   doneTitle: { fontSize: 17, fontWeight: '900', color: InkColors.ink },
-  doneSub: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },
-  linkBox: {
-    backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
-    padding: Space.lg, ...Elevation.e2,
-  },
-  linkText: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 22 },
+  doneSub: { ...Type.desc, fontWeight: '600' },
+  linkBox: CardStyles.list,
+  linkText: { ...Type.body, fontWeight: '700', lineHeight: 22 },
 
   foot: {
     flexDirection: 'row', gap: Space.sm,
     paddingHorizontal: Space.gutter, paddingVertical: Space.md,
     borderTopWidth: 1, borderTopColor: InkColors.line, backgroundColor: InkColors.bg,
   },
-  primary: { ...ButtonStyles.primary, flex: 1, backgroundColor: InkColors.ink, ...Elevation.e1 },
+  // 주 버튼 = 52 · 모서리 16 · 16/800 · 그림자 없음(2026-11-02 결정표). 보조(ghost)도 같은 틀에 흰 면.
+  primary: { ...ButtonStyles.primary, flex: 1, backgroundColor: InkColors.ink },
   primaryOff: { backgroundColor: InkColors.bgSoft },
-  primaryText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   primaryTextOff: { color: InkColors.ink3 },
   ghost: {
-    flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center',
-    borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', ...Elevation.e1,
+    ...ButtonStyles.primary, flex: 1,
+    borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
   },
-  ghostText: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
+  ghostText: { ...ButtonTextStyles.primary, color: InkColors.ink2 },
 });

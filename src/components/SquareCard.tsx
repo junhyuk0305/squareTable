@@ -3,8 +3,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { SourceFooter } from './SourceFooter';
 import { VerifyBadge } from './VerifyBadge';
 import { KnowhowRows } from '@/components/blocks/KnowhowRows';
-import { BrandColors, InkColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
+import { BrandColors, InkColors, TextColor } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
+import { CardStyles } from '@/lib/theme/card';
+import { Type } from '@/lib/theme/type';
 import { type VerifyState } from '@/lib/utils/verification';
 
 type Props = {
@@ -186,13 +188,8 @@ export function SquareCard({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: InkColors.line,
+    ...CardStyles.list,
     gap: 12,
-    ...Elevation.e2,
   },
   header: {
     flexDirection: 'row',
@@ -214,26 +211,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 6,
   },
-  confText: { fontSize: 11, fontWeight: '700', color: InkColors.ink3 },
+  confText: { ...Type.micro, fontWeight: '700', color: TextColor.secondary },
   rateBadge: {
     backgroundColor: InkColors.bgSoft,
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
   },
-  rateText: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
+  rateText: { ...Type.micro, fontWeight: '800', color: InkColors.ink2 },
   // 상황·할 일·금지 본문 스타일은 KnowhowRows(D10)로 옮겼다(2026-08-08 형태 통일).
-  sparse: { fontSize: 14, color: InkColors.ink3, lineHeight: 21, paddingVertical: 4 },
+  sparse: { ...Type.desc, paddingVertical: 4 },
   // 정도 기준 게이지 (노란 바)
   gaugeBox: { gap: 6, paddingVertical: 2 },
   gaugeHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  gaugeLabel: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
+  gaugeLabel: { ...Type.tag, fontWeight: '800', color: InkColors.ink2 },
   gaugeVal: { fontSize: 13, fontWeight: '900', color: InkColors.ink },
   gaugeTrack: { height: 10, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, position: 'relative', justifyContent: 'center' },
   gaugeFill: { height: '100%', borderRadius: Radius.pill, backgroundColor: BrandColors.yellow },
   gaugeKnob: { position: 'absolute', top: -4, width: 18, height: 18, borderRadius: Radius.sm, backgroundColor: InkColors.ink, borderWidth: 3, borderColor: BrandColors.yellow, marginLeft: -9 },
   gaugeEnds: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
-  gaugeEndTxt: { fontSize: 11, fontWeight: '700', color: InkColors.ink3 },
+  gaugeEndTxt: { ...Type.micro, fontWeight: '700', color: TextColor.secondary },
   feedback: {
     flexDirection: 'row',
     gap: 8,

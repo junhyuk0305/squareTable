@@ -14,11 +14,14 @@ import { templatesForIndustry, forkTemplate, type PlaybookTemplate } from '@/dat
 import { standardSections, UNSECTIONED } from '@/lib/config/sections';
 import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
-import { SectionLabel } from '@/components/SectionLabel';
+import { Section } from '@/components/Screen';
 import { PressableScale } from '@/components/PressableScale';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Space, SCREEN_GUTTER, CONTENT_MAX_WIDTH, frameCapStyle } from '@/lib/theme/layout';
+import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
+import { Layout, Space, SCREEN_GUTTER, CONTENT_MAX_WIDTH, frameCapStyle, screenScrollStyle } from '@/lib/theme/layout';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { PLANS, VAT_NOTE } from '@/lib/config/tiers';
 import { formatKrw } from '@/lib/config/billing';
 import { showBillingEntry, showPaymentSurface } from '@/lib/config/store-policy';
@@ -300,21 +303,21 @@ export default function OwnerOnboardingScreen() {
               {bySection.map(({ sec, items }) => {
                 const allOn = items.every((t) => checked[t.id]);
                 return (
-                  <View key={sec} style={styles.group}>
-                    <SectionLabel
-                      title={sec}
-                      trailing={
-                        <Pressable onPress={() => toggleCategory(items)} hitSlop={8} style={styles.catAll}>
-                          <Text style={styles.catAllText}>{allOn ? '전체 해제' : '전체 선택'}</Text>
-                        </Pressable>
-                      }
-                    />
+                  <Section
+                    key={sec}
+                    title={sec}
+                    trailing={
+                      <Pressable onPress={() => toggleCategory(items)} hitSlop={8} style={styles.catAll}>
+                        <Text style={styles.catAllText}>{allOn ? '전체 해제' : '전체 선택'}</Text>
+                      </Pressable>
+                    }
+                  >
                     <View style={styles.rows}>
                       {items.map((t) => (
                         <TemplateRow key={t.id} tpl={t} on={!!checked[t.id]} onToggle={() => toggle(t.id)} />
                       ))}
                     </View>
-                  </View>
+                  </Section>
                 );
               })}
             </Collapse>
@@ -395,30 +398,22 @@ function TemplateRow({ tpl, on, onToggle }: { tpl: PlaybookTemplate; on: boolean
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.bgSoft },
+  // 화면 바탕(Surface.screen). 헤더가 없는 가입 흐름 화면이라 위·아래 안전 영역을 SafeAreaView 가 그대로 든다.
+  safe: { flex: 1, backgroundColor: Surface.screen },
+  // 첫 여백·좌우·섹션 사이 = screenScrollStyle. 넓은 웹에서 콘텐츠 폭만 가둔다.
   scroll: {
-    padding: SCREEN_GUTTER,
-    paddingTop: Space.lg,
-    gap: Space.lg,
+    ...screenScrollStyle,
     maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: 'center',
     width: '100%',
   },
 
   intro: { gap: Space.sm, paddingTop: Space.sm },
-  introTitle: { fontSize: 24, fontWeight: '900', color: InkColors.ink, lineHeight: 32 },
-  introBody: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
+  introTitle: { ...Type.pageTitle, color: InkColors.ink, lineHeight: 32 },
+  introBody: { ...Type.desc },
 
-  // ① 추천 묶음 카드
-  bundle: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.lg,
-    borderWidth: 1.5,
-    borderColor: InkColors.line,
-    padding: Space.lg,
-    gap: Space.md,
-    ...Elevation.e2,
-  },
+  // ① 추천 묶음 카드 — 목록 카드 모양(모서리 16 · 그림자 e1). 선택 테두리가 보이게 선만 1.5.
+  bundle: { ...CardStyles.list, borderWidth: 1.5, gap: Space.md },
   bundleOn: { borderColor: InkColors.ink },
   bundleHead: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
   bundleIcon: {
@@ -429,8 +424,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bundleKicker: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
-  bundleTitle: { fontSize: 18, fontWeight: '900', color: InkColors.ink, marginTop: 1 },
+  bundleKicker: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
+  bundleTitle: { ...Type.title, marginTop: 1 },
   bundleCheck: {
     width: 28,
     height: 28,
@@ -454,21 +449,10 @@ const styles = StyleSheet.create({
   },
   chipDot: { width: 7, height: 7, borderRadius: Radius.pill },
   chipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
-  bundlePreview: { fontSize: 12.5, color: InkColors.ink3, fontWeight: '600' },
+  bundlePreview: { ...Type.tag, color: TextColor.secondary, fontWeight: '600' },
 
-  // ③ 기존 매뉴얼 카드 — 완료 화면 planNudge와 같은 리스트형 CTA 형태.
-  manualCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    backgroundColor: InkColors.bg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: Radius.lg,
-    paddingVertical: Space.md,
-    paddingHorizontal: Space.lg,
-    ...Elevation.e1,
-  },
+  // ③ 기존 매뉴얼 카드 — 완료 화면 planNudge와 같은 리스트형 CTA 형태 · 목록 카드 모양.
+  manualCard: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: Space.md },
   manualIcon: {
     width: 34,
     height: 34,
@@ -477,44 +461,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  manualTitle: { fontSize: 14, fontWeight: '900', color: InkColors.ink },
-  manualSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', lineHeight: 17, marginTop: 1 },
+  manualTitle: { ...Type.body, fontWeight: '900' },
+  manualSub: { ...Type.desc, fontWeight: '600', marginTop: 1 },
 
   // ② 직접 고르기(접이식)
   pickerWrap: { gap: Space.md },
-  discloseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingVertical: Space.md,
-    paddingHorizontal: Space.lg,
-    ...Elevation.e1,
-  },
-  discloseTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  discloseSub: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
+  discloseRow: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+  discloseTitle: { ...Type.body, fontWeight: '800' },
+  discloseSub: { ...Type.desc, marginTop: 2 },
 
-  groups: { gap: Space.lg, marginTop: Space.xs },
-  group: { gap: Space.sm },
+  // 카테고리 묶음 사이 = 섹션 간격(Section 이 제목 ↔ 목록을 붙인다).
+  groups: { gap: Layout.sectionGap, marginTop: Space.xs },
   catAll: { paddingVertical: 2, paddingHorizontal: Space.sm },
-  catAllText: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
+  catAllText: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
 
   rows: { gap: Space.sm },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    backgroundColor: InkColors.bg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: Radius.md,
-    paddingVertical: Space.md,
-    paddingHorizontal: Space.md,
-    ...Elevation.e1,
-  },
+  row: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: Space.md },
   rowOn: { borderColor: InkColors.ink },
   check: {
     width: 22,
@@ -527,8 +489,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  rowTitle: { fontSize: 14.5, fontWeight: '800', color: InkColors.ink },
-  rowSit: { fontSize: 12.5, color: InkColors.ink3, lineHeight: 17, marginTop: 1 },
+  rowTitle: { ...Type.body, fontWeight: '800' },
+  rowSit: { ...Type.tag, color: TextColor.secondary, lineHeight: 17, marginTop: 1 },
 
   // 하단 고정 바
   barWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center' },
@@ -542,19 +504,14 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     ...Elevation.e2,
   },
-  barNudge: { fontSize: 12, color: BrandColors.warnText, fontWeight: '700', textAlign: 'center' },
-  cta: {
-    backgroundColor: InkColors.ink,
-    paddingVertical: Space.lg,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    ...Elevation.e2,
-  },
-  ctaOff: { backgroundColor: InkColors.line, ...Elevation.e1 },
-  ctaText: { fontSize: 16, fontWeight: '800', color: InkColors.bubbleText },
-  ctaTextOff: { color: InkColors.ink3 },
+  barNudge: { ...Type.tag, color: BrandColors.warnText, fontWeight: '700', textAlign: 'center' },
+  // 주 버튼(52 · 모서리 16 · 가로 꽉 · 그림자 없음).
+  cta: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
+  ctaOff: { backgroundColor: InkColors.line },
+  ctaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  ctaTextOff: { color: TextColor.disabled },
   skip: { alignSelf: 'center', paddingVertical: Space.sm, paddingHorizontal: Space.lg },
-  skipText: { fontSize: 14, fontWeight: '700', color: InkColors.ink3 },
+  skipText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
 
   // 완료 화면
   doneWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Space.xl, gap: Space.md },
@@ -562,24 +519,11 @@ const styles = StyleSheet.create({
   doneHead: { alignItems: 'center', gap: Space.md },
   doneStretch: { alignSelf: 'stretch' },
   doneTitle: { fontSize: 23, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
-  doneSub: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
+  doneSub: { ...Type.desc, textAlign: 'center' },
   doneStrong: { fontWeight: '800', color: InkColors.ink },
   doneNotify: { alignSelf: 'stretch' },
-  // 요금제 후킹 카드(완료 화면) — 좌 아이콘 · 중앙 카피 · 우 chevron 의 리스트형 CTA.
-  planNudge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    alignSelf: 'stretch',
-    marginTop: Space.md,
-    backgroundColor: InkColors.bg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: Radius.lg,
-    paddingVertical: Space.md,
-    paddingHorizontal: Space.lg,
-    ...Elevation.e1,
-  },
+  // 요금제 후킹 카드(완료 화면) — 좌 아이콘 · 중앙 카피 · 우 chevron 의 리스트형 CTA · 목록 카드 모양.
+  planNudge: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: Space.md, alignSelf: 'stretch', marginTop: Space.md },
   planIcon: {
     width: 34,
     height: 34,
@@ -588,16 +532,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  planTitle: { fontSize: 14, fontWeight: '900', color: InkColors.ink },
-  planSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', lineHeight: 17, marginTop: 1 },
-  primary: {
-    marginTop: Space.md,
-    backgroundColor: InkColors.ink,
-    paddingVertical: Space.lg,
-    paddingHorizontal: Space.xl,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    alignSelf: 'stretch',
-  },
-  primaryText: { fontSize: 16, fontWeight: '800', color: InkColors.bubbleText },
+  planTitle: { ...Type.body, fontWeight: '900' },
+  planSub: { ...Type.desc, fontWeight: '600', marginTop: 1 },
+  primary: { ...ButtonStyles.primary, marginTop: Space.md, backgroundColor: InkColors.ink },
+  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

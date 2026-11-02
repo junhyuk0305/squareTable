@@ -22,9 +22,12 @@ import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { SegmentTabs } from '@/components/SegmentTabs';
 import { todayStr } from '@/lib/utils/attendance';
 import { accountAckAt, buildJuniorNotifications } from '@/lib/utils/notifications';
-import { InkColors } from '@/lib/theme/colors';
+import { InkColors, Surface } from '@/lib/theme/colors';
 import { useLegacyQuizOpen } from '@/lib/hooks/useLegacyQuizOpen';
-import { Elevation, Radius } from '@/lib/theme/elevation';
+import { Radius } from '@/lib/theme/elevation';
+import { screenScrollStyle } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
 
 const EMPTY_IDS: string[] = [];
 
@@ -153,7 +156,7 @@ export default function JuniorNotificationsScreen() {
       <ScreenTitleHeader title="알림" backFallback right={seg === 'store' && hasUnread ? <MarkAllReadButton onPress={markAll} /> : undefined} />
       <Stack.Screen options={{ title: '알림' }} />
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={screenScrollStyle} showsVerticalScrollIndicator={false}>
         {/* 맨 위 — 매장명 · 내 이름(정체성). 홈 헤더에서 옮겨온 정보 */}
         {/* 카드 자체가 '내 계정' 진입점 — 누르면 프로필 편집 화면으로(설정 탭 프로필 카드와 동일 목적지). */}
         <Appear delay={stagger(0)}>
@@ -234,31 +237,18 @@ export default function JuniorNotificationsScreen() {
         )}
         </Appear>
         )}
-
-        <View style={{ height: 12 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  truncNote: { textAlign: 'center', color: InkColors.ink3, fontSize: 15, paddingVertical: 8 },
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: 20, gap: 16 },
+  truncNote: { ...Type.desc, textAlign: 'center', paddingVertical: 8 },
+  // 화면 바탕(Surface.screen). 탭바가 없는 화면이라 아래 안전 영역을 SafeAreaView(bottom)가 든다. 사장 알림 화면과 같은 틀.
+  safe: { flex: 1, backgroundColor: Surface.screen },
 
-  // 정체성 카드
-  idCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    ...Elevation.e1,
-  },
+  // 정체성 카드 — 사장 알림 화면과 같은 규격 · 목록 카드 모양.
+  idCard: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: {
     width: 42,
     height: 42,
@@ -267,8 +257,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { fontSize: 17, fontWeight: '900', color: '#FFFFFF' },
+  avatarText: { fontSize: 17, fontWeight: '900', color: InkColors.bubbleText },
   idStore: { fontSize: 16, fontWeight: '900', color: InkColors.ink },
-  idUser: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, marginTop: 2 },
-
+  idUser: { ...Type.desc, fontWeight: '600', marginTop: 2 },
 });

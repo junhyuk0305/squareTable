@@ -11,9 +11,12 @@ import type { Member } from '@/components/work/MentionInput';
 import { todayStr } from '@/lib/utils/attendance';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { CardStyles } from '@/lib/theme/card';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 type WorkSettingsPanelProps = {
   /** 담당자 후보(사장 포함 매장 명부). 루틴 편집 시트가 그대로 받으므로 Member 전체를 받는다. */
@@ -291,48 +294,40 @@ const s = StyleSheet.create({
   scroll: { flex: 1 },
   scrollPad: { paddingHorizontal: Space.lg, paddingTop: Space.md, paddingBottom: Space.xl },
 
-  lead: { fontSize: 13, color: InkColors.ink2, lineHeight: 19, marginBottom: Space.lg },
+  lead: { ...Type.desc, marginBottom: Space.lg },
 
-  // 1단 — 카테고리 행
-  list: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: Space.md },
+  // 1단 — 카테고리 행(행 목록 카드)
+  list: { ...CardStyles.rows },
   row: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: InkColors.line },
   rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.lg, minWidth: 0 },
-  rowTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  rowMeta: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
+  rowTitle: { ...Type.body, fontWeight: '800' },
+  rowMeta: { ...Type.tag, color: TextColor.secondary, marginTop: 2 },
   orderBtns: { flexDirection: 'row', alignItems: 'center' },
 
   // 2단 — 헤더/필드
   backRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingHorizontal: Space.lg, paddingVertical: Space.md },
-  backText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
-  fieldLabel: { fontSize: 12, fontWeight: '800', color: InkColors.ink3, marginBottom: Space.sm },
-  fieldHint: { fontSize: 12.5, color: InkColors.ink3, lineHeight: 18, marginBottom: Space.md },
-  empty: { fontSize: 13, color: InkColors.ink3, lineHeight: 19, marginBottom: Space.md },
+  backText: { fontSize: 13, fontWeight: '800', color: TextColor.secondary },
+  fieldLabel: { ...Type.tag, fontWeight: '800', color: TextColor.secondary, marginBottom: Space.sm },
+  fieldHint: { ...Type.desc, marginBottom: Space.md },
+  empty: { ...Type.desc, marginBottom: Space.md },
   labelInp: {
+    ...Type.body,
     borderWidth: 1,
     borderColor: InkColors.line,
     borderRadius: Radius.sm,
     paddingHorizontal: Space.md,
     paddingVertical: Space.md,
-    fontSize: 15,
     fontWeight: '700',
-    color: InkColors.ink,
     backgroundColor: '#FFFFFF',
   },
 
   // 2단 — 루틴 카드(텍스트 + 담당자 칩)
-  routineCard: {
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: Radius.md,
-    backgroundColor: '#FFFFFF',
-    padding: Space.md,
-    marginBottom: Space.sm,
-  },
+  routineCard: { ...CardStyles.list, marginBottom: Space.sm },
   routineHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   routineMain: { flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', gap: 1 },
-  routineText: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  routineText: { ...Type.body, fontWeight: '700' },
   routineTextEmpty: { color: InkColors.ink3, fontWeight: '600' },
-  routineMeta: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
+  routineMeta: { ...Type.tag, color: TextColor.secondary, fontWeight: '600' },
   bullet: { width: 5, height: 5, borderRadius: Radius.pill, backgroundColor: InkColors.ink3 },
   iconBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
   chipRow: { gap: Space.xs, paddingTop: Space.sm },
@@ -353,19 +348,20 @@ const s = StyleSheet.create({
     paddingVertical: Space.md,
     marginTop: Space.md,
   },
-  addDashedText: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
+  addDashedText: { fontWeight: '800', fontSize: Type.desc.fontSize, color: InkColors.ink },
 
   delRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, paddingVertical: Space.lg, marginTop: Space.md },
   delText: { fontSize: 13, fontWeight: '800', color: BrandColors.badText },
   confirmBar: { marginTop: Space.lg, padding: Space.md, borderRadius: Radius.sm, backgroundColor: BrandColors.badSoft, borderWidth: 1, borderColor: BrandColors.bad },
-  confirmText: { fontSize: 12.5, color: BrandColors.badText, fontWeight: '700', lineHeight: 18 },
+  // 삭제 확인 안내 — 크기는 설명 단계, 색은 경고 빨강 그대로.
+  confirmText: { ...Type.desc, color: BrandColors.badText, fontWeight: '700' },
   confirmBtns: { flexDirection: 'row', gap: Space.sm, marginTop: Space.sm, justifyContent: 'flex-end' },
   cCancel: { paddingHorizontal: Space.lg, paddingVertical: Space.sm, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
-  cCancelText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
+  cCancelText: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
   cDel: { paddingHorizontal: Space.lg, paddingVertical: Space.sm, borderRadius: Radius.sm, backgroundColor: BrandColors.badSolid },
-  cDelText: { fontSize: 12.5, fontWeight: '800', color: '#FFFFFF' },
+  cDelText: { ...Type.tag, fontWeight: '800', color: '#FFFFFF' },
 
   foot: { paddingHorizontal: Space.lg, paddingTop: Space.md, paddingBottom: Space.lg, borderTopWidth: 1, borderTopColor: InkColors.line, backgroundColor: InkColors.cream },
-  saveBtn: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: Space.lg, alignItems: 'center' },
-  saveText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  saveBtn: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
+  saveText: { ...ButtonTextStyles.primary, color: '#FFFFFF' },
 });

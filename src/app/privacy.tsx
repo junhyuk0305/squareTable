@@ -2,8 +2,9 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-na
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
-import { InkColors } from '@/lib/theme/colors';
+import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { canManage } from '@/lib/utils/roles';
@@ -16,7 +17,7 @@ export default function PrivacyScreen() {
   const role = useSessionStore((s) => s.role);
   return (
     <SafeAreaView style={styles.safe} edges={[]}>
-      <Stack.Screen options={{ headerShown: false, title: '개인정보 처리방침', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
+      <Stack.Screen options={{ headerShown: false, title: '개인정보 처리방침', headerStyle: { backgroundColor: Surface.header }, headerTintColor: InkColors.ink }} />
       <ScreenTitleHeader title="개인정보 처리방침" backFallback />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.h1}>개인정보 수집·이용 안내</Text>
@@ -67,12 +68,12 @@ function Section({ title, children }: { title: string; children: string }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
+  safe: { flex: 1, backgroundColor: Surface.screen },
   scroll: { padding: 24, gap: 16 },
   h1: { fontSize: 22, fontWeight: '900', color: InkColors.ink },
-  updated: { fontSize: 12, color: InkColors.ink3, marginTop: -8 },
+  updated: { ...Type.tag, color: TextColor.secondary, marginTop: -8 },
   section: { gap: 5 },
-  h2: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
-  body: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
-  link: { fontSize: 14, fontWeight: '700', color: InkColors.ink, textDecorationLine: 'underline', marginTop: Space.sm },
+  h2: { fontSize: 15, fontWeight: '800', color: TextColor.secondary },
+  body: { ...Type.body, color: TextColor.secondary, lineHeight: 22 },
+  link: { ...Type.body, fontWeight: '700', textDecorationLine: 'underline', marginTop: Space.sm },
 });

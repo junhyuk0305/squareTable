@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
 import { USE_NATIVE_DRIVER } from '@/lib/anim';
 import { useOwnerTodoCount } from '@/lib/hooks/useOwnerTodoCount';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -178,7 +179,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   label: {
-    fontSize: 11,
+    ...Type.tab,
   },
   // 벨 뱃지(NotificationBell)와 동일 문법 — 아이콘 우상단 카운트.
   badge: {
@@ -193,5 +194,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { fontSize: 10, fontWeight: '900', color: '#FFFFFF' },
+  badgeText: { ...Type.micro, fontWeight: '900', color: '#FFFFFF' },
 });

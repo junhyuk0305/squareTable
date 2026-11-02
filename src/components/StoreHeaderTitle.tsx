@@ -4,8 +4,9 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { storeColor } from '@/lib/utils/storeColor';
-import { InkColors } from '@/lib/theme/colors';
+import { TextColor } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
+import { Type } from '@/lib/theme/type';
 
 /**
  * 매장 표시(이름·색) SSOT — 상단바(StoreToggle)와 탭 헤더(StoreHeaderTitle)가 **같은 판정을 공유**한다.
@@ -70,8 +71,8 @@ export function StoreHeaderTitle({ title }: { title: string }) {
 
 const styles = StyleSheet.create({
   wrap: { justifyContent: 'center' },
-  title: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
+  title: { ...Type.section },
   storeLine: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, marginTop: 1 },
   dot: { width: 6, height: 6, borderRadius: 3 },
-  storeName: { fontSize: 11.5, fontWeight: '600', color: InkColors.ink3, maxWidth: 220 },
+  storeName: { ...Type.tag, fontWeight: '600', color: TextColor.secondary, maxWidth: 220 },
 });
