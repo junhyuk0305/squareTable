@@ -99,6 +99,7 @@ export default function OwnerCoachScreen() {
   );
   // 0315: 다른 매장에 넣기(copy_knowhow_to)는 양쪽 매장 소유자만 된다. 이 매장의 매니저에게는 넛지를 안 띄운다.
   const isOwnerHere = useSessionStore((s) => s.role === 'owner');
+  const userName = useSessionStore((s) => s.userName);
   const nudgeTargets = useMemo(
     () => stores.filter((st) => isOwnerHere && st.role === 'owner' && st.unit_id !== activeUnit).map((st) => ({ unit_id: st.unit_id, store_name: st.store_name })),
     [stores, activeUnit, isOwnerHere],
@@ -244,10 +245,17 @@ export default function OwnerCoachScreen() {
   // 고른 파트를 저장할 노하우에 얹는다. **공통(null)이면 키 자체를 넣지 않는다** — 삽입 경로라
   // null 을 명시하는 것과 안 넣는 것이 결과가 같고(컬럼 기본값도 null), 안 넣으면 0164 미적용
   // 환경에서 파트 없는 저장까지 PGRST204 로 죽는 것을 피한다(db.ts spread → 컬럼부재 선례).
+  // 사장이 이 화면에서 직접 쓴 노하우는 저장할 때부터 '사장님 검증'이다(2026-11-02 사용자 결정).
+  // 매니저가 쓴 것은 그대로 '확인 필요'로 남는다. 이미 저장된 노하우는 바꾸지 않는다.
   const withPart = useCallback(
-    (e: PlaybookEntry, d: PublishDecision): PlaybookEntry =>
-      d.partId ? { ...e, section: d.section, part_id: d.partId } : { ...e, section: d.section },
-    [],
+    (e: PlaybookEntry, d: PublishDecision): PlaybookEntry => {
+      const verified: PlaybookEntry =
+        isOwnerHere && !e.verification
+          ? { ...e, verification: { state: 'owner_verified', verified_by: userName, verified_at: new Date().toISOString() } }
+          : e;
+      return d.partId ? { ...verified, section: d.section, part_id: d.partId } : { ...verified, section: d.section };
+    },
+    [isOwnerHere, userName],
   );
 
   const onPublished = useCallback(

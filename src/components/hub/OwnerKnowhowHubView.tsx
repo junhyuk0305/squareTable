@@ -328,7 +328,6 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
       {/* ★2026-08-27: AR1(맨바닥 원형) 폐기 → `card`(AR2+). 형제 액션 = 한 상자. '추가'만 주 액션(노랑). */}
       <Appear delay={stagger(3)}>
         <ActionRow
-          variant="card"
           items={[
             {
               key: 'add',

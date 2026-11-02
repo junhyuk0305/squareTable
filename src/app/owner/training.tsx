@@ -311,16 +311,13 @@ export default function OwnerTrainingScreen() {
           </View>
         ) : quizzes.length === 0 ? (
           usable === 0 ? (
-            /* A3 — 재료가 없다. 막다른 길을 만들지 않고 두 갈래 모두 준다.
+            /* A3 — 재료가 없다. 막다른 길을 만들지 않고 노하우 추가로 보낸다.
                ★"업무 채팅 열기"로 보내지 않는다 — 업무는 노하우를 만들어 주지 않는다. */
-            <>
-              <EmptyState
-                title="먼저 노하우가 필요해요"
-                body={'퀴즈 문제는 사장님이 적어 둔 노하우에서 나와요.\n노하우가 하나도 없으면 낼 문제가 없어요.'}
-                cta={{ label: '노하우 추가하기', onPress: () => router.push('/owner/coach' as never) }}
-              />
-              <GhostButton icon="document-text-outline" label="매뉴얼 올리기 · 인수인계서가 있으면" onPress={() => router.push('/owner/handover' as never)} />
-            </>
+            <EmptyState
+              title="먼저 노하우가 필요해요"
+              body={'퀴즈 문제는 사장님이 적어 둔 노하우에서 나와요.\n노하우가 하나도 없으면 낼 문제가 없어요.'}
+              cta={{ label: '노하우 추가하기', onPress: () => router.push('/owner/coach' as never) }}
+            />
           ) : (
             /* A1 — 재료는 있는데 아직 안 만들었다(§10-10). 지표·경고는 전부 "문항이 생긴 뒤"의 것이라 감춘다.
                인트로 카드 + PickRow "먼저 물어볼 만한 것" + "고른 n개로 만들기" — 첫 화면에서 고르기까지. */

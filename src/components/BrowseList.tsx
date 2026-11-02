@@ -62,23 +62,34 @@ export function BrowseCard({
         accessibilityLabel={`${entry.title}, ${v.label}${ratePct !== null ? `, 해결률 ${ratePct}%` : ''}${hits > 0 ? `, ${hits}명이 물어봄` : ''}`}
         style={({ pressed }) => [styles.cardBody, pressed && styles.pressed]}
       >
-        {/* 헤더: 카테고리(색점+이름) + 검증배지. 노출은 showCategory로 제어. */}
-        <View style={[styles.header, !showCategory && { justifyContent: 'flex-end' }]}>
-          {showCategory && (() => {
-            const sm = getSectionMeta(entry.section);
-            return (
-              <View style={styles.sectionChip}>
-                <View style={[styles.sectionDot, { backgroundColor: sm.color }]} />
-                <Text style={styles.sectionChipText}>{sm.label}</Text>
-              </View>
-            );
-          })()}
-          <VerifyBadge state={entry.verification?.state} size="list" />
-        </View>
-
-        <Text style={styles.title} numberOfLines={2}>
-          {entry.title}
-        </Text>
+        {/* 헤더: 카테고리(색점+이름) + 검증배지. 카테고리를 숨기면 배지 혼자 한 줄을 차지해
+            왼쪽 위가 비므로, 그때는 제목과 배지를 한 줄에 놓는다. */}
+        {showCategory ? (
+          <>
+            <View style={styles.header}>
+              {(() => {
+                const sm = getSectionMeta(entry.section);
+                return (
+                  <View style={styles.sectionChip}>
+                    <View style={[styles.sectionDot, { backgroundColor: sm.color }]} />
+                    <Text style={styles.sectionChipText}>{sm.label}</Text>
+                  </View>
+                );
+              })()}
+              <VerifyBadge state={entry.verification?.state} size="list" />
+            </View>
+            <Text style={styles.title} numberOfLines={2}>
+              {entry.title}
+            </Text>
+          </>
+        ) : (
+          <View style={styles.header}>
+            <Text style={[styles.title, styles.titleInRow]} numberOfLines={2}>
+              {entry.title}
+            </Text>
+            <VerifyBadge state={entry.verification?.state} size="list" />
+          </View>
+        )}
 
         {/* 해결률 · 물어본 수 — 있는 것만 */}
         {ratePct !== null || hits > 0 ? (
@@ -173,6 +184,7 @@ const styles = StyleSheet.create({
   sectionDot: { width: 7, height: 7, borderRadius: Radius.pill },
   sectionChipText: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
   title: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 21 },
+  titleInRow: { flex: 1, minWidth: 0 },
   statRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   rate: { fontSize: 12, fontWeight: '700', color: InkColors.ink2 },
   hits: { fontSize: 12, fontWeight: '700', color: BrandColors.warnText },

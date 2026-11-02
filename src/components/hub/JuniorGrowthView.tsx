@@ -118,7 +118,6 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
 
   // ── 빈 상태: 골격 + 정직한 예시(라벨 명시·실데이터 들어오면 이 분기 자체가 사라짐) ──
   if (empty) {
-    const firstUnit = growth[0]?.unit_id;
     return (
       <>
       {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
@@ -130,18 +129,8 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
             <Text style={styles.emptyBody}>
               일하다 막히면 물어보고, 할일을 완료하면 그 기록이 이 화면에 모여요. 이 화면은 나만 볼 수 있어요.
             </Text>
-            {firstUnit && (
-              <Pressable
-                onPress={() => goStore(firstUnit, '/junior/chat')}
-                disabled={!!switching}
-                style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.9 }]}
-                accessibilityRole="button"
-                accessibilityLabel="물어보러 가기"
-              >
-                <Ionicons name="chatbubble-outline" size={15} color={InkColors.ink} />
-                <Text style={styles.emptyBtnText}>물어보러 가기</Text>
-              </Pressable>
-            )}
+            {/* '물어보러 가기'는 뺐다(2026-11-02 사용자 결정). 성장은 매장 밖 개인 화면인데,
+                버튼이 첫 매장을 임의로 골라 그 매장 물어보기로 보냈다. */}
           </View>
         </Appear>
         {/* ★2026-08-06: 가짜 실적("내 노하우가 최근 30일 7번 도움 됐어요")을 **스켈레톤**으로 교체했다.
@@ -371,25 +360,8 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
         </Appear>
       )}
 
-      {/* ── 제안 진입점 — 가르침 실적이 0건일 때만.
-             ★2026-08-19 판정("0건에도 이 존재를 알려야 한다")은 그대로 지키되, 자리를 맨 위 노랑 카드에서
-               맨 아래 한 줄로 내렸다(2026-08-27). 카드가 아니므로 블록 예산에 세지 않는다.
-               1건 이상이면 위 L4 '매장 노하우가 된 내 답' 칸이 같은 말을 이미 한다. ── */}
-      {totals.taught === 0 && growth[0] && (
-        <Appear delay={stagger(4)}>
-          <Pressable
-            onPress={() => goStore(growth[0].unit_id, '/junior/suggest')}
-            disabled={!!switching}
-            style={({ pressed }) => [styles.suggestLink, pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-            accessibilityLabel="노하우 제안하러 가기"
-          >
-            <Ionicons name="bulb-outline" size={15} color={InkColors.ink2} />
-            <Text style={styles.suggestText}>내가 아는 것을 제안하면 매장 노하우로 남아요 · 제안하기</Text>
-            <Ionicons name="chevron-forward" size={14} color={InkColors.ink3} />
-          </Pressable>
-        </Appear>
-      )}
+      {/* 노하우 제안 진입 행은 뺐다(2026-11-02 사용자 결정). 성장은 매장 밖 개인 화면인데,
+          첫 매장을 임의로 골라 그 매장 제안으로 보냈다. */}
 
       {/* 노하우 원문 시트 — 물어보기 [출처]와 동일 컴포넌트(읽기 전용) 재사용 */}
       <EntryDetailModal entry={openEntry} visible={!!openEntry} onClose={() => setOpenEntry(null)} />
@@ -414,18 +386,6 @@ const styles = StyleSheet.create({
   // 빈 상태
   emptyTitle: { fontSize: 17, fontWeight: '900', color: InkColors.ink, paddingTop: Space.xs },
   emptyBody: { fontSize: 15, color: InkColors.ink2, lineHeight: 22, marginTop: Space.xs },
-  emptyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: BrandColors.yellowSoft,
-    borderRadius: Radius.md,
-    paddingVertical: Space.md,
-    marginTop: Space.md,
-    marginBottom: Space.xs,
-  },
-  emptyBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
   // 스켈레톤 카드 — 가짜 수치가 없으므로 opacity 로 흐리지 않는다(흐림 = 가짜 표시였다).
   ghostCard: {
     backgroundColor: '#FFFFFF',
@@ -465,15 +425,6 @@ const styles = StyleSheet.create({
   tgRow: { paddingVertical: Space.sm, minWidth: 0 },
   tgTitle: { fontSize: 13, lineHeight: 18, fontWeight: '800', color: InkColors.ink },
   tgSub: { fontSize: 11.5, lineHeight: 16, color: InkColors.ink3, marginTop: 1 },
-  // 제안 진입점 한 줄 — 카드가 아니다(블록 예산 밖).
-  suggestLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    minHeight: 48,
-    paddingHorizontal: Space.sm,
-  },
-  suggestText: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 18, fontWeight: '700', color: InkColors.ink2 },
 
   statRow: { flexDirection: 'row', paddingVertical: Space.xs },
   statCell: { flex: 1, alignItems: 'center', gap: 2 },

@@ -74,8 +74,8 @@ export const styles = StyleSheet.create({
     ...Elevation.e1,
   },
   // 할일 0건 — 첫 할일 등록으로 안내(새 매장은 기본 할일이 없다).
-  taskEmpty: { alignItems: 'flex-start', gap: Space.sm, paddingVertical: Space.sm },
-  taskEmptyText: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: InkColors.ink2 },
+  taskEmpty: { alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm },
+  taskEmptyText: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: InkColors.ink2, textAlign: 'center' },
   taskEmptyCta: {
     flexDirection: 'row',
     alignItems: 'center',

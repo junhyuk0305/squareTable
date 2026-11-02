@@ -183,16 +183,14 @@ export default function OwnerStaffScreen() {
         />
         </Appear>
 
-        {/* ③④ 바로 가기 — 퀴즈·근무표 진입 2칸. 블록 A2′ ActionRow `tile`(데모 §7-7 · 2026-08-27).
-            맨바닥 행 2개(AR1, 폐기)를 타일 한 덩어리로 접었다 — 목적지가 /owner/training·/owner/schedule 로
-            제각각이라 card(형제 액션)가 아니라 tile. 새 직원이 들어오기로 한 순간이 코스를 만들 순간(초대코드 바로 아래).
+        {/* ③④ 바로 가기 — 퀴즈·근무표 진입 2칸. ActionRow(2026-11-02 형태를 하나로 통일 — 옛 tile 폐기).
+            새 직원이 들어오기로 한 순간이 코스를 만들 순간(초대코드 바로 아래).
             근무표 칸은 허브 '현황'이 근무표로 착지하게 바뀐(2026-08-11 P2) 보상으로 둔 반대 방향 진입점.
             상태 한 줄 없음 — 이 화면은 퀴즈·근무표 건수를 읽지 않는다(새 쿼리 금지). */}
         <Appear delay={stagger(2)}>
         <View style={{ gap: Space.sm }}>
           <SectionLabel title="바로 가기" />
           <ActionRow
-            variant="tile"
             items={[
               { key: 'quiz', icon: 'school-outline', label: '퀴즈', onPress: () => goToTab('/owner/training') },
               { key: 'schedule', icon: 'calendar-outline', label: '근무표', onPress: () => router.push('/owner/schedule') },
