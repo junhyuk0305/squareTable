@@ -6,7 +6,7 @@ import { Space } from '@/lib/theme/layout';
 // 바탕·첫 여백·섹션 간격·인사 문구·섹션(제목 ↔ 카드)은 <Screen>·<Greeting>·<Section> 이 든다(2026-11-02).
 export const styles = StyleSheet.create({
   // 오늘 업무 — 목록 3건을 한 카드에. 남은 개수·출퇴근 상태는 위 히어로(HeroSubNav)가 갖는다.
-  // 카드 = CardStyles(흰 면·선 1px·모서리 16·그림자 없음·안쪽 16).
+  // 카드 = CardStyles(흰 면·선 1px·모서리 16·그림자 e1·안쪽 16).
   todoCard: { ...CardStyles.list, gap: Space.md },
   todoRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingVertical: Space.xs },
   todoRowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },

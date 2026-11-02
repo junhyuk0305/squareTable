@@ -34,11 +34,14 @@ export function SegmentTabs({
   value,
   onChange,
   style,
+  testID,
 }: {
   items: SegmentItem[];
   value: string;
   onChange: (key: string) => void;
   style?: ViewStyle;
+  /** 칸마다 `${testID}-${key}` 를 붙인다(하니스가 칸을 집는 자리 · 예: forgot-mode-email). */
+  testID?: string;
 }) {
   // 선택 알약(검정)을 활성 세그먼트 위로 부드럽게 슬라이드한다.
   //  각 세그먼트 폭이 count/dot로 조금씩 달라질 수 있어 onLayout으로 실측 → translateX·width 애니메이트.
@@ -105,6 +108,7 @@ export function SegmentTabs({
               accessibilityRole="tab"
               accessibilityState={{ selected: isOn }}
               accessibilityLabel={it.label}
+              testID={testID ? `${testID}-${it.key}` : undefined}
               style={styles.seg}
             >
               <View style={styles.labelRow}>

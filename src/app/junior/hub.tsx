@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { ButtonStyles } from '@/lib/theme/button';
@@ -331,7 +331,8 @@ export default function JuniorHub() {
 const CELL_GAP = 8;
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
+  // 바탕 = 매장 안 화면과 같은 Surface.screen(2026-11-02 사용자 — 허브도 매장 내부와 같이).
+  safe: { flex: 1, backgroundColor: Surface.screen },
   scroll: { padding: Space.gutter, gap: Space.xl, paddingBottom: 40 },
 
   topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

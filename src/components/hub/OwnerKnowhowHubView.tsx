@@ -31,6 +31,7 @@ import { AlertRow } from '@/components/blocks/AlertRow';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { Appear, stagger } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Type } from '@/lib/theme/type';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
@@ -248,7 +249,8 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
                     ].map((r, i) => (
                       <View key={r.text} style={[styles.bnRow, i > 0 && styles.lgDivider]}>
                         <Text style={styles.bnValue}>{r.n}</Text>
-                        <Text style={styles.lgText} numberOfLines={1}>{r.text}</Text>
+                        {/* 줄을 자르지 않는다 — 좁은 칸에서 '문항이 없는 노…'로 뜻이 잘렸다(2026-11-02). */}
+                        <Text style={styles.lgText}>{r.text}</Text>
                       </View>
                     ))}
                   </View>,
@@ -514,7 +516,8 @@ const styles = StyleSheet.create({
   lgValue: { fontSize: 17, lineHeight: 22, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.4 },
   // 뒷면(V4 큰숫자형) — 급한 값 두 개만 크게.
   bnRow: { flexDirection: 'row', alignItems: 'baseline', gap: Space.sm + 2, paddingVertical: Space.sm + 2 },
-  bnValue: { minWidth: 52, textAlign: 'right', fontSize: 30, lineHeight: 36, fontWeight: '900', color: InkColors.ink, letterSpacing: -1.2 },
+  // 숫자는 왼쪽에 붙인다(2026-11-02 사용자) — 옛 폭 52 오른쪽 정렬 상자가 글자 자리를 먹어 라벨이 잘렸다.
+  bnValue: { ...Type.numHero, color: InkColors.ink },
 
   emptyTitle: { fontSize: 15, fontWeight: '900', color: InkColors.ink, paddingTop: Space.xs },
   emptyBody: { fontSize: 15, color: InkColors.ink2, lineHeight: 22, marginTop: 2 },

@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { PasswordInput } from '@/components/PasswordInput';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { KeyboardShift } from '@/components/KeyboardShift';
+import { SegmentTabs } from '@/components/SegmentTabs';
 import { usePhoneOtp, resetPasswordByPhone, findEmailByPhone } from '@/lib/otp';
 import { ROLE_SPLIT_TEXT } from '@/lib/account/copy';
 import { foundAccountLine, googleAccountHint, resetDoneText, type FoundAccount } from '@/lib/account/findEmail';
@@ -148,13 +149,14 @@ export default function ForgotPasswordScreen() {
             </View>
           ) : (
             <View style={styles.card} testID="forgot-form">
-              <View style={styles.seg}>
-                {(['email', 'password'] as Mode[]).map((m) => (
-                  <Pressable key={m} onPress={() => switchMode(m)} accessibilityRole="button" accessibilityState={{ selected: mode === m }} testID={`forgot-mode-${m}`} style={[styles.segBtn, mode === m && styles.segBtnOn]}>
-                    <Text style={[styles.segText, mode === m && styles.segTextOn]}>{m === 'email' ? '이메일 찾기' : '비밀번호 바꾸기'}</Text>
-                  </Pressable>
-                ))}
-              </View>
+              {/* 앱 안과 같은 공용 탭 스위처(2026-11-02 사용자 · 옛 복제본 회색 트랙). 칸 id = forgot-mode-email·password. */}
+              <SegmentTabs
+                items={[{ key: 'email', label: '이메일 찾기' }, { key: 'password', label: '비밀번호 바꾸기' }]}
+                value={mode}
+                onChange={(k) => switchMode(k as Mode)}
+                style={styles.segTabs}
+                testID="forgot-mode"
+              />
               <Text style={styles.title}>가입한 휴대폰 번호로 확인해요</Text>
               <Text style={styles.text}>
                 {mode === 'email'
@@ -167,13 +169,12 @@ export default function ForgotPasswordScreen() {
                   <Text style={styles.label}>어떤 계정인가요?</Text>
                   {/* J11: 같은 번호로 사장·직원 계정이 따로 있을 수 있다. 역할을 잘못 고르면 엣지가 맞는 역할을 알려 준다(Q18). */}
                   <Text style={styles.roleHint}>{ROLE_SPLIT_TEXT}</Text>
-                  <View style={styles.seg}>
-                    {(['owner', 'junior'] as Role[]).map((r) => (
-                      <Pressable key={r} onPress={() => setRole(r)} accessibilityRole="button" accessibilityState={{ selected: role === r }} style={[styles.segBtn, role === r && styles.segBtnOn]}>
-                        <Text style={[styles.segText, role === r && styles.segTextOn]}>{r === 'owner' ? '사장님' : '직원'}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
+                  <SegmentTabs
+                    items={[{ key: 'owner', label: '사장님' }, { key: 'junior', label: '직원' }]}
+                    value={role}
+                    onChange={(k) => setRole(k as Role)}
+                    style={styles.segTabs}
+                  />
                 </>
               ) : null}
 
@@ -276,11 +277,9 @@ const styles = StyleSheet.create({
   hint: { fontSize: 13, lineHeight: 19, color: InkColors.ink3, marginTop: Space.xs },
   label: { fontSize: 13.5, fontWeight: '700', color: InkColors.ink2, marginTop: Space.sm },
   roleHint: { fontSize: 13, lineHeight: 19, color: InkColors.ink3 },
-  seg: { flexDirection: 'row', backgroundColor: InkColors.paper, borderRadius: Radius.pill, padding: 3, gap: 2 },
-  segBtn: { flex: 1, paddingVertical: 9, borderRadius: Radius.pill, alignItems: 'center' },
-  segBtnOn: { backgroundColor: InkColors.ink },
-  segText: { fontSize: 14.5, fontWeight: '700', color: InkColors.ink2 },
-  segTextOn: { color: InkColors.bubbleText },
+  // 공용 SegmentTabs 의 바깥 여백(16·아래 8)을 끈다 — 카드 안 간격은 카드 gap 이 정한다.
+  //   변마다 적는다: 네이티브(Yoga)는 개별 변(marginBottom)이 줄임 margin 보다 우선해 margin:0 만으로는 아래 8 이 남는다.
+  segTabs: { marginTop: 0, marginBottom: 0, marginHorizontal: 0 },
   // flexWrap + 입력칸 기준 폭 120 — 글자가 커져(OS 배율·앱 배율) 버튼이 넓어지면 버튼이 아랫줄로 내려간다.
   //   140 은 '010-0000-0000' 이 기본 크기에서 들어가는 폭이다. 360dp 기본에서는 지금처럼 한 줄이다.
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, alignItems: 'center' },

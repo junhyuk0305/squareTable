@@ -11,7 +11,8 @@ import { NoStoreView } from '@/components/hub/NoStoreView';
 import { JuniorGrowthView } from '@/components/hub/JuniorGrowthView';
 import { OwnerKnowhowHubView } from '@/components/hub/OwnerKnowhowHubView';
 import { Appear, stagger } from '@/components/Appear';
-import { InkColors } from '@/lib/theme/colors';
+import { InkColors, Surface } from '@/lib/theme/colors';
+import { Type } from '@/lib/theme/type';
 import { Space } from '@/lib/theme/layout';
 
 // ── 허브 2번째 탭: 축적·순환 레이어(3탭 확장, 2026-07-30) ─────────────────────────────
@@ -71,9 +72,10 @@ export default function HubGrowthScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
+  // 바탕 = 매장 안 화면과 같은 Surface.screen(2026-11-02 사용자 — 허브도 매장 내부와 같이).
+  safe: { flex: 1, backgroundColor: Surface.screen },
   scroll: { padding: Space.gutter, gap: Space.lg, paddingBottom: 40 },
   titleBlock: { gap: 4 },
-  title: { fontSize: 26, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5 },
+  title: { ...Type.pageTitle, color: InkColors.ink },
   subtitle: { fontSize: 15, color: InkColors.ink2 },
 });

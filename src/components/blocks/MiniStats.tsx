@@ -2,6 +2,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 
 import { InfoDot } from '@/components/InfoDot';
 import { InkColors } from '@/lib/theme/colors';
+import { Type } from '@/lib/theme/type';
 import { Space } from '@/lib/theme/layout';
 
 export type MiniStatsItem = {
@@ -69,7 +70,8 @@ const styles = StyleSheet.create({
   divider: { borderLeftWidth: 1, borderLeftColor: InkColors.line },
   cellInner: { alignItems: 'center', gap: Space.xs, paddingVertical: Space.md, paddingHorizontal: Space.xs },
   pressed: { opacity: 0.6 },
-  value: { fontSize: 20, lineHeight: 27, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5 },
+  // 칸 숫자 = Type.numCell(22 · 2026-11-02 사용자. 옛 20) — 숫자 칸(StatCardGrid)과 같은 단계.
+  value: { ...Type.numCell, color: InkColors.ink, letterSpacing: -0.5 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 3, maxWidth: '100%' },
   labelText: { flexShrink: 1 },
   label: { fontSize: 12, lineHeight: 17, fontWeight: '700', color: InkColors.ink2 },

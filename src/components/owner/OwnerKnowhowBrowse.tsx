@@ -36,6 +36,7 @@ import { UNSECTIONED, sectionOptions } from '@/lib/config/sections';
 import { manualToText } from '@/lib/utils/manualText';
 import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { Type } from '@/lib/theme/type';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Layout, Space } from '@/lib/theme/layout';
@@ -857,7 +858,7 @@ const styles = StyleSheet.create({
 
   // 템플릿 둘러보기 진입 링크(홈에서 이관)
   // '여러 개 한 번에 추가' — 두 진입을 한 카드 안 2행으로. 카드 1장 = 블록 1개(2026-08-06).
-  // 카드 = CardStyles.rows(좌우 16 · 그림자 없음) + 행 위아래 16 → 안쪽 사방 16(2026-11-02).
+  // 카드 = CardStyles.rows(좌우 16 · 그림자 e1) + 행 위아래 16 → 안쪽 사방 16(2026-11-02).
   growCard: CardStyles.rows,
   growRow: {
     flexDirection: 'row', alignItems: 'center', gap: Space.sm,
@@ -896,7 +897,7 @@ const styles = StyleSheet.create({
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 6, paddingHorizontal: 12, borderRadius: Radius.pill },
   chipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   chipDot: { width: 7, height: 7, borderRadius: Radius.pill },
-  chipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
+  chipText: { ...Type.tag, fontWeight: '700', color: InkColors.ink2 },
   chipTextOn: { color: InkColors.bubbleText },
 
   // (2026-08-08: 정렬 컨트롤 스타일 8종 + 카테고리 묶음 헤더 3종은 기능과 함께 삭제됐다.)

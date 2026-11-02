@@ -271,8 +271,10 @@ export function TodoScreen({
             {/* 업무 설정(사장·매니저) — 카테고리·루틴 업무·담당자를 한 화면에서 정한다.
                 옛 ⋯ 메뉴(안에 '업무 카테고리 설정'이 숨어 있었다)와 '루틴 업무 설정' 행을 함께 대체한다. */}
             {onOpenSettings && (
-              <Pressable onPress={onOpenSettings} style={({ pressed }) => [s.setBtn, pressed && { opacity: 0.85 }]} accessibilityRole="button">
-                <Text style={s.setBtnText}>업무 설정</Text>
+              <Pressable onPress={onOpenSettings} style={({ pressed }) => [s.setHit, pressed && { opacity: 0.85 }]} accessibilityRole="button">
+                <View style={s.setBtn}>
+                  <Text style={s.setBtnText}>업무 설정</Text>
+                </View>
               </Pressable>
             )}
             <Pressable onPress={() => { setCursor(new Date(`${today}T00:00:00`)); setSelected(today); }} style={s.todayBtn}>
@@ -506,7 +508,9 @@ const s = StyleSheet.create({
   month: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   // 오른쪽 액션 묶음 — marginLeft:auto 를 **여기 하나만** 둔다(버튼마다 주면 auto 끼리 여백을 나눠 가져 벌어진다).
   calActions: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: Space.xs },
-  setBtn: { borderWidth: 1, borderColor: BrandColors.gold, backgroundColor: BrandColors.yellowSoft, borderRadius: Radius.pill, paddingHorizontal: Space.md, minHeight: 40, justifyContent: 'center' },
+  // 보이는 알약은 낮게(위아래 4 · 2026-11-02 사용자), 누르는 상자는 44 — RN-web 은 hitSlop 을 무시한다.
+  setHit: { minHeight: 44, justifyContent: 'center' },
+  setBtn: { borderWidth: 1, borderColor: BrandColors.gold, backgroundColor: BrandColors.yellowSoft, borderRadius: Radius.pill, paddingHorizontal: Space.md, paddingVertical: Space.xs },
   setBtnText: { fontSize: 11, fontWeight: '800', color: InkColors.ink },
   todayBtn: { borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3 },
   todayText: { fontSize: 11, fontWeight: '700', color: InkColors.ink2 },

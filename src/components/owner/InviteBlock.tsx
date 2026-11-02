@@ -160,9 +160,10 @@ export function InviteBlock({
 const s = StyleSheet.create({
   // 라벨↔카드 8 — 다른 섹션(SectionLabel + 부모 gap sm)과 같은 간격.
   root: { gap: Space.sm },
+  // 모서리 16 — 다른 카드와 한 벌(2026-11-02 사용자. 옛 20).
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
     padding: Space.lg,

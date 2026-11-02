@@ -16,7 +16,8 @@ import { assignedTodayCount } from '@/lib/utils/crossStoreNotifs';
 import { roleNoun } from '@/lib/utils/roles';
 import { todayStr } from '@/lib/utils/attendance';
 import { fetchOwnerOverview, fetchMyLockedUnits, fetchMyCanAddStore, type MyUnitRow, type OwnerOverviewRow } from '@/lib/db';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface } from '@/lib/theme/colors';
+import { Type } from '@/lib/theme/type';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { canUseMultistore } from '@/lib/config/tiers';
@@ -345,11 +346,12 @@ function industryIcon(industry: string | null): keyof typeof Ionicons.glyphMap {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
+  // 바탕 = 매장 안 화면과 같은 Surface.screen(2026-11-02 사용자 — 허브도 매장 내부와 같이).
+  safe: { flex: 1, backgroundColor: Surface.screen },
   scroll: { padding: Space.gutter, gap: Space.xl, paddingBottom: 40 },
 
   titleBlock: { gap: 4 },
-  title: { fontSize: 26, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5 },
+  title: { ...Type.pageTitle, color: InkColors.ink },
   subtitle: { fontSize: 15, color: InkColors.ink2 },
 
   section: { gap: Space.sm },

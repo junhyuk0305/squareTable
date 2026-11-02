@@ -242,10 +242,10 @@ export default function JuniorAttendanceRoute() {
 }
 
 const styles = StyleSheet.create({
-  // 출근 카드 — 모서리 20·안쪽 24 는 미정이라 그대로 둔다(2026-11-02 결정표 '아직 안 정한 것').
+  // 출근 카드 — 모서리 16(다른 카드와 한 벌 · 2026-11-02 사용자). 안쪽 24 는 그대로.
   mainCard: {
     backgroundColor: Surface.card,
-    borderRadius: Radius.lg,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
     padding: 24,
@@ -253,7 +253,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   workingTag: { fontSize: 13, fontWeight: '800', color: BrandColors.accentText },
-  bigTime: { fontSize: 40, fontWeight: '900', color: InkColors.ink, letterSpacing: -1 },
+  // 대표 숫자 = Type.numHero(32 · 2026-11-02 사용자. 옛 40).
+  bigTime: { ...Type.numHero, color: InkColors.ink },
   bigSub: { fontSize: 14, color: TextColor.secondary, fontWeight: '600', marginBottom: 14 },
   // 주 버튼 = ButtonStyles.primary(높이 52·모서리 16·가로 꽉) — 출근 카드 자체의 모서리 20 과 별개다.
   btn: ButtonStyles.primary,
@@ -263,7 +264,7 @@ const styles = StyleSheet.create({
 
   // 이번 달 합계는 공용 <MiniStats>(I3)로 대체됨 — 로컬 statCard·wageNote 폐기(2026-08-06).
 
-  // 최근 기록 — 행 목록 카드(CardStyles.rows: 흰 면·선 1px·모서리 16·그림자 없음·좌우 16).
+  // 최근 기록 — 행 목록 카드(CardStyles.rows: 흰 면·선 1px·모서리 16·그림자 e1·좌우 16).
   list: CardStyles.rows,
   emptyWrap: { paddingVertical: Space.gutter, gap: Gap.inline },
   emptyDesc: { ...Type.desc, textAlign: 'center' },

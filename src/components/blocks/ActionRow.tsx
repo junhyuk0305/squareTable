@@ -2,7 +2,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { BrandColors, InkColors, TextColor } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
+import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
 /** 디스크 치수 — 도형 크기라 간격 토큰 대상이 아니다. 터치 타깃은 칸(item) 전체라 48dp 를 넘긴다. */
@@ -85,6 +85,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: InkColors.line,
     backgroundColor: InkColors.bg,
+    ...Elevation.e1,
   },
   item: { flex: 1, minWidth: 0, minHeight: ITEM_MIN_H, alignItems: 'center', paddingVertical: Space.md, paddingHorizontal: Space.xs },
   divider: { borderLeftWidth: 1, borderLeftColor: InkColors.line },

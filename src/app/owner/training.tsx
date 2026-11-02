@@ -989,7 +989,7 @@ const st = StyleSheet.create({
 
   // 접히는 요약행 — 카드가 아니다(카드로 만들면 목록 카드 옆에서 또 하나의 카드로 읽힌다).
   // ★회색 바탕 위에 맨몸으로 두지 않는다(2026-09-11) — 섹션이 흰 카드로 묶여야 한 덩어리로 읽힌다.
-  // 흰 면 · 선 1px · 모서리 16 · 그림자 없음 · 좌우 16 = CardStyles.rows(2026-11-02).
+  // 흰 면 · 선 1px · 모서리 16 · 그림자 e1 · 좌우 16 = CardStyles.rows(2026-11-02).
   foldRow: {
     ...CardStyles.rows,
     flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48,

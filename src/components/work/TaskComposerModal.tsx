@@ -10,6 +10,7 @@ import { maskHHMM } from '@/lib/utils/attendance';
 import { genId } from '@/lib/utils/id';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { searchPlaybook } from '@/lib/rag';
 import type { PlaybookEntry } from '@/types';
@@ -386,7 +387,7 @@ function TaskComposerBody({
                   value={taskScope}
                   onChange={(k) => { setTaskScope(k as 'shared' | 'private'); if (k === 'private') setPicked([]); }}
                 />
-                {taskScope === 'private' && <Text style={s.revealLabel}>나만 봐요. 사장님도 볼 수 없어요.</Text>}
+                {taskScope === 'private' && <Text style={s.scopeNote}>나만 봐요. 사장님도 볼 수 없어요.</Text>}
               </Field>
             )}
 
@@ -659,6 +660,9 @@ function TaskComposerBody({
   );
 }
 
+/** 한 칸(Field) 안 묶음 간격 — 제목↔버튼, 버튼↔설명이 같은 붙은 여백을 쓴다. */
+const FIELD_INNER_GAP = 6;
+
 function Field({ label, info, children }: { label: string; info?: React.ReactNode; children: React.ReactNode }) {
   return (
     <View style={s.fld}>
@@ -699,8 +703,8 @@ const s = StyleSheet.create({
   title: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: InkColors.ink, paddingHorizontal: 16, paddingBottom: 12 },
   scroll: { flex: 1, paddingHorizontal: 16 },
   fld: { marginBottom: 13 },
-  fldLabel: { fontSize: 11.5, lineHeight: 17, fontWeight: '800', color: InkColors.ink2, marginBottom: 6 },
-  fldLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 6 },
+  fldLabel: { fontSize: 11.5, lineHeight: 17, fontWeight: '800', color: InkColors.ink2, marginBottom: FIELD_INNER_GAP },
+  fldLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: FIELD_INNER_GAP },
   fldLabelInRow: { marginBottom: 0 },
   timeInp: { alignSelf: 'flex-start', minWidth: 96, textAlign: 'center' },
   // ⓘ 설명 — 시트 위에 겹쳐 뜨는 창. 바깥이나 '알겠어요'를 누르면 닫힌다.
@@ -724,6 +728,8 @@ const s = StyleSheet.create({
 
   reveal: { marginTop: 9, padding: 11, backgroundColor: InkColors.cream, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md },
   revealLabel: { fontSize: 11, fontWeight: '800', color: InkColors.ink2, marginBottom: 8 },
+  // 선택 버튼 아래 설명 — 같은 묶음이라 제목↔버튼과 같은 붙은 여백(2026-11-02 사용자). 설명 글자 = Type.desc.
+  scopeNote: { ...Type.desc, marginTop: FIELD_INNER_GAP },
   dateText: { fontSize: 14, fontWeight: '700', color: InkColors.ink, marginTop: 8, textAlign: 'center' },
 
   // 미니 달력

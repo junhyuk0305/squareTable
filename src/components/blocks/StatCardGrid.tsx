@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { InfoDot } from '@/components/InfoDot';
 import { InkColors, TextColor } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
+import { Type } from '@/lib/theme/type';
+import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
 /**
@@ -43,7 +44,8 @@ export type StatCardItem = {
  *
  * 옛 `MiniStats`(숫자만 나열)의 자리를 새 화면에서는 이것이 먼저 맡는다 — 숫자 옆에 대상(R2)과
  * 그림(R4)이 붙어야 "지표 나열"로 안 읽힌다. **같은 폭 반복 3회 = 2열로 접는다**(R3).
- * 홀수 개면 마지막 줄은 빈 칸으로 채워 폭을 맞춘다(마지막 칸만 두 배로 넓어지면 위계가 생긴다).
+ * 홀수 개면 마지막 칸이 한 줄을 다 쓴다(2026-11-02 사용자 결정). 옛 방식 = 빈 칸을 채워 반쪽 카드로 두기 —
+ *   카드 옆이 비어 칸이 안 맞아 보였다.
  * 표시 전용: 값·단위·톤은 호출부가 정한다.
  */
 export function StatCardGrid({ items }: { items: StatCardItem[] }) {
@@ -58,7 +60,6 @@ export function StatCardGrid({ items }: { items: StatCardItem[] }) {
           {row.map((it) => (
             <StatCard key={it.key} item={it} style={styles.cell} />
           ))}
-          {row.length === 1 ? <View style={styles.cell} /> : null}
         </View>
       ))}
     </View>
@@ -136,8 +137,8 @@ const styles = StyleSheet.create({
   grid: { gap: Space.sm },
   row: { flexDirection: 'row', gap: Space.sm },
   cell: { flex: 1, minWidth: 0 },
-  // 카드 = 그림자 없음(2026-11-02 결정).
-  card: cardBase,
+  // 카드 = 그림자 e1 — CardStyles 와 같은 그림자(2026-11-02 되살림).
+  card: { ...cardBase, ...Elevation.e1 },
   // 초안 칸 — 아직 아무 일도 아닌 것(회색 면).
   cardDim: { ...cardBase, backgroundColor: InkColors.bgSoft },
   pressed: { opacity: 0.75 },
@@ -145,7 +146,7 @@ const styles = StyleSheet.create({
   // 라벨·단위·부제는 위치·상태 꼬리표라 본문 15sp 하한 대상이 아니다(simplicity-voice §4 '보조').
   label: { flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 17, fontWeight: '800', color: InkColors.ink2 },
   // 26 → 22: "498만원"처럼 단위 붙은 값이 칸을 압도했다(2026-09-03 웹 실측 피드백).
-  value: { marginTop: Space.xs, fontSize: 22, lineHeight: 27, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.8 },
+  value: { ...Type.numCell, marginTop: Space.xs, color: InkColors.ink, letterSpacing: -0.8 },
   unit: { fontSize: 14, fontWeight: '800', color: InkColors.ink3, letterSpacing: 0 },
   // info 가 있을 때만 — 라벨이 자리를 다 먹지 않고 ⓘ 를 바로 옆에 붙인다.
   // ★`flex: 0` 를 쓰면 안 된다: RN 의 flex 단축은 basis 를 **0%** 로 잡아서 grow 0 과 겹치면

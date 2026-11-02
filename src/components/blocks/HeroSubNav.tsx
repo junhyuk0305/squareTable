@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { Type } from '@/lib/theme/type';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
@@ -123,10 +124,7 @@ const styles = StyleSheet.create({
     opacity: 0.65,
   },
   value: {
-    fontSize: 32,
-    lineHeight: 40,
-    fontWeight: '900',
-    letterSpacing: -1,
+    ...Type.numHero,
     color: InkColors.bubbleText,
     marginTop: Space.xs,
     marginBottom: Space.sm,

@@ -65,7 +65,7 @@ export const styles = StyleSheet.create({
   dutyText: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 18, fontWeight: '700', color: InkColors.ink2 },
   // 완료 꼬리표(완료자·시각) — 감시원칙 D1이 드러내라고 정한 값. 역시 보조 표기.
   taskDoneBy: { flexShrink: 0, fontSize: 12, fontWeight: '700', color: TextColor.secondary },
-  // 행 목록 카드(좌우 16 · 그림자 없음) — 위아래 여백은 각 행이 갖는다.
+  // 행 목록 카드(좌우 16 · 그림자 e1 = CardStyles) — 위아래 여백은 각 행이 갖는다.
   taskCard: CardStyles.rows,
   // 할일 0건 — 첫 할일 등록으로 안내(새 매장은 기본 할일이 없다). 위아래 = 카드 안쪽 16(행이 없으니 사방 16이 된다).
   taskEmpty: { alignItems: 'center', gap: Space.sm, paddingVertical: Layout.cardPad },

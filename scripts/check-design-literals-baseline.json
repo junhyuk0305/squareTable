@@ -1,8 +1,8 @@
 {
   "totals": {
     "hex": 314,
-    "fontSize": 1622,
-    "spacing": 1760
+    "fontSize": 1609,
+    "spacing": 1755
   },
   "files": {
     "src/app/+html.tsx": {
@@ -48,8 +48,8 @@
       "fontSize": 3
     },
     "src/app/forgot-password.tsx": {
-      "fontSize": 10,
-      "spacing": 5
+      "fontSize": 9,
+      "spacing": 2
     },
     "src/app/hq/_layout.tsx": {
       "fontSize": 3,
@@ -100,7 +100,7 @@
       "spacing": 4
     },
     "src/app/hub-growth.tsx": {
-      "fontSize": 2,
+      "fontSize": 1,
       "spacing": 2
     },
     "src/app/hub-knowhow.tsx": {
@@ -109,7 +109,7 @@
       "spacing": 1
     },
     "src/app/hub.tsx": {
-      "fontSize": 2,
+      "fontSize": 1,
       "spacing": 2
     },
     "src/app/index.tsx": {
@@ -123,7 +123,7 @@
       "spacing": 5
     },
     "src/app/junior/attendance.tsx": {
-      "fontSize": 6,
+      "fontSize": 5,
       "spacing": 5
     },
     "src/app/junior/hub.tsx": {
@@ -282,7 +282,7 @@
     },
     "src/app/stores.tsx": {
       "hex": 4,
-      "fontSize": 12,
+      "fontSize": 11,
       "spacing": 13
     },
     "src/app/terms.tsx": {
@@ -315,7 +315,7 @@
       "spacing": 3
     },
     "src/components/blocks/HeroSubNav.tsx": {
-      "fontSize": 5,
+      "fontSize": 4,
       "spacing": 1
     },
     "src/components/blocks/KnowhowRows.tsx": {
@@ -328,7 +328,7 @@
       "spacing": 4
     },
     "src/components/blocks/MiniStats.tsx": {
-      "fontSize": 2,
+      "fontSize": 1,
       "spacing": 1
     },
     "src/components/blocks/PickRow.tsx": {
@@ -350,7 +350,7 @@
       "fontSize": 1
     },
     "src/components/blocks/StatCardGrid.tsx": {
-      "fontSize": 4
+      "fontSize": 3
     },
     "src/components/blocks/StepProgress.tsx": {
       "fontSize": 2
@@ -366,7 +366,7 @@
       "spacing": 2
     },
     "src/components/BrowseList.tsx": {
-      "fontSize": 7,
+      "fontSize": 5,
       "spacing": 12
     },
     "src/components/CardBillingPanel.tsx": {
@@ -503,7 +503,7 @@
       "fontSize": 5
     },
     "src/components/hub/OwnerKnowhowHubView.tsx": {
-      "fontSize": 9,
+      "fontSize": 8,
       "spacing": 2
     },
     "src/components/hub/OwnerStatusView.tsx": {
@@ -638,7 +638,7 @@
     },
     "src/components/owner/OwnerKnowhowBrowse.tsx": {
       "hex": 1,
-      "fontSize": 15,
+      "fontSize": 14,
       "spacing": 21
     },
     "src/components/owner/OwnerKnowhowImport.tsx": {
@@ -862,7 +862,6 @@
       "spacing": 2
     },
     "src/components/VerifyBadge.tsx": {
-      "fontSize": 1,
       "spacing": 2
     },
     "src/components/VoiceInputButton.tsx": {
@@ -933,7 +932,7 @@
     "src/components/work/TaskComposerModal.tsx": {
       "hex": 9,
       "fontSize": 21,
-      "spacing": 58
+      "spacing": 56
     },
     "src/components/work/TodoScreen.tsx": {
       "hex": 2,

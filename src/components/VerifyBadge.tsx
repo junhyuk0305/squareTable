@@ -2,6 +2,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { InkColors } from '@/lib/theme/colors';
+import { Type } from '@/lib/theme/type';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { verifyMeta, type VerifyState } from '@/lib/utils/verification';
@@ -54,5 +55,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
   },
   disc: { alignItems: 'center', justifyContent: 'center' },
-  label: { fontSize: 11, fontWeight: '800' },
+  // 꼬리표 = Type.tag(12 · 2026-11-02 사용자. 옛 11).
+  label: { ...Type.tag, fontWeight: '800' },
 });

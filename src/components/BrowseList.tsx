@@ -3,6 +3,7 @@ import { Appear, stagger } from './Appear';
 import { EmptyState } from './EmptyState';
 import { VerifyBadge } from './VerifyBadge';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Type } from '@/lib/theme/type';
 import { Radius } from '@/lib/theme/elevation';
 import { CardStyles } from '@/lib/theme/card';
 import { getSectionMeta } from '@/lib/utils/category';
@@ -182,7 +183,7 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bgSoft,
   },
   sectionDot: { width: 7, height: 7, borderRadius: Radius.pill },
-  sectionChipText: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
+  sectionChipText: { ...Type.tag, fontWeight: '800', color: InkColors.ink2 },
   title: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 21 },
   titleInRow: { flex: 1, minWidth: 0 },
   statRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
@@ -197,5 +198,5 @@ const styles = StyleSheet.create({
   },
   previewTag: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5, minWidth: 36 },
   previewText: { flex: 1, fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
-  source: { fontSize: 11, color: InkColors.ink3, marginTop: 2 },
+  source: { ...Type.tag, color: InkColors.ink3, marginTop: 2 },
 });

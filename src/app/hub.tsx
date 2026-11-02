@@ -12,7 +12,8 @@ import { NoStoreView } from '@/components/hub/NoStoreView';
 import { Appear, stagger } from '@/components/Appear';
 import { todayStr } from '@/lib/utils/attendance';
 import { weekdayOf } from '@/lib/utils/schedule';
-import { InkColors } from '@/lib/theme/colors';
+import { InkColors, Surface } from '@/lib/theme/colors';
+import { Type } from '@/lib/theme/type';
 import { Space } from '@/lib/theme/layout';
 
 // ── 허브 랜딩 탭: 사장 '현황' / 직원 '오늘' (기획 v2 확정, 2026-07-24) ─────────────────────
@@ -75,9 +76,10 @@ export default function HubScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
+  // 바탕 = 매장 안 화면과 같은 Surface.screen(2026-11-02 사용자 — 허브도 매장 내부와 같이).
+  safe: { flex: 1, backgroundColor: Surface.screen },
   scroll: { padding: Space.gutter, gap: Space.lg, paddingBottom: 40 },
   titleBlock: { gap: 4 },
-  title: { fontSize: 26, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5 },
+  title: { ...Type.pageTitle, color: InkColors.ink },
   subtitle: { fontSize: 15, color: InkColors.ink2 },
 });
