@@ -2,7 +2,7 @@
 // qa-push-route.mjs — 푸시를 누르면 알림이 온 매장의 맞는 화면이 열린다(Q24 · Q25 · 보안 M8). 백엔드 없음.
 //
 // 무엇을 보나
-//   [1] 앱 순수 함수 pushTapPlan(src/lib/push/pushTap.ts 를 임시 트랜스파일해 실제 함수로 검증 · 로직 복제 없음)
+//   [1] 앱 순수 함수 pushTapPlan(src/lib/push/pushTap.ts 를 공용 QA 훅으로 직접 import · 로직 복제 없음)
 //       · "/" 로 시작하는 앱 안 경로 허용 목록만 따른다. "https://", "//", 모르는 경로는 무시한다.
 //       · 다른 매장 알림이면 그 매장으로 들어간 뒤(enter) 이동한다. /stores · /billing 은 매장을 바꾸지 않는다.
 //       · 같은 매장이면 역할에 맞춰(routeForRole) 바로 연다. route 가 있으면 url 보다 먼저 쓴다.
@@ -15,15 +15,14 @@
 //   [4] 소스 계약 — 탭 처리가 pushTapPlan 을 쓰고, 콜드 스타트를 한 번만 처리하고 알림 id 로 중복을 막는다.
 //       매장 전환은 useStoreEntryStore.enter({ then }) 로 한다(전환 = switchUnit → tenantReset 이 데이터를 비운다).
 // 실행: node scripts/qa-push-route.mjs
-import { execFileSync, spawnSync } from 'node:child_process';
-import { writeFileSync, readFileSync, existsSync } from 'node:fs';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { rm } from 'node:fs/promises';
 import ts from 'typescript';
+import { installNotifHooks } from './lib/qa-notif-hooks.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = join(root, '.qa-out', 'push-route');
 let pass = 0, fail = 0;
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  PASS', n, extra)) : (fail++, console.log('  FAIL', n, extra)); };
 const read = (p) => readFileSync(join(root, p), 'utf8').replace(/\r\n/g, '\n');
@@ -31,37 +30,9 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 // ── [1] 앱 순수 함수 ──────────────────────────────────────────────────────────
 console.log('\n[1] pushTapPlan');
-const tsc = (files) => {
-  try {
-    execFileSync('npx', ['tsc', ...files,
-      '--outDir', OUT, '--module', 'es2022', '--target', 'es2022',
-      '--moduleResolution', 'node', '--skipLibCheck', '--ignoreConfig', '--ignoreDeprecations', '6.0',
-    ], { cwd: root, stdio: 'pipe', shell: process.platform === 'win32' });
-  } catch { /* tsc 는 성공해도 종종 비-0 경고 — 산출물 존재로 판정 */ }
-};
-tsc(['src/lib/utils/roles.ts']);
-writeFileSync(join(OUT, 'package.json'), '{"type":"module"}');
-const R = await import(pathToFileURL(join(OUT, 'roles.js')));
-let plan = null;
-if (existsSync(join(root, 'src/lib/push/pushTap.ts'))) {
-  tsc(['src/lib/push/pushTap.ts']);
-  const fp = join(OUT, 'pushTap.js');
-  if (existsSync(fp)) {
-    writeFileSync(fp, readFileSync(fp, 'utf8').split("'@/lib/utils/roles'").join("'./roles.js'"), 'utf8');
-    const P = await import(pathToFileURL(fp));
-    if (typeof P.pushTapPlan === 'function') plan = P.pushTapPlan;
-  }
-}
-// 함수가 없으면(수정 전) **지금 탭 처리의 판정**으로 같은 케이스를 돌린다 — 함수가 없어서가 아니라 판정이 틀려서 RED 여야 한다.
-//   지금 nativepush.ts = data.url 이 있으면 무엇이든 router.push(routeForRole(url, role)). 매장은 바꾸지 않는다.
+installNotifHooks();
+const { pushTapPlan: tap } = await import('../src/lib/push/pushTap.ts');
 const nativeSrc = read('src/lib/push/nativepush.ts');
-if (!plan && nativeSrc.includes('router.push(routeForRole(to, useSessionStore.getState().role)')) {
-  console.log('  (pushTapPlan 없음 → 지금 nativepush.ts 판정으로 실행)');
-  plan = (data) => (data && typeof data.url === 'string' && data.url
-    ? { kind: 'push', to: R.routeForRole(data.url, SESSION_ROLE) } : { kind: 'ignore' });
-}
-let SESSION_ROLE = 'owner';
-const tap = (data, s) => { SESSION_ROLE = s.role; return plan ? plan(data, s) : null; };
 const A = { unitId: 'store_a', role: 'owner' };
 const show = (x) => JSON.stringify(x);
 
@@ -74,7 +45,7 @@ check('1-3 ★"//" 주소는 무시한다', eq(r, { kind: 'ignore' }), show(r));
 r = tap({ url: '/billing', route: '/owner/knowledge', unitId: 'store_b' }, A);
 check('1-4 ★다른 매장 알림은 그 매장으로 들어간 뒤(enter) 이동한다', eq(r, { kind: 'enter', unitId: 'store_b', then: '/owner/knowledge' }), show(r));
 r = tap({ url: '/owner/suggestions', unitId: 'store_a' }, { unitId: 'store_a', role: 'manager' });
-check('1-5 매니저는 열 수 없는 사장 화면 대신 직원 홈(routeForRole)', eq(r, { kind: 'push', to: '/junior/home' }), show(r));
+check('1-5 매니저는 허용된 제안 승인 화면을 연다(0315)', eq(r, { kind: 'push', to: '/owner/suggestions' }), show(r));
 r = tap({ url: '/stores', unitId: 'store_b' }, A);
 check('1-6 /stores 는 매장을 바꾸지 않는다', eq(r, { kind: 'push', to: '/stores' }), show(r));
 r = tap({ url: '/billing', route: '/billing', unitId: 'store_b' }, A);
@@ -91,6 +62,10 @@ r = tap(undefined, A);
 check('1-12 data 가 없으면 무시', eq(r, { kind: 'ignore' }), show(r));
 r = tap({ url: '/', unitId: 'store_a' }, A);
 check('1-13 "/" 는 연다(앱 첫 화면)', eq(r, { kind: 'push', to: '/' }), show(r));
+r = tap({ url: '/owner/staff', unitId: 'store_a' }, { unitId: 'store_a', role: 'manager' });
+check('1-14 매니저는 직원 관리 대신 직원 홈을 연다(0201)', eq(r, { kind: 'push', to: '/junior/home' }), show(r));
+r = tap({ url: '/owner/payroll?month=2026-10', unitId: 'store_a' }, { unitId: 'store_a', role: 'manager' });
+check('1-15 매니저는 급여 화면 대신 직원 홈을 연다(0201)', eq(r, { kind: 'push', to: '/junior/home' }), show(r));
 
 // ── [2] 엣지 ────────────────────────────────────────────────────────────────
 console.log('\n[2] 엣지 push/index.ts');
@@ -109,9 +84,11 @@ const clientPushRoute = routeSrc ? new Function(`${routeSrc}; return clientPushR
 check('2-2 서버 표: 언급 알림은 /junior/work · 모르는 tag 는 "/"',
   !!clientPushRoute && clientPushRoute('user', 'mention') === '/junior/work' && clientPushRoute('user', 'https://evil') === '/',
   clientPushRoute ? `${clientPushRoute('user', 'mention')} · ${clientPushRoute('user', 'https://evil')}` : 'clientPushRoute 없음');
-check('2-3 서버 표: 질문 알림은 사장 /owner/inbox · 직원 /junior/chat',
-  !!clientPushRoute && clientPushRoute('owners', 'question') === '/owner/inbox' && clientPushRoute('staff', 'question') === '/junior/chat');
-check('2-4 serve 가 deliver 에 route 를 서버 표로 넘긴다', /clientPushRoute\(audience, tag\)/.test(serveSrc));
+check('2-3 서버 표: 질문 알림은 사장 /owner/coach · 직원 /junior/chat',
+  !!clientPushRoute && clientPushRoute('owners', 'question') === '/owner/coach' && clientPushRoute('staff', 'question') === '/junior/chat');
+check('2-4 serve 가 서버 사건 id 로 route 를 정해 deliver 에 넘긴다',
+  /const route = clientPushRoute\(audience,\s*tag,\s*event\.item_id\s*\?\?\s*undefined\)/.test(serveSrc)
+  && /deliver\(admin,\s*scopeUnit,\s*recipientIds,\s*\{\s*title,\s*body,\s*url:\s*route,\s*route\s*[,}]/.test(serveSrc));
 
 // deliver() 를 가짜 admin 으로 돌려 Expo 메시지를 본다.
 const chain = (data) => {
@@ -170,6 +147,9 @@ check('2-11 route 가 없으면 url 을 route 로 싣는다', sent.length === 1 
 const ownerSrc = extract('sweepOwnerAlerts') ?? '';
 check('2-12 사장 알림: 옛 빌드용 url /billing 을 두고 route 를 종류별로 싣는다',
   /url: '\/billing'/.test(ownerSrc) && /route: ownerAlertRouteEdge\(/.test(ownerSrc));
+check('2-13 질문 알림은 서버 사건 id 로 해당 질문을 연다',
+  !!clientPushRoute && clientPushRoute('owners', 'question', 'uq_123') === '/owner/coach?uqId=uq_123'
+  && clientPushRoute('staff', 'question', 'uq_123') === '/junior/chat?uqId=uq_123');
 
 // ── [3] 동기 검사 ───────────────────────────────────────────────────────────
 console.log('\n[3] 엣지 표 ↔ 앱 표');
@@ -191,5 +171,4 @@ check('4-5 enter 가 then 을 받아 전환 뒤 역할로 이동한다',
 check('4-6 enter 는 여전히 switchUnit 으로 바꾼다(tenantReset 이 데이터를 비운다)', /sess\.switchUnit\(uid\)/.test(entrySrc));
 
 console.log(`\n── ${pass} PASS · ${fail} FAIL`);
-await rm(OUT, { recursive: true, force: true }).catch(() => {});
 process.exit(fail > 0 ? 1 : 0);
