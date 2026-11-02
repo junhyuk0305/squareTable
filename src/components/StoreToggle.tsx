@@ -15,6 +15,7 @@ import { InkColors, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
+import { ButtonStyles, TouchSize, hitTrim } from '@/lib/theme/button';
 
 // 상단바 좌상단 — **2칸 토글**(2026-08-08 상단바 C안). 허브 층·매장 층이 같은 것을 쓴다.
 //   [ 매장의 정석 | 신촌점 ▾ ]  회색 트랙 안에 두 칸, **지금 있는 층의 칸에만 흰 면**이 깔린다.
@@ -249,12 +250,16 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     ...Elevation.e1,
   },
+  // 칸 = 보이는 높이 32(흰 면) · 누르는 높이 44(2026-11-02 사용자 결정 · 줄 안 작은 버튼과 같은 32).
+  //   칸 Pressable 이 44 이고 위아래 음수 여백(hitTrim)으로 자리는 32 만 차지한다 → 흰 면·트랙 안쪽 = 32.
+  //   위아래 6 이 트랙 안쪽 여백(4)과 선(1)을 덮고 1 만큼 밖으로 나온다.
   logoCell: {
+    ...ButtonStyles.inlineHit,
+    marginVertical: hitTrim(TouchSize.inlineFace),
     paddingHorizontal: Space.sm,
-    paddingVertical: Space.sm,
     flexShrink: 0, // 로고는 안 줄인다 — 홈 버튼이라 항상 온전해야 한다.
   },
-  scopeCell: { paddingHorizontal: Space.md, paddingVertical: Space.sm, flexShrink: 1 },
+  scopeCell: { ...ButtonStyles.inlineHit, marginVertical: hitTrim(TouchSize.inlineFace), paddingHorizontal: Space.md, flexShrink: 1 },
   scopeInner: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   scopeText: { fontSize: 13, fontWeight: '900', color: InkColors.ink, flexShrink: 1 },
 

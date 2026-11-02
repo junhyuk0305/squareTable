@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
   cellFoot: { flexDirection: 'row', gap: Space.sm, alignItems: 'center', marginTop: Space.sm },
   ghostBtn: { minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.sm },
   ghostText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
-  // 작은 버튼(48 알약 · 15/800 · 내용 폭 · 2026-11-02).
+  // 작은 버튼(44 알약 · 15/800 · 내용 폭 · 2026-11-02).
   doneBtn: { ...ButtonStyles.small, backgroundColor: InkColors.ink },
   doneText: { ...ButtonTextStyles.small, color: InkColors.bubbleText },
 

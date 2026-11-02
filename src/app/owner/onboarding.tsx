@@ -307,7 +307,7 @@ export default function OwnerOnboardingScreen() {
                     key={sec}
                     title={sec}
                     trailing={
-                      <Pressable onPress={() => toggleCategory(items)} hitSlop={8} style={styles.catAll}>
+                      <Pressable onPress={() => toggleCategory(items)} style={styles.catAll}>
                         <Text style={styles.catAllText}>{allOn ? '전체 해제' : '전체 선택'}</Text>
                       </Pressable>
                     }
@@ -364,7 +364,7 @@ export default function OwnerOnboardingScreen() {
               {registering ? '담는 중…' : selectedCount > 0 ? `우리 매장에 담기 · ${selectedCount}개` : '노하우를 골라주세요'}
             </Text>
           </PressableScale>
-          <Pressable onPress={onSkip} hitSlop={8} style={styles.skip}>
+          <Pressable onPress={onSkip} style={styles.skip}>
             <Text style={styles.skipText}>건너뛰기</Text>
           </Pressable>
         </View>
@@ -472,7 +472,9 @@ const styles = StyleSheet.create({
 
   // 카테고리 묶음 사이 = 섹션 간격(Section 이 제목 ↔ 목록을 붙인다).
   groups: { gap: Layout.sectionGap, marginTop: Space.xs },
-  catAll: { paddingVertical: 2, paddingHorizontal: Space.sm },
+  // 글자 링크 = 글자 그대로 · 누르는 높이 44(2026-11-02 사용자 결정). RN-web 은 hitSlop 을 무시한다.
+  //   위아래 -12 로 자리는 20 만 차지한다 → 섹션 제목 줄(22) 높이는 그대로.
+  catAll: { ...ButtonStyles.inlineHit, marginVertical: -Space.md, paddingHorizontal: Space.sm },
   catAllText: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
 
   rows: { gap: Space.sm },
@@ -510,7 +512,8 @@ const styles = StyleSheet.create({
   ctaOff: { backgroundColor: InkColors.line },
   ctaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   ctaTextOff: { color: TextColor.disabled },
-  skip: { alignSelf: 'center', paddingVertical: Space.sm, paddingHorizontal: Space.lg },
+  // 건너뛰기 = 글자 그대로 · 누르는 높이 44(2026-11-02). 옛 자리(위아래 8 + 글자 약 20 = 36)를 지키려고 위아래 -4.
+  skip: { ...ButtonStyles.inlineHit, alignSelf: 'center', marginVertical: -Space.xs, paddingHorizontal: Space.lg },
   skipText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
 
   // 완료 화면

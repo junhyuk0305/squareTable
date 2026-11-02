@@ -52,11 +52,13 @@ import { Radius } from '@/lib/theme/elevation';
 import { Space, screenScrollStyle } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
-import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { ButtonStyles, ButtonTextStyles, hitTrim } from '@/lib/theme/button';
 import { EmptyStyles } from '@/lib/theme/empty';
 
 /** 알림으로 들어온 요청 카드로 스크롤하기 전 등장 애니메이션이 가라앉는 시간(NoticePanel · TodoScreen 과 같다). */
 const FOCUS_SETTLE_MS = 520;
+/** '되돌리기' 알약의 보이는 높이. 누르는 상자(44)는 바깥 Pressable 이 든다. */
+const EXC_BTN_H = 34;
 
 export default function OwnerScheduleScreen() {
   const router = useRouter();
@@ -392,9 +394,11 @@ export default function OwnerScheduleScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="이 날 반복 근무 되돌리기"
                     onPress={() => restoreException(t.id, selected)}
-                    style={({ pressed }) => [styles.excBtn, pressed && { opacity: 0.6 }]}
+                    style={({ pressed }) => [styles.excHit, pressed && { opacity: 0.6 }]}
                   >
-                    <Text style={styles.excBtnText}>되돌리기</Text>
+                    <View style={styles.excBtn}>
+                      <Text style={styles.excBtnText}>되돌리기</Text>
+                    </View>
                   </Pressable>
                 </View>
               ))}
@@ -599,7 +603,9 @@ const styles = StyleSheet.create({
   offText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary, paddingTop: Space.sm },
   excRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingTop: Space.sm },
   excText: { ...Type.tag, flex: 1, fontWeight: '700', color: TextColor.secondary, lineHeight: 17 },
-  excBtn: { minHeight: 34, justifyContent: 'center', paddingHorizontal: 10, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line },
+  // 되돌리기 = 보이는 알약 34 그대로 · 누르는 높이 44(2026-11-02 사용자 결정 · 글자 링크). 위아래 음수 여백으로 줄 높이는 그대로.
+  excHit: { ...ButtonStyles.inlineHit, marginVertical: hitTrim(EXC_BTN_H) },
+  excBtn: { minHeight: EXC_BTN_H, justifyContent: 'center', paddingHorizontal: 10, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line },
   excBtnText: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
   addRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, minHeight: 48, marginTop: Space.sm, borderRadius: Radius.sm, borderWidth: 1, borderStyle: 'dashed', borderColor: InkColors.line },
   addText: { ...Type.body, lineHeight: 21, fontWeight: '800' },

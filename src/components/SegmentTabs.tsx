@@ -7,8 +7,10 @@ import { Type } from '@/lib/theme/type';
 
 /** 트랙 안쪽 여백 — 선택 칸이 트랙 선에서 떨어지는 거리. */
 const TRACK_PAD = Space.xs;
-/** 선택 칸 모서리 = 트랙 모서리 - 안쪽 여백(16 - 4 = 12). 두 곡선이 같은 간격으로 붙는다. */
-const PILL_RADIUS = Radius.md - TRACK_PAD;
+/** 선택 칸·칸 모서리 = Radius.sm(10). 알약 대신 둥근 사각(2026-11-02 사용자 결정). */
+const PILL_RADIUS = Radius.sm;
+/** 트랙 모서리 = 선택 칸 모서리 + 안쪽 여백(10 + 4 = 14). 두 곡선이 같은 간격으로 붙는다. */
+const TRACK_RADIUS = PILL_RADIUS + TRACK_PAD;
 const SEG_ON = InkColors.bubbleText;
 const SEG_OFF = InkColors.ink3;
 
@@ -28,7 +30,7 @@ export type SegmentItem = {
  *  · 받은질문: 대기 / 자동응답 / 보관
  *
  * junior/work.tsx의 인라인 Segment를 일반화한 것. 5탭 비대칭 IA의 "탭 안 깊이"를 담는 그릇.
- * 모양(2026-11-02 사용자 결정): 트랙 = 흰 박스 + 선 1px + 모서리 16 · 선택 칸 = 검정 채움 + 흰 글자 · 높이는 그대로.
+ * 모양(2026-11-02 사용자 결정): 트랙 = 흰 박스 + 선 1px + 모서리 14 · 선택 칸 = 검정 채움 + 흰 글자 + 모서리 10(둥근 사각) · 높이는 그대로.
  */
 export function SegmentTabs({
   items,
@@ -141,13 +143,13 @@ const styles = StyleSheet.create({
     backgroundColor: Surface.card,
     borderWidth: 1,
     borderColor: InkColors.line,
-    borderRadius: Radius.md,
+    borderRadius: TRACK_RADIUS,
   },
   track: { flexDirection: 'row', gap: 4, padding: TRACK_PAD },
   // 높이는 그대로 둔다(2026-11-02 결정) — paddingVertical 9 + 글자 줄. 트랙 선 1px 만큼 바깥이 2 커진다.
   seg: { flex: 1, paddingVertical: 9, borderRadius: PILL_RADIUS, alignItems: 'center' },
   // 슬라이드 알약 = 선택 칸. 검정 채움 + 흰 글자(2026-11-02). wrap 패딩에 맞춰 상하로 겹친다(text는 그 위로 렌더).
-  // 모서리 = 트랙 16 - 안쪽 여백 4 = 12 — 안쪽 둥근 칸이 트랙 곡선과 같은 간격으로 붙는다.
+  // 모서리 = Radius.sm(10) · 트랙 14 = 10 + 안쪽 여백 4 — 안쪽 둥근 칸이 트랙 곡선과 같은 간격으로 붙는다.
   pill: {
     position: 'absolute',
     top: TRACK_PAD,

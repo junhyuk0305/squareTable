@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
   dots: { flex: 1, flexDirection: 'row', justifyContent: 'center', gap: 6 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: InkColors.line },
   dotOn: { backgroundColor: InkColors.ink },
-  // 작은 버튼(48 알약 · 15/800 · 내용 폭).
+  // 작은 버튼(44 알약 · 15/800 · 내용 폭).
   nextBtn: {
     ...ButtonStyles.small,
     minWidth: 92,

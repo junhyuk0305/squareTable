@@ -24,7 +24,7 @@ import { Radius } from '@/lib/theme/elevation';
 import { Layout, Space, screenScrollStyle } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
-import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { ButtonStyles, ButtonTextStyles, TouchSize, hitTrim } from '@/lib/theme/button';
 import { EmptyStyles } from '@/lib/theme/empty';
 import { fmtDuration, todayStr, liveMinutes, staffWorkStatus } from '@/lib/utils/attendance';
 import { showToast } from '@/lib/store/useToastStore';
@@ -217,11 +217,16 @@ export default function OwnerStaffScreen() {
                     <Text style={styles.staffName} numberOfLines={1}>{p.name || '이름 미입력'}</Text>
                     <Text style={styles.staffMeta} numberOfLines={1}>{p.phone_last4 ? `••••-${p.phone_last4}` : '연락처 미입력'}</Text>
                   </View>
-                  <Pressable onPress={() => setRejectTarget({ id: p.id, name: p.name || '신청자' })} hitSlop={6} style={({ pressed }) => [styles.rejectBtn, pressed && { opacity: 0.7 }]}>
-                    <Text style={styles.rejectText}>거절</Text>
+                  {/* 보이는 버튼 32 · 누르는 상자 44(바깥 Pressable) — RN-web 은 hitSlop 을 무시한다. */}
+                  <Pressable onPress={() => setRejectTarget({ id: p.id, name: p.name || '신청자' })} style={({ pressed }) => [styles.rowHit, pressed && { opacity: 0.7 }]}>
+                    <View style={styles.rejectBtn}>
+                      <Text style={styles.rejectText}>거절</Text>
+                    </View>
                   </Pressable>
-                  <Pressable onPress={() => approve(p.id)} hitSlop={6} style={({ pressed }) => [styles.approveBtn, pressed && { opacity: 0.85 }]}>
-                    <Text style={styles.approveText}>승인</Text>
+                  <Pressable onPress={() => approve(p.id)} style={({ pressed }) => [styles.rowHit, pressed && { opacity: 0.85 }]}>
+                    <View style={styles.approveBtn}>
+                      <Text style={styles.approveText}>승인</Text>
+                    </View>
                   </Pressable>
                 </Appear>
               ))}
@@ -291,11 +296,12 @@ export default function OwnerStaffScreen() {
               {isOwner && (
                 <Pressable
                   onPress={() => setRemoveTarget({ id: s.id, name: s.name })}
-                  hitSlop={8}
                   accessibilityLabel={`${s.name} 내보내기`}
-                  style={({ pressed }) => [styles.removeBtn, pressed && { opacity: 0.6 }]}
+                  style={({ pressed }) => [styles.rowHit, styles.removeHit, pressed && { opacity: 0.6 }]}
                 >
-                  <Ionicons name="person-remove-outline" size={19} color={BrandColors.bad} />
+                  <View style={styles.removeBtn}>
+                    <Ionicons name="person-remove-outline" size={19} color={BrandColors.bad} />
+                  </View>
                 </Pressable>
               )}
             </View>
@@ -307,19 +313,20 @@ export default function OwnerStaffScreen() {
             {isOwner && (
               <Pressable
                 onPress={() => (isManager ? setRole(s.id, 'junior') : setManagerTarget({ id: s.id, name: s.name }))}
-                hitSlop={6}
                 accessibilityRole="button"
                 accessibilityLabel={isManager ? `${s.name} 매니저 해제` : `${s.name} 매니저로 지정`}
-                style={({ pressed }) => [isManager ? styles.roleBtn : styles.roleBtnOn, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [styles.roleHit, pressed && { opacity: 0.6 }]}
               >
-                <Ionicons
-                  name={isManager ? 'remove-circle-outline' : 'ribbon-outline'}
-                  size={14}
-                  color={isManager ? InkColors.ink3 : InkColors.ink}
-                />
-                <Text style={isManager ? styles.roleBtnText : styles.roleBtnOnText}>
-                  {isManager ? '매니저 해제' : '매니저로 지정'}
-                </Text>
+                <View style={isManager ? styles.roleBtn : styles.roleBtnOn}>
+                  <Ionicons
+                    name={isManager ? 'remove-circle-outline' : 'ribbon-outline'}
+                    size={14}
+                    color={isManager ? InkColors.ink3 : InkColors.ink}
+                  />
+                  <Text style={isManager ? styles.roleBtnText : styles.roleBtnOnText}>
+                    {isManager ? '매니저 해제' : '매니저로 지정'}
+                  </Text>
+                </View>
               </Pressable>
             )}
             </Appear>
@@ -412,9 +419,12 @@ const styles = StyleSheet.create({
   pendingList: { backgroundColor: BrandColors.yellowSoft, borderColor: BrandColors.gold },
   // 알림으로 들어온 신청 행 — 테두리만 강조.
   focusRow: { borderWidth: 2, borderColor: BrandColors.accentSolid, borderRadius: Radius.md, paddingHorizontal: 8 },
-  rejectBtn: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line },
+  // 줄 안 작은 버튼(2026-11-02 사용자 결정) — 보이는 높이 32 · 누르는 상자 44.
+  //   상자는 위아래 음수 여백(hitTrim)으로 자리를 32 만큼만 차지한다 → 줄 높이(아바타 40 + 위아래 14)는 그대로.
+  rowHit: { ...ButtonStyles.inlineHit, marginVertical: hitTrim(TouchSize.inlineFace) },
+  rejectBtn: { minHeight: TouchSize.inlineFace, justifyContent: 'center', paddingHorizontal: 12, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line },
   rejectText: { fontSize: 13, fontWeight: '700', color: TextColor.secondary },
-  approveBtn: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: Radius.sm, backgroundColor: BrandColors.brand },
+  approveBtn: { minHeight: TouchSize.inlineFace, justifyContent: 'center', paddingHorizontal: 14, borderRadius: Radius.sm, backgroundColor: BrandColors.brand },
   approveText: { fontSize: 13, fontWeight: '800', color: InkColors.bubbleText },
 
   list: CardStyles.rows,
@@ -422,12 +432,17 @@ const styles = StyleSheet.create({
   // 직원 항목 컨테이너(0093) — 행 + (사장 전용) 매니저 지정 줄. 구분선은 여기 하나만.
   staffItem: { borderBottomWidth: 1, borderBottomColor: InkColors.line },
   staffRowFlat: { borderBottomWidth: 0 },
-  roleBtn: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 4, paddingBottom: 12, paddingHorizontal: 2 },
+  // 매니저 지정/해제 누르는 상자 44 — 보이는 32 의 위끝은 행 바로 아래, 아래끝은 항목 끝에서 12(옛 자리 그대로).
+  roleHit: {
+    ...ButtonStyles.inlineHit, alignSelf: 'flex-end',
+    marginTop: hitTrim(TouchSize.inlineFace), marginBottom: Space.md + hitTrim(TouchSize.inlineFace),
+  },
+  roleBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: TouchSize.inlineFace, paddingHorizontal: 2 },
   roleBtnText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
   // 지정(권장 액션) — 노랑 알약 + 검정 글자. 해제(roleBtn)와 무게를 일부러 다르게 둔다.
   roleBtnOn: {
-    flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 4,
-    marginBottom: 12, paddingVertical: 6, paddingHorizontal: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    minHeight: TouchSize.inlineFace, paddingHorizontal: 12,
     borderRadius: Radius.pill, backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep,
   },
   roleBtnOnText: { ...Type.tag, fontWeight: '800', color: InkColors.ink },
@@ -437,13 +452,15 @@ const styles = StyleSheet.create({
   staffName: { ...Type.body, fontWeight: '700', flexShrink: 1 },
   staffMeta: { ...Type.tag, color: TextColor.secondary, flexShrink: 1 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, minWidth: 0 },
-  removeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.sm, backgroundColor: BrandColors.accentSoft },
+  // 내보내기 = 보이는 32 · 누르는 44×44. 오른쪽 음수 여백으로 보이는 네모를 줄 오른쪽 끝(매니저 버튼과 같은 선)에 붙인다.
+  removeHit: { minWidth: TouchSize.inline, alignItems: 'center', marginRight: hitTrim(TouchSize.inlineFace) },
+  removeBtn: { width: TouchSize.inlineFace, height: TouchSize.inlineFace, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.sm, backgroundColor: BrandColors.accentSoft },
 
   // 안내 한 줄 = 설명(13/19 secondary). 위 간격은 스크롤 gap(20)이 정한다.
   demoNote: Type.desc,
   emptyBox: EmptyStyles.box,
   emptyText: EmptyStyles.text,
-  // 빈 카드 가운데 작은 버튼(48 알약) — 카드가 가운데 정렬이라 alignSelf 만 되돌린다.
+  // 빈 카드 가운데 작은 버튼(44 알약) — 카드가 가운데 정렬이라 alignSelf 만 되돌린다.
   retryBtn: { ...ButtonStyles.small, alignSelf: 'center', flexDirection: 'row', gap: 6, backgroundColor: InkColors.ink, marginTop: 2 },
   retryText: { ...ButtonTextStyles.small, color: InkColors.bubbleText },
 });

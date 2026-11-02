@@ -21,7 +21,7 @@ import { confirmAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
-import { ButtonTextStyles } from '@/lib/theme/button';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Type } from '@/lib/theme/type';
 
 type Kind = 'entry' | 'course';
@@ -193,20 +193,19 @@ const styles = StyleSheet.create({
   err: { ...Type.desc, color: BrandColors.badText, fontWeight: '600' },
   btns: { flexDirection: 'row', gap: Space.xs, flexWrap: 'wrap' },
 
+  // 작은 버튼(44 알약 · 내용 폭) + 아이콘. 선·면 색은 자리 값 그대로.
   btn: {
+    ...ButtonStyles.small,
+    // 시트 안에서는 원래처럼 가로 꽉(small 의 내용 폭을 덮는다).
+    alignSelf: 'stretch',
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 6,
-    minHeight: 48,
-    paddingVertical: 11,
-    paddingHorizontal: 15,
-    borderRadius: Radius.pill,
     borderWidth: 1,
     borderColor: InkColors.line,
     backgroundColor: InkColors.bg,
   },
   btnPri: { backgroundColor: BrandColors.yellow, borderColor: BrandColors.yellowDeep },
-  // 작은 알약 버튼 글자(15/800 · 2026-11-02). 모양(48 알약)은 원래 작은 버튼과 같다.
+  // 작은 버튼 글자(15/800 · 2026-11-02).
   btnText: { ...ButtonTextStyles.small, color: InkColors.ink },
 
   sheetTitle: { ...Type.title, marginBottom: 5 },

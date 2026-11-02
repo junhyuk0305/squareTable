@@ -455,7 +455,7 @@ const styles = StyleSheet.create({
   phoneRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Space.sm, minHeight: 48 },
   phoneValue: { flexGrow: 1, flexShrink: 1, fontSize: 16, color: InkColors.ink },
   phoneEmpty: { color: InkColors.ink3 },
-  // 작은 버튼(48 알약 · 15/800 · 내용 폭). 색은 그대로.
+  // 작은 버튼(44 알약 · 15/800 · 내용 폭). 색은 그대로.
   phoneBtn: { ...ButtonStyles.small, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bgSoft },
   phoneBtnText: { ...ButtonTextStyles.small, color: InkColors.ink },
   sheetBody: { paddingHorizontal: 20, paddingBottom: 20, gap: Space.sm },

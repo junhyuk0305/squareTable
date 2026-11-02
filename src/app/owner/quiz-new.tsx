@@ -1303,8 +1303,8 @@ const st = StyleSheet.create({
   qSource: { fontSize: 13, fontWeight: '600', color: TextColor.secondary },
   // 근거 줄과 버튼 사이를 띄운다 — 붙어 있으면 버튼이 본문의 일부처럼 읽힌다(2026-09-11).
   qActs: { flexDirection: 'row', gap: Space.sm, marginTop: Space.md },
-  // 작은 버튼 = ButtonStyles.small(48 알약 · 2026-11-02 결정으로 48 알약. 옛 9월 납작한 직사각형 44).
-  //   선·면 색은 자리 값 그대로. `qa:quiz-ui` 의 L3 검사(44dp+)는 48 이라 통과한다.
+  // 작은 버튼 = ButtonStyles.small(2026-11-02 결정으로 44 알약. 옛 9월 납작한 직사각형 44).
+  //   선·면 색은 자리 값 그대로. `qa:quiz-ui` 의 L3 검사(44dp+)는 44 라 통과한다.
   smallAct: {
     ...ButtonStyles.small,
     borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', ...Elevation.e1,

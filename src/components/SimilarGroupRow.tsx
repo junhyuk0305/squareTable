@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     paddingHorizontal: 16,
   },
-  // 작은 버튼(48 알약 · 15/800 · 내용 폭 · 2026-11-02).
+  // 작은 버튼(44 알약 · 15/800 · 내용 폭 · 2026-11-02).
   actionBtn: {
     ...ButtonStyles.small,
     backgroundColor: InkColors.ink,

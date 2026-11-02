@@ -53,8 +53,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SCREEN_GUTTER,
-    // 높이는 위에서 고정한다(insets.top + Layout.headerH). 옛 위 20·아래 16 여백 = 83 이 그 값의 출처다
-    // (내용 47 = 토글 트랙 테두리 2 + 안쪽 8 + 로고 칸 16 + 로고 글자 약 21). 이제 내용 높이가 바뀌어도 83 이다.
+    // 높이는 위에서 고정한다(insets.top + Layout.headerH 83). 83 의 출처 = 옛 위 20·아래 16 여백 + 옛 내용 47(매장 토글 트랙).
+    // 2026-11-02 매장 토글 칸이 32 로 낮아져 내용(트랙 42)이 줄었지만 높이는 83 그대로다.
+    // 허브 상단바(HubTopBar)는 minHeight 47(= 83 - 스크롤 위 여백 16 - 첫 간격 20)로 같은 83 을 맞춘다.
     // 바탕 = 흰 헤더(Surface.header). 화면 바탕(Surface.screen 회색)과 띠로 갈라진다 — 비교 시안 적용 후 그림과 같다.
     backgroundColor: Surface.header,
   },

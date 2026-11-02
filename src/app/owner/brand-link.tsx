@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
   banner: { flexDirection: 'row', gap: Space.sm, padding: Space.md, backgroundColor: BrandColors.warnSoft },
   bannerTitle: { ...Type.desc, color: BrandColors.warnText, fontWeight: '600' },
   bannerActions: { flexDirection: 'row', gap: Space.sm, marginTop: Space.sm },
-  // 작은 버튼(48 알약 · 내용 폭).
+  // 작은 버튼(44 알약 · 내용 폭).
   smallPri: { ...ButtonStyles.small, backgroundColor: InkColors.ink },
   smallPriText: { ...ButtonTextStyles.small, color: InkColors.bubbleText },
   small: { ...ButtonStyles.small, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
   levelShort: { ...Type.tag, color: TextColor.secondary, marginTop: 1 },
   levelTag: { ...Type.tag, fontWeight: '700', color: BrandColors.warnText, marginTop: 3 },
   lockRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  // 연결 해제 = 작은 버튼(48 알약 · 내용 폭) + 빨강 틴트.
+  // 연결 해제 = 작은 버튼(44 알약 · 내용 폭) + 빨강 틴트.
   danger: { ...ButtonStyles.small, flexDirection: 'row', gap: 6, backgroundColor: BrandColors.badSoft },
   dangerText: { ...ButtonTextStyles.small, color: BrandColors.badText },
   note: Type.desc,

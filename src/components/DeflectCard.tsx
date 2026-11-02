@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  // 작은 버튼(48 알약) 두 개를 반씩 나눠 쓴다 — 폭만 flex 로 바꾼다.
+  // 작은 버튼(44 알약) 두 개를 반씩 나눠 쓴다 — 폭만 flex 로 바꾼다.
   btn: {
     ...ButtonStyles.small,
     flex: 1,

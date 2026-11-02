@@ -254,6 +254,7 @@ const styles = StyleSheet.create({
   err: { ...Type.body, color: BrandColors.accentText, fontWeight: '600', marginTop: 4 },
   primary: { ...ButtonStyles.primary, marginTop: 12, backgroundColor: BrandColors.brand },
   primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
-  logoutRow: { alignItems: 'center', paddingVertical: 4 },
+  // 글자 링크 = 글자 그대로 · 누르는 높이 44(2026-11-02 사용자 결정). 위아래 -8 로 자리는 옛 높이에 가깝게(약 25 → 28).
+  logoutRow: { ...ButtonStyles.inlineHit, alignItems: 'center', marginVertical: -Space.sm },
   logoutText: { fontSize: 13, color: TextColor.secondary, fontWeight: '700' },
 });

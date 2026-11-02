@@ -21,8 +21,10 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
+import { ButtonStyles, TouchSize, hitTrim } from '@/lib/theme/button';
 
 const EMPTY_IDS: string[] = [];
+const BELL_ICON = 23;
 
 /** 알림 벨(프레젠테이셔널) — 헤더 우측 공용. 배지 카운트·탭 동작은 호출부가 주입(사장·직원 공유).
  *  edge=true(기본): 네이티브 헤더용 우측 끝 여백(HEADER_EDGE_GUTTER). false: 자체 패딩 가진 커스텀 헤더용. */
@@ -30,17 +32,19 @@ export function BellButton({ count, onPress, edge = true }: { count: number; onP
   return (
     <Pressable
       onPress={onPress}
-      hitSlop={8}
       accessibilityRole="button"
       accessibilityLabel={count > 0 ? `알림 ${count}건` : '알림'}
-      style={({ pressed }) => [styles.btn, !edge && { paddingLeft: 0, paddingRight: 0 }, pressed && { opacity: 0.6 }]}
+      style={({ pressed }) => [styles.btn, !edge && styles.btnFlush, pressed && { opacity: 0.6 }]}
     >
-      <Ionicons name={count > 0 ? 'notifications' : 'notifications-outline'} size={23} color={InkColors.ink} />
-      {count > 0 && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText} maxFontSizeMultiplier={1.3}>{count > 99 ? '99+' : count}</Text>
-        </View>
-      )}
+      {/* 보이는 종(32) — 배지는 이 안쪽 기준으로 종 오른쪽 위에 붙는다. 바깥 Pressable 이 누르는 상자 44. */}
+      <View style={styles.face}>
+        <Ionicons name={count > 0 ? 'notifications' : 'notifications-outline'} size={BELL_ICON} color={InkColors.ink} />
+        {count > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText} maxFontSizeMultiplier={1.3}>{count > 99 ? '99+' : count}</Text>
+          </View>
+        )}
+      </View>
     </Pressable>
   );
 }
@@ -123,7 +127,11 @@ export function OwnerNotificationBell({ edge = true }: { edge?: boolean } = {}) 
 
 const styles = StyleSheet.create({
   // 우측 끝에서 콘텐츠 거터(HEADER_EDGE_GUTTER)만큼 안쪽으로 — 좌측 back 화살표와 좌우 대칭.
-  btn: { paddingLeft: 14, paddingRight: HEADER_EDGE_GUTTER, paddingVertical: 4 },
+  // 누르는 상자 = 높이 44 이상(2026-11-02 사용자 결정 · 상단바 작은 알약). RN-web 은 hitSlop 을 무시한다.
+  btn: { ...ButtonStyles.inlineHit, paddingLeft: 14, paddingRight: HEADER_EDGE_GUTTER },
+  // 상단바 안(edge=false) — 폭도 44 로 키우되 좌우 음수 여백으로 자리는 종 폭(23)만 차지한다(옆 아바타와의 간격 그대로).
+  btnFlush: { paddingLeft: 0, paddingRight: 0, minWidth: TouchSize.inline, alignItems: 'center', marginHorizontal: hitTrim(BELL_ICON) },
+  face: { minHeight: TouchSize.inlineFace, justifyContent: 'center' },
   badge: {
     position: 'absolute',
     top: -1,

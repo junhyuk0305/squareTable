@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
   pendingMeta: { ...Type.tag, color: BrandColors.warnText, fontWeight: '700', marginTop: 2 },
   pendingBody: { ...Type.desc },
   pendingActions: { flexDirection: 'row', gap: Space.sm },
-  // 작은 버튼(48 알약 · 15/800). 두 개가 한 줄을 나눠 가지므로 폭만 flex 1.
+  // 작은 버튼(44 알약 · 15/800). 두 개가 한 줄을 나눠 가지므로 폭만 flex 1.
   ghostBtn: { ...ButtonStyles.small, flex: 1, alignSelf: 'auto', paddingHorizontal: Space.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
   ghostBtnText: { ...ButtonTextStyles.small, color: TextColor.secondary },
 

@@ -1,8 +1,8 @@
 {
   "totals": {
     "hex": 166,
-    "fontSize": 611,
-    "spacing": 1567
+    "fontSize": 608,
+    "spacing": 1542
   },
   "files": {
     "src/app/+html.tsx": {
@@ -159,7 +159,7 @@
     "src/app/owner/create-store.tsx": {
       "hex": 1,
       "fontSize": 5,
-      "spacing": 9
+      "spacing": 8
     },
     "src/app/owner/edit/[id].tsx": {
       "fontSize": 4,
@@ -175,7 +175,7 @@
     },
     "src/app/owner/onboarding.tsx": {
       "fontSize": 2,
-      "spacing": 8
+      "spacing": 7
     },
     "src/app/owner/previous-stores.tsx": {
       "fontSize": 2,
@@ -206,7 +206,7 @@
     },
     "src/app/owner/staff.tsx": {
       "fontSize": 3,
-      "spacing": 22
+      "spacing": 17
     },
     "src/app/owner/store-config.tsx": {
       "fontSize": 1,
@@ -504,10 +504,10 @@
     },
     "src/components/MarkAllReadButton.tsx": {
       "fontSize": 1,
-      "spacing": 3
+      "spacing": 2
     },
     "src/components/NotificationBell.tsx": {
-      "spacing": 3
+      "spacing": 2
     },
     "src/components/NotificationEnableCard.tsx": {
       "hex": 1,
@@ -526,7 +526,7 @@
       "spacing": 4
     },
     "src/components/owner/BrandCopyPanel.tsx": {
-      "spacing": 11
+      "spacing": 9
     },
     "src/components/owner/BrandInviteCard.tsx": {
       "spacing": 1
@@ -648,8 +648,8 @@
       "spacing": 12
     },
     "src/components/schedule/ScheduleWeek.tsx": {
-      "fontSize": 4,
-      "spacing": 17
+      "fontSize": 1,
+      "spacing": 4
     },
     "src/components/schedule/ShiftQuickSheet.tsx": {
       "fontSize": 2
@@ -748,7 +748,7 @@
     "src/components/TimesheetView.tsx": {
       "hex": 2,
       "fontSize": 9,
-      "spacing": 27
+      "spacing": 26
     },
     "src/components/Toast.tsx": {
       "hex": 3,

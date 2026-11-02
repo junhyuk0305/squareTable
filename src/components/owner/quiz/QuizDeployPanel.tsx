@@ -356,7 +356,7 @@ const st = StyleSheet.create({
   url: { ...Type.body, fontWeight: '700' },
   meta: { ...Type.tag, color: TextColor.secondary, fontWeight: '600' },
   acts: { flexDirection: 'row', gap: Space.xs },
-  // 작은 버튼 = ButtonStyles.small(2026-11-02 결정으로 48 알약). 선·면 색은 자리 값 그대로.
+  // 작은 버튼 = ButtonStyles.small(2026-11-02 결정으로 44 알약). 선·면 색은 자리 값 그대로.
   act: {
     ...ButtonStyles.small, minWidth: 56,
     borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,

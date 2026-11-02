@@ -9,6 +9,7 @@
 // ★R2 '뷰포트 밖' 은 "스크롤해도 닿을 수 없음" 으로 잰다 — 목록 아래쪽 행은 뷰포트 밖이지만 정상이다.
 // ★R2 '가려짐' 은 완전히 뷰포트 안에 든 요소만 잰다 — 반쯤 잘린 요소의 중심은 다른 요소를 찍는다(거짓 실패).
 // ★R3 는 getBoundingClientRect 만 본다 — RN-web 은 hitSlop 을 무시한다(메모리 project_squaretable_rnweb_hitslop).
+// ★R3 기준은 요소마다 다르다(일반 44 · 탭 스위처 칸 39 · 고르기 칩·요일 원 40 · 2026-11-02 사용자 결정 · 상세 = r3 머리 주석).
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -17,7 +18,7 @@ export const RULES = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10
 export const RULE_TITLES = {
   R1: '콘솔 에러 0 · ≥400 응답 0',
   R2: '누를 수 있는 요소가 전부 보인다(0크기·닿을 수 없음·가려짐 없음)',
-  R3: '누를 수 있는 요소 44×44 이상(44~47 경고 · 탭 스위처 칸은 39 이상)',
+  R3: '누를 수 있는 요소 44×44 이상(탭 스위처 칸 39 · 고르기 칩·요일 원 40 이상)',
   R4: '16자 이하 글자가 접히지 않는다',
   R5: '"0개·0건·0명"·"알바"·느낌표·그림 이모지 0건',
   R6: '빈 상태 문구 옆에 다음 행동 버튼이 있다',
@@ -52,7 +53,10 @@ export const probeFor = (sel) => `(() => {
     const item = { t: label(el), x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height),
       nested: !!(el.parentElement && el.parentElement.closest(SEL)), back: el.getAttribute('aria-label') === '뒤로',
       // 탭 스위처(SegmentTabs · tablist 는 이 부품 하나뿐) 칸 — R3 기준이 다르다(아래 r3 참고).
-      seg: el.getAttribute('role') === 'tab' && !!el.closest('[role="tablist"]') };
+      seg: el.getAttribute('role') === 'tab' && !!el.closest('[role="tablist"]'),
+      // 고르기 칩·요일 원 — tab 이 아니면서 선택 상태 속성(aria-selected·checked·pressed)이 있는 요소. R3 기준 40.
+      // ★RN-web 은 accessibilityState 를 DOM 에 안 그린다 — 화면 쪽에 aria-selected 같은 prop 이 있어야 여기 잡힌다.
+      chip: el.getAttribute('role') !== 'tab' && ['aria-selected', 'aria-checked', 'aria-pressed'].some((a) => el.hasAttribute(a)) };
     clickables.push(item); els.push(el);
     if (!r.width || !r.height) { item.zero = true; continue; }
     const inView = r.bottom > 0 && r.top < H && r.right > 0 && r.left < W;
@@ -198,21 +202,20 @@ export function r2(snap) {
   return res(d.length ? 'fail' : 'pass', d);
 }
 
-/** R3 — 보이는 요소 44×44 이상. 44~47 은 경고. 겹친(부모도 버튼) 안쪽 요소는 바깥이 터치 면적이므로 뺀다. */
+/** R3 — 누르는 상자의 짧은 변이 요소별 기준 이상. 겹친(부모도 버튼) 안쪽 요소는 바깥이 터치 면적이므로 뺀다.
+ *  기준(2026-11-02 사용자 결정 · 정본 = 산출물/디자인시스템비교_2026-11-02/근무표시안_누르는영역_2026-11-02.html 2부 표):
+ *   · 일반 44 — 작은 버튼 44·줄 안 작은 버튼/상단바 작은 알약/글자 링크의 누르는 상자 44. 44 가 정한 기준이라 44~47 경고는 없앴다.
+ *   · 탭 스위처 칸 39 — 칸이 가로로 넓어 낮아도 누르기 쉽다.
+ *   · 고르기 칩·요일 원 40 — 요일 7개가 한 줄에 서야 해서 44 대신 40. */
 export function r3(snap) {
   const fail = [];
-  const warn = [];
   for (const c of snap.clickables) {
     if (c.zero || c.off || c.nested) continue;
     const m = Math.min(c.w, c.h);
-    // 탭 스위처 칸은 높이 39 로 통일했다(2026-11-02 사용자 결정 · 칸이 가로로 넓어 누르기 쉽다). 39 미만만 FAIL.
-    if (c.seg) { if (m < 39) fail.push(fmt(c)); continue; }
-    if (m < 44) fail.push(fmt(c));
-    else if (m < 48) warn.push(fmt(c));
+    const min = c.seg ? 39 : c.chip ? 40 : 44;
+    if (m < min) fail.push(`<${min} ${fmt(c)}`);
   }
-  if (fail.length) return res('fail', fail.map((s) => `<44 ${s}`));
-  if (warn.length) return res('warn', warn.map((s) => `44~47 ${s}`));
-  return res('pass');
+  return res(fail.length ? 'fail' : 'pass', fail);
 }
 
 /** R4 — 16자 이하 글자가 줄높이×1.6 을 넘지 않는다. */

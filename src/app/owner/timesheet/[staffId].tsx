@@ -106,7 +106,7 @@ export default function OwnerTimesheetScreen() {
 }
 
 const styles = StyleSheet.create({
-  // 보조 버튼 = 작은 버튼(48 알약 · 내용 폭). 빈 카드 아래 가운데.
+  // 보조 버튼 = 작은 버튼(44 알약 · 내용 폭). 빈 카드 아래 가운데.
   backBtn: { ...ButtonStyles.small, alignSelf: 'center', borderWidth: 1, borderColor: InkColors.line, backgroundColor: Surface.card },
   backBtnText: { ...ButtonTextStyles.small, color: InkColors.ink },
   staffCard: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: 12 },

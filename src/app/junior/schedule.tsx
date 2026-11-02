@@ -192,7 +192,9 @@ export default function JuniorScheduleScreen() {
               </View>
             )}
             </Appear>
+            {/* 안내 문장은 그날 목록 바로 아래(시안 2026-11-02) — 목록과 한 묶음이라 같은 등장·Space.sm 간격 */}
             <Appear delay={stagger(1)}>
+            <View style={styles.weekBlock}>
             <ScheduleWeek
               monday={monday}
               setMonday={setMonday}
@@ -207,9 +209,8 @@ export default function JuniorScheduleScreen() {
               //   교대는 시트가 앞으로의 근무에만 보여 준다.
               canPress={(date, sh) => sh.workerStaffId === me && date >= addDays(today, -35) && !sh.pending}
             />
-            </Appear>
-            <Appear delay={stagger(2)}>
             <Text style={styles.tip}>내 근무(노랑)를 누르거나 ‘교대 요청’ 탭에서 대타·맞교환을 올릴 수 있어요.</Text>
+            </View>
             </Appear>
           </>
         ) : (
@@ -613,7 +614,9 @@ const styles = StyleSheet.create({
   storeChip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: InkColors.cream, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 10, paddingHorizontal: 12 },
   storeChipText: { ...Type.tag, flex: 1, fontWeight: '700', color: TextColor.secondary },
 
-  tip: { ...Type.desc, textAlign: 'center' },
+  weekBlock: { gap: Space.sm },
+  // 목록 바로 아래 왼쪽 정렬(시안). 좌우 4 = SectionLabel 과 같은 들여쓰기.
+  tip: { ...Type.desc, paddingHorizontal: Space.xs },
 
   // 주 버튼 — 그림자 없음(결정표).
   reqBtn: { ...ButtonStyles.primary, flexDirection: 'row', gap: 7, backgroundColor: InkColors.ink },
@@ -640,7 +643,7 @@ const styles = StyleSheet.create({
   // 카드 안 수락은 목록마다 반복돼 Primary가 될 수 없다 → 잉크 솔리드에서 초록 틴트(면 50 + 글자 800)로.
   acceptBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: BrandColors.goodSoft, borderRadius: Radius.md, minHeight: 48, paddingVertical: 12, marginTop: 4 },
   acceptText: { fontSize: Type.body.fontSize, fontWeight: '800', color: BrandColors.goodText },
-  // 행 옆 작은 버튼 = 48 알약 · 15/800.
+  // 행 옆 작은 버튼 = 44 알약 · 15/800.
   cancelBtn: { ...ButtonStyles.small, alignSelf: 'auto', paddingHorizontal: Space.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
   cancelText: { ...ButtonTextStyles.small, color: TextColor.secondary },
 

@@ -70,7 +70,7 @@ export const styles = StyleSheet.create({
   // 할일 0건 — 첫 할일 등록으로 안내(새 매장은 기본 할일이 없다). 위아래 = 카드 안쪽 16(행이 없으니 사방 16이 된다).
   taskEmpty: { alignItems: 'center', gap: Space.sm, paddingVertical: Layout.cardPad },
   taskEmptyText: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: InkColors.ink2, textAlign: 'center' },
-  // 작은 버튼(48 · 알약 · 내용 폭). 가운데 정렬 칸 안이라 alignSelf 만 가운데로 둔다.
+  // 작은 버튼(44 · 알약 · 내용 폭). 가운데 정렬 칸 안이라 alignSelf 만 가운데로 둔다.
   taskEmptyCta: {
     ...ButtonStyles.small,
     alignSelf: 'center',

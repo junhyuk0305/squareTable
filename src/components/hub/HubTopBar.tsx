@@ -7,7 +7,7 @@ import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { BellButton } from '@/components/NotificationBell';
 import { AccountAvatarButton } from '@/components/AccountAvatarButton';
 import { StoreToggle } from '@/components/StoreToggle';
-import { Space } from '@/lib/theme/layout';
+import { Layout, Space } from '@/lib/theme/layout';
 
 export function HubTopBar() {
   const router = useRouter();
@@ -27,6 +27,11 @@ export function HubTopBar() {
 
 const styles = StyleSheet.create({
   // zIndex — 매장 드롭다운이 아래 콘텐츠 위로 겹쳐 열린다. 상단바가 형제보다 위에 그려져야 한다.
-  topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', zIndex: 20 },
+  // 높이 = 83 - 스크롤 위 여백 16 - 첫 간격 20 = 47(2026-11-02). 매장 토글 칸이 32 로 낮아져도(트랙 47 → 42)
+  //   허브 헤더 높이는 매장 층 상단바(Layout.headerH 83)와 그대로 같다.
+  topbar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', zIndex: 20,
+    minHeight: Layout.headerH - Layout.screenTop - Layout.sectionGap,
+  },
   right: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
 });

@@ -6,12 +6,12 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { InkColors } from '@/lib/theme/colors';
 import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
+import { ButtonStyles } from '@/lib/theme/button';
 
 export function MarkAllReadButton({ onPress }: { onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
-      hitSlop={8}
       accessibilityRole="button"
       accessibilityLabel="알림 전체 읽음 처리"
       style={({ pressed }) => [styles.btn, pressed && { opacity: 0.6 }]}
@@ -23,13 +23,15 @@ export function MarkAllReadButton({ onPress }: { onPress: () => void }) {
 }
 
 const styles = StyleSheet.create({
+  // 누르는 높이 44(2026-11-02 사용자 결정 · 상단바 작은 알약). 글자·아이콘은 그대로 가운데 — RN-web 은 hitSlop 을 무시한다.
+  //   헤더 줄은 뒤로 버튼(48)이 높이를 정하므로 44 로 키워도 헤더 높이는 그대로다.
   btn: {
+    ...ButtonStyles.inlineHit,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingLeft: 14,
     paddingRight: HEADER_EDGE_GUTTER,
-    paddingVertical: 4,
   },
   text: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
 });

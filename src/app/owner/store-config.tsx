@@ -22,7 +22,7 @@ import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space, screenScrollStyle } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
-import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { ButtonStyles, ButtonTextStyles, TouchSize } from '@/lib/theme/button';
 import { CardStyles } from '@/lib/theme/card';
 
 const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
@@ -171,12 +171,10 @@ function StoreConfigForm() {
           {WEEKDAY_ORDER.map((wd) => {
             const on = closedDays.includes(wd);
             return (
-              <Pressable
-                key={wd}
-                onPress={() => toggleDay(wd)}
-                style={[styles.dow, on && styles.dowOn, wd === 0 && on && styles.dowSun]}
-              >
-                <Text style={[styles.dowText, on && { color: InkColors.bubbleText }]}>{WEEKDAY_LABELS[wd]}</Text>
+              <Pressable key={wd} onPress={() => toggleDay(wd)} accessibilityState={{ selected: on }} aria-selected={on} style={styles.dowHit}>
+                <View style={[styles.dow, on && styles.dowOn, wd === 0 && on && styles.dowSun]}>
+                  <Text style={[styles.dowText, on && { color: InkColors.bubbleText }]}>{WEEKDAY_LABELS[wd]}</Text>
+                </View>
               </Pressable>
             );
           })}
@@ -326,6 +324,8 @@ const styles = StyleSheet.create({
   warn: { ...Type.body, color: BrandColors.badText, fontWeight: '700', textAlign: 'center' },
 
   dows: { flexDirection: 'row', justifyContent: 'space-between' },
+  // 요일 원 = 보이는 38 그대로 · 누르는 40×40(2026-11-02 사용자 결정 · 칩·요일 원). 7개가 한 줄에 서야 해서 44 대신 40.
+  dowHit: { width: TouchSize.chip, height: TouchSize.chip, alignItems: 'center', justifyContent: 'center' },
   dow: { width: 38, height: 38, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, alignItems: 'center', justifyContent: 'center' },
   dowOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   dowSun: { backgroundColor: BrandColors.badSolid, borderColor: BrandColors.bad },

@@ -7,6 +7,8 @@ import { Type } from '@/lib/theme/type';
 
 /** 점 지름 — "그날 뭔가 있다"만 뜻하는 표식이라 작게. */
 const DOT = 4;
+/** 노랑 점 지름 — 테두리 1 을 빼면 안쪽 4 가 남아 기본 점과 같은 크기로 읽힌다. */
+const DOT_YELLOW = 6;
 
 export type WeekDay = {
   key: string;
@@ -18,6 +20,8 @@ export type WeekDay = {
   hasEvent?: boolean;
   /** 흐리게(휴무·지난 날) */
   dimmed?: boolean;
+  /** 요일 글자를 빨강 계열로(일요일). 안 넘기면 회색 그대로. */
+  sunday?: boolean;
 };
 
 /**
@@ -34,13 +38,17 @@ export function WeekStrip({
   selectedKey,
   todayKey,
   onSelect,
+  dotTone = 'mention',
 }: {
   days: WeekDay[];
   selectedKey: string;
   /** 오늘의 key — 다른 날을 골라 놨을 때 "여기가 오늘"을 잃지 않게 옅은 면으로 표시한다. */
   todayKey?: string;
   onSelect: (key: string) => void;
+  /** 점 색. 'yellow' = 내 근무가 있는 날(직원 근무표 · 2026-11-02). 흰 면에서 보이게 테두리를 두르고 조금 키운다. */
+  dotTone?: 'mention' | 'yellow';
 }) {
+  const yellow = dotTone === 'yellow';
   return (
     <View style={styles.strip}>
       {days.map((d) => {
@@ -61,9 +69,15 @@ export function WeekStrip({
               pressed && !on && styles.pressed,
             ]}
           >
-            <Text style={[styles.dow, on && styles.dowOn]}>{d.dow}</Text>
+            <Text style={[styles.dow, d.sunday && styles.dowSun, on && styles.dowOn]}>{d.dow}</Text>
             <Text style={[styles.date, on && styles.dateOn]}>{d.date}</Text>
-            <View style={[styles.dot, d.hasEvent ? on && styles.dotOn : styles.dotHidden]} />
+            <View
+              style={[
+                styles.dot,
+                yellow && styles.dotYellow,
+                d.hasEvent ? on && !yellow && styles.dotOn : styles.dotHidden,
+              ]}
+            />
           </Pressable>
         );
       })}
@@ -92,6 +106,7 @@ const styles = StyleSheet.create({
   cellDim: { opacity: 0.45 },
   pressed: { backgroundColor: InkColors.bgSoft },
   dow: { ...Type.micro, fontWeight: '700', color: TextColor.secondary },
+  dowSun: { color: BrandColors.badText },
   dowOn: { color: InkColors.bubbleText, opacity: 0.6 },
   date: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
   dateOn: { color: InkColors.bubbleText },
@@ -103,6 +118,15 @@ const styles = StyleSheet.create({
     backgroundColor: BrandColors.mention,
   },
   dotOn: { backgroundColor: BrandColors.yellow },
+  // 노랑 점은 흰 면에서 안 보여서 노랑 딥 테두리를 두른다. 고른 칸(검정)에서도 같은 모양.
+  dotYellow: {
+    width: DOT_YELLOW,
+    height: DOT_YELLOW,
+    borderRadius: DOT_YELLOW / 2,
+    borderWidth: 1,
+    borderColor: BrandColors.yellowDeep,
+    backgroundColor: BrandColors.yellow,
+  },
   // 자리는 남기고 색만 뺀다 — 점 유무로 행 높이가 흔들리면 스트립이 들썩인다.
-  dotHidden: { backgroundColor: 'transparent' },
+  dotHidden: { backgroundColor: 'transparent', borderColor: 'transparent' },
 });

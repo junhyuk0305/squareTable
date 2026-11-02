@@ -862,7 +862,7 @@ const st = StyleSheet.create({
   thinTitle: { ...Type.body, fontWeight: '800', lineHeight: 22 },
   thinRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   thinName: { ...Type.body, flex: 1, minWidth: 0, fontWeight: '700' },
-  // 작은 버튼 = ButtonStyles.small(2026-11-02 결정으로 48 알약). 선·면 색은 자리 값 그대로.
+  // 작은 버튼 = ButtonStyles.small(2026-11-02 결정으로 44 알약). 선·면 색은 자리 값 그대로.
   smallAct: {
     ...ButtonStyles.small,
     borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', ...Elevation.e1,

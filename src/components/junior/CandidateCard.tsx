@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
 
   divider: { height: 1, backgroundColor: InkColors.line },
 
-  // 작은 버튼(48 알약)을 카드 폭으로. 글자는 문구가 길어 13 을 지킨다(15 면 좁은 폰에서 두 줄).
+  // 작은 버튼(44 알약)을 카드 폭으로. 글자는 문구가 길어 13 을 지킨다(15 면 좁은 폰에서 두 줄).
   registerBtn: {
     ...ButtonStyles.small,
     alignSelf: 'stretch',

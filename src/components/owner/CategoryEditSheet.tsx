@@ -212,7 +212,7 @@ const s = StyleSheet.create({
 
   confirmBar: { marginTop: 10, padding: 10, borderRadius: Radius.sm, backgroundColor: '#FBECEC', borderWidth: 1, borderColor: BrandColors.bad },
   confirmText: { ...Type.desc, color: '#8A2B2B', fontWeight: '700' },
-  // 작은 버튼(48 알약 · 15/800 · 내용 폭 · 2026-11-02).
+  // 작은 버튼(44 알약 · 15/800 · 내용 폭 · 2026-11-02).
   confirmBtns: { flexDirection: 'row', gap: 8, marginTop: 8, justifyContent: 'flex-end' },
   cCancel: { ...ButtonStyles.small, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
   cCancelText: { ...ButtonTextStyles.small, color: InkColors.ink2 },
