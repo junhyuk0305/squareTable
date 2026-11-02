@@ -50,6 +50,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
+    "db:start": "npx supabase start && docker image prune -a -f",
     "compile:packs": "node scripts/compile-pack.mjs",
     "platform:status": "node scripts/platform-status.mjs",
     "native:gate": "node scripts/native-gate.mjs",
