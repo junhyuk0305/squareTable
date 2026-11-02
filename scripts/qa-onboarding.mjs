@@ -24,6 +24,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
+import { seedPending } from './lib/qa-staff.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -120,8 +121,7 @@ try {
     cleanup.push(pend);
     let seedErr = SERVICE ? null : 'SERVICE 키 없음';
     if (SERVICE) {
-      const { error } = await createClient(URL, SERVICE, { auth: { persistSession: false } }).from('profiles').update({ pending_unit_id: unit }).eq('id', pendId);
-      seedErr = error?.message ?? null;
+      seedErr = await seedPending(createClient(URL, SERVICE, { auth: { persistSession: false } }), pendId, unit).then(() => null, (e) => e.message);
     }
     const { data: peek } = await pend.from('playbook_entries').select('id').limit(1);
     check('승인 전 대기 신청자: 매장 노하우 0행(RLS 격리)', !seedErr && Array.isArray(peek) && peek.length === 0, seedErr ?? `rows=${peek?.length}`);

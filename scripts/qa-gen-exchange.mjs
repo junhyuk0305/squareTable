@@ -16,6 +16,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
+import { joinAsStaff } from './lib/qa-staff.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -98,10 +99,7 @@ async function main() {
     }
     const joinAndApprove = async (name, birth) => {
       const J = await signUp(name, 'junior', birth);
-      const j = await J.c.rpc('join_by_invite', { p_code: row.invite_code });
-      if (j.error) throw new Error(`join(${name}): ${j.error.message}`);
-      const ap = await O.c.rpc('approve_member', { p_uid: J.uid });
-      if (ap.error) throw new Error(`approve(${name}): ${ap.error.message}`);
+      await joinAsStaff(J.c, row.invite_code);
       return J;
     };
     const J1 = await joinAndApprove('j20', '2000-03-05');

@@ -36,6 +36,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 import { guardResolvedUrls } from './lib/local-target-guard.mjs';
+import { joinAsStaff, seedPending } from './lib/qa-staff.mjs';
 
 const here = (r) => fileURLToPath(new URL(r, import.meta.url));
 function pe(f){const o={};try{for(const l of readFileSync(f,'utf8').split(/\r?\n/)){const m=l.match(/^([A-Z_]+)=(.*)$/);if(m)o[m[1]]=m[2].trim();}}catch{}return o;}
@@ -139,10 +140,8 @@ async function main() {
   const aId = await signUpSession(jA, `qa_qs_a_${s}@example.com`, { name: 'QA직원A', role: 'junior', phone: `0108${s.slice(0,7)}` });
   const bId = await signUpSession(jB, `qa_qs_b_${s}@example.com`, { name: 'QA직원B', role: 'junior', phone: `0109${s.slice(0,7)}` });
   const cId = await signUpSession(jC, `qa_qs_c_${s}@example.com`, { name: 'QA직원C', role: 'junior', phone: `0107${s.slice(0,7)}` });
-  for (const [j, id] of [[jA, aId], [jB, bId], [jC, cId]]) {
-    await j.rpc('join_by_invite', { p_code: CODE });
-    const { error } = await owner.rpc('approve_member', { p_uid: id });
-    if (error) throw new Error('approve_member: ' + error.message);
+  for (const j of [jA, jB, jC]) {
+    await joinAsStaff(j, CODE);
     await j.rpc('switch_active_unit', { p_unit_id: UNIT });
   }
   check('직원 3명 합류 승인', true);
@@ -426,16 +425,16 @@ async function main() {
   // ★0346: join_by_invite 는 바로 합류하므로 0346 전 옛 신청(대기 행)을 service_role 로 심는다.
   const jE = mk();
   const eId = await signUpSession(jE, `qa_qs_e_${s}@example.com`, { name: 'QA직원E', role: 'junior', phone: `0105${s.slice(0,7)}` });
-  { const { error } = await admin.from('profiles').update({ pending_unit_id: UNIT }).eq('id', eId); if (error) throw new Error('E 대기 심기: ' + error.message); }
+  await seedPending(admin, eId, UNIT);
   const { data: eRows } = await admin.from('quiz_assignments').select('id').eq('unit_id', UNIT).eq('user_id', eId);
   check('신청(pending)만으로는 배정 없음', (eRows ?? []).length === 0, `n=${eRows?.length}`);
 
   // 합류 확정(0346 즉시 합류 · 이어 부르는 approve_member 는 no-op) → 첫 퀴즈 1건.
   const jD = mk();
   const dId = await signUpSession(jD, `qa_qs_d_${s}@example.com`, { name: 'QA직원D', role: 'junior', phone: `0102${s.slice(0,7)}` });
-  await jD.rpc('join_by_invite', { p_code: CODE });
+  await joinAsStaff(jD, CODE);
   const { error: apErr } = await owner.rpc('approve_member', { p_uid: dId });
-  check('합류 승인 성공(입사 트리거가 승인을 깨지 않는다)', !apErr, apErr?.message ?? '');
+  check('이미 멤버인데 approve_member 를 불러도 오류 없음(0346 · 옛 사장 앱)', !apErr, apErr?.message ?? '');
   const { data: dRows } = await admin.from('quiz_assignments')
     .select('course_id, origin, scheduled_on, sent_at, created_by').eq('unit_id', UNIT).eq('user_id', dId);
   check(`입사 즉시 코스 ${JOIN_COURSES}개만 배정(첫날에 전부 쏟지 않는다)`, (dRows ?? []).length === JOIN_COURSES, `n=${dRows?.length}`);

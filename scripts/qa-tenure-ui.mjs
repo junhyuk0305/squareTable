@@ -19,6 +19,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
+import { joinAsStaff, seedPending } from './lib/qa-staff.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(root, '.qa-out', 'tenure-ui');
@@ -200,10 +201,7 @@ try {
   UNIT = row.unit_id;
   await O.c.rpc('switch_active_unit', { p_unit_id: UNIT });
   const joinApprove = async (U) => {
-    const j = await U.c.rpc('join_by_invite', { p_code: row.invite_code });
-    if (j.error) throw new Error('join_by_invite: ' + j.error.message);
-    const a = await O.c.rpc('approve_member', { p_uid: U.id });
-    if (a.error) throw new Error('approve_member: ' + a.error.message);
+    await joinAsStaff(U.c, row.invite_code);
     await U.c.rpc('switch_active_unit', { p_unit_id: UNIT });
   };
   for (const U of [A, B, C]) await joinApprove(U);
@@ -269,8 +267,7 @@ try {
 
     // ── 재입사 신청자 판정 ──
     // ★0346: join_by_invite 는 바로 합류한다. 재입사 '신청자' 경고는 옛 신청(대기 행)에만 있으므로 대기를 심는다.
-    const j = await admin.from('profiles').update({ pending_unit_id: UNIT }).eq('id', C.id);
-    if (j.error) throw new Error('C 재신청(대기 심기): ' + j.error.message);
+    await seedPending(admin, C.id, UNIT);
     const pend = await O.c.from('profiles').select('id').eq('pending_unit_id', UNIT);
     check('4-12 C 가 합류 신청 목록에 있다', (pend.data ?? []).some((p) => p.id === C.id), JSON.stringify(pend.data ?? pend.error));
     const ap = await O.c.rpc('approve_member', { p_uid: C.id });

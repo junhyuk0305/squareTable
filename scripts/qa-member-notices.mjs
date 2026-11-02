@@ -18,6 +18,7 @@
 // 실행: node scripts/qa-member-notices.mjs   자가정리(계정·매장·OTP 시드).
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
+import { seedPending } from './lib/qa-staff.mjs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import ts from 'typescript';
@@ -91,12 +92,8 @@ try {
   UNIT = row.unit_id;
   await O.c.rpc('switch_active_unit', { p_unit_id: UNIT });
   // ★0346: join_by_invite 는 바로 합류한다. 이 하니스는 옛 신청(승인·반려) 경로를 재므로 대기 행을 service_role 로 심는다.
-  const joinUnit = async (U) => {
-    const j = await admin.from('profiles').update({ pending_unit_id: UNIT }).eq('id', U.id);
-    if (j.error) throw new Error(`${U.name} 대기 심기: ${j.error.message}`);
-  };
   const approve = async (U) => {
-    await joinUnit(U);
+    await seedPending(admin, U.id, UNIT);
     const a = await O.c.rpc('approve_member', { p_uid: U.id });
     if (a.error) throw new Error(`${U.name} approve_member: ${a.error.message}`);
     await U.c.rpc('switch_active_unit', { p_unit_id: UNIT });
@@ -135,7 +132,7 @@ try {
     const upd = await A.c.from('member_notices').update({ title: 'x' }).eq('user_id', A.id).select('id');
     check('2-5 받은 사람도 고칠 수 없다', !!upd.error || (upd.data ?? []).length === 0, upd.error?.message ?? JSON.stringify(upd.data));
 
-    await joinUnit(B);
+    await seedPending(admin, B.id, UNIT);
     const r = await O.c.rpc('reject_member', { p_uid: B.id });
     check('2-6 reject_member 성공', !r.error, r.error?.message);
     const b = await noticesOf(B.id);

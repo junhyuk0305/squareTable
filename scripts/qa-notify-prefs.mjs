@@ -28,6 +28,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 import { IS_LOCAL, localEnv, assertLocalUrl } from './qa-local-target.mjs';
+import { joinAsStaff } from './lib/qa-staff.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -114,21 +115,19 @@ try {
     });
     if (!r.ok) throw new Error(`admin_activate_store A: ${r.status} ${(await r.text()).slice(0, 160)}`);
   }
-  const joinA = async (c, uid, label) => {
-    const { error } = await c.rpc('join_by_invite', { p_code: codeA });
-    if (error) throw new Error(`${label} join_by_invite: ${error.message}${SERVICE ? '' : ' (SERVICE 키가 없어 좌석 캡을 못 비켰다)'}`);
-    await ownerA.rpc('approve_member', { p_uid: uid }); // 0346 이미 멤버면 no-op(옛 사장 앱 경로)
-  };
+  const joinA = (c, label) => joinAsStaff(c, codeA).catch((e) => {
+    throw new Error(`${label} ${e.message}${SERVICE ? '' : ' (SERVICE 키가 없어 좌석 캡을 못 비켰다)'}`);
+  });
 
   const staffA1 = mk();
   const staffA1Id = await signUpSession(staffA1, `qa_np_sa1_${s}@example.com`, { name: 'NPStaffA1', role: 'junior', phone: ph('52') });
   cleanup.push(staffA1);
-  await joinA(staffA1, staffA1Id, 'A1');
+  await joinA(staffA1, 'A1');
 
   const staffA2 = mk();
   const staffA2Id = await signUpSession(staffA2, `qa_np_sa2_${s}@example.com`, { name: 'NPStaffA2', role: 'junior', phone: ph('53') });
   cleanup.push(staffA2);
-  await joinA(staffA2, staffA2Id, 'A2');
+  await joinA(staffA2, 'A2');
 
   // ★0324: push 는 DB 에 실제 사건이 있어야 보낸다(사건 없는 호출은 아무에게도 안 감). 그래서 직원 A3 이 질문을 올리고
   //   '동료 질문'(tag=question · audience=staff) 사건으로 보낸다. 보낸 사람은 수신자에서 빠지므로 수신자는 A1·A2 그대로다.
@@ -136,7 +135,7 @@ try {
   const staffA3 = mk();
   const staffA3Id = await signUpSession(staffA3, `qa_np_sa3_${s}@example.com`, { name: 'NPStaffA3', role: 'junior', phone: ph('54') });
   cleanup.push(staffA3);
-  await joinA(staffA3, staffA3Id, 'A3');
+  await joinA(staffA3, 'A3');
   const unitRow = (Array.isArray(csA) ? csA[0] : csA).unit_id;
   let qn = 0;
   const askAndPush = async () => {

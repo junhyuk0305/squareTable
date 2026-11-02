@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
+import { joinAsStaff, seedPending } from './lib/qa-staff.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 function loadEnv() {
@@ -128,8 +129,7 @@ try {
   // ═══════ 1. 즉시 합류 ═══════
   console.log('\n[1] join_by_invite — 코드를 넣으면 바로 멤버');
   {
-    const jm = await M.c.rpc('join_by_invite', { p_code: CODE });
-    if (jm.error) throw new Error('M join: ' + jm.error.message);
+    await joinAsStaff(M.c, CODE);
     const r = await O.c.rpc('set_member_role', { p_uid: M.id, p_role: 'manager' });
     if (r.error) throw new Error('set_member_role: ' + r.error.message);
 
@@ -242,7 +242,7 @@ try {
   // ═══════ 7. 옛 신청 ═══════
   console.log('\n[7] 0346 전 대기 신청은 approve_member 로 예전처럼 승인된다');
   {
-    await admin.from('profiles').update({ pending_unit_id: st2.unit_id }).eq('id', P.id);
+    await seedPending(admin, P.id, st2.unit_id);
     const a = await O2.c.rpc('approve_member', { p_uid: P.id });
     check('7-1 승인 성공', !a.error, a.error?.message);
     const p = await profileOf(P.id);

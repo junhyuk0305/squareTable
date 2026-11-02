@@ -29,6 +29,7 @@ import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { launch, sleep, storageKeyFor } from './lib/cdp.mjs';
 import { FIXED, PW, UNIT, login, stateLine, rolePrecondition } from './lib/qa-fixed-accounts.mjs';
+import { seedPending } from './lib/qa-staff.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const env = { ...process.env };
@@ -195,13 +196,6 @@ async function joinViaUi(J, code, { double = false } = {}) {
   if (double) await doublePress(page, '합류하기');
   else await clickText(page, '합류하기');
 }
-/** 0346 전 옛 신청을 흉내 낸다 — staff2 에게 이 매장 대기 행을 심는다(멤버가 아닌 매장에만). */
-async function seedPending(u) {
-  const { data: mem } = await admin.from('unit_members').select('user_id').eq('unit_id', u).eq('user_id', jc.uid);
-  if ((mem ?? []).length) throw new Error('대기 심기: staff2 가 이미 이 매장 멤버');
-  const { error } = await admin.from('profiles').update({ pending_unit_id: u }).eq('id', jc.uid);
-  if (error) throw new Error(`대기 심기 실패: ${error.message}`);
-}
 
 const staffNum = (t) => { const m = (t ?? '').match(/합류한 직원 \((\d+)명\)/); return m ? Number(m[1]) : null; };
 const pendNum = (t) => { const m = (t ?? '').match(/합류 신청 \((\d+)명\)/); return m ? Number(m[1]) : null; };
@@ -345,7 +339,7 @@ try {
   const J = await openWindow('J', 9334, juniorSession, '/junior/hub');
   await J.page.waitFor(`document.body.innerText.includes('코드로 매장 추가')`, 40000);
   {
-    await seedPending(unit); // ★0346: 화면 합류는 바로 멤버라 대기를 심는다
+    await seedPending(admin, jc.uid, unit); // ★0346: 화면 합류는 바로 멤버라 staff2 에게 옛 신청 대기를 심는다
     await J.reload();
     const r0 = await watch(J.page, (t) => /승인 대기|승인을 기다/.test(t), 10000);
     info(`K7-r 신청: 대기 카드 ${r0.ok ? r0.sec.toFixed(1) + '초' : '안 뜸(10초)'} · DB pending=${await dbPending(unit)}`);
@@ -386,7 +380,7 @@ try {
   {
     const seen = new Set();
     const before = new Set((await J.page.text()).split('\n').map((s) => s.trim()));
-    await seedPending(unit);
+    await seedPending(admin, jc.uid, unit);
     await J.reload();
     const r = await watch(J.page, (t) => /승인 대기|승인을 기다/.test(t), 10000, seen);
     const pend = await dbPending(unit);

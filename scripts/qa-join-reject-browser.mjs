@@ -17,6 +17,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
+import { seedPending } from './lib/qa-staff.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -75,8 +76,7 @@ async function main() {
   if (e1 || !storeRow?.unit_id) throw new Error('create_store: ' + (e1?.message ?? 'no row'));
   // ★0346: join_by_invite 는 바로 합류한다. 거절 경로는 0346 전 옛 신청에만 있으므로 대기 행을 service_role 로 심는다.
   const admin = createClient(URL_, SRV, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { error: e2 } = await admin.from('profiles').update({ pending_unit_id: storeRow.unit_id }).eq('id', juniorId);
-  if (e2) throw new Error('대기 심기: ' + e2.message);
+  await seedPending(admin, juniorId, storeRow.unit_id);
 
   // ── 브라우저: 신청 직원으로 부팅 ─────────────────────────────
   const session = await passwordSession(`qa_jrb_j_${s}@example.com`);

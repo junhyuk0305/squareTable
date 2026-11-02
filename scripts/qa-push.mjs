@@ -25,6 +25,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
+import { joinAsStaff, seedPending } from './lib/qa-staff.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -109,18 +110,16 @@ try {
   const rowA = Array.isArray(csA) ? csA[0] : csA;
   const codeA = rowA.invite_code, unitA = rowA.unit_id;
 
-  // 매장 A 직원 2명(가입 → 신청 → 사장 승인 → 소속 확정)
+  // 매장 A 직원 2명(가입 → 코드 입력 → 바로 소속 · 0346)
   const staffA1 = mk();
   const staffA1Id = await signUpSession(staffA1, `qa_push_sa1_${s}@example.com`, { name: 'PushStaffA1', role: 'junior', phone: ph('42') });
   cleanup.push(staffA1);
-  await staffA1.rpc('join_by_invite', { p_code: codeA });
-  await ownerA.rpc('approve_member', { p_uid: staffA1Id });
+  await joinAsStaff(staffA1, codeA);
 
   const staffA2 = mk();
   const staffA2Id = await signUpSession(staffA2, `qa_push_sa2_${s}@example.com`, { name: 'PushStaffA2', role: 'junior', phone: ph('43') });
   cleanup.push(staffA2);
-  await staffA2.rpc('join_by_invite', { p_code: codeA });
-  await ownerA.rpc('approve_member', { p_uid: staffA2Id });
+  await joinAsStaff(staffA2, codeA);
 
   // 매장 B 사장 + 직원1(크로스테넌트 표적)
   const ownerB = mk();
@@ -133,8 +132,7 @@ try {
   const staffB1 = mk();
   const staffB1Id = await signUpSession(staffB1, `qa_push_sb1_${s}@example.com`, { name: 'PushStaffB1', role: 'junior', phone: ph('45') });
   cleanup.push(staffB1);
-  await staffB1.rpc('join_by_invite', { p_code: codeB });
-  await ownerB.rpc('approve_member', { p_uid: staffB1Id });
+  await joinAsStaff(staffB1, codeB);
 
   // 매장 A 신청 대기자(승인 전 — pending_unit_id=A, unit_id=null)
   // ★0346: join_by_invite 는 바로 합류한다(무료 좌석이 차 있으면 staff_limit). 0346 전 옛 신청을 service_role 로 심는다.
@@ -144,8 +142,7 @@ try {
   if (!SERVICE) throw new Error('신청 대기자 심기: SUPABASE_SERVICE_ROLE_KEY 필요(.env.seed)');
   {
     const admin = createClient(URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
-    const { error } = await admin.from('profiles').update({ pending_unit_id: unitA }).eq('id', pendingAId);
-    if (error) throw new Error(`신청 대기자 심기: ${error.message}`);
+    await seedPending(admin, pendingAId, unitA);
   }
 
   // unit 없는 유저(가입만)

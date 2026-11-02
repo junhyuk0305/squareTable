@@ -11,6 +11,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { joinAsStaff, seedPending } from './lib/qa-staff.mjs';
 
 const st = Object.fromEntries(
   execFileSync('npx', ['supabase', 'status', '-o', 'env'], { encoding: 'utf8', shell: true, stdio: ['ignore', 'pipe', 'ignore'] })
@@ -56,10 +57,10 @@ const { data: cs } = await O.c.rpc('create_store', { p_store_name: `위조검사
 const S1 = cs?.[0]?.unit_id, code = cs?.[0]?.invite_code;
 const J = await signUp(`qa_forg_j_${s}@example.com`, { name: 'QA직원J', role: 'junior', phone: phones[1] });
 const K = await signUp(`qa_forg_k_${s}@example.com`, { name: 'QA직원K', role: 'junior', phone: phones[2] });
-for (const u of [J, K]) { await u.c.rpc('join_by_invite', { p_code: code }); await O.c.rpc('approve_member', { p_uid: u.id }); }
+for (const u of [J, K]) await joinAsStaff(u.c, code);
 const P = await signUp(`qa_forg_p_${s}@example.com`, { name: 'QA신청P', role: 'junior', phone: phones[3] });
 // ★0346: join_by_invite 는 바로 합류한다. 합류 대기는 0346 전 옛 신청이라 서비스 키로 대기 행을 심는다.
-await must(srv.from('profiles').update({ pending_unit_id: S1 }).eq('id', P.id), 'P 대기');
+await seedPending(srv, P.id, S1);
 const { count: memberCount } = await srv.from('unit_members').select('user_id', { count: 'exact', head: true }).eq('unit_id', S1);
 check('setup: 사장·직원 둘·합류 대기 하나', !!S1 && memberCount === 3, `S1=${S1} members=${memberCount}`);
 

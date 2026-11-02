@@ -25,6 +25,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { assertSeedTarget } from './lib/seed-target.mjs';
+import { seedPending } from './lib/qa-staff.mjs';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const readEnv = (file) => {
@@ -560,8 +561,7 @@ async function main() {
     else if (prof?.pending_unit_id === STORE2) console.log('  · 이미 홍대점 합류 신청 대기 중 → 건너뜀');
     else {
       // ★0346: join_by_invite 는 바로 합류한다. 신청 대기 데모는 0346 전 옛 신청과 같은 대기 행을 service_role 로 심는다.
-      const { error: jErr } = await db.from('profiles').update({ pending_unit_id: STORE2 }).eq('id', APPLICANT);
-      if (jErr) throw new Error(`합류 신청 대기 심기 실패: ${jErr.message}`);
+      await seedPending(db, APPLICANT, STORE2);
       console.log('  ✓ 대기 행 심기 → 승인 대기 상태(사장이 허브에서 확인)');
     }
   }
