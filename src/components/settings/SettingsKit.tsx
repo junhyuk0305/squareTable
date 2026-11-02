@@ -23,7 +23,7 @@ export function SettingsSection({
 }) {
   return (
     <View style={styles.section}>
-      {title ? <SectionLabel icon={icon} title={title} flush /> : null}
+      {title ? <SectionLabel icon={icon} title={title} /> : null}
       <View style={styles.card}>
         <View style={styles.cardClip}>{children}</View>
       </View>

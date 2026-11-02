@@ -122,7 +122,7 @@ export default function GuestQuizResultScreen() {
               <Text style={qst.emptyText}>{'문항별 기록이 없어요.\n예전 링크로 푼 결과는 점수만 남아 있어요.'}</Text>
             ) : (
               <View style={st.labeled}>
-                <SectionLabel flush title="문항별" hint={`${items.length}문제`} />
+                <SectionLabel title="문항별" hint={`${items.length}문제`} />
                 <View style={st.list}>
                   {items.map((it, i) => (
                     <Appear key={it.id} delay={stagger(i)}>

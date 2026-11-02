@@ -14,7 +14,7 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
-import { Space } from '@/lib/theme/layout';
+import { Layout, Space } from '@/lib/theme/layout';
 import type { PlaybookEntry } from '@/types';
 
 export type JuniorBrowseDashboardProps = {
@@ -288,8 +288,9 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   // 가로 패딩은 Space.gutter(20)로 — KnowhowCarousel이 -Space.gutter로 가장자리까지 흘리므로
   // 같은 값이어야 상쇄돼 460 프레임을 벗어나지 않는다(Space.lg=16이면 4px 오버플로).
-  content: { paddingHorizontal: Space.gutter, paddingTop: Space.lg, paddingBottom: Space.lg, gap: Space.xl },
-  // 한 블록 = [밖 라벨] + [카드들].
+  // 첫 여백 = Layout.screenTop · 섹션 사이 = Layout.sectionGap.
+  content: { paddingHorizontal: Space.gutter, paddingTop: Layout.screenTop, paddingBottom: Space.lg, gap: Layout.sectionGap },
+  // 한 블록 = [밖 라벨] + [카드들]. `<Section>`(gap 8)을 안 쓰는 건 캐러셀이 위 패딩 2 를 스스로 들어서다.
   // 캐러셀 위 패딩 2 + 라벨 아래 2 를 더해 제목→카드 10.
   block: { gap: 6 },
 });

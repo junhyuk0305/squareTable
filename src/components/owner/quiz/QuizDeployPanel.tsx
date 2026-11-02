@@ -203,7 +203,6 @@ export function QuizDeployPanel({ course, onOpenResult }: { course: TrainingCour
         <View style={st.section}>
           {/* 이름은 '링크' 하나로 둔다(2026-09-13) — '열려 있는'은 힌트(지난 링크 N개)가 이미 말한다. */}
           <SectionLabel
-            flush
             title="링크"
             hint={closed > 0 ? `${live.length}개 · 지난 링크 ${closed}개` : `${live.length}개`}
           />
@@ -234,7 +233,7 @@ export function QuizDeployPanel({ course, onOpenResult }: { course: TrainingCour
       {subs.length > 0 && (
         <View style={st.section}>
           {/* N16: 같은 사람이 여러 번 낼 수 있다. 사람 수가 아니라 제출 건수다. */}
-          <SectionLabel flush title={guestSubmissionsLabel(subs.length)} />
+          <SectionLabel title={guestSubmissionsLabel(subs.length)} />
           <View style={st.list}>
             {subs.map((s, i) => (
               <Pressable
@@ -334,7 +333,7 @@ function RowAction({
 }
 
 const st = StyleSheet.create({
-  // 묶음 사이 = 화면 틀과 같은 20 · 섹션 안 제목 ↔ 카드 = 8(SectionLabel flush · 2026-11-02).
+  // 묶음 사이 = 화면 틀과 같은 20 · 섹션 안 제목 ↔ 카드 = 8(2026-11-02).
   wrap: { gap: Layout.sectionGap },
   section: { gap: Space.sm },
   warnBox: {

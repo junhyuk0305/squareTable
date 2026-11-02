@@ -100,7 +100,7 @@ export function InviteBlock({
 
   return (
     <View style={[s.root, style]}>
-      <SectionLabel title="직원 초대" flush />
+      <SectionLabel title="직원 초대" />
       <View style={s.card}>
         <View style={s.head}>
           <Text style={s.howTitle}>초대코드</Text>
@@ -161,7 +161,7 @@ export function InviteBlock({
 }
 
 const s = StyleSheet.create({
-  // 라벨↔카드 = `<Section>` 과 같은 간격(SectionLabel flush 아래 2 + gap 8 = 10). 섹션 사이는 부모 화면 틀이 정한다.
+  // 라벨↔카드 = `<Section>` 과 같은 간격(SectionLabel 아래 2 + gap 8 = 10). 섹션 사이는 부모 화면 틀이 정한다.
   root: { gap: Space.sm },
   // 목록 카드 모양(모서리 16 · 그림자 e1 · 안쪽 16) — 다른 카드와 한 벌.
   card: { ...CardStyles.list, gap: Space.md },

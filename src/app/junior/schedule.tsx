@@ -403,9 +403,9 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    // 제목 ↔ 카드 10(SectionLabel 아래 2 + 8) · 카드끼리 Gap.item. 섹션 사이는 SectionStack 이 정한다(flush).
+    // 제목 ↔ 카드 10(SectionLabel 아래 2 + 8) · 카드끼리 Gap.item. 섹션 사이는 SectionStack 이 정한다.
     <View style={styles.section}>
-      <SectionLabel flush icon={icon} title={title} />
+      <SectionLabel icon={icon} title={title} />
       <View style={styles.sectionCards}>{children}</View>
     </View>
   );

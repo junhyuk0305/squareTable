@@ -349,7 +349,6 @@ export default function OwnerDashboardScreen() {
         {/* 할일이 0건이어도 섹션은 남긴다 — 새 매장은 기본 할일이 없으므로(2026-09-03 시드 제거) 여기서 첫 할일을 등록한다. */}
         <Appear delay={stagger(2)} style={styles.section}>
             <SectionLabel
-              flush
               icon="today-outline"
               title="오늘"
               trailing={

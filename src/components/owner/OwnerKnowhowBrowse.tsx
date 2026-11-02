@@ -442,7 +442,7 @@ export function OwnerKnowhowBrowse({
   //   한 갈래에 몰리면(예: '고객 응대' 300건) 그 묶음 하나가 300줄이다.
   const groupBlock = (key: string, title: string, items: PlaybookEntry[]) => (
     <View key={key} style={styles.group}>
-      <SectionLabel flush title={title} hint={`${items.length}건`} />
+      <SectionLabel title={title} hint={`${items.length}건`} />
       <PagedRows key={`${key}-${listKey}`} items={items} render={entryItem} style={styles.list} />
     </View>
   );
@@ -929,7 +929,7 @@ const styles = StyleSheet.create({
   // 개수 줄 오른쪽 톱니 — 작게 그리되 hitSlop 으로 48dp 하한을 지킨다.
   gearBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
 
-  // 묶음(쓰임새·안 쓰임) = 카드 밖 라벨 + 목록. 위 = 스크롤 gap 12 + 8 = 섹션 사이 20(SectionLabel flush · 2026-11-02).
+  // 묶음(쓰임새·안 쓰임) = 카드 밖 라벨 + 목록. 위 = 스크롤 gap 12 + 8 = 섹션 사이 20(2026-11-02).
   group: { gap: Space.sm, marginTop: Space.sm },
 
 

@@ -338,7 +338,7 @@ export default function OwnerTrainingScreen() {
               </Appear>
               <Appear delay={stagger(1)}>
                 <View style={st.group}>
-                  <SectionLabel title="먼저 물어볼 만한 것" hint={`노하우 ${usable}개`} flush />
+                  <SectionLabel title="먼저 물어볼 만한 것" hint={`노하우 ${usable}개`} />
                   <PickRow
                     rows={pickPool.map((e) => ({
                       key: e.id,
@@ -441,7 +441,6 @@ export default function OwnerTrainingScreen() {
               <SectionLabel
                 title={tab === 'running' ? '응시 중인 퀴즈' : '응시 완료'}
                 hint={tab === 'running' ? `${running.length}건` : `${finished.length}건`}
-                flush
               />
               <View style={st.group}>
                 {tab === 'running' ? (

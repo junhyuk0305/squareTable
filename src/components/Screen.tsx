@@ -54,12 +54,12 @@ export function SectionStack({ children, style }: { children: ReactNode; style?:
 
 /**
  * 섹션 — 카드 밖 제목(SectionLabel) + 내용. 제목 ↔ 내용은 한 덩어리라 섹션 간격보다 좁게 붙인다.
- * SectionLabel 이 스스로 들던 위 여백(12)은 없앴다 — 섹션 사이는 Screen·SectionStack 이 정한다.
+ * 섹션 사이는 Screen·SectionStack 이 정한다.
  */
 export function Section({ children, ...label }: ComponentProps<typeof SectionLabel> & { children: ReactNode }) {
   return (
     <View style={styles.section}>
-      <SectionLabel {...label} flush />
+      <SectionLabel {...label} />
       {children}
     </View>
   );

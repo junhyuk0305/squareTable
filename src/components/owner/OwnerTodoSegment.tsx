@@ -204,7 +204,7 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
           300건 매장에서도 "50건"이라고 했다 — 그건 거짓이고, 51번째부터는 앱 어디에도 없다. */}
       {badOpen && badAnswers.length > 0 && (
         <View style={styles.group}>
-          <SectionLabel flush title="답이 틀렸대요" hint={`${badAnswers.length}건`} />
+          <SectionLabel title="답이 틀렸대요" hint={`${badAnswers.length}건`} />
           <Text style={styles.groupHint}>노하우를 눌러 고치면 다음부터 제대로 답해요.</Text>
           <PagedList
             items={badAnswers}
@@ -221,7 +221,7 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
         <View style={styles.group}>
           {/* ★수는 서버 집계(pendingTotal)를 쓴다 — 목록은 상한까지만 오므로 길이로 세면 거짓이 된다.
               히어로 1건을 뺀 '남은' 수로 말한다. */}
-          <SectionLabel flush title="답할 질문" hint={`남은 ${Math.max(0, (pendingTotal ?? pending.length) - 1)}건`} />
+          <SectionLabel title="답할 질문" hint={`남은 ${Math.max(0, (pendingTotal ?? pending.length) - 1)}건`} />
           <PagedList
             items={restPending}
             render={(uq, i) => (
@@ -237,14 +237,13 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
           👎 교정 루프가 통째로 안 보이고 **틀린 답이 그대로 노하우로 굳는다.** */}
       {aiError && (
         <View style={styles.group}>
-          <SectionLabel flush title="AI가 답한 질문" />
+          <SectionLabel title="AI가 답한 질문" />
           <Text style={styles.aiErr}>목록을 불러오지 못했어요. 연결을 확인하고 다시 들어와 주세요.</Text>
         </View>
       )}
       {!aiError && okAnswers.length > 0 && (
         <View style={styles.group}>
           <SectionLabel
-            flush
             title="AI가 답한 질문"
             hint={aiAnswers.length >= AI_ANSWER_LIMIT ? `최근 ${okAnswers.length}건` : `${okAnswers.length}건`}
           />
@@ -261,7 +260,7 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
 
       {peerAnswers.length > 0 && (
         <View style={styles.group}>
-          <SectionLabel flush title="동료가 답한 질문" hint={`최근 30일 ${peerAnswers.length}건`} />
+          <SectionLabel title="동료가 답한 질문" hint={`최근 30일 ${peerAnswers.length}건`} />
           <PagedList
             items={peerAnswers}
             render={(r, i) => (
@@ -322,7 +321,7 @@ function heroMeta(uq: UnknownQuery) {
 
 const styles = StyleSheet.create({
   aiErr: { ...Type.body, color: InkColors.ink2, paddingVertical: 8 },
-  // 섹션 사이 = 화면 틀과 같은 20 · 제목 ↔ 내용 8(SectionLabel flush · 2026-11-02).
+  // 섹션 사이 = 화면 틀과 같은 20 · 제목 ↔ 내용 8(2026-11-02).
   root: { gap: Layout.sectionGap },
   group: { gap: Space.sm },
   groupHint: { ...Type.desc, marginTop: -4 },

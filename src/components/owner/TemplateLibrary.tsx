@@ -302,7 +302,7 @@ export function TemplateLibrary() {
           {topTags.length > 0 ? (
             <Appear delay={stagger(3)}>
             <View style={styles.labeled}>
-              <SectionLabel flush icon="pricetags-outline" title="빠른 검색" />
+              <SectionLabel icon="pricetags-outline" title="빠른 검색" />
               <View style={styles.tagWrap}>
                 {topTags.map((tag) => (
                   <Pressable key={tag} onPress={() => setQuery(tag)} style={({ pressed }) => [styles.tag, pressed && { opacity: 0.7 }]}>
@@ -316,7 +316,7 @@ export function TemplateLibrary() {
 
           {recommended.length > 0 ? (
             <Appear delay={stagger(4)} style={styles.labeled}>
-              <SectionLabel flush icon="star-outline" title="추천 템플릿" />
+              <SectionLabel icon="star-outline" title="추천 템플릿" />
               <View style={styles.list}>{recommended.map(renderCard)}</View>
             </Appear>
           ) : null}

@@ -261,7 +261,7 @@ export function QuizSettingsPanel({
 
       {/* ── 배포 ─────────────────────────────────────────────────────────── */}
       <View style={s.labeled}>
-      <SectionLabel flush icon="send-outline" title="배포" />
+      <SectionLabel icon="send-outline" title="배포" />
       {audience == null ? (
         <View style={s.card}>
           <Text style={qst.fieldLabel}>누구에게 낼 퀴즈예요?</Text>
@@ -352,7 +352,7 @@ export function QuizSettingsPanel({
 
 const s = StyleSheet.create({
   wrap: { gap: Space.md },
-  // 배포 섹션 — 위 카드와의 사이 = wrap 12 + 8 = 20(섹션 사이 · 2026-11-02). 제목 ↔ 카드 8(SectionLabel flush).
+  // 배포 섹션 — 위 카드와의 사이 = wrap 12 + 8 = 20(섹션 사이 · 2026-11-02). 제목 ↔ 카드 8.
   labeled: { gap: Space.sm, marginTop: Space.sm },
   // 카드 = CardStyles.list(모서리 16 · 안쪽 16 · 그림자 e1 · 2026-11-02).
   card: { ...CardStyles.list, gap: Space.xs },

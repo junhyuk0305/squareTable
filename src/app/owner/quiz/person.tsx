@@ -132,7 +132,7 @@ export default function QuizPersonResultScreen() {
             {/* 응시가 여러 번이면 회차별 점수를 짧게 — 늘었나 줄었나가 여기서 읽힌다. */}
             {attempts.length > 1 ? (
               <Appear delay={60} style={{ gap: Space.sm }}>
-                <SectionLabel flush title="제출 기록" hint={submissionsLabel(attempts.length)} />
+                <SectionLabel title="제출 기록" hint={submissionsLabel(attempts.length)} />
                 <View style={st.listCard}>
                   {attempts.map((a, i) => (
                     <View key={a.submissionId} style={[st.tryRow, i > 0 && st.tryRowTop]}>
@@ -153,7 +153,6 @@ export default function QuizPersonResultScreen() {
             ) : (
               <Appear delay={120} style={{ gap: Space.sm }}>
                 <SectionLabel
-                  flush
                   title="문항별"
                   hint={attempts.length > 1 ? `문항마다 마지막 답 · ${latest.length}문제` : `${latest.length}문제`}
                 />

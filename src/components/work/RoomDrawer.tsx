@@ -265,7 +265,6 @@ function Block({
   return (
     <Appear style={s.block}>
       <SectionLabel
-        flush
         title={title}
         trailing={
           moreLabel && onMore ? (
@@ -325,7 +324,7 @@ const s = StyleSheet.create({
   // RN-web 은 hitSlop 을 무시한다 — 상자 자체를 44 로.
   topBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   tapBox: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  // 섹션 사이 = 화면 틀과 같은 20. 섹션 제목은 flush(위 여백을 들지 않는다).
+  // 섹션 사이 = 화면 틀과 같은 20.
   scroll: { paddingHorizontal: Space.gutter, gap: Layout.sectionGap },
 
   identity: { alignItems: 'center', gap: Space.xs, paddingVertical: Space.md },

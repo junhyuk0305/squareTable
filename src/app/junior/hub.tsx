@@ -233,7 +233,7 @@ export default function JuniorHub() {
             ③에서는 이미 연결된 직원에게 코드 입력이 상시 노출됐다. */}
         <Appear delay={stagger(2)}>
         <View style={styles.section}>
-          {(pendingUnitId || hasStore) && <SectionLabel flush title="내 매장" />}
+          {(pendingUnitId || hasStore) && <SectionLabel title="내 매장" />}
 
           <View style={styles.sectionCards}>
           {!!pendingUnitId && (

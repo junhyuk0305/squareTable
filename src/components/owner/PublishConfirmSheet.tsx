@@ -176,7 +176,7 @@ export function PublishConfirmSheet({
         )}
 
         <View style={styles.labeled}>
-        <SectionLabel flush title="카테고리" />
+        <SectionLabel title="카테고리" />
         <View style={styles.chips}>
           {options.map((name) => {
             const on = section === name;
@@ -260,7 +260,7 @@ export function PublishConfirmSheet({
         {partsEnabled && partsLoaded && (
           <>
             <View style={styles.labeled}>
-            <SectionLabel flush title="파트" />
+            <SectionLabel title="파트" />
             <View style={styles.chips}>
               {parts.map((p) => {
                 const on = partId === p.id;
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
   sheet: { maxHeight: '85%' },
   // 시트 좌우 여백은 lg(16) — 화면 거터(gutter 20)가 아니라 시트 표준을 따른다(kit 의 qst.body).
   body: { paddingHorizontal: Space.lg, paddingTop: Space.sm, paddingBottom: Space.xl, gap: Space.md },
-  // 시트 안 간격은 그대로 둔다 — SectionLabel 이 들던 위 여백 12 를 여기로 옮겼다(flush · 2026-11-02).
+  // 시트 안 간격은 그대로 둔다 — SectionLabel 이 들던 위 여백 12 를 여기로 옮겼다(2026-11-02).
   labeled: { gap: Space.sm, marginTop: Space.md },
   title: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
 

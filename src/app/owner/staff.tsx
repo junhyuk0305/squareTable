@@ -233,7 +233,7 @@ export default function OwnerStaffScreen() {
         {/* 직원 목록 — 이번 달 시간·근무상태(구 근무·급여 화면 흡수). 제목과 목록이 따로 등장해 Section 대신 같은 간격(sm)을 직접 둔다. */}
         <View style={{ gap: Space.sm }}>
         <Appear delay={stagger(4)}>
-        <SectionLabel title={`합류한 직원 (${staff.length}명)`} flush />
+        <SectionLabel title={`합류한 직원 (${staff.length}명)`} />
         </Appear>
         <Appear delay={stagger(5)}>
         {staff.length === 0 ? (

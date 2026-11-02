@@ -355,7 +355,7 @@ export function TodoScreen({
               { n: dayTasks.filter((t) => !dayDone[t.id]).length, label: '남음', color: BrandColors.warnSoft },
             ]}
           />
-          <SectionLabel flush title={selected === today ? '오늘 업무 배정' : '업무 배정'} />
+          <SectionLabel title={selected === today ? '오늘 업무 배정' : '업무 배정'} />
         </Appear>
       )}
 
@@ -537,7 +537,7 @@ const s = StyleSheet.create({
   legendDot: { width: 10, height: 10, borderRadius: 3 },
 
   dayBar: { flexDirection: 'row', alignItems: 'baseline', gap: 8, paddingHorizontal: 15, paddingTop: 6, paddingBottom: 4, backgroundColor: InkColors.paper },
-  // 게이지 ↔ 섹션 제목 = 섹션 간격(라벨은 flush). 아래 0 = 라벨 아래 2 + 목록 위 8 로 제목→카드 10.
+  // 게이지 ↔ 섹션 제목 = 섹션 간격. 아래 0 = 라벨 아래 2 + 목록 위 8 로 제목→카드 10.
   gauge: { paddingHorizontal: 15, paddingTop: Space.xs, paddingBottom: 0, gap: Layout.sectionGap, backgroundColor: InkColors.paper },
   dayTitle: { ...Type.section },
   dayCount: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },

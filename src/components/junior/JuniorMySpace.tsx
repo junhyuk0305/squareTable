@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
-import { SectionLabel } from '@/components/SectionLabel';
+import { Section } from '@/components/Screen';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { Heatmap, type HeatCell, type HeatGroup, type HeatLegend } from '@/components/blocks/Heatmap';
 import { RollupRows, type RollupRow } from '@/components/blocks/RollupRows';
@@ -22,7 +22,7 @@ import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToCli
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
-import { Space } from '@/lib/theme/layout';
+import { Layout, Space } from '@/lib/theme/layout';
 import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery } from '@/types';
 
 /**
@@ -212,46 +212,47 @@ export function JuniorMySpace({ me }: { me: string }) {
         </Appear>
       )}
 
-      {/* ① 도와줄 수 있는 질문 (D4) */}
-      <SectionLabel icon="hand-left-outline" title="도와줄 수 있는 질문" hint={answerable.length ? `${answerable.length}건` : undefined} />
-      {answerable.length === 0 ? (
-        <Text style={s.empty}>지금은 도와줄 질문이 없어요.</Text>
-      ) : (
-        <View style={s.list}>
-          {answerable.map((u, i) => (
-            <Appear key={u.id} delay={stagger(i)}>
-              <Pressable onPress={() => setAnswerFor(u)} style={({ pressed }) => [s.qCard, pressed && { opacity: 0.85 }]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.qText} numberOfLines={2}>{u.query_text}</Text>
-                  <Text style={s.qMeta}>{u.junior_name}님이 물었어요{u.similar_queries_count > 0 ? ` · 같은 질문 ${u.similar_queries_count + 1}회` : ''}</Text>
-                </View>
-                <View style={s.qCta}><Text style={s.qCtaText}>답하기</Text></View>
-              </Pressable>
-            </Appear>
-          ))}
-        </View>
-      )}
+      {/* ① 도와줄 수 있는 질문 (D4). 내보내기 버튼도 이 섹션 안에 둔다. 목록과의 간격(16)이 섹션 간격으로 벌어지지 않게. */}
+      <Section icon="hand-left-outline" title="도와줄 수 있는 질문" hint={answerable.length ? `${answerable.length}건` : undefined}>
+        {answerable.length === 0 ? (
+          <Text style={s.empty}>지금은 도와줄 질문이 없어요.</Text>
+        ) : (
+          <View style={s.list}>
+            {answerable.map((u, i) => (
+              <Appear key={u.id} delay={stagger(i)}>
+                <Pressable onPress={() => setAnswerFor(u)} style={({ pressed }) => [s.qCard, pressed && { opacity: 0.85 }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.qText} numberOfLines={2}>{u.query_text}</Text>
+                    <Text style={s.qMeta}>{u.junior_name}님이 물었어요{u.similar_queries_count > 0 ? ` · 같은 질문 ${u.similar_queries_count + 1}회` : ''}</Text>
+                  </View>
+                  <View style={s.qCta}><Text style={s.qCtaText}>답하기</Text></View>
+                </Pressable>
+              </Appear>
+            ))}
+          </View>
+        )}
 
-      {/* 내 기여 내보내기 — 내보낼 게 있고 복사가 되는 환경(웹)에서만 노출. */}
-      {canCopyToClipboard() && (myProposals.length > 0 || myAnswered.length > 0) && (
-        <Pressable
-          onPress={onExport}
-          style={({ pressed }) => [s.exportBtn, pressed && { opacity: 0.7 }]}
-          accessibilityRole="button"
-          accessibilityLabel="내 기여 내보내기"
-        >
-          <Ionicons name={copied ? 'checkmark' : 'download-outline'} size={14} color={copied ? BrandColors.good : InkColors.ink2} />
-          <Text style={[s.exportBtnText, copied && { color: BrandColors.goodText }]}>{copied ? '복사됐어요' : '내 기여 내보내기'}</Text>
-        </Pressable>
-      )}
+        {/* 내 기여 내보내기 — 내보낼 게 있고 복사가 되는 환경(웹)에서만 노출. */}
+        {canCopyToClipboard() && (myProposals.length > 0 || myAnswered.length > 0) && (
+          <Pressable
+            onPress={onExport}
+            style={({ pressed }) => [s.exportBtn, pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel="내 기여 내보내기"
+          >
+            <Ionicons name={copied ? 'checkmark' : 'download-outline'} size={14} color={copied ? BrandColors.good : InkColors.ink2} />
+            <Text style={[s.exportBtnText, copied && { color: BrandColors.goodText }]}>{copied ? '복사됐어요' : '내 기여 내보내기'}</Text>
+          </Pressable>
+        )}
+      </Section>
 
       {/* ── 내 기록 — 블록 L5(RollupRows). 2026-08-27: 섹션 3개(답한 질문·보낸 제안·물어본 것)가
              각자 제목+카드였다(같은 형태 3연속). 셋은 **대등한 지표**라 §7-4 B 그대로 롤업 행으로 묶고,
              행을 누르면 그 목록이 **아래로 펼쳐진다**(시트·모달 아님).
              각 행은 대표 대상 1줄을 갖는다(R2) — 숫자 1은 대상 없이는 아무 말도 안 한다. ── */}
       {(myAnswered.length > 0 || myProposals.length > 0 || myQuestions.length > 0) && (
-        <>
-          <SectionLabel icon="albums-outline" title="내 기록" />
+        // 펼친 목록도 섹션 안에 둔다 — 롤업 행 ↔ 목록 = 섹션 안 간격(8).
+        <Section icon="albums-outline" title="내 기록">
           <RollupRows
             rows={[
               ...(myAnswered.length > 0
@@ -289,87 +290,82 @@ export function JuniorMySpace({ me }: { me: string }) {
                 : []),
             ]}
           />
-        </>
-      )}
 
-      {/* ③ 내가 답한 질문 — 롤업에서 펼쳤을 때만. 카드 1장 + 헤어라인 행(낱개 보더 카드 반복 = 시각 소음) */}
-      {openRecord === 'answered' && myAnswered.length > 0 && (
-        <>
-          <View style={s.groupCard}>
-            {(showAllAnswered ? myAnswered : myAnswered.slice(0, 3)).map((u, i) => {
-              const e = u.resolved_with_entry_id ? entryById.get(u.resolved_with_entry_id) : undefined;
-              return (
-                <Appear key={u.id} delay={stagger(i)}>
-                  <Pressable
-                    disabled={!e}
-                    onPress={() => e && setDetailEntry(e)}
-                    style={({ pressed }) => [s.groupRow, i > 0 && s.rowDivider, pressed && e && { opacity: 0.7 }]}
-                  >
-                    <Ionicons name="checkmark-circle" size={16} color={BrandColors.good} />
-                    <Text style={s.rowText} numberOfLines={1}>{u.query_text}</Text>
-                    {e ? <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} /> : null}
-                  </Pressable>
-                </Appear>
-              );
-            })}
-            {!showAllAnswered && myAnswered.length > 3 && (
-              <MoreRow count={myAnswered.length - 3} onPress={() => setShowAllAnswered(true)} />
-            )}
-          </View>
-        </>
-      )}
+          {/* ③ 내가 답한 질문 — 롤업에서 펼쳤을 때만. 카드 1장 + 헤어라인 행(낱개 보더 카드 반복 = 시각 소음) */}
+          {openRecord === 'answered' && myAnswered.length > 0 && (
+            <View style={s.groupCard}>
+              {(showAllAnswered ? myAnswered : myAnswered.slice(0, 3)).map((u, i) => {
+                const e = u.resolved_with_entry_id ? entryById.get(u.resolved_with_entry_id) : undefined;
+                return (
+                  <Appear key={u.id} delay={stagger(i)}>
+                    <Pressable
+                      disabled={!e}
+                      onPress={() => e && setDetailEntry(e)}
+                      style={({ pressed }) => [s.groupRow, i > 0 && s.rowDivider, pressed && e && { opacity: 0.7 }]}
+                    >
+                      <Ionicons name="checkmark-circle" size={16} color={BrandColors.good} />
+                      <Text style={s.rowText} numberOfLines={1}>{u.query_text}</Text>
+                      {e ? <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} /> : null}
+                    </Pressable>
+                  </Appear>
+                );
+              })}
+              {!showAllAnswered && myAnswered.length > 3 && (
+                <MoreRow count={myAnswered.length - 3} onPress={() => setShowAllAnswered(true)} />
+              )}
+            </View>
+          )}
 
-      {/* ② 내가 보낸 제안 — 롤업에서 펼쳤을 때만. 검토 중·반려가 위(정렬은 myProposals에서) */}
-      {openRecord === 'proposals' && myProposals.length > 0 && (
-        <>
-          <View style={s.groupCard}>
-            {(showAllProposals ? myProposals : myProposals.slice(0, 3)).map((sug, i) => (
-              <Appear key={sug.id} delay={stagger(i)}>
-                <View style={i > 0 ? s.rowDivider : undefined}>
-                  <View style={s.groupRow}>
-                    <Ionicons name={sug.status === 'approved' ? 'checkmark-circle' : sug.status === 'rejected' ? 'close-circle' : 'time-outline'} size={16} color={sug.status === 'approved' ? BrandColors.good : sug.status === 'rejected' ? BrandColors.bad : InkColors.ink3} />
-                    <Text style={s.rowText} numberOfLines={1}>{sug.text}</Text>
-                    <Text style={[s.statusTag, sug.status === 'approved' && { color: BrandColors.goodText }, sug.status === 'rejected' && { color: BrandColors.badText }]}>
-                      {sug.status === 'approved' ? '반영됨' : sug.status === 'rejected' ? '반려' : '검토 중'}
-                    </Text>
-                  </View>
-                  {sug.status === 'rejected' && !!sug.owner_note && (
-                    <Text style={s.rejectNote}>사장님 메모 · {sug.owner_note}</Text>
-                  )}
-                </View>
-              </Appear>
-            ))}
-            {!showAllProposals && myProposals.length > 3 && (
-              <MoreRow count={myProposals.length - 3} onPress={() => setShowAllProposals(true)} />
-            )}
-          </View>
-        </>
-      )}
-
-      {/* ④ 내 질문 이력 — 롤업에서 펼쳤을 때만. 예외(답 기다리는 중)만 강조, 답 받음은 흐린 메타로 */}
-      {openRecord === 'questions' && myQuestions.length > 0 && (
-        <>
-          <View style={s.groupCard}>
-            {(showAllQuestions ? myQuestions.slice(0, 20) : myQuestions.slice(0, 5)).map((q, i) => {
-              const answered = !!q.resolved_at || (q.matched_entry_ids?.length ?? 0) > 0;
-              return (
-                <Appear key={q.id} delay={stagger(i)}>
-                  <View style={[s.groupRow, i > 0 && s.rowDivider]}>
-                    <Ionicons name="help-circle-outline" size={16} color={InkColors.ink3} />
-                    <Text style={s.rowText} numberOfLines={1}>{q.query_text}</Text>
-                    {answered ? <Text style={s.doneMeta}>답 받음</Text> : <Text style={s.waitTag}>답 기다리는 중</Text>}
+          {/* ② 내가 보낸 제안 — 롤업에서 펼쳤을 때만. 검토 중·반려가 위(정렬은 myProposals에서) */}
+          {openRecord === 'proposals' && myProposals.length > 0 && (
+            <View style={s.groupCard}>
+              {(showAllProposals ? myProposals : myProposals.slice(0, 3)).map((sug, i) => (
+                <Appear key={sug.id} delay={stagger(i)}>
+                  <View style={i > 0 ? s.rowDivider : undefined}>
+                    <View style={s.groupRow}>
+                      <Ionicons name={sug.status === 'approved' ? 'checkmark-circle' : sug.status === 'rejected' ? 'close-circle' : 'time-outline'} size={16} color={sug.status === 'approved' ? BrandColors.good : sug.status === 'rejected' ? BrandColors.bad : InkColors.ink3} />
+                      <Text style={s.rowText} numberOfLines={1}>{sug.text}</Text>
+                      <Text style={[s.statusTag, sug.status === 'approved' && { color: BrandColors.goodText }, sug.status === 'rejected' && { color: BrandColors.badText }]}>
+                        {sug.status === 'approved' ? '반영됨' : sug.status === 'rejected' ? '반려' : '검토 중'}
+                      </Text>
+                    </View>
+                    {sug.status === 'rejected' && !!sug.owner_note && (
+                      <Text style={s.rejectNote}>사장님 메모 · {sug.owner_note}</Text>
+                    )}
                   </View>
                 </Appear>
-              );
-            })}
-            {!showAllQuestions && myQuestions.length > 5 && (
-              <MoreRow count={Math.min(myQuestions.length, 20) - 5} onPress={() => setShowAllQuestions(true)} />
-            )}
-          </View>
-        </>
+              ))}
+              {!showAllProposals && myProposals.length > 3 && (
+                <MoreRow count={myProposals.length - 3} onPress={() => setShowAllProposals(true)} />
+              )}
+            </View>
+          )}
+
+          {/* ④ 내 질문 이력 — 롤업에서 펼쳤을 때만. 예외(답 기다리는 중)만 강조, 답 받음은 흐린 메타로 */}
+          {openRecord === 'questions' && myQuestions.length > 0 && (
+            <View style={s.groupCard}>
+              {(showAllQuestions ? myQuestions.slice(0, 20) : myQuestions.slice(0, 5)).map((q, i) => {
+                const answered = !!q.resolved_at || (q.matched_entry_ids?.length ?? 0) > 0;
+                return (
+                  <Appear key={q.id} delay={stagger(i)}>
+                    <View style={[s.groupRow, i > 0 && s.rowDivider]}>
+                      <Ionicons name="help-circle-outline" size={16} color={InkColors.ink3} />
+                      <Text style={s.rowText} numberOfLines={1}>{q.query_text}</Text>
+                      {answered ? <Text style={s.doneMeta}>답 받음</Text> : <Text style={s.waitTag}>답 기다리는 중</Text>}
+                    </View>
+                  </Appear>
+                );
+              })}
+              {!showAllQuestions && myQuestions.length > 5 && (
+                <MoreRow count={Math.min(myQuestions.length, 20) - 5} onPress={() => setShowAllQuestions(true)} />
+              )}
+            </View>
+          )}
+        </Section>
       )}
 
-      <View style={{ height: 24 }} />
+      {/* 맨 아래 여백 — 스크롤 gap(섹션 간격 20)과 더해 32. */}
+      <View style={{ height: Space.md }} />
 
       {answerFor && (
         <AnswerSheet
@@ -507,7 +503,8 @@ function AnswerSheet({
 
 const s = StyleSheet.create({
   flex: { flex: 1 },
-  scroll: { padding: Space.gutter, gap: Space.sm },
+  // 섹션 사이 = Layout.sectionGap. 제목 ↔ 내용은 `<Section>` 이 정한다.
+  scroll: { padding: Space.gutter, gap: Layout.sectionGap },
   empty: { fontSize: 15, color: InkColors.ink2, paddingVertical: 14, textAlign: 'center' },
   list: { gap: Space.sm, marginBottom: Space.sm },
 
