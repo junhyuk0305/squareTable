@@ -215,7 +215,7 @@ function StoreConfigForm() {
       {isOwner && stores.length > 1 ? (
         <View style={styles.dangerBox}>
           <Text style={styles.dangerLabel}>위험 구역</Text>
-          <Text style={styles.dangerDesc}>이 매장(“{storeName}”)을 완전히 삭제해요. 노하우·근무·급여 등 모든 데이터가 사라지고 되돌릴 수 없어요. (직원이 있으면 먼저 내보내야 해요.)</Text>
+          <Text style={styles.dangerDesc}>이 매장(“{storeName}”)을 완전히 삭제해요. 노하우·근무 기록 등 모든 데이터가 사라지고 되돌릴 수 없어요. (직원이 있으면 먼저 내보내야 해요.)</Text>
           <Pressable
             onPress={onDelete}
             disabled={deleting || checking}

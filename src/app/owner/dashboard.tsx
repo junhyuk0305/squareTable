@@ -119,15 +119,14 @@ export default function OwnerDashboardScreen() {
   const [tourOn, setTourOn] = useState(false);
 
   // 히어로 바닥에 붙는 바로가기 — 탭바가 못 덮는 진입점만. **3칸**(상한 4칸, 5칸이면 라벨이 깨진다).
-  // '급여' 칸은 2026-08-19에 뺐다 — staff 화면이 이미 '직원·급여'라 두 칸이 사실상 같은 화면이었다
-  // (급여 설정 자체는 그 화면 안 진입점과 설정 탭에 그대로 있다).
+  // '급여' 칸은 2026-08-19에 뺐고, 급여 기능 자체는 2026-11-02에 제품에서 뺐다.
   const subnav: HeroSubNavItem[] = useMemo(
     () => [
       { key: 'quiz', icon: 'help-circle-outline', label: '퀴즈', onPress: () => goToTab('/owner/training') },
       {
         key: 'staff',
         icon: 'people-outline',
-        label: '직원·급여',
+        label: '직원',
         onPress: () => router.push('/owner/staff'),
         badge: pendingJoin,
         badgeHint: '합류 승인 대기',
@@ -188,7 +187,7 @@ export default function OwnerDashboardScreen() {
       };
     }
     // 설정 결손 — "오늘 할 일"이 아니라 **선행 조건**이라 사람이 기다리는 것들 뒤에 둔다.
-    // 근무표가 비면 급여가 계산되지 않는데, 그 사실이 화면 어디에도 없어 급여일에야 알게 된다.
+    // 근무표가 비면 교대·근무 기록 대조가 서지 않는데, 그 사실이 화면 어디에도 없다.
     // 짜고 나면 scheduleEmpty 가 false 가 되어 이 줄은 스스로 사라진다.
     if (scheduleEmpty) {
       return {
@@ -214,7 +213,7 @@ export default function OwnerDashboardScreen() {
       {
         targetRef: hubRef,
         title: '매장 운영부터 둘러보세요',
-        body: '직원이 물은 질문이 맨 위에 떠요.\n퀴즈·직원·급여·근무표는 아래 세 칸에 있어요.',
+        body: '직원이 물은 질문이 맨 위에 떠요.\n퀴즈·직원·근무표는 아래 세 칸에 있어요.',
       },
       {
         targetRef: ctaRef,

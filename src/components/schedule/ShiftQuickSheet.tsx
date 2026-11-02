@@ -5,7 +5,7 @@
 //  · 추가: 직원 1명 + 요일(다중) + 시간  — 주 5일도 한 번에 넣을 수 있다.
 //  · 고치기: 그 요일 하나의 시간 수정 / 삭제 — 요일마다 시간이 다른 근무를 지킨다.
 //  · 반복 근무를 고치거나 지울 때는 범위를 고른다(0242 · J1): "이 날부터 계속"(기본) / "이 날만".
-//    지난 기록은 서버가 지난 구간으로 남긴다. 그래서 그 전 급여는 그대로다.
+//    지난 기록은 서버가 지난 구간으로 남긴다. 그래서 그 전 근무 기록은 그대로다.
 //  · 지난 날짜를 바꾸면 시트 안에서 한 번 더 묻는다(§8 Q4). 확인해야 서버가 받는다(p_confirm_past).
 import { useState } from 'react';
 import { View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform } from 'react-native';
@@ -93,7 +93,7 @@ export function ShiftQuickSheet({
   const overnight = timeOk && isOvernight(start, end);
   const changed = !isEdit || start !== editing.start || end !== editing.end;
 
-  // 지난 날짜를 건드리는가 — 급여 기준이 근무표라 그 기간 급여가 바뀐다(§8 Q4).
+  // 지난 날짜를 건드리는가 — 그 기간 근무 기록이 바뀐다(§8 Q4).
   //   반복 추가는 고른 요일마다 이 날 이후 첫 날부터 들어간다. 그중 가장 이른 날로 본다.
   const today = todayStr();
   const firstDay = !isEdit && repeat && days.length > 0
@@ -113,7 +113,7 @@ export function ShiftQuickSheet({
       ? days
       : [weekday];
   const closedNote = targetDays.some((d) => config.closedDays.includes(d));
-  // 같은 사람 그날 근무와 시간이 겹치면 경고만 한다(A9 · 저장은 막지 않는다). 급여는 겹친 시간을 한 번만 센다(computePay).
+  // 같은 사람 그날 근무와 시간이 겹치면 경고만 한다(A9 · 저장은 막지 않는다).
   const overlapStaff = isEdit ? (templates.find((t) => t.id === editing.templateId)?.staff_id ?? '') : staffId;
   const overlapDays = !isEdit && repeat ? days.map((wd) => nextDateForWeekday(date, wd)) : [editing?.date ?? date];
   const overlapNote = timeOk && !!overlapStaff && overlapDays.some((d) =>
@@ -333,14 +333,14 @@ export function ShiftQuickSheet({
           <View style={s.noteRow}>
             <Ionicons name="alert-circle-outline" size={14} color={BrandColors.warn} />
             <Text style={[s.noteText, s.pastNote]}>
-              {fromScope ? '지난 날짜부터 바꾸면 그 기간 급여도 바뀌어요.' : '지난 날짜를 바꾸면 그날 급여도 바뀌어요.'}
+              {fromScope ? '지난 날짜부터 바꾸면 그 기간 근무 기록도 바뀌어요.' : '지난 날짜를 바꾸면 그날 근무 기록도 바뀌어요.'}
             </Text>
           </View>
         )}
         {overlapNote && (
           <View style={s.noteRow}>
             <Ionicons name="alert-circle-outline" size={14} color={BrandColors.warn} />
-            <Text style={s.noteText}>같은 시간에 이미 근무가 있어요. 급여는 겹친 시간을 한 번만 세요.</Text>
+            <Text style={s.noteText}>같은 시간에 이미 근무가 있어요.</Text>
           </View>
         )}
         {closedNote && (

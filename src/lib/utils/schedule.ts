@@ -210,7 +210,7 @@ export function spanIn(
   return { left: (s - win.from) / len, width: shiftMinutes(start, end) / len };
 }
 
-/** "YYYY-MM" 의 모든 날짜(YYYY-MM-DD). 급여·근무표 월 집계의 날짜 축. */
+/** "YYYY-MM" 의 모든 날짜(YYYY-MM-DD). 근무 내역·근무표 월 집계의 날짜 축. */
 export function monthDates(ym: string): string[] {
   const [y, m] = ym.split('-').map(Number);
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate(); // 다음 달 0일 = 이번 달 마지막 날
@@ -245,7 +245,7 @@ export type DatedShift = {
 /**
  * 이 근무가 그날 서는가 — 날짜 지정은 그 날짜, 반복은 요일과 적용 기간(valid_from ~ valid_to)(0242).
  * 서버 `workers_at`·`request_shift_time` 과 같은 규칙이다. 그날 예외(0178)는 shiftsOn 이 따로 본다.
- * ★기간을 안 보면 지난 구간 복사본과 원래 행이 둘 다 잡혀 그 주 근무가 두 벌이 되고 급여도 두 배가 된다.
+ * ★기간을 안 보면 지난 구간 복사본과 원래 행이 둘 다 잡혀 그 주 근무가 두 벌이 된다.
  */
 export function shiftAppliesOn(t: DatedShift, date: string): boolean {
   if (t.date) return t.date === date;
@@ -283,7 +283,7 @@ function laterSegments(templates: SeriesRow[], staffId: string, weekday: number,
  *  · 없으면 새로 넣는다. 끝난 행은 기록이라 고치지 않는다.
  *    ★새 행의 시작일(valid_from)은 그 요일 첫 날이 아니라 고른 날(지난 날이면 오늘)이다(라이브 QA 결함 10 · 2026-10-07).
  *     옛 앱은 오늘 적용 중인 반복만 읽어(st_read) 시작일이 앞날이면 그날까지 근무가 안 보였다.
- *     그 사이에 그 요일이 없어 근무가 서는 날과 급여는 같다. 첫 날이 이미 지났으면 예전처럼 그 첫 날이다.
+ *     그 사이에 그 요일이 없어 근무가 서는 날은 같다. 첫 날이 이미 지났으면 예전처럼 그 첫 날이다.
  *  · 그 뒤에 시작하는 행이 이미 있으면 새 행을 그 전날로 닫는다. 안 닫으면 그날부터 근무가 두 벌이 된다.
  */
 export function planSeriesSave(
@@ -347,7 +347,7 @@ export type SeriesApi = {
 /**
  * 저장 계획을 차례로 보낸다. 하나가 실패하면 거기서 멈추고 false 다(앞 단계는 이미 저장됐다).
  * ★새 행을 나중 행 앞에서 닫을 때도 사장이 확인한 confirmPast 를 넘긴다. 닫는 날이 지난 날짜면 서버가 확인을 요구한다.
- *   닫기가 실패하면 방금 넣은 행을 시작일부터 그만둔다(= 지운다). 남기면 그날부터 매주 근무가 두 벌이고 급여도 두 배다.
+ *   닫기가 실패하면 방금 넣은 행을 시작일부터 그만둔다(= 지운다). 남기면 그날부터 매주 근무가 두 벌이다.
  */
 export async function runSeriesOps(
   api: SeriesApi,
@@ -426,7 +426,7 @@ export function timeRequestApprovable(r: { date: string }, today: string): boole
 
 /**
  * 지난 근무가 든 교대를 승인하기 전 확인창(Q10). 지난 근무가 없으면 null 이다.
- * 승인하면 그 근무 급여가 받는 사람에게 간다. 원래 담당자가 그날 출근을 찍었으면 경고를 더한다(clockedIn).
+ * 승인하면 그 근무가 받는 사람에게 넘어간다. 원래 담당자가 그날 출근을 찍었으면 경고를 더한다(clockedIn).
  * 확인창을 거쳤으면 서버에 p_confirm_past=true 를 보낸다.
  */
 export function pastSwapNotice(
@@ -438,8 +438,8 @@ export function pastSwapNotice(
   const past = swapLegs(r).filter((l) => l.date < today);
   if (past.length === 0) return null;
   const head = past.length === 1
-    ? `승인하면 이 근무 급여가 ${nameOf(past[0].to)}님에게 가요.`
-    : '승인하면 두 근무 급여가 서로 바뀌어요.';
+    ? `승인하면 이 근무가 ${nameOf(past[0].to)}님에게 넘어가요.`
+    : '승인하면 두 근무가 서로 바뀌어요.';
   const clocked = past.filter((l) => records.some((rec) => rec.staff_id === l.from && rec.date === l.date));
   const warn = clocked.map((l) => `${nameOf(l.from)}님이 그날 출근을 찍었어요. 누가 일했는지 확인해 주세요.`);
   return { title: '지난 근무예요', message: [head, ...warn].join('\n\n'), clockedIn: clocked.length > 0 };
@@ -456,9 +456,9 @@ export type ResolvedShift = {
 };
 
 /**
- * 한 사람이 그 날짜들에 서기로 된 근무들 — **급여 계산의 입력**이다(급여 기준 = 근무표).
+ * 한 사람이 그 날짜들에 서기로 된 근무들 — **근무 시간 집계와 근무 기록 대조의 입력**이다.
  * 판정은 shiftsOn 하나뿐이다: 교대로 옮겨진 근무·그날 빠진 반복이 여기에 그대로 반영된다.
- * ★이 함수를 안 쓰고 templates 를 직접 훑으면 **교대 결과가 급여에 안 잡혀 돈이 틀린 사람에게 간다.**
+ * ★이 함수를 안 쓰고 templates 를 직접 훑으면 **교대 결과가 안 잡혀 근무가 틀린 사람에게 붙는다.**
  */
 export function scheduledShiftsFor(
   templates: ShiftTemplate[],
@@ -481,7 +481,7 @@ export function scheduledShiftsFor(
  *
  * ★★2026-08-26 — **승인된 교대를 여기서 치환하지 않는다.**
  *   승인은 이제 근무 행 자체를 수락자에게 옮긴다(0179 approve_swap → transfer_shift).
- *   파생 치환을 남겨 두면 **담당자가 두 번 바뀐다**(이중 적용) — 화면도 급여도 함께 틀린다.
+ *   파생 치환을 남겨 두면 **담당자가 두 번 바뀐다**(이중 적용) — 화면도 근무 기록 대조도 함께 틀린다.
  *   대신 반드시 `exceptions` 를 받아 "그날 빠진 반복"을 걸러야 한다. 안 걸러내면 그날 근무가
  *   **두 벌**로 보인다(원본 반복 + 이전으로 생긴 날짜 지정 조각).
  *   서버측 짝은 `workers_at`(0179) — 같은 규칙이다.

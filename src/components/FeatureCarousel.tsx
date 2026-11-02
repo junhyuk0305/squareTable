@@ -77,7 +77,7 @@ export const OWNER_FEATURES: FeatureCard[] = [
     key: 'ops',
     icon: 'clipboard',
     title: '출퇴근·할일·근무표 한 화면에서',
-    desc: '출퇴근, 할일, 근무표, 인건비까지 한 곳에서 봐요.',
+    desc: '출퇴근, 할일, 근무표를 한 곳에서 봐요.',
     cta: '업무 관리 보기',
     route: '/owner/work',
   },

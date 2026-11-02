@@ -59,7 +59,7 @@ function kstMonthDay(iso: string): string | null {
  * ⛔웹은 지금 문구 그대로다.
  */
 export function deleteStoreConfirmText(v: { storeName: string; preview: DeleteStorePreview | null; os: string }): string {
-  const base = `“${v.storeName}”의 노하우·근무·급여 등 모든 데이터가 영구 삭제돼요. 되돌릴 수 없어요.`;
+  const base = `“${v.storeName}”의 노하우·근무 기록 등 모든 데이터가 영구 삭제돼요. 되돌릴 수 없어요.`;
   if (v.os === 'web' || !v.preview?.returns_slot || !v.preview.paid_until) return base;
   const md = kstMonthDay(v.preview.paid_until);
   if (!md) return base;
