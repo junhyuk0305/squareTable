@@ -53,7 +53,8 @@ const FN_TOKENS = {
   shift_templates_all: ['valid_from', 'unit_members', 'auth_can_manage', 'archived_tenure_id'],
   transfer_shift: ['valid_from', 'shift_exceptions', 'archived_tenure_id'],
   approve_swap: ['p_confirm_past', 'kst_today() - 35', 'transfer_shift', 'auth_can_manage', 'archived_tenure_id'],
-  due_quiz_sends: ['valid_to', 'workers_at', 'archived_at'],
+  // 0327·0332 — 보관·본사 숨김 필터는 quiz_course_servable 안(quiz_course_live)으로 옮겼다. 발송은 그것을 부른다.
+  due_quiz_sends: ['valid_to', 'workers_at', 'public.quiz_course_servable(qa.unit_id, qa.course_id)'],
   // P4-2 0243(J2) — 나누기가 요청을 안 옮기면 지난 날짜 요청이 엉뚱한 구간에 붙는다(데이터 H6). 승인은 사장만(J2 원문).
   copy_past_segment: ['shift_exceptions', 'swap_requests', 'shift_change_requests'],
   request_shift_time: ['valid_from', 'shift_exceptions', 'kst_today() - 35', 'kst_today() + 60', 'auth.uid()', 'archived_tenure_id'],
@@ -99,12 +100,16 @@ const FN_TOKENS = {
   copy_knowhow_between: ['archived_at is null', 'not_owner_source', 'not_owner_target'],
   brand_unit_entries: ['archived_at is null', 'brand_has_unit'],
   brand_overview_rows: ['archived_at is null', 'p_brand is not null or p_units is not null'],
-  quiz_items_for: ['archived_at is not null', 'brand_hidden_at is not null'],
+  // 0326·0332 — 출제 문항 집합은 quiz_course_servable(코스) · quiz_self_servable(자청) 두 곳이다. 보관·숨김 필터는 그 안에만 있다.
+  quiz_course_live: ['c.unit_id = p_unit and c.active and c.brand_hidden_at is null', 'pe.archived_at is null and pe.brand_hidden_at is null'],
+  quiz_course_servable: ['public.quiz_course_live(p_unit, p_course)', 'pe.archived_at is null and pe.brand_hidden_at is null'],
+  quiz_self_servable: ['pe.archived_at is null and pe.brand_hidden_at is null'],
+  quiz_items_for: ['public.quiz_course_servable(v_unit, p_course_id)', 'public.quiz_self_servable(v_unit)'],
   // 0308 이 링크 문항 술어를 quiz_link_servable 한 곳으로 옮겼다 — quiz_link_items 는 그것을 부르기만 한다.
   quiz_link_items: ['public.quiz_link_servable(l)'],
-  quiz_link_servable: ['archived_at is not null', 'brand_hidden_at is not null'],
+  quiz_link_servable: ['public.quiz_course_servable(l.unit_id, l.course_id)'],
   quiz_item_counts: ['archived_at is not null', 'brand_hidden_at is not null'],
-  quiz_link_resolve: ['archived_at is null', 'brand_hidden_at is not null', 'revoked_at is null'],
+  quiz_link_resolve: ['public.quiz_course_servable(l.unit_id, l.course_id)', 'revoked_at is null'],
   enqueue_knowhow_rechecks: ['archived_at is null', 'brand_hidden_at is null'],
   archive_knowhow: ['auth_owns_unit', 'brand_copy_use_hide', "'draft'", 'archived_by', 'entry_not_found', 'restore_not_allowed'],
   knowhow_usage: ['auth_owns_unit', 'quiz_attempts', 'work_template_knowhow', 'course_entries'],
@@ -146,14 +151,17 @@ for (const [fn, tokens] of Object.entries(FN_FORBIDDEN)) {
 }
 
 console.log('\n[2] RLS 정책 본문');
+// 0335 가 표마다 RESTRICTIVE account_access_allowed(FOR ALL · 탈퇴 계정 차단)를 붙였다. RESTRICTIVE 는 허용 정책과 AND 로 묶여
+// 행을 더 보이게 할 수 없다. 그래서 아래 정책 개수·본문 검사는 허용 정책(PERMISSIVE)만 센다.
+const PERMISSIVE = `and permissive = 'PERMISSIVE'`;
 const pol = (table, name) => psql(`select coalesce(qual, '') || ' | ' || coalesce(with_check, '') from pg_policies
                                     where schemaname = 'public' and tablename = '${table}' and policyname = '${name}'`);
 {
   const r = pol('shift_templates', 'st_read');
   check('shift_templates.st_read ⊇ valid_from (옛 앱에는 오늘 적용 중인 반복 행만)', r.includes('valid_from'), r || '정책 없음');
   check('shift_templates.st_read ⊇ kst_today', r.includes('kst_today'), r || '정책 없음');
-  const w = psql(`select count(*) from pg_policies where schemaname = 'public' and tablename = 'shift_templates' and cmd = 'ALL'`);
-  check('shift_templates 에 FOR ALL 정책이 없다(있으면 관리자에게 읽기 필터가 안 먹는다)', w === '0', `FOR ALL 정책 ${w}개`);
+  const w = psql(`select count(*) from pg_policies where schemaname = 'public' and tablename = 'shift_templates' and cmd = 'ALL' ${PERMISSIVE}`);
+  check('shift_templates 에 FOR ALL 허용 정책이 없다(있으면 관리자에게 읽기 필터가 안 먹는다)', w === '0', `FOR ALL 정책 ${w}개`);
 }
 // 2026-10-05 사용자 결정: 결근 표시 기능은 필요 없다 → 0245 의 marks 부분을 걷어 냈다(시급 이력 v2 는 남는다).
 {
@@ -171,7 +179,7 @@ const TENURE_TABLES = ['attendance', 'shift_templates', 'wage_rates', 'shift_cha
 {
   for (const t of TENURE_TABLES) {
     const out = psql(`select policyname || '|' || cmd || '|' || coalesce(qual, '-') || '|' || coalesce(with_check, '-')
-                        from pg_policies where schemaname = 'public' and tablename = '${t}' order by policyname`);
+                        from pg_policies where schemaname = 'public' and tablename = '${t}' ${PERMISSIVE} order by policyname`);
     const pols = out ? out.split('\n') : [];
     const missing = pols.filter((line) => {
       const [, , q, w] = line.split('|');
@@ -188,8 +196,8 @@ console.log('\n[3] 0246 member_tenures · 표시 열 · 정리 함수 권한');
   check('member_tenures 표가 있다', has === 't', has);
   if (has === 't') {
     check('member_tenures RLS 켜짐', psql(`select relrowsecurity from pg_class where oid = 'public.member_tenures'::regclass`) === 't');
-    const pols = psql(`select cmd || '|' || coalesce(qual, '') from pg_policies where schemaname = 'public' and tablename = 'member_tenures'`);
-    check('member_tenures 정책 = select 하나 · 같은 매장 사장만(auth_is_owner · auth_unit_id)',
+    const pols = psql(`select cmd || '|' || coalesce(qual, '') from pg_policies where schemaname = 'public' and tablename = 'member_tenures' ${PERMISSIVE}`);
+    check('member_tenures 허용 정책 = select 하나 · 같은 매장 사장만(auth_is_owner · auth_unit_id)',
       pols.split('\n').length === 1 && pols.startsWith('SELECT|') && pols.includes('auth_is_owner') && pols.includes('auth_unit_id'), pols);
     for (const r of ['anon', 'authenticated']) {
       const v = psql(`select has_table_privilege('${r}', 'public.member_tenures', 'INSERT,UPDATE,DELETE,TRUNCATE')`);
@@ -227,8 +235,8 @@ console.log('\n[3] 0246 member_tenures · 표시 열 · 정리 함수 권한');
   const bak = psql(`select to_regclass('public._bak_wages_0246') is not null`);
   check('_bak_wages_0246 이 있다(롤백 근거)', bak === 't');
   if (bak === 't') {
-    check('_bak_wages_0246: RLS 켜짐 · 정책 0개 · anon/authenticated 권한 0',
-      psql(`select c.relrowsecurity and not exists (select 1 from pg_policies where tablename = '_bak_wages_0246')
+    check('_bak_wages_0246: RLS 켜짐 · 허용 정책 0개 · anon/authenticated 권한 0',
+      psql(`select c.relrowsecurity and not exists (select 1 from pg_policies where tablename = '_bak_wages_0246' ${PERMISSIVE})
                    and not has_table_privilege('anon', 'public._bak_wages_0246', 'SELECT,INSERT,UPDATE,DELETE')
                    and not has_table_privilege('authenticated', 'public._bak_wages_0246', 'SELECT,INSERT,UPDATE,DELETE')
               from pg_class c where c.oid = 'public._bak_wages_0246'::regclass`) === 't');
@@ -273,8 +281,8 @@ console.log('\n[5] 0247 member_notices · retention_purge_log · 스윕·크론 
   check('member_notices 표가 있다', has('member_notices'));
   if (has('member_notices')) {
     check('member_notices RLS 켜짐', psql(`select relrowsecurity from pg_class where oid = 'public.member_notices'::regclass`) === 't');
-    const pols = psql(`select cmd || '|' || coalesce(qual, '') from pg_policies where schemaname = 'public' and tablename = 'member_notices'`);
-    check('member_notices 정책 = select 하나 · 본인만(auth.uid())', pols.split('\n').length === 1 && pols.startsWith('SELECT|') && pols.includes('auth.uid()'), pols);
+    const pols = psql(`select cmd || '|' || coalesce(qual, '') from pg_policies where schemaname = 'public' and tablename = 'member_notices' ${PERMISSIVE}`);
+    check('member_notices 허용 정책 = select 하나 · 본인만(auth.uid())', pols.split('\n').length === 1 && pols.startsWith('SELECT|') && pols.includes('auth.uid()'), pols);
     for (const r of ['anon', 'authenticated']) {
       const v = psql(`select has_table_privilege('${r}', 'public.member_notices', 'INSERT,UPDATE,DELETE,TRUNCATE')`);
       check(`member_notices: ${r} 쓰기 권한 없음`, v === 'f', v);
@@ -286,8 +294,8 @@ console.log('\n[5] 0247 member_notices · retention_purge_log · 스윕·크론 
   }
   check('retention_purge_log 표가 있다', has('retention_purge_log'));
   if (has('retention_purge_log')) {
-    check('retention_purge_log: RLS 켜짐 · 정책 0개 · anon/authenticated 권한 0',
-      psql(`select c.relrowsecurity and not exists (select 1 from pg_policies where tablename = 'retention_purge_log')
+    check('retention_purge_log: RLS 켜짐 · 허용 정책 0개 · anon/authenticated 권한 0',
+      psql(`select c.relrowsecurity and not exists (select 1 from pg_policies where tablename = 'retention_purge_log' ${PERMISSIVE})
                    and not has_table_privilege('anon', 'public.retention_purge_log', 'SELECT,INSERT,UPDATE,DELETE')
                    and not has_table_privilege('authenticated', 'public.retention_purge_log', 'SELECT,INSERT,UPDATE,DELETE')
               from pg_class c where c.oid = 'public.retention_purge_log'::regclass`) === 't');

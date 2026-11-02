@@ -96,8 +96,14 @@ console.log('\n[C4] 닫힌(잠긴) 매장에는 할일·퀴즈 알림을 보내�
   const q = lastTouch('due_quiz_sends');
   check('★퀴즈 발송 후보에서 잠긴 매장을 뺀다(due_quiz_sends)',
     /and not public\.unit_access_locked\(u\.id\)/.test(q.text), q.file);
-  check('퀴즈 발송 함수는 service_role 전용 그대로(anon 실행 불가 자가점검)',
-    /has_function_privilege\('anon', 'public\.due_quiz_sends\(\)', 'execute'\)/.test(q.text));
+  // 0332 가 마지막 정의인데 자가점검 줄이 없다. 파일 문자열 대신 로컬 DB 의 실제 권한을 본다.
+  let grant = '';
+  try {
+    grant = execFileSync('docker', ['exec', 'supabase_db_SquareTable', 'psql', '-U', 'postgres', '-At', '-c',
+      `select has_function_privilege('anon', 'public.due_quiz_sends()', 'execute')::text || '/' || has_function_privilege('authenticated', 'public.due_quiz_sends()', 'execute')::text || '/' || has_function_privilege('service_role', 'public.due_quiz_sends()', 'execute')::text`],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  } catch { grant = 'DB 없음'; }
+  check('퀴즈 발송 함수는 service_role 전용 그대로(anon·authenticated 실행 불가 · 로컬 DB 권한)', grant === 'false/false/true', grant);
 }
 
 console.log('\n[C5] 닫힌 매장·탈퇴한 사장 매장의 코드로는 합류 신청을 받지 않는다');
@@ -160,8 +166,11 @@ const psql = (sql) => {
 const tail = (o) => o.split('\n').filter((l) => /^R=|ERR=/.test(l)).join(' ').slice(0, 200);
 let dbUp = true;
 try { execFileSync('docker', ['exec', 'supabase_db_SquareTable', 'psql', '-U', 'postgres', '-c', 'select 1'], { stdio: 'pipe' }); } catch { dbUp = false; }
+// 전면 무료 모드면 아무 매장도 잠기지 않는다(unit_access_locked ①). 다른 하니스가 스위치를 켜 둔 채여도 닫힌 매장 검사가 서도록
+// 트랜잭션 안에서만 끈다(rollback 으로 사라진다 · 전역 값은 그대로).
 const IDS = `
 begin;
+insert into public.app_config (key, value) values ('billing_free_mode', 'false') on conflict (key) do update set value = excluded.value;
 select set_config('qa.o', (select id::text from auth.users where email = 'owner@pilot.squaretable.app'), true);
 select set_config('qa.m', (select id::text from auth.users where email = 'staff@pilot.squaretable.app'), true);
 select set_config('qa.j', (select id::text from auth.users where email = 'staff2@pilot.squaretable.app'), true);
@@ -270,7 +279,10 @@ console.log('\n[C8] 매장 설정에서 사업자번호를 넣고 바꾼다(RPC 
     check('★매니저·직원은 못 바꾼다 → not_owner', staff.includes('not_owner'), tail(staff));
     const mine = call('o', extraUnit('qa_c8_mine', '991102', `update public.units set biz_no = '2208100001' where id = 'qa_c8_mine';`), 'store_001', '2208100001');
     check('★내 다른 매장에서 쓰는 번호 → biz_no_mine', mine.includes('biz_no_mine'), tail(mine));
-    const other = call('o', `set local session_replication_role = replica; update public.units set biz_no = '1112223339' where id = 'store_solo_local'; set local session_replication_role = origin;`, 'store_001', '1112223339');
+    // 다른 사장 매장은 트랜잭션 안에서 심는다(예전 store_solo_local 은 로컬 시드에 없다 · 끝나면 rollback).
+    const other = call('o', `set local session_replication_role = replica;
+insert into public.units (id, store_name, owner_id, invite_code, biz_no) values ('qa_c8_other', 'QA qa_c8_other', current_setting('qa.m')::uuid, '991103', '1112223339');
+set local session_replication_role = origin;`, 'store_001', '1112223339');
     check('★다른 사장 매장 번호 → duplicate_biz_no', other.includes('duplicate_biz_no') && !other.includes('biz_no_mine'), tail(other));
     const clear = call('o', `update public.units set biz_no = '1234567891' where id = 'store_001';`, 'store_001', '');
     check('빈 값이면 번호를 지운다(null)', clear.includes('R=null'), tail(clear));
@@ -526,7 +538,8 @@ select 'PROF=' || active_unit_id from public.profiles where id = current_setting
 // 로컬 도커 전용(고정 계정 owner@pilot · 비밀번호는 bootstrap 과 같다). 끝나면 만든 매장을 지우고 계정 값을 store_001 로 돌린다.
 console.log('\n[C3-실세션] 두 번 로그인한 같은 사장 — 세션마다 다른 매장');
 {
-  const env = {};
+  // 키 파일이 없는 슬롯(worktree)에서는 환경변수로 로컬 값을 넘긴다. 없으면 이 절이 조용히 SKIP 된다.
+  const env = { ...process.env };
   for (const f of ['.env', '.env.seed']) for (const line of read(f).split('\n')) { const m = line.match(/^([A-Z0-9_]+)=(.*)$/); if (m && !env[m[1]]) env[m[1]] = m[2].trim(); }
   const URL_ = env.EXPO_PUBLIC_SUPABASE_URL, ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
   if (!dbUp || !URL_ || !ANON || !/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(URL_)) console.log('  SKIP 로컬 Supabase 아님/없음');

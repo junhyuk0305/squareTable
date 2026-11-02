@@ -62,7 +62,17 @@ const iso = (ms) => new Date(ms).toISOString();
 const users = [];
 const otherUnits = [];
 let UNIT = null;
+let freeMode0;
 try {
+  // [7] reopen_store 는 잠긴 매장만 연다. 전면 무료 모드면 아무것도 안 잠긴다 → 서버 스위치를 끈다(끝나면 원복 · qa-instant-join 과 같다).
+  {
+    const { data, error: e0 } = await admin.from('app_config').select('value').eq('key', 'billing_free_mode').maybeSingle();
+    // 못 읽으면 원래 값을 모른다 → 바꾸지 않고 멈춘다(원복 때 있던 키를 지우지 않게).
+    if (e0) throw new Error('billing_free_mode 읽기: ' + e0.message);
+    freeMode0 = data?.value ?? null;
+    const { error } = await admin.from('app_config').upsert({ key: 'billing_free_mode', value: 'false' });
+    if (error) throw new Error('billing_free_mode 끄기: ' + error.message);
+  }
   await seedVerifiedPhones(URL_, SRV, phones);
   const O = mk(), J = mk();
   const up = async (c, i, name, role, birth) => {
@@ -81,6 +91,9 @@ try {
   const row = Array.isArray(st) ? st[0] : st;
   if (e1 || !row?.unit_id) throw new Error('create_store: ' + (e1?.message ?? 'no row'));
   UNIT = row.unit_id;
+  // 직원 3명(J·K·L)이 합류한다. 무료 좌석은 직원 2명이라(0336) 이 매장을 유료로 심는다. [7]에서 만료시켜 잠근다.
+  { const { error } = await admin.from('unit_subscriptions').upsert({ unit_id: UNIT, status: 'active', plan: 'multi', paid_until: iso(Date.now() + 30 * 24 * H) });
+    if (error) throw new Error('유료 구독 셋업: ' + error.message); }
   await O.rpc('switch_active_unit', { p_unit_id: UNIT });
   await J.rpc('join_by_invite', { p_code: row.invite_code });
   { const { error } = await O.rpc('approve_member', { p_uid: jId }); if (error) throw new Error('approve_member: ' + error.message); }
@@ -328,11 +341,10 @@ try {
     const js = await rows(admin.from('shift_templates').select('valid_to').eq('id', jSeries));
     check('7-3 ★직원 반복 근무는 지우지 않고 오늘로 닫는다', Array.isArray(js) && js[0]?.valid_to === today, JSON.stringify(js));
     check('7-4 ★직원 교대 이력(approved)이 남는다', len(await rows(admin.from('swap_requests').select('id').eq('id', jSwap))) === 1);
-    const ten = await rows(admin.from('member_tenures').select('user_id, left_reason, left_at').eq('unit_id', UNIT).is('archived_tenure_id', null));
     const tenOpen = await rows(admin.from('member_tenures').select('user_id').eq('unit_id', UNIT).is('left_at', null));
     const jt = await rows(admin.from('member_tenures').select('left_reason').eq('unit_id', UNIT).eq('user_id', jId));
     check('7-5 ★직원 재직 기간이 reopen 으로 닫히고 열린 기간이 0', Array.isArray(jt) && jt.some((x) => x.left_reason === 'reopen')
-      && Array.isArray(tenOpen) && tenOpen.length === 0, JSON.stringify([jt, tenOpen, typeof ten === 'string' ? ten : '']));
+      && Array.isArray(tenOpen) && tenOpen.length === 0, JSON.stringify([jt, tenOpen]));
     const mem = (await admin.from('unit_members').select('*', { count: 'exact', head: true }).eq('unit_id', UNIT).in('role', ['junior', 'manager'])).count;
     check('7-6 직원 멤버십 0', mem === 0, `rows=${mem}`);
     const pend = (await admin.from('profiles').select('pending_unit_id').eq('id', L.id).maybeSingle()).data;
@@ -448,6 +460,12 @@ try {
   if (UNIT) { try { await admin.from('units').delete().eq('id', UNIT); } catch { /* best-effort */ } }
   for (const id of otherUnits) { try { await admin.from('units').delete().eq('id', id); } catch { /* best-effort */ } }
   try { await cleanupSeededPhones(URL_, SRV, phones); } catch { /* best-effort */ }
+  if (freeMode0 !== undefined) {
+    const { error } = freeMode0 === null
+      ? await admin.from('app_config').delete().eq('key', 'billing_free_mode')
+      : await admin.from('app_config').upsert({ key: 'billing_free_mode', value: freeMode0 });
+    if (error) { fail++; console.log('  FAIL billing_free_mode 원복 실패 — 수동 확인 필요:', error.message); }
+  }
 }
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
