@@ -47,15 +47,9 @@ export const styles = StyleSheet.create({
     marginBottom: 8,
   },
   // 근거 한 줄 — 추천 칩이 어디서 나왔는지("우리 매장 노하우 n개")를 칩 바로 위에 붙인다.
-  // 본문 하한 15sp 를 지킨다: 이 문장은 장식이 아니라 답변의 출처 고지다.
-  // 뒤따르는 보충 문장은 설명(Type.desc) 한 줄로 내린다 — 본문 15 두 줄 연속 금지(2026-11-02).
+  // 출처 고지도 안내 문장이라 설명(Type.desc)으로 쓴다(2026-11-02 사용자 결정: 15 안내 문장 → 13 설명). 굵기로 고지임을 드러낸다.
   grounding: { gap: Gap.inline, marginBottom: 2 },
-  groundingText: {
-    fontSize: 15,
-    lineHeight: 21,
-    fontWeight: '700',
-    color: InkColors.ink2,
-  },
+  groundingText: { ...Type.desc, fontWeight: '700' },
   groundingNote: Type.desc,
   suggestList: { gap: 10 },
   suggest: {

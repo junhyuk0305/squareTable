@@ -1,7 +1,7 @@
 {
   "totals": {
     "hex": 166,
-    "fontSize": 614,
+    "fontSize": 611,
     "spacing": 1567
   },
   "files": {
@@ -231,7 +231,7 @@
       "spacing": 4
     },
     "src/app/q/[token].tsx": {
-      "fontSize": 13
+      "fontSize": 12
     },
     "src/app/report.tsx": {
       "fontSize": 3,
@@ -384,7 +384,6 @@
     },
     "src/components/GuideModal.tsx": {
       "hex": 3,
-      "fontSize": 1,
       "spacing": 7
     },
     "src/components/HeaderBackButton.tsx": {
@@ -468,7 +467,7 @@
       "spacing": 6
     },
     "src/components/junior/askStyles.ts": {
-      "fontSize": 7,
+      "fontSize": 6,
       "spacing": 25
     },
     "src/components/junior/CandidateCard.tsx": {

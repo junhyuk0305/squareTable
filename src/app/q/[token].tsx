@@ -524,7 +524,7 @@ const st = StyleSheet.create({
   // 화면당 굵은 잉크는 하나(R4-1) — 제목만 잉크, 나머지는 ink2/ink3.
   title: { fontSize: 24, fontWeight: '900', color: InkColors.ink, lineHeight: 34 },
   lead: { fontSize: 17, fontWeight: '700', color: InkColors.ink2, lineHeight: 25, marginTop: Space.sm },
-  sub: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
+  sub: { ...Type.desc, fontWeight: '600' },
   input: {
     // 카드 없이 회색 바탕에 바로 놓인 칸 — 흰 면 + 진한 선(lineStrong · 2026-11-02 결정).
     marginTop: Space.lg, borderWidth: 1, borderColor: InkColors.lineStrong, borderRadius: Radius.md,

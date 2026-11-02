@@ -204,12 +204,12 @@ export function QuizSettingsPanel({
               <Pressable
                 key={c.label}
                 onPress={() => setCycle(c.days)}
-                style={[qst.chip, on && qst.chipOn]}
+                style={[qst.chip, on && s.cycleOn]}
                 accessibilityRole="button"
                 accessibilityState={{ selected: on }}
                 accessibilityLabel={c.label}
               >
-                <Text style={[qst.chipText, on && qst.chipTextOn]}>{c.label}</Text>
+                <Text style={[qst.chipText, on && s.cycleTextOn]}>{c.label}</Text>
               </Pressable>
             );
           })}
@@ -364,6 +364,9 @@ const s = StyleSheet.create({
   },
   // 고른 사람 = 브랜드 노랑 면(글자 ink 그대로 · 2026-11-02 사용자 요청). 안 고른 사람 = 흰 면 + 선(person).
   personOn: { backgroundColor: BrandColors.yellow, borderColor: BrandColors.yellow },
+  // '다시 확인' 주기 선택도 받는 사람 선택과 같은 노랑(2026-11-02 사용자 결정). kit 의 qst.chipOn(검정)은 본사도 써서 여기서만 덮는다.
+  cycleOn: { backgroundColor: BrandColors.yellow, borderColor: BrandColors.yellow },
+  cycleTextOn: { color: InkColors.ink },
   personLocked: { backgroundColor: InkColors.bgSoft },
   check: {
     width: 22, height: 22, borderRadius: Radius.sm, borderWidth: 1.5, borderColor: InkColors.line,

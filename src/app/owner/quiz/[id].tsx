@@ -565,10 +565,10 @@ export default function QuizDetailScreen() {
                     accessibilityLabel={`${i + 1}번 문항 — 미리보기·고치기·빼기`}
                   >
                     <View style={st.rowText}>
-                      {/* 첫 줄 = 번호 - 질문, 둘째 줄 = 유형 칩 + 답안 수(2026-11-02 사용자 요청).
+                      {/* 첫 줄 = 번호 · 질문, 둘째 줄 = 유형 칩 + 답안 수(2026-11-02 사용자 요청).
                           질문이 빈 형태는 유형 이름으로 대신한다. */}
                       <Text style={st.rowTitle} numberOfLines={2}>
-                        {i + 1} - {String(q.payload?.ask ?? '').trim() || (FORMATS[q.format]?.label ?? q.format)}
+                        {i + 1} · {String(q.payload?.ask ?? '').trim() || (FORMATS[q.format]?.label ?? q.format)}
                       </Text>
                       <View style={st.itemMeta}>
                         <View style={[st.formatChip, { backgroundColor: kindChip(q.format).bg }]}>

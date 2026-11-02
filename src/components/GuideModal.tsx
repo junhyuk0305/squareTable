@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
   },
   title: { ...Type.title, lineHeight: 26 },
   // 본문은 '읽어서 판단하는 문장' = 15sp(복잡도·워딩 표준).
-  body: { fontSize: 15, lineHeight: 23, color: InkColors.ink2, marginTop: 8 },
+  body: { ...Type.desc, marginTop: 8 },
   footer: { flexDirection: 'row', alignItems: 'center', marginTop: 22, gap: 10 },
   // ★48dp 는 상자 크기로 — hitSlop 은 RN-web 에서 안 먹는다(실측 36dp 였다, 2026-09-11).
   skip: { minHeight: 48, justifyContent: 'center', paddingRight: 4 },

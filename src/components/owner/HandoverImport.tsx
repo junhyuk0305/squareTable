@@ -448,7 +448,7 @@ function HandoverImportBody() {
               value={rawText}
               onChangeText={setRawText}
               multiline
-              placeholder={'예)\n[오픈]\n머신 20분 예열 후 시운전 2잔\n\n[레시피]\n아이스 아메리카노는 시럽 없이 물 200ml\n\n[마감]\n그라인더 원두 비우고 청소'}
+              placeholder={'예)\n[오픈]\n머신 20분 예열 후 시운전 2잔\n\n[레시피]\n아이스 아메리카노는 시럽 없이 물 200ml'}
               placeholderTextColor={InkColors.ink3}
               maxLength={MAX_IMPORT_CHARS}
               // 추출 완료 시 주입이 이 값 기준으로 이어붙는다 — 추출 중 타이핑을 허용하면
