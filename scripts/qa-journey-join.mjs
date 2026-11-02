@@ -279,7 +279,7 @@ async function accountActive(uid) {
 }
 
 // 이 묶음이 끝까지 못 돌면 남은 단언을 ✗ 로 센다.
-const PLANNED = ['K1-a', 'K1-b', 'K7-r', 'K5-a', 'K2-auto', 'K2', 'K7-s', 'K3', 'K4', 'K1-c', 'K2-c', 'K7-j', 'K7-h', 'K5-b', 'K5-c', 'K6-a', 'K6-b'];
+const PLANNED = ['K1-a', 'K1-b', 'K7-r', 'K5-a', 'K2-auto', 'K2', 'K7-s', 'K3', 'K4', 'K1-c', 'K2-c', 'K7-j', 'K7-d', 'K7-h', 'K5-b', 'K5-c', 'K6-a', 'K6-b'];
 const done = new Set();
 const mark = (k) => done.add(k);
 let unit = null;
@@ -511,6 +511,22 @@ try {
     check('K7-j 승인 항목 탭 → /stores 착지 · 새 매장 이름이 화면에 있음 [문자열]', land.path === '/stores' && land.hasStore, `착지 ${land.path} · 매장 이름 보임=${land.hasStore}`);
     mark('K7-j');
     await J.mark('승인 벨');
+  }
+
+  // ── K7-d(0345 · 2026-10-29 결정 4): 처리한 합류 신청이 S 목록에 내역으로 남는다 · 처리자 = 서버가 찍은 actor_id ──
+  //   J 는 K7-r 에서 반려되고 K3 에서 승인됐다. 두 번 다 S(같은 사장 계정)가 처리했으니 본문은 '내가 …했어요'다.
+  section('K7-d. S 벨 "<신청자>님 합류 신청 처리함" 내역 2건(반려 · 승인) · DB actor_id = 사장');
+  {
+    const { data: jp } = await admin.from('profiles').select('name').eq('id', jc.uid).single();
+    const { data: done } = await admin.from('member_notices').select('kind, actor_id').eq('user_id', jc.uid).eq('unit_id', unit).in('kind', ['approved', 'rejected']);
+    const TITLE_D = `${jp?.name}님 합류 신청 처리함`; // 레지스트리 join_done.title
+    await S.goto('/owner/notifications');
+    const sDone = await watch(S.page, (t) => t.split(TITLE_D).length - 1 >= 2 && t.includes('내가 승인했어요') && t.includes('내가 반려했어요'), 30000);
+    check('K7-d S 벨에 처리 내역 2건(반려 · 승인 · 본문 = 처리자 + 결과) [문자열]', sDone.ok, `${sDone.ok ? sDone.sec.toFixed(1) + '초' : '없음(30초)'} · 기대 "${TITLE_D}" ×2`);
+    check('K7-d DB member_notices 승인·반려 행의 actor_id = 사장(서버가 찍음) [건]',
+      (done ?? []).length === 2 && (done ?? []).every((x) => x.actor_id === oc.uid), JSON.stringify(done));
+    mark('K7-d');
+    await S.mark('처리 내역');
   }
 
   // ── K7-h(0313 · 결정 3): J 허브 알림(/notifications) '전체 읽음' → 승인 항목은 남고 안 읽음 0 · 내 매장 전부 notif_ack_at 갱신 ──

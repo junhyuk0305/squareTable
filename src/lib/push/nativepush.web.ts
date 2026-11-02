@@ -10,6 +10,9 @@ export function bindNotificationTapRouting(): void {}
 export async function nativePermissionState(): Promise<PushPermission> {
   return 'unsupported';
 }
+export async function requestNativePermission(): Promise<PushPermission> {
+  return 'unsupported';
+}
 export async function enableNativePush(_unitId: string | null): Promise<PushPermission> {
   return 'unsupported';
 }

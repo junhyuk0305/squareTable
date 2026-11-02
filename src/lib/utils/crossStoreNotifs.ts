@@ -51,7 +51,7 @@ export function buildClosureNotifs(
 //   0313: 입금 결과·사장 알림·퀴즈 완료·시간 수정 요청도 벨과 같은 자리에(매장 벨 owner/notifications.tsx ownerArgs 와 같은 키).
 const ownerArgsOf = (d: UnitNotifData, me: string, nameOf: (id: string) => string, ackAt?: string | null) =>
   ({ queue: d.queue, suggestions: d.suggestions, swaps: d.swaps, pending: d.pending, nameOf, feed: d.feed, userId: me, ackAt,
-     claims: d.claims, alerts: d.alerts, assignments: d.assignments, courses: d.courses, timeRequests: d.timeRequests });
+     claims: d.claims, alerts: d.alerts, assignments: d.assignments, courses: d.courses, timeRequests: d.timeRequests, joinDone: d.joinDone });
 const receivedArgsOf = (
   d: UnitNotifData, me: string, today: string, nameOf: (id: string) => string, ackAt?: string | null,
 ): ManagerReceivedArgs =>

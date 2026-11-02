@@ -98,6 +98,14 @@ export const NOTIF = {
     route: (_s, id) => `/owner/staff${id ? `?member=${enc(id)}` : ''}`,
     pushTag: 'join', badgeUnit: '합류 신청', audience: ['join_owners'],
   },
+  // 처리한 합류 신청(0345 join_history_rows · 사장 매장). 승인·반려 뒤에도 내역으로 남는다(2026-10-29 결정 4).
+  //   푸시가 없다(새 행을 만들지 않는다). 읽음·배지에 안 들어간다(처리할 일이 아니다).
+  //   승인된 사람은 명부의 그 사람으로(?member=), 반려된 사람은 명부에 없으니 명부로.
+  join_done: {
+    title: (applicant) => `${applicant}님 합류 신청 처리함`,
+    route: (_s, id) => `/owner/staff${id ? `?member=${enc(id)}` : ''}`,
+    badgeUnit: '세지 않음(처리한 내역)',
+  },
   // 합류 결과 — 원천은 서버가 넣는 member_notices(0247 approved·rejected · 본인 행만 읽는다). 푸시는 서버 크론(엣지 sweepMemberNotices)이
   // 그 행을 보내므로 앱은 푸시를 쏘지 않는다(schedule 과 같은 갈래 · 같은 사건을 두 번 보내지 않는다). actor 자리에는 매장 이름이 온다.
   // 승인은 매장 목록(새 매장이 보인다) · 반려는 직원 허브(반려 안내 카드가 있다).

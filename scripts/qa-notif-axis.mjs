@@ -147,6 +147,28 @@ check('⑥ 사장: 직원 제안 2건 모두 검토함에(자기 것 아님)', o
   check('⑩ 허브 직원 행에 question(D4 · 동료 질문) · schedule(근무 알림)', jr.some((r) => r.id === 'q_uq2' && r.kind === 'question') && jr.some((r) => r.id === 'sched_9' && r.kind === 'schedule'));
   check('⑩ 허브 직원 배지 == 목록 안읽음', storeUnreadCount(d, 'junior', JR, TODAY, null) === jr.filter((r) => r.unread).length);
 
+  // ⑪ 처리한 합류 신청(0345 join_done · 2026-10-29 결정 4) — 사장 목록에 내역으로 남고, 배지·읽음에는 안 들어간다.
+  //   처리자: 나 = '내가' · 다른 사장 = 이름 · 0345 전 행(actor 없음) = 처리자 없이.
+  const jd = [
+    { id: 11, unit_id: 'u1', kind: 'approved', applicant_id: 'u_new', applicant_name: '정하늘', actor_id: OWNER, actor_name: '김영자', created_at: iso(7) },
+    { id: 12, unit_id: 'u1', kind: 'rejected', applicant_id: 'u_no', applicant_name: '오민준', actor_id: 'u_owner2', actor_name: '박사장', created_at: iso(6) },
+    { id: 13, unit_id: 'u1', kind: 'approved', applicant_id: 'u_old', applicant_name: '', actor_id: null, actor_name: '', created_at: iso(1) },
+  ];
+  const dj = { ...d, joinDone: jd };
+  const ownJ = buildStoreNotifs(dj, 'owner', OWNER, TODAY, null);
+  const r11 = ownJ.find((r) => r.id === 'join_done_11'), r12 = ownJ.find((r) => r.id === 'join_done_12'), r13 = ownJ.find((r) => r.id === 'join_done_13');
+  check('⑪ 사장 행에 join_done 3건 · 제목 = 신청자 · 본문 = 처리자 + 결과',
+    r11?.title === '정하늘님 합류 신청 처리함' && r11?.body === '내가 승인했어요'
+      && r12?.body === '박사장님이 반려했어요' && r13?.title === '직원님 합류 신청 처리함' && r13?.body === '승인했어요',
+    JSON.stringify([r11, r12, r13].map((r) => r && [r.title, r.body])));
+  check('⑪ join_done 은 전부 unread=false · 승인은 명부의 그 사람(?member=) · 반려는 명부',
+    [r11, r12, r13].every((r) => r?.unread === false) && r11?.route === '/owner/staff?member=u_new' && r12?.route === '/owner/staff');
+  check('⑪ 내역을 넣어도 사장 배지는 그대로 · 배지 == 목록 안읽음',
+    storeUnreadCount(dj, 'owner', OWNER, TODAY, null) === storeUnreadCount(d, 'owner', OWNER, TODAY, null)
+      && storeUnreadCount(dj, 'owner', OWNER, TODAY, null) === ownJ.filter((r) => r.unread).length);
+  const mgrJ = buildStoreNotifs(dj, 'manager', ME, TODAY, null);
+  check('⑪ 매니저 목록에는 join_done 이 없다(승인·반려가 사장 전용)', !mgrJ.some((r) => r.kind === 'join_done'), mgrJ.map((r) => r.id).join(','));
+
   // 합류 결과 — 반려된 매장(u3)엔 prefs 행이 없다. 읽음 기준 = 내 매장 ack 중 최댓값(iso(5)).
   const ackByUnit = { u1: iso(5), u2: iso(3) };
   const joinNotices = [

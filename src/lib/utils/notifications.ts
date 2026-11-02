@@ -4,7 +4,7 @@
 import type { FeedItem, TaskTemplate, DoneMark } from '@/lib/store/useWorkStore';
 import { occursOn, assigneesOf } from '@/lib/store/useWorkStore';
 import type { SwapRequest, ShiftTemplate, ScheduleNotice, ShiftTimeRequest } from '@/lib/store/useScheduleStore';
-import type { PendingMember, JoinNotice } from '@/lib/store/useStaffStore';
+import type { PendingMember, JoinNotice, JoinDone } from '@/lib/store/useStaffStore';
 import type { UnknownQuery, PlaybookSuggestion, PaymentClaim, OwnerAlert } from '@/types';
 // D4 '도와줄 수 있는 질문' 판정 SSOT — 벨 배지·알림 목록이 '내 공간' 리스트와 같은 축을 보게 재사용한다.
 import { answerableQuestions } from '@/lib/store/useUnknownQueueStore';
@@ -432,6 +432,8 @@ export function buildJoinNotifRows(joinNotices: JoinNotice[], joinAckAt: string 
 export type OwnerNotifKind =
   // 직원 나감·탈퇴(0317 · 0247 member_notices left·account_deleted)
   | 'member_left'
+  // 처리한 합류 신청(0345) — 내역이라 읽음·배지에 안 들어간다
+  | 'join_done'
   | 'join_request' | 'question' | 'suggestion' | 'swap_approval' | 'mention'
   | 'payment_approved' | 'payment_rejected'
   // 0191 사장 알림 — 좌석 잠김 · AI 사용량 80%·100%
@@ -622,8 +624,10 @@ function ownerRows(args: {
   courses?: CourseName[];
   /** 근무 시간 수정 요청(0243 · 대기만). 없으면 해당 알림 없음. */
   timeRequests?: ShiftTimeRequest[];
+  /** 처리한 합류 신청(0345 · 사장 매장). 없으면 내역 없음. */
+  joinDone?: JoinDone[];
 }): OwnerNotif[] {
-  const { queue, suggestions, swaps, pending, nameOf, feed = [], userId: me, ackAt, claims = [], alerts = [], assignments = [], courses = [], timeRequests = [] } = args;
+  const { queue, suggestions, swaps, pending, nameOf, feed = [], userId: me, ackAt, claims = [], alerts = [], assignments = [], courses = [], timeRequests = [], joinDone = [] } = args;
   const out: OwnerNotif[] = [];
 
   // 사장 알림(0191·0213) — 문구는 서버가 적재한 그대로(푸시와 같은 문장). 탭 목적지는 종류가 정한다.
@@ -669,6 +673,23 @@ function ownerRows(args: {
       at: p.created_at,
       unread: isAfterAck(p.created_at, ackAt),
       route: NOTIF.join_request.route('owner', p.id),
+    });
+  }
+
+  // 처리한 합류 신청(0345) — 승인·반려 뒤에도 내역으로 남는다(2026-10-29 결정 4). 누가 처리했는지는 본문에 쓴다.
+  //   처리할 일이 아니라 unread 는 항상 false 다. ownerUnreadCount 도 이것을 세지 않는다(배지 == 목록의 안 읽음).
+  //   이름은 서버가 읽는 때의 프로필 이름으로 준다(명부와 같은 출처 · 반려된 사람은 명부에 없다).
+  for (const j of joinDone) {
+    const ok = j.kind === 'approved';
+    const who = j.actor_id && j.actor_id === me ? '내가 ' : j.actor_name ? `${j.actor_name}님이 ` : '';
+    out.push({
+      id: `join_done_${j.id}`,
+      kind: 'join_done',
+      title: NOTIF.join_done.title(j.applicant_name || '직원'),
+      body: `${who}${ok ? '승인했어요' : '반려했어요'}`,
+      at: j.created_at,
+      unread: false,
+      route: NOTIF.join_done.route('owner', ok ? j.applicant_id : undefined),
     });
   }
 

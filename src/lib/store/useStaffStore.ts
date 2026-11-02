@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import type { Owner, Junior } from '@/types';
 import usersData from '@/data/users.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchStaffProfiles, removeStaffMember, subscribeStaff, fetchPendingMembers, approveMember, rejectMember, setMemberRoleDb, fetchMemberTenures, fetchJoinNotices } from '@/lib/db';
+import { fetchStaffProfiles, removeStaffMember, subscribeStaff, fetchPendingMembers, approveMember, rejectMember, setMemberRoleDb, fetchMemberTenures, fetchJoinNotices, fetchJoinHistory } from '@/lib/db';
 import { openJoinedAt, type MemberTenure } from '@/lib/utils/tenure';
 import { showToast } from '@/lib/store/useToastStore';
 import { PLANS } from '@/lib/config/tiers';
@@ -31,6 +31,11 @@ export type PendingMember = { id: string; name: string; phone_last4: string; cre
 /** 내 합류 결과(0247 member_notices · approved·rejected) — 서버가 승인·반려 때 넣는다. 푸시는 크론이 같은 행을 보낸다. 벨 항목의 원천. */
 // 0317: removed = 사장이 나를 내보냄(0247 · 계정 단위 · 그 매장은 이미 내 매장이 아니다).
 export type JoinNotice = { id: number; unit_id: string; kind: 'approved' | 'rejected' | 'removed'; store_name: string | null; body: string; created_at: string };
+/** 처리한 합류 신청(0345 join_history_rows · 사장 매장). 사장 목록의 '처리함' 내역. actor = 처리한 사람(0345 전 행은 null). */
+export type JoinDone = {
+  id: number; unit_id: string; kind: 'approved' | 'rejected';
+  applicant_id: string; applicant_name: string; actor_id: string | null; actor_name: string; created_at: string;
+};
 
 type StaffState = {
   owner: Owner | null;
@@ -38,6 +43,8 @@ type StaffState = {
   pending: PendingMember[];
   // 내 합류 결과(계정 단위 · 본인 행만). 신청자의 profiles 행이 바뀌면(승인·반려) subscribe 가 hydrate 를 다시 불러 곧 따라온다.
   joinNotices: JoinNotice[];
+  // 이 매장에서 처리한 합류 신청(0345) — 사장 목록의 '처리함' 내역. 사장만 읽는다. 못 읽으면 빈 배열.
+  joinDone: JoinDone[];
   // 매장별 역할 맵(0093, unit_members.role) — 매니저 배지·임명 UI 입력. 키=userId.
   roles: Record<string, string>;
   // 이 매장 재직 기간(0246) — 사장만 읽는다. 입사일 · 이번 기간 퇴사자 줄 · 재입사 경고의 입력. 못 읽으면 빈 배열.
@@ -86,6 +93,7 @@ export const useStaffStore = create<StaffState>((set, get) => ({
   staff: HAS_SUPABASE ? [] : demoStaff,
   pending: [],
   joinNotices: [],
+  joinDone: [],
   roles: {},
   tenures: [],
   loaded: !HAS_SUPABASE,
@@ -97,12 +105,14 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     const epoch = currentTenantEpoch();
     // 재직 기간은 사장에게만 행이 온다(RLS). 0246 이 없는 서버에서는 실패한다 — 실패는 명부 실패로 보지 않고 빈 기간으로 둔다.
     const isOwner = useSessionStore.getState().role === 'owner';
-    const [staffRes, pendingRes, tenRes, joinRes] = await Promise.all([
+    const [staffRes, pendingRes, tenRes, joinRes, doneRes] = await Promise.all([
       fetchStaffProfiles(),
       fetchPendingMembers(),
       isOwner ? fetchMemberTenures() : Promise.resolve({ data: [] as MemberTenure[], error: false }),
       // 합류 결과는 읽기 실패를 명부 실패로 보지 않는다(벨 항목 하나가 빠질 뿐이다).
       fetchJoinNotices(),
+      // 처리한 합류 신청도 사장만(0345 · 서버도 사장 매장만 준다). 실패는 내역이 빌 뿐이다.
+      isOwner ? fetchJoinHistory() : Promise.resolve({ data: [] as JoinDone[], error: false }),
     ]);
     if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 명부를 쓰지 않는다
     const tenures = tenRes.data;
@@ -113,6 +123,7 @@ export const useStaffStore = create<StaffState>((set, get) => ({
       tenures,
       pending: pendingRes.data,
       joinNotices: joinRes.data,
+      joinDone: doneRes.data,
       // 역할 맵은 명부와 같은 멤버십 읽기에서 온다 — 그 읽기가 실패하면 명부도 실패(loadError)다.
       roles: staffRes.roles,
       loaded: true,

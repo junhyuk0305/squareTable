@@ -47,8 +47,9 @@ export default function JuniorHub() {
   const [phoneReady, setPhoneReady] = useState(false);
   const sessionPhone = useSessionStore((s) => s.phone);
   const updateProfile = useSessionStore((s) => s.updateProfile);
-  /** 매장이 이미 있을 때 코드 입력을 접어두는 상태. 매장 0개면 이 값과 무관하게 항상 펼쳐진다. */
-  const [addOpen, setAddOpen] = useState(false);
+  /** 매장이 이미 있을 때 코드 입력을 접어두는 상태. 매장 0개면 이 값과 무관하게 항상 펼쳐진다.
+   *  초대 링크로 코드를 들고 왔으면 펼친 채 연다 — 다른 매장 직원도 채워진 코드를 바로 본다(2026-10-29 결정 5). */
+  const [addOpen, setAddOpen] = useState(code.length > 0);
 
   // 내 가게 목록 — 단일매장이라 연결 시 1개. 멀티매장 전환 시 여기만 배열로 바뀐다.
   const stores = unitId ? [{ id: unitId, name: storeName || '내 매장' }] : [];

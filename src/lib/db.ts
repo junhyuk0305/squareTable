@@ -13,7 +13,7 @@ import type { TaskTemplate, FeedItem, DoneMark, Recurrence } from '@/lib/store/u
 import type { Room, RoomMember, RoomPref } from '@/lib/store/useRoomStore';
 import type { AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import type { StoreConfig, ShiftTemplate, ShiftException, SwapRequest, ShiftTimeRequest, ScheduleNotice } from '@/lib/store/useScheduleStore';
-import type { JoinNotice } from '@/lib/store/useStaffStore';
+import type { JoinDone, JoinNotice } from '@/lib/store/useStaffStore';
 import type { CustomCategory } from '@/lib/store/knowhowCategories';
 import type { KnowhowUsage } from '@/lib/knowhow/archive';
 import type { WageRate } from '@/lib/utils/payroll';
@@ -478,6 +478,8 @@ export type UnitNotifData = {
   alerts: OwnerAlert[];
   /** 내 근무 알림(D9 · 매장별). */
   scheduleNotices: ScheduleNotice[];
+  /** 처리한 합류 신청(0345 · 사장 매장). 옛 서버는 빈 배열. */
+  joinDone: JoinDone[];
 };
 export async function fetchCrossStoreNotifData(): Promise<DbResult<UnitNotifData[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
@@ -493,7 +495,7 @@ export async function fetchCrossStoreNotifData(): Promise<DbResult<UnitNotifData
     if (!b) {
       b = {
         unitId, feed: [], swaps: [], taskTemplates: [], done: {}, names: {}, queue: [], suggestions: [], pending: [],
-        assignments: [], quizProgress: undefined, courses: [], timeRequests: [], claims: [], alerts: [], scheduleNotices: [],
+        assignments: [], quizProgress: undefined, courses: [], timeRequests: [], claims: [], alerts: [], scheduleNotices: [], joinDone: [],
       };
       byUnit.set(unitId, b);
     }
@@ -535,6 +537,8 @@ export async function fetchCrossStoreNotifData(): Promise<DbResult<UnitNotifData
       case 'claim': b.claims.push(p as PaymentClaim); break;
       case 'alert': b.alerts.push(p as OwnerAlert); break;
       case 'schednotice': b.scheduleNotices.push(p as ScheduleNotice); break;
+      // 0345 — 매장 벨(fetchJoinHistory)과 같은 함수(join_history_rows)·같은 매퍼.
+      case 'join_done': b.joinDone.push(toJoinDone(r.unit_id, p)); break;
     }
   }
   // 0332: 퀴즈 순서를 매장 앱(fetchTrainingCourses order by position)과 같게 — 벨의 "1회성 앞선 하나"가 홈과 같은 퀴즈를 고른다.
@@ -4155,6 +4159,29 @@ export async function fetchJoinNotices(): Promise<ReadResult<JoinNotice[]>> {
     return { data: [], error: true };
   }
   return { data: (data ?? []) as JoinNotice[], error: false };
+}
+
+/** join_history_rows(0345) 한 행 → JoinDone. 매장 벨·허브가 이 하나를 쓴다. */
+function toJoinDone(unitId: string, p: any): JoinDone {
+  return {
+    id: Number(p.id), unit_id: unitId, kind: p.kind === 'approved' ? 'approved' : 'rejected',
+    applicant_id: p.applicant_id ?? '', applicant_name: p.applicant_name ?? '',
+    actor_id: p.actor_id ?? null, actor_name: p.actor_name ?? '', created_at: p.created_at ?? '',
+  };
+}
+
+/** 지금 매장에서 처리한 합류 신청(0345 · 사장만 행이 온다). 사장 목록의 '처리함' 내역.
+ *  읽기 실패는 명부 실패로 보지 않는다(내역 몇 줄이 빠질 뿐이다). 0345 전 서버는 함수가 없어 빈 배열이다. */
+export async function fetchJoinHistory(): Promise<ReadResult<JoinDone[]>> {
+  if (!HAS_SUPABASE || !_unitId) return { data: [], error: false };
+  const unitId = _unitId;
+  const { data, error } = await supabase.rpc('join_history_rows');
+  if (error) {
+    readFail('fetchJoinHistory', error);
+    return { data: [], error: true };
+  }
+  const rows = (data ?? []) as { unit_id: string; payload: any }[];
+  return { data: rows.filter((r) => r.unit_id === unitId).map((r) => toJoinDone(r.unit_id, r.payload)), error: false };
 }
 
 /** 사장 · 매니저가 근무를 바꾼 뒤 그 직원에게 알린다(D9 · 0289). 본인 · 다른 매장 사람에게는 서버가 넣지 않는다(false).

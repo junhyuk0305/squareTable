@@ -41,6 +41,8 @@ export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: strin
   // 직원 나감·탈퇴(0317 · 0247 left·account_deleted).
   member_left: { icon: 'person-remove', tint: BrandColors.accentSoft },
   join_request: { icon: 'person-add', tint: BrandColors.yellowSoft },
+  // 처리한 합류 신청(0345) — 끝난 내역이라 처리 대기(노랑)와 다른 무채색.
+  join_done: { icon: 'checkmark-done', tint: BrandColors.brandSoft },
   question: { icon: 'chatbubble-ellipses', tint: BrandColors.yellowSoft },
   suggestion: { icon: 'bulb', tint: BrandColors.brandSoft },
   swap_approval: { icon: 'swap-horizontal', tint: BrandColors.accentSoft },

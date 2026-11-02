@@ -8,6 +8,8 @@
 //       (매니저는 받지 않는다 · 이동 화면 /owner/staff 가 사장 전용 · F-2). 다시 열기(reopen)는 알림이 없다.
 //   [4] sweep_member_notices() — service_role 만 · 먼저 claim 하고 돌려준다(두 번째 호출은 0) · 하루 지난 알림은 버린다.
 //   [5] 엣지 push/index.ts — 크론 갈래 sweepMemberNotices 가 반드시 deliver() 를 지난다(세션·음소거 판정이 적용된다).
+//   [6] 0345 처리한 합류 신청 — approve·reject 가 처리자(actor_id)를 찍는다 · join_history_rows 는 그 매장 사장만 읽는다
+//       (매니저·신청자·다른 매장 사장·anon 은 0행 또는 거부) · 허브 my_units_notif_data 'join_done' 이 같은 행을 준다.
 //
 // 지금(0246)은 알림이 어디에도 없다. 내보낸 직원은 앱을 열기 전까지 모르고, 엣지 user 대상은 같은 매장 멤버만
 //   받아서 내보낸 뒤에는 클라이언트가 보낼 수도 없다.
@@ -50,10 +52,11 @@ const pw = 'Test1234!qa';
 let pass = 0, fail = 0;
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  PASS', n)) : (fail++, console.log('  FAIL', n, extra)); };
 
-const phones = ['0131', '0132', '0133', '0134', '0135', '0136'].map((p) => `${p}${s.slice(0, 7)}`);
+const phones = ['0131', '0132', '0133', '0134', '0135', '0136', '0137'].map((p) => `${p}${s.slice(0, 7)}`);
 const H = 3600000;
 const users = [];
 let UNIT = null;
+let UNIT2 = null;
 
 /** 이 사람이 받은 알림(service_role 로 읽는다). 오류면 문자열. */
 const noticesOf = async (uid) => {
@@ -173,6 +176,48 @@ try {
     check('3-9 나간 본인에게는 left 알림이 가지 않는다', Array.isArray(c) && !c.some((x) => x.kind === 'left'), kinds(c));
   }
 
+  // ═══════ 6. 처리한 합류 신청(0345) ═══════
+  // 이 시점 = A 승인(뒤 내보냄) · B 반려 · M·C·D 승인(M 매니저 · C 나감 · D 탈퇴). 처리자는 모두 O.
+  console.log('\n[6] 0345 join_history_rows — 처리자 기록 · 그 매장 사장만 · 허브 join_done');
+  {
+    const O2 = await up(6, 'QA알림다른사장', 'owner', '1980-01-01');
+    const { data: st2, error: e2 } = await O2.c.rpc('create_store', { p_store_name: 'QA알림다른매장', p_industry: '카페·디저트', p_biz_no: null });
+    const row2 = Array.isArray(st2) ? st2[0] : st2;
+    if (e2 || !row2?.unit_id) throw new Error('create_store O2: ' + (e2?.message ?? 'no row'));
+    UNIT2 = row2.unit_id;
+
+    const { data: raw } = await admin.from('member_notices').select('user_id, kind, actor_id').eq('unit_id', UNIT).in('kind', ['approved', 'rejected']);
+    check('6-1 ★승인·반려 행에 처리자(actor_id = 사장)가 찍힌다', (raw ?? []).length === 5 && (raw ?? []).every((x) => x.actor_id === O.id), JSON.stringify(raw));
+
+    const jh = await O.c.rpc('join_history_rows');
+    const mineRows = (jh.data ?? []).filter((x) => x.unit_id === UNIT);
+    const byUser = (uid) => mineRows.find((x) => x.payload?.applicant_id === uid)?.payload;
+    const pa = byUser(A.id), pb = byUser(B.id), pd = byUser(D.id);
+    check('6-2 ★사장은 처리한 신청 5건을 읽는다(승인 4 · 반려 1)', !jh.error && mineRows.length === 5
+      && mineRows.filter((x) => x.payload?.kind === 'approved').length === 4, jh.error?.message ?? JSON.stringify(mineRows.map((x) => x.payload?.kind)));
+    check('6-3 행에 신청자 이름 · 처리자 이름 · 결과', pa?.applicant_name === 'QA알림내보냄' && pa?.actor_id === O.id && pa?.actor_name === 'QA알림사장'
+      && pa?.kind === 'approved' && pb?.kind === 'rejected' && pb?.applicant_name === 'QA알림반려', JSON.stringify({ pa, pb }));
+    check('6-4 탈퇴한 신청자는 이름을 비운다', pd?.applicant_name === '', JSON.stringify(pd));
+
+    const jm = await M.c.rpc('join_history_rows');
+    check('6-5 ★매니저는 0행(승인·반려가 사장 전용)', !jm.error && (jm.data ?? []).length === 0, jm.error?.message ?? `rows=${(jm.data ?? []).length}`);
+    const jb = await B.c.rpc('join_history_rows');
+    check('6-6 ★반려된 신청자 본인도 0행', !jb.error && (jb.data ?? []).length === 0, jb.error?.message ?? `rows=${(jb.data ?? []).length}`);
+    const jo2 = await O2.c.rpc('join_history_rows');
+    check('6-7 ★다른 매장 사장은 이 매장 행을 못 본다(0행)', !jo2.error && !(jo2.data ?? []).some((x) => x.unit_id === UNIT), jo2.error?.message ?? `rows=${(jo2.data ?? []).length}`);
+    const jan = await mk().rpc('join_history_rows');
+    check('6-8 anon 은 실행할 수 없다(42501)', jan.error?.code === '42501', `code=${jan.error?.code ?? '-'} ${jan.error?.message ?? ''}`);
+
+    const hub = await O.c.rpc('my_units_notif_data');
+    const hubDone = (hub.data ?? []).filter((x) => x.source === 'join_done' && x.unit_id === UNIT);
+    check('6-9 ★허브(my_units_notif_data)도 같은 5건을 join_done 으로 준다', !hub.error && hubDone.length === 5
+      && hubDone.every((x) => mineRows.some((y) => y.payload?.id === x.payload?.id)), hub.error?.message ?? `rows=${hubDone.length}`);
+    const hubM = await M.c.rpc('my_units_notif_data');
+    check('6-10 매니저 허브에는 join_done 이 없다', !hubM.error && !(hubM.data ?? []).some((x) => x.source === 'join_done'), hubM.error?.message ?? '');
+    const direct = await O.c.from('member_notices').select('id').eq('unit_id', UNIT).in('kind', ['approved', 'rejected']);
+    check('6-11 표 RLS 는 그대로 — 사장이 신청자 행을 직접 읽지는 못한다(0행)', !direct.error && (direct.data ?? []).length === 0, direct.error?.message ?? `rows=${(direct.data ?? []).length}`);
+  }
+
   // ═══════ 4. 스윕 ═══════
   console.log('\n[4] sweep_member_notices — service_role · 먼저 claim · 두 번째 0 · 하루 지난 알림은 버린다');
   {
@@ -247,6 +292,7 @@ try {
   for (const u of users) { try { await u.c.rpc('delete_my_account'); } catch { /* best-effort */ } }
   for (const u of users) { try { if (u.id) await admin.auth.admin.deleteUser(u.id); } catch { /* best-effort */ } }
   if (UNIT) { try { await admin.from('units').delete().eq('id', UNIT); } catch { /* best-effort */ } }
+  if (UNIT2) { try { await admin.from('units').delete().eq('id', UNIT2); } catch { /* best-effort */ } }
   try { await cleanupSeededPhones(URL_, SRV, phones); } catch { /* best-effort */ }
 }
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);

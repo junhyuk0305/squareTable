@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndicator } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
-import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
+import { useRouter, Stack, useLocalSearchParams, Redirect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -65,6 +65,17 @@ export default function SignupScreen() {
   // 이메일 입력창 아래 안내(중복가입 등). 이메일 인증은 추후 도입 예정 — 지금은 단계 없음.
   const [emailMsg, setEmailMsg] = useState<string | null>(null);
 
+  // 이 화면에서 가입을 눌렀는가. 가입 중에도 세션이 열리므로, 누른 뒤의 로그인은 아래 우회 판정에서 뺀다.
+  const [submitted, setSubmitted] = useState(false);
+  const signedIn = useSessionStore((s) => s.status === 'signed_in');
+
+  // 이미 로그인한 사람이 초대 링크(`/signup?role=junior&code=…`)로 오면 가입 폼을 보여 주지 않는다(2026-10-29 결정 5).
+  //   코드가 있으면 그 코드를 채운 합류 화면으로 간다. 신청은 직원이 누르고, 같은 매장·사장 계정은 서버가 가른다.
+  //   코드가 없으면 첫 화면이 착지를 정한다. 판정을 여기 다시 적지 않는다(index.tsx 한 곳).
+  if (HAS_SUPABASE && signedIn && !submitted && !accountReady) {
+    return <Redirect href={inviteFromLink ? { pathname: '/junior/hub', params: { code: inviteFromLink } } : '/'} />;
+  }
+
   const start = async () => {
     setErr(null);
     if (!allConsented(role, consent)) return setErr('필수 약관에 모두 동의해주세요.');
@@ -102,6 +113,7 @@ export default function SignupScreen() {
     if (role === 'owner' && bizNo.trim() && !isValidBizNo(bizNo)) return setErr('사업자등록번호 형식(10자리)을 확인해주세요. 비워두면 나중에 등록할 수 있어요.');
     // 직원 초대코드는 선택 — 비우면 가입 후 '가게 연결' 화면으로 유도
 
+    setSubmitted(true);
     setBusy(true);
     // ★ 전체를 try/catch/finally 로 감싼다 — signUp/createStore/isPhoneTaken 은 네트워크 예외를 던질 수 있고,
     //   그때 finally 없이 setBusy(false) 를 놓치면 버튼이 무한 스피너로 멈춘 채(무음 행) 아무 안내도 못 준다.

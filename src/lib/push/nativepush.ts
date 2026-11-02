@@ -216,11 +216,17 @@ async function registerToken(unitId: string | null): Promise<boolean> {
   }
 }
 
-/** 권한을 요청하고 토큰까지 등록한다. 사용자가 "알림 켜기"를 누를 때(웹의 enablePush 와 대응). */
-export async function enableNativePush(unitId: string | null): Promise<PushPermission> {
+/** OS 권한만 묻는다(토큰 등록 없음). 로그인 전 첫 실행 안내가 쓴다.
+ *  등록 RPC 는 auth.uid() 가 있어야 해서 로그인 전엔 못 한다 — 로그인 뒤 usePushBootstrap 이 등록한다. */
+export async function requestNativePermission(): Promise<PushPermission> {
   if (!pushSupported()) return 'unsupported';
   const perm = await Notifications.requestPermissionsAsync();
-  const status = mapStatus(perm.status);
+  return mapStatus(perm.status);
+}
+
+/** 권한을 요청하고 토큰까지 등록한다. 사용자가 "알림 켜기"를 누를 때(웹의 enablePush 와 대응). */
+export async function enableNativePush(unitId: string | null): Promise<PushPermission> {
+  const status = await requestNativePermission();
   if (status !== 'granted') return status;
   // OS 권한은 받았지만 우리 쪽 토큰 등록이 실패하면 켜진 게 아니다 — 카드를 남겨 재시도를 열어둔다.
   if (!(await registerToken(unitId))) return 'default';

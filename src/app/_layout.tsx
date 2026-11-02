@@ -15,6 +15,7 @@ import { DialogHost } from '@/components/DialogHost';
 import { GuideHost } from '@/components/GuideHost';
 import { TextScaleTransition } from '@/components/settings/TextScaleTransition';
 import { FreeUntilNotice } from '@/components/FreeUntilNotice';
+import { NotificationPermissionSheet } from '@/components/NotificationPermissionSheet';
 import { VoiceRecorderBinder } from '@/components/VoiceRecorderBinder';
 import { BackRulesBinder } from '@/components/BackRulesBinder';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -126,6 +127,8 @@ export default function RootLayout() {
         {/* 글자 크기 전환 로딩 오버레이 — Stack 바깥이라 key 리마운트에도 살아남아 깜빡임을 가린다. */}
         <TextScaleTransition />
         {splashDone && signedIn && <FreeUntilNotice />}
+        {/* 앱 첫 실행 알림 안내 — 로그인 전에도 뜬다(네이티브만 · 권한을 아직 안 정한 사람만). */}
+        {splashDone && <NotificationPermissionSheet firstRun />}
         <ErrorBoundary>
           {/* 왼쪽 가장자리 스와이프 → 이전 화면(Android). 제스처 루트도 여기서 제공한다. */}
           <SwipeBack>
