@@ -17,7 +17,7 @@ export const RULES = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10
 export const RULE_TITLES = {
   R1: '콘솔 에러 0 · ≥400 응답 0',
   R2: '누를 수 있는 요소가 전부 보인다(0크기·닿을 수 없음·가려짐 없음)',
-  R3: '누를 수 있는 요소 44×44 이상(44~47 경고)',
+  R3: '누를 수 있는 요소 44×44 이상(44~47 경고 · 탭 스위처 칸은 39 이상)',
   R4: '16자 이하 글자가 접히지 않는다',
   R5: '"0개·0건·0명"·"알바"·느낌표·그림 이모지 0건',
   R6: '빈 상태 문구 옆에 다음 행동 버튼이 있다',
@@ -50,7 +50,9 @@ export const probeFor = (sel) => `(() => {
     if (hiddenByAncestor(el)) continue;
     const r = el.getBoundingClientRect();
     const item = { t: label(el), x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height),
-      nested: !!(el.parentElement && el.parentElement.closest(SEL)), back: el.getAttribute('aria-label') === '뒤로' };
+      nested: !!(el.parentElement && el.parentElement.closest(SEL)), back: el.getAttribute('aria-label') === '뒤로',
+      // 탭 스위처(SegmentTabs · tablist 는 이 부품 하나뿐) 칸 — R3 기준이 다르다(아래 r3 참고).
+      seg: el.getAttribute('role') === 'tab' && !!el.closest('[role="tablist"]') };
     clickables.push(item); els.push(el);
     if (!r.width || !r.height) { item.zero = true; continue; }
     const inView = r.bottom > 0 && r.top < H && r.right > 0 && r.left < W;
@@ -203,6 +205,8 @@ export function r3(snap) {
   for (const c of snap.clickables) {
     if (c.zero || c.off || c.nested) continue;
     const m = Math.min(c.w, c.h);
+    // 탭 스위처 칸은 높이 39 로 통일했다(2026-11-02 사용자 결정 · 칸이 가로로 넓어 누르기 쉽다). 39 미만만 FAIL.
+    if (c.seg) { if (m < 39) fail.push(fmt(c)); continue; }
     if (m < 44) fail.push(fmt(c));
     else if (m < 48) warn.push(fmt(c));
   }
