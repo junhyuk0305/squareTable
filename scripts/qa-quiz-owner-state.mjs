@@ -13,10 +13,13 @@ function declarations(path, names) {
   }).join('\n');
 }
 
-const stats = declarations('src/lib/quiz/courseStats.ts', ['latestQuizAssignments', 'latestCourseAnswers']);
-const schedule = declarations('src/lib/quiz/schedule.ts', ['addDaysKst', 'dayLabelKst']);
-const panel = declarations('src/components/owner/quiz/QuizDeployPanel.tsx', ['kstDay', 'endOfDayIso', 'shortDate']);
+const stats = declarations('src/lib/quiz/progress.ts', ['currentSend']) + '\n' + declarations('src/lib/quiz/courseStats.ts', ['latestQuizAssignments', 'latestCourseAnswers']);
 const panelSource = fs.readFileSync(new URL('../src/components/owner/quiz/QuizDeployPanel.tsx', import.meta.url), 'utf8');
+// 7fc9214 부터 패널의 shortDate 는 공용 linkLastDayLabel 의 별칭이다. 지역 구현이 돌아오면 그걸 잰다.
+const localShortDate = /function shortDate\(/.test(panelSource);
+const schedule = declarations('src/lib/quiz/schedule.ts', ['addDaysKst', 'dayLabelKst', ...(localShortDate ? [] : ['linkLastDayLabel'])]);
+const panel = declarations('src/components/owner/quiz/QuizDeployPanel.tsx', ['kstDay', 'endOfDayIso', ...(localShortDate ? ['shortDate'] : [])])
+  + (localShortDate ? '' : '\nconst shortDate = linkLastDayLabel;');
 // Test the actual local implementation if reintroduced, otherwise the imported shared helper.
 const addDays = /function addDays\(/.test(panelSource)
   ? declarations('src/components/owner/quiz/QuizDeployPanel.tsx', ['addDays'])
@@ -36,7 +39,16 @@ const pending = { ...old, id: 'new', scheduledOn: '2026-10-22', sentAt: null, co
 const other = { ...old, id: 'B', courseId: 'B' };
 const latest = latestQuizAssignments([pending, old, other]);
 assert.equal(latest.length, 2, 'course scopes stay separate');
-assert.equal(latest.find((r) => r.courseId === 'A').id, 'new', 'previous completion does not hide new assignment');
+// 2026-11-03: 안 나간 행(다시 알리기·재확인 대기)은 이미 나간 발송을 가리지 않는다(직원 화면과 같은 currentSend).
+assert.equal(latest.find((r) => r.courseId === 'A').id, 'old', 'unsent pending row does not hide the sent assignment');
+const newerSent = { ...pending, sentAt: '2026-10-22T00:00:00Z' };
+assert.equal(latestQuizAssignments([newerSent, old]).find((r) => r.courseId === 'A').id, 'new', 'previous completion does not hide a newer sent assignment');
+assert.equal(latestQuizAssignments([pending]).at(0).id, 'new', 'nothing sent yet: latest scheduled row');
+// 재확인(0169 origin='recheck')이 예약돼 있어도 그 행이 나가기 전까지 완료자는 '완료'다(직원 화면과 같다 · 11-03 행동 변화).
+const recheck = { ...pending, id: 'recheck', origin: 'recheck' };
+const kept = latestQuizAssignments([recheck, { ...old, origin: 'manual' }]).find((r) => r.courseId === 'A');
+assert.equal(kept.id, 'old', 'pending recheck does not hide a completed sent assignment');
+assert.ok(kept.completedAt, 'completed person stays completed until the recheck is sent');
 
 const sentAt = '2026-10-22T00:00:00Z';
 const answers = [

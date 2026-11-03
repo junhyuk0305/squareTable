@@ -16,6 +16,7 @@ import { ReactionBar } from './ReactionBar';
 import { MentionInput, extractMentions, type Member } from './MentionInput';
 import { Appear, stagger } from '@/components/Appear';
 import { confirmAction } from '@/lib/utils/confirm';
+import { deleteConfirmText } from '@/lib/work/chatRules';
 
 /**
  * NoticePanel — 우상단 [공지]로 진입하는 전용 화면.
@@ -366,7 +367,14 @@ function NoticeCard({
                 <Text style={s.cText}>{c.text}</Text>
               </View>
               {canDelete && (
-                <Pressable onPress={() => onDeleteComment(c.id)} hitSlop={6}>
+                <Pressable
+                  onPress={async () => {
+                    // 지운 댓글은 되살리지 못한다 — 채팅 메시지 삭제와 같은 확인창·문구 정의.
+                    const t = deleteConfirmText(c, me);
+                    if (await confirmAction(t.title, t.message, '삭제', { destructive: true, icon: 'trash-outline' })) onDeleteComment(c.id);
+                  }}
+                  hitSlop={6}
+                >
                   <Text style={s.cDel}>삭제</Text>
                 </Pressable>
               )}

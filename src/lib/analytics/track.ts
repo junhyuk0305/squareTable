@@ -26,11 +26,13 @@ export function initAnalytics(): void {
     void supabase.auth.getSession().then(
       ({ data }) => {
         _token = data.session?.access_token ?? null;
+        _expiresAt = data.session?.expires_at ?? null;
       },
       () => {},
     );
     supabase.auth.onAuthStateChange((_event, session) => {
       _token = session?.access_token ?? null;
+      _expiresAt = session?.expires_at ?? null;
     });
   } catch {
     // 계측은 절대 앱을 깨지 않는다.
@@ -116,9 +118,8 @@ export function reportError(context: string, raw: unknown, meta?: Record<string,
     const code = codeOf(raw);
     if (throttled(`${context}|${code ?? ''}|${message}`)) return;
     if (overRateCap(_errorsSent)) return;
-    void (supabase
-      .from('client_errors')
-      .insert({
+    sendErrorRow(
+      {
         unit_id: _ctx.unitId,
         user_id: _ctx.userId,
         role: _ctx.role,
@@ -127,13 +128,77 @@ export function reportError(context: string, raw: unknown, meta?: Record<string,
         message,
         route: routeOf(),
         meta: meta ?? null,
-      }) as unknown as PromiseLike<unknown>).then(
-      () => {},
-      () => {}, // 실패는 무해하게 삼킨다(재귀·콘솔 스팸 방지)
+      },
+      false,
     );
   } catch {
     // 계측은 절대 앱을 깨지 않는다.
   }
+}
+
+// ── 못 보낸 오류 기록 다시 보내기 ──
+// 토큰이 만료됐거나 네트워크가 끊긴 순간엔 client_errors insert 도 같이 실패한다. 그 순간의 기록이 가장 중요하다.
+// 실패한 행을 메모리에 최대 UNSENT_MAX 건 들고 있다가(넘치면 오래된 것부터 버림) 다음 기록이 성공하거나
+// hydrate 가 끝났을 때(flushUnsentErrors) 한 번만 다시 보낸다. 다시 보내도 실패하면 버린다(재귀·폭주 방지).
+// 저장소에는 쓰지 않는다 — 앱을 껐다 켜면 사라진다.
+type ErrorRow = {
+  unit_id: string | null;
+  user_id: string | null;
+  role: string | null;
+  context: string;
+  code: string | null;
+  message: string;
+  route: string | null;
+  meta: Record<string, unknown> | null;
+};
+const UNSENT_MAX = 5;
+const _unsent: { row: ErrorRow; at: string }[] = [];
+let _unsentDropped = 0;
+
+function sendErrorRow(row: ErrorRow, retried: boolean): void {
+  const keep = () => {
+    if (retried) return;
+    if (_unsent.length >= UNSENT_MAX) {
+      _unsent.shift();
+      _unsentDropped++;
+    }
+    _unsent.push({ row, at: new Date().toISOString() });
+  };
+  void (supabase.from('client_errors').insert(row) as unknown as PromiseLike<{ error: unknown } | null>).then(
+    (res) => {
+      if (res?.error) keep();
+      else flushUnsentErrors();
+    },
+    keep, // 실패는 조용히 삼킨다(콘솔 스팸 방지)
+  );
+}
+
+/** 못 보낸 오류 기록을 한 번 다시 보낸다. 원래 시각은 meta.queued_at 에 남긴다. */
+export function flushUnsentErrors(): void {
+  try {
+    if (!_unsent.length || !HAS_SUPABASE) return;
+    const items = _unsent.splice(0);
+    const dropped = _unsentDropped;
+    _unsentDropped = 0;
+    items.forEach(({ row, at }, i) => {
+      const meta = { ...(row.meta ?? {}), queued_at: at, ...(i === 0 && dropped ? { unsent_dropped: dropped } : null) };
+      sendErrorRow({ ...row, meta }, true);
+    });
+  } catch {
+    // no-op
+  }
+}
+
+// 세션 만료 시각(초 · Supabase expires_at). 토큰 원문은 기록하지 않는다.
+let _expiresAt: number | null = null;
+
+// 연결 상태 진단값 — 웹 브라우저의 온라인 여부(online)와 세션 만료까지 남은 초(음수 = 이미 만료).
+export function connectivityMeta(): { online?: boolean; session_left_s: number | null } {
+  const online = Platform.OS === 'web' && typeof navigator !== 'undefined' ? navigator.onLine : undefined;
+  return {
+    ...(online === undefined ? null : { online }),
+    session_left_s: _expiresAt === null ? null : Math.round(_expiresAt - Date.now() / 1000),
+  };
 }
 
 // 전역 안전망 — 어디서도 안 잡힌 Promise reject / 런타임 에러를 원격에 남긴다(웹 전용).

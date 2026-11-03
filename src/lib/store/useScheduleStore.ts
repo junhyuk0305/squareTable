@@ -336,6 +336,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
       HYDRATE_TIMEOUT_MS,
       Promise.all([fetchScheduleConfig(), fetchShiftTemplates(), fetchSwaps(), fetchShiftExceptions(), fetchShiftTimeRequests(), fetchScheduleNotices()]),
       () => null,
+      { store: 'schedule' },
     );
     if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 근무표를 쓰지 않는다
     if (all === null) { set({ loaded: true, loadError: true, configLoadError: true }); return; }

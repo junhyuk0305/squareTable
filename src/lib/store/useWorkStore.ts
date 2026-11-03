@@ -55,7 +55,7 @@ import {
 import type { QuizAssignment, TrainingCourse as TrainingCourseRow } from '@/lib/quiz/types';
 import { isBrandHidden } from '@/lib/brand/copy';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
-import { coalesce, subscribeDebounced, settleWithin, HYDRATE_TIMEOUT_MS } from '@/lib/store/realtimeSync';
+import { coalesce, subscribeDebounced, settleWithin, HYDRATE_TIMEOUT_MS, pendingNames, reportHydrate } from '@/lib/store/realtimeSync';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import { genId } from '@/lib/utils/id';
 import { useRoomStore } from '@/lib/store/useRoomStore';
@@ -810,12 +810,11 @@ export const useWorkStore = create<State>((set, get) => ({
     //   예외를 던지면 Promise.all 이 reject 되고 set 이 영영 실행되지 않아 loaded 가 false 로 남는다
     //   → 게이트가 **영구 스피너**가 된다. 계약을 값 반환 경로에만 걸면 계약이 아니다.
     const epoch = currentTenantEpoch();
-    try {
     const fetchedAt = Date.now();
+    let failed: string[] | undefined; // 조회가 끝난 뒤에 throw 했다면 그때 실패한 축(계측용)
+    try {
     // 정지(hang) 방지 — 실패·예외는 막았어도 **끝나지 않는 것**은 못 막는다(2026-08-26 실측).
-    const all = await settleWithin(
-      HYDRATE_TIMEOUT_MS,
-      Promise.all([
+    const works = [
       fetchTemplates(),
       fetchDone(),
       fetchFeed(),
@@ -829,12 +828,18 @@ export const useWorkStore = create<State>((set, get) => ({
       fetchQuizAssignments(true),
       fetchQuizAttempts(),
       fetchQuizAssignmentProgress(),
-      ]),
-      () => null,
-    );
+    ] as const;
+    const all = await settleWithin(HYDRATE_TIMEOUT_MS, Promise.all(works), () => null, {
+      store: 'work',
+      pending: pendingNames(
+        ['templates', 'done', 'feed', 'knowhowLinks', 'understanding', 'courseEntries', 'training', 'courses', 'trainingRequests', 'quizCounts', 'assignments', 'quizAttempts', 'quizProgress'],
+        works,
+      ),
+    });
     if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 업무를 쓰지 않는다
     if (all === null) { set({ loaded: true, loadError: true, quizProgressError: true, quizProgress: [] }); return; }
     const [templates, done, feed, knowhowLinks, understanding, courseEntries, training, courses, trainingRequests, quizCounts, assignments, quizAttempts, quizProgress] = all;
+    failed = Object.entries({ templates, done, feed, understanding, courseEntries }).filter(([, r]) => r.error).map(([k]) => k);
     // 아직 서버에 안 닿은 체크는 스냅샷 위에 다시 얹는다 — 안 그러면 빠른 연속 체크가 되돌아간다.
     const live = overlayPendingDone(done.data, feed.data, fetchedAt);
     set({
@@ -856,6 +861,7 @@ export const useWorkStore = create<State>((set, get) => ({
     });
     } catch (e) {
       console.warn('[work] hydrate threw:', e);
+      reportHydrate('threw', 'work', fetchedAt, { failed }, e);
       if (isStaleEpoch(epoch)) return;
       set({ loaded: true, loadError: true, quizProgressError: true, quizProgress: [] });
     }

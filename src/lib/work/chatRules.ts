@@ -13,8 +13,13 @@ export function canEditMessage(item: FeedItem, me: string, now: number = Date.no
   return !Number.isNaN(at) && now - at < FEED_EDIT_WINDOW_MS;
 }
 
-/** 지우기 전 확인 문구. 남의 글(사장·매니저가 지울 때)은 모두에게서 사라진다고 말한다. */
+/** 지우기 전 확인 문구. 남의 글(사장·매니저가 지울 때)은 모두에게서 사라진다고 말한다. 공지 댓글도 같은 문구를 쓴다. */
 export function deleteConfirmText(item: FeedItem, me: string): { title: string; message: string } {
+  if (item.kind === 'comment') {
+    return item.authorId === me
+      ? { title: '댓글 삭제', message: '이 댓글을 지울까요?' }
+      : { title: '댓글 삭제', message: '다른 사람의 댓글이에요. 모두에게서 사라져요.' };
+  }
   return item.authorId === me
     ? { title: '메시지 삭제', message: '이 메시지를 지울까요?' }
     : { title: '메시지 삭제', message: '다른 사람의 메시지예요. 모두에게서 사라져요.' };
