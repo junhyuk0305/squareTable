@@ -128,7 +128,11 @@ export function injectPwaHead(): void {
     font.textContent =
       "html,body,#root{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont," +
       "system-ui,'Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',sans-serif;" +
-      '-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-synthesis:none;}';
+      '-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-synthesis:none;}' +
+      // 한글은 어절(띄어쓰기) 단위로 끊는다(2026-11-03). 기본값은 글자 단위라 두 줄 제목이 "결/정"처럼 갈렸다.
+      // 상속 속성이라 html 에 한 번 걸면 셸 밖에 그려지는 Modal(portal)까지 닿는다.
+      // 띄어쓰기 없는 URL·이메일은 RN-web Text 기본값(word-wrap:break-word)이 칸 안에서 끊는다. 여기서 따로 걸지 않는다.
+      'html,body{word-break:keep-all;}';
     document.head.appendChild(font);
   }
   // Pretendard 가변폰트(CDN). 이미 링크가 있으면(+html/static 모드) 중복 주입을 건너뛴다.
