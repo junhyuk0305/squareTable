@@ -98,6 +98,14 @@ const ans = [
 const p = m.staffProgress(sends, ans);
 assert.deepEqual({ ...p }, { recipients: 3, done: 1, started: 0, notStarted: 2, notDone: 2 }, 'N11/N17 scheduled excluded, self and old-round answers do not start');
 assert.equal(m.doneLabel(p), '완료 1/3명');
+// 0348 이어 풀기: 다시 알리기가 앞 회차를 이어받으면(countFrom < sentAt) 앞 회차 답으로 '푸는 중'이다. 직원 화면 진행과 같은 기준.
+const carriedB = { ...sends[1], countFrom: '2026-10-21T00:00:00Z' };
+assert.equal(m.personState(carriedB, ans), 'in_progress', '0348 carried send counts the previous round answers');
+assert.equal(m.countFromOf(carriedB), '2026-10-21T00:00:00Z');
+assert.equal(m.countFromOf(sends[1]), sends[1].sentAt, 'count_from null = sent_at');
+assert.equal(m.countFromOf(sends[3]), null, 'not sent = null');
+// 처음부터 다시 풀기: 시작 시각이 누른 때로 가면 그 전 답은 진행이 아니다.
+assert.equal(m.personState({ ...sends[1], countFrom: '2026-10-22T06:00:00Z' }, ans), 'not_started', '0348 restart starts from the tap');
 assert.equal(m.allDone(m.staffProgress([], ans)), false, 'link-only is not done');
 const r = m.quizRate(ans);
 // staff first: a:i1 false, a:i2 true, b:i1 true (cumulative), c self excluded; guests: false, true

@@ -15,7 +15,18 @@
 // ── 입력 모양 ────────────────────────────────────────────────────────────
 
 /** 발송 원장 한 줄(QuizAssignment 와 같은 모양). 사람별 최신 발송은 latestQuizAssignments 로 먼저 고른다. */
-export type MetricAssignment = { userId: string; sentAt: string | null; completedAt: string | null };
+export type MetricAssignment = { userId: string; sentAt: string | null; completedAt: string | null; countFrom?: string | null };
+
+/**
+ * 이 발송의 진행을 세기 시작하는 시각(0348 · 서버 짝 = quiz_assignment_count_from).
+ * 보통은 sent_at 이다. 푸는 중에 다시 알리기가 나가면 앞 회차의 시작 시각을 이어받는다(이어 풀기).
+ * 직원이 처음부터 다시 풀기를 누르면 그 시각이다. null = 아직 안 나감.
+ * "언제부터 세나"는 서버·클라 모두 이 값 하나만 본다(personState · latestCourseAnswers 호출부 · progress.restartOffered).
+ */
+export function countFromOf(a: { sentAt: string | null; countFrom?: string | null }): string | null {
+  if (!a.sentAt) return null;
+  return a.countFrom ?? a.sentAt;
+}
 
 /**
  * 답 한 줄(fetchQuizCourseAttemptItems 의 CourseAttemptItemRow 와 같은 모양).
@@ -83,7 +94,7 @@ export const PERSON_STATE_LABEL: Record<PersonState, string> = {
 
 /**
  * 한 사람의 이번 발송 상태(N17).
- * 누구를: 직원 1명. 언제부터: 그 사람의 최신 발송 sent_at 뒤.
+ * 누구를: 직원 1명. 언제부터: 그 사람의 최신 발송의 집계 시작 시각(countFromOf) 뒤.
  * 완료 = completed_at(서버 mark_quiz_completed 가 문항 단위로 찍는다).
  * 푸는 중 = 완료 전이고 이번 발송 뒤 답 1개 이상. 아직 안 풂 = 받았고 답 0개.
  * Q1: source='self' 답은 세지 않는다.
@@ -91,8 +102,8 @@ export const PERSON_STATE_LABEL: Record<PersonState, string> = {
 export function personState(a: MetricAssignment | undefined, answers: readonly MetricAnswer[]): PersonState {
   if (!a || !a.sentAt) return 'not_sent';
   if (a.completedAt) return 'done';
-  const sentAt = a.sentAt;
-  const any = answers.some((r) => r.staffId === a.userId && r.source !== 'self' && r.takenAt >= sentAt);
+  const from = countFromOf(a) ?? a.sentAt;
+  const any = answers.some((r) => r.staffId === a.userId && r.source !== 'self' && Date.parse(r.takenAt) >= Date.parse(from));
   return any ? 'in_progress' : 'not_started';
 }
 

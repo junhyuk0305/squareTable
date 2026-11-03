@@ -7,6 +7,7 @@ import { ProgressPill, type ProgressTone } from '@/components/blocks/ProgressPil
 import { cardProgressText, type QuizItemProgress } from '@/lib/quiz/checkCopy';
 import { roundLabel } from '@/lib/quiz/metrics';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { ButtonStyles } from '@/lib/theme/button';
 import { CardStyles } from '@/lib/theme/card';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -81,6 +82,7 @@ export function TrainingCard({
   lastSubmission,
   onOpenKnowhow,
   onStartCheck,
+  onRestart,
 }: {
   course: TrainingCardCourse;
   items: TrainingCardItem[];
@@ -92,6 +94,8 @@ export function TrainingCard({
   onOpenKnowhow: (entryId: string) => void;
   /** 퀴즈 시작 — 노하우 하나 + 그 노하우가 담긴 퀴즈(0307 · 요청만 담은 카드는 null). */
   onStartCheck: (entryId: string, courseId: string | null) => void;
+  /** 이어 풀기 중일 때만 넘긴다(progress.restartOffered). 없으면 '처음부터 다시 풀기' 줄이 없다. */
+  onRestart?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   // KST 오늘 "YYYY-MM-DD". 마감은 날짜 비교라 시각이 필요 없다(서버 due_on 도 KST 날짜).
@@ -183,6 +187,18 @@ export function TrainingCard({
         </Pressable>
       </View>
 
+      {/* 다시 알리기가 푸는 중에 왔다(0348). 기본은 이어 풀기라 글자 링크로만 둔다(주 버튼은 하나). */}
+      {onRestart ? (
+        <Pressable
+          onPress={onRestart}
+          style={({ pressed }) => [st.restartHit, pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+          accessibilityLabel="처음부터 다시 풀기"
+        >
+          <Text style={st.restartText}>처음부터 다시 풀기</Text>
+        </Pressable>
+      ) : null}
+
       {/* 전체 항목 — 펼침은 아래로(Reveal 규칙). 행 탭 = 그 항목의 노하우 읽기. */}
       <Pressable
         onPress={() => setExpanded((v) => !v)}
@@ -248,6 +264,9 @@ const st = StyleSheet.create({
     borderRadius: Radius.md, backgroundColor: InkColors.ink,
   },
   ctaText: { fontWeight: '800', fontSize: Type.desc.fontSize, color: '#FFFFFF' },
+  // 글자 링크 — 누르는 상자 44(TouchSize.inline) · 보이는 것은 글자뿐.
+  restartHit: { ...ButtonStyles.inlineHit, alignSelf: 'center', paddingHorizontal: Space.md },
+  restartText: { ...Type.desc, fontWeight: '700', color: TextColor.secondary, textDecorationLine: 'underline' },
 
   expandRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,

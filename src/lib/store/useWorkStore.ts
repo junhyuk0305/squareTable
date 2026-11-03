@@ -45,6 +45,7 @@ import {
   fetchQuizAttempts,
   markQuizOpened,
   markQuizCompleted,
+  restartQuizAssignment,
   type TrainingItemRow,
   type CourseEntryRow,
   type TrainingCourse,
@@ -746,6 +747,8 @@ type State = {
   noteQuizOpened: (entryIds: string[], assignmentId?: string) => void;
   /** 응시를 마쳤다(맞힘과 무관 · E4). 직접 연 발송의 완료 여부는 서버가 판정한다. */
   noteQuizFinished: (entryIds: string[], assignmentId?: string) => Promise<void>;
+  /** 처음부터 다시 풀기(0348). ok = 바뀜 · noop = 바꿀 것 없음 · error = 실패. ok·noop 이면 원장·진행을 다시 읽는다. */
+  restartQuiz: (assignmentId: string) => Promise<'ok' | 'noop' | 'error'>;
   /** 코스에 노하우 담기(0111) — 껍데기 업무를 만들지 않는다. 성공 여부 반환. */
   addCourseEntry: (courseId: string, entryId: string) => Promise<boolean>;
   /** 코스에서 노하우 빼기 — 노하우·통과 기록·다른 코스 소속은 남는다. */
@@ -1079,6 +1082,12 @@ export const useWorkStore = create<State>((set, get) => ({
     if (progress && progress.totalItems > 0 && progress.pendingItemIds.length === 0 && assignment && !assignment.completedAt) {
       throw new Error('Quiz completion update failed');
     }
+  },
+
+  restartQuiz: async (assignmentId) => {
+    const res = await restartQuizAssignment(assignmentId);
+    if (res !== 'error') await get().hydrate();
+    return res;
   },
 
   markUnderstood: async (entryIds, staffId) => {

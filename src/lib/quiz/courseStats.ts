@@ -35,7 +35,8 @@ export function latestCourseAnswers<T extends { itemId: string; takenAt: string 
   if (sentAt === null) return [];
   const latest = new Map<string, T>();
   for (const row of rows) {
-    if (sentAt && row.takenAt < sentAt) continue;
+    // 시각 문자열은 소수 자릿수가 달라 문자열 비교가 경계에서 어긋날 수 있다(0348 count_from). 숫자로 비교한다.
+    if (sentAt && Date.parse(row.takenAt) < Date.parse(sentAt)) continue;
     const prev = latest.get(row.itemId);
     if (!prev || row.takenAt > prev.takenAt) latest.set(row.itemId, row);
   }

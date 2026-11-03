@@ -153,4 +153,6 @@ export type QuizAssignment = {
   completedAt: string | null;
   /** 왜 생긴 발송인가(0169) — 'manual'(사장) · 'join'(입사) · 'recheck'(노하우 변경). */
   origin?: string;
+  /** 진행을 세기 시작하는 시각(0348). null = sentAt. 읽을 때는 metrics.countFromOf 만 쓴다. */
+  countFrom?: string | null;
 };

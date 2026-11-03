@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
 import {
   PERSON_STATE_LABEL,
+  countFromOf,
   guestSubmissions,
   guestSubmissionsLabel,
   itemAnswers,
@@ -187,7 +188,8 @@ export default function QuizDetailScreen() {
       const a = latestSends.find((x) => x.userId === uid);
       const history = quizAnswers.filter((r) => r.staffId === uid);
       // 한 코스를 노하우별로 나눠 푼다. 제출 하나 대신 이번 발송의 문항별 마지막 답을 센다.
-      const mine = latestCourseAnswers(history, a?.sentAt);
+      // 언제부터 = 집계 시작 시각(0348 · 이어 풀기면 앞 회차부터 · 다시 풀기면 누른 때부터). 직원 화면 진행과 같은 기준이다.
+      const mine = latestCourseAnswers(history, a ? countFromOf(a) : undefined);
       return {
         id: uid,
         name: s?.name ?? '나간 직원',
