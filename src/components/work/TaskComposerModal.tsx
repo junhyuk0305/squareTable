@@ -11,6 +11,7 @@ import { genId } from '@/lib/utils/id';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Radius } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { searchPlaybook } from '@/lib/rag';
@@ -165,6 +166,8 @@ function TaskComposerBody({
   const [remindOn, setRemindOn] = useState(draft?.remindOn ?? !!editTemplate?.remindAt);
   const [remindAt, setRemindAt] = useState(draft?.remindAt ?? editTemplate?.remindAt ?? '');
   const [remindInfo, setRemindInfo] = useState(false); // ⓘ 인라인 펼침
+  // 삭제는 되돌릴 수 없어 한 번 묻는다. 확인창(Modal)을 시트(Modal) 위에 띄우지 않고 시트 아래쪽에서 묻는다(iOS · ShiftQuickSheet 와 같은 방식).
+  const [delAsk, setDelAsk] = useState(false);
   const remindValid = !remindOn || /^([01]\d|2[0-3]):[0-5]\d$/.test(remindAt);
 
   // ★2026-08-19: **배정과 공개는 다른 축이다.**
@@ -622,12 +625,33 @@ function TaskComposerBody({
                 <Text style={s.khOpenText}>작성 중인 내용 버리기</Text>
               </Pressable>
             )}
+            {delAsk && onDelete && editTemplate ? (
+              <>
+                <View style={s.delAsk} accessibilityRole="alert">
+                  <Text style={s.delAskTitle}>이 할일을 삭제할까요?</Text>
+                  <Text style={s.delAskBody}>되돌릴 수 없어요.</Text>
+                </View>
+                <View style={s.footBtns}>
+                  <Pressable onPress={() => setDelAsk(false)} accessibilityRole="button" style={({ pressed }) => [s.askCancel, { flex: 1 }, pressed && { opacity: 0.7 }]}>
+                    <Text style={s.askCancelText}>취소</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => { onDelete(editTemplate.id); onClose(); }}
+                    accessibilityRole="button"
+                    accessibilityLabel="할일 삭제"
+                    style={({ pressed }) => [s.askDel, { flex: 1 }, pressed && { opacity: 0.85 }]}
+                  >
+                    <Text style={s.askDelText}>삭제</Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
             <View style={s.footBtns}>
               {/* 루틴 삭제는 여기서 하지 않는다 — 루틴을 지우는 자리는 업무 설정 한 곳이다(지우는 문을 둘로 만들지 않는다). */}
               {isEdit && !routineMode && onDelete && editTemplate && (
                 <Pressable
                   disabled={saving}
-                  onPress={() => { onDelete(editTemplate.id); onClose(); }}
+                  onPress={() => setDelAsk(true)}
                   style={({ pressed }) => [s.delBtn, pressed && { opacity: 0.85 }]}
                   accessibilityRole="button"
                   accessibilityLabel="이 할일 삭제"
@@ -642,6 +666,7 @@ function TaskComposerBody({
                 </Text>
               </Pressable>
             </View>
+            )}
           </View>
 
           {remindInfo && (
@@ -771,4 +796,12 @@ const s = StyleSheet.create({
   ctaText: { ...ButtonTextStyles.primary, color: '#fff' },
   delBtn: { ...ButtonStyles.primary, flexDirection: 'row', gap: 5, borderWidth: 1, borderColor: BrandColors.bad, backgroundColor: InkColors.bg },
   delText: { ...ButtonTextStyles.primary, color: BrandColors.badText },
+  // 삭제 확인 단계 — 확인창(ConfirmModal)과 같은 색 역할: 틴트 면 + 800 글자 · 빨강 솔리드 버튼.
+  delAsk: { marginBottom: Space.sm, padding: Space.md, gap: Space.xs, borderRadius: Radius.md, backgroundColor: BrandColors.badSoft },
+  delAskTitle: { ...Type.body, fontWeight: '800', color: BrandColors.badText },
+  delAskBody: { ...Type.desc, color: TextColor.secondary },
+  askCancel: { ...ButtonStyles.primary, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
+  askCancelText: { ...ButtonTextStyles.primary, color: TextColor.secondary },
+  askDel: { ...ButtonStyles.primary, backgroundColor: BrandColors.badSolid },
+  askDelText: { ...ButtonTextStyles.primary, color: InkColors.bg },
 });

@@ -20,6 +20,7 @@ import { Type } from '@/lib/theme/type';
 import { BadgeStyles } from '@/lib/theme/badge';
 import { fmtDuration, hhmm, todayStr, normalizeTime, shiftMonth, daysInMonth, maskHHMM } from '@/lib/utils/attendance';
 import { checkShiftTime, isOvernight, monthDates } from '@/lib/utils/schedule';
+import { confirmAction } from '@/lib/utils/confirm';
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -356,7 +357,15 @@ export function TimesheetView({ staffId, editedBy, badgeLabel, badgeTone = 'ink'
                     {err && <Text style={styles.errText}>{err}</Text>}
                     <View style={styles.editActions}>
                       <Pressable
-                        onPress={() => {
+                        onPress={async () => {
+                          // 지운 기록은 되살리지 못한다 — 한 번 묻는다(공지 삭제와 같은 확인창).
+                          const ok = await confirmAction(
+                            '출퇴근 기록 삭제',
+                            `${d.getMonth() + 1}월 ${d.getDate()}일 출퇴근 기록을 삭제할까요? 되돌릴 수 없어요.`,
+                            '삭제',
+                            { destructive: true, icon: 'trash-outline' },
+                          );
+                          if (!ok) return;
                           removeRecord(r.id);
                           cancel();
                         }}
