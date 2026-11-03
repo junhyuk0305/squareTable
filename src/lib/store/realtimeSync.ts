@@ -12,6 +12,7 @@
  *   2) subscribeDebounced — realtime 이벤트 버스트를 트레일링 디바운스로 1회 재조회에 합친다.
  *      마운트 시의 명시적 hydrate() 호출은 디바운스를 타지 않으니 첫 로딩은 즉시다.
  */
+import { reportError, connectivityMeta, flushUnsentErrors } from '@/lib/analytics/track';
 
 /** 동시 호출 합치기: 진행 중이면 재실행만 예약하고 진행 중 Promise를 돌려준다. */
 export function coalesce(run: () => Promise<void>): () => Promise<void> {
@@ -68,7 +69,15 @@ export function subscribeDebounced(
  *   그 시간을 넘겼는데도 화면이 스피너인 것보다, "못 불러왔어요 · 다시 시도"가 사용자에게 낫다.
  *   재시도 버튼이 있으므로 되돌릴 수 있는 판정이다.
  */
-export function settleWithin<T>(ms: number, work: Promise<T>, onTimeout: () => T): Promise<T> {
+export function settleWithin<T>(
+  ms: number,
+  work: Promise<T>,
+  onTimeout: () => T,
+  diag?: { store: string; pending?: () => string[] },
+): Promise<T> {
+  const t0 = Date.now();
+  // 원격 기록은 diag 를 넘긴 원격 hydrate 만 남긴다(로컬 저장소 읽기 지연까지 올리지 않는다).
+  // 기록은 resolve 뒤에 한다 — 계측이 던져도 정지 방지 계약이 깨지지 않는다.
   return new Promise<T>((resolve) => {
     let done = false;
     const timer = setTimeout(() => {
@@ -76,12 +85,41 @@ export function settleWithin<T>(ms: number, work: Promise<T>, onTimeout: () => T
       done = true;
       console.warn(`[hydrate] ${ms}ms 안에 끝나지 않아 실패로 처리한다(정지 방지)`);
       resolve(onTimeout());
+      if (diag) reportHydrate('timeout', diag.store, t0, { pending: diag.pending }, `${ms}ms`);
     }, ms);
     work.then(
-      (v) => { if (!done) { done = true; clearTimeout(timer); resolve(v); } },
-      (e) => { if (!done) { done = true; clearTimeout(timer); console.warn('[hydrate] 실패:', e); resolve(onTimeout()); } },
+      (v) => { if (!done) { done = true; clearTimeout(timer); resolve(v); flushUnsentErrors(); } },
+      (e) => { if (!done) { done = true; clearTimeout(timer); console.warn('[hydrate] 실패:', e); resolve(onTimeout()); if (diag) reportHydrate('reject', diag.store, t0, {}, e); } },
     );
   });
+}
+
+/**
+ * hydrate 실패 원격 기록(2026-11-03 · "업무를 불러오지 못했어요" 간헐 오류 계측).
+ * 이 경로들은 예전엔 console.warn 만 해서 client_errors 에 아무것도 안 남았다.
+ * 기록 이름 = `hydrate.<timeout|reject|threw>:<store>`. meta = 축 정보 + 걸린 ms + 연결 상태(웹 onLine·세션 남은 초).
+ */
+export function reportHydrate(
+  kind: 'timeout' | 'reject' | 'threw',
+  store: string,
+  startedAt: number,
+  axes: Record<string, unknown> & { pending?: () => string[] },
+  raw: unknown,
+): void {
+  try {
+    const { pending, ...rest } = axes;
+    reportError(`hydrate.${kind}:${store}`, raw, { ...rest, ...(pending ? { pending: pending() } : {}), ms: Date.now() - startedAt, ...connectivityMeta() });
+  } catch { /* 계측 실패는 화면에 영향을 주지 않는다 */ }
+}
+
+/** Promise.all 에 넘길 조회들 중 아직 안 끝난 것의 이름을 돌려준다 — 시간 초과 때 어느 축이 매달렸는지 남긴다. */
+export function pendingNames(names: readonly string[], works: readonly Promise<unknown>[]): () => string[] {
+  const settled = works.map(() => false);
+  works.forEach((p, i) => {
+    const mark = () => { settled[i] = true; };
+    p.then(mark, mark);
+  });
+  return () => names.filter((_, i) => !settled[i]);
 }
 
 /** hydrate 정지 방지 기본 시간 — 느린 3G 왕복(여러 쿼리 병렬)을 넉넉히 덮는 값. */

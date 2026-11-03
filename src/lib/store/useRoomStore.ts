@@ -2,7 +2,7 @@
 // 메시지/공지/할일 자체는 useWorkStore가 보관하고 roomId로 묶인다. 이 스토어는 '어떤 방들이 있고
 // 누가 속하며 지금 어느 방을 보는가'만 관리한다.
 import { create } from 'zustand';
-import { coalesce, subscribeDebounced, settleWithin, HYDRATE_TIMEOUT_MS } from '@/lib/store/realtimeSync';
+import { coalesce, subscribeDebounced, settleWithin, HYDRATE_TIMEOUT_MS, pendingNames, reportHydrate } from '@/lib/store/realtimeSync';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import {
@@ -120,18 +120,23 @@ export const useRoomStore = create<State>((set, get) => ({
     //   예외를 던지면 Promise.all 이 reject 되고 set 이 영영 실행되지 않아 loaded 가 false 로 남는다
     //   → 게이트가 **영구 스피너**가 된다. 계약을 값 반환 경로에만 걸면 계약이 아니다.
     const epoch = currentTenantEpoch();
+    const t0 = Date.now();
+    let failed: string[] | undefined; // 조회가 끝난 뒤에 throw 했다면 그때 실패한 축(계측용)
     try {
     const session = useSessionStore.getState();
     // 정지(hang) 방지 — 백엔드 블랙아웃 때 supabase 클라가 토큰 갱신을 기다리며 매달리면
     // Promise.all 이 영영 안 끝나 게이트가 영구 스피너가 된다(2026-08-26 실측).
     const FAILED = { data: [] as never[], error: true };
+    const works = [fetchRooms(), fetchRoomMembers(), fetchRoomPrefs()] as const;
     const [roomsRes, membersRes, prefsRes] = await settleWithin(
       HYDRATE_TIMEOUT_MS,
-      Promise.all([fetchRooms(), fetchRoomMembers(), fetchRoomPrefs()]),
+      Promise.all(works),
       () => [FAILED, FAILED, FAILED] as unknown as [Awaited<ReturnType<typeof fetchRooms>>, Awaited<ReturnType<typeof fetchRoomMembers>>, Awaited<ReturnType<typeof fetchRoomPrefs>>],
+      { store: 'room', pending: pendingNames(['rooms', 'members', 'prefs'], works) },
     );
     if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 방을 쓰지도, 기본방을 만들지도 않는다
     const loadError = roomsRes.error || membersRes.error || prefsRes.error;
+    failed = (['rooms', 'members', 'prefs'] as const).filter((_, i) => [roomsRes, membersRes, prefsRes][i].error);
     let rooms = roomsRes.data;
     // 자가치유: 마이그레이션 backfill 이후 생성된 새 매장엔 기본방이 없을 수 있다.
     // 사장이 들어오면 기본방('전체')을 한 번 만들어 둔다(알바는 권한 없어 패스).
@@ -150,6 +155,7 @@ export const useRoomStore = create<State>((set, get) => ({
     });
     } catch (e) {
       console.warn('[room] hydrate threw:', e);
+      reportHydrate('threw', 'room', t0, { failed }, e);
       if (isStaleEpoch(epoch)) return;
       set({ loaded: true, loadError: true });
     }
