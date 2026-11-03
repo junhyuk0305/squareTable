@@ -7,6 +7,7 @@
 //  · 반복 근무를 고치거나 지울 때는 범위를 고른다(0242 · J1): "이 날부터 계속"(기본) / "이 날만".
 //    지난 기록은 서버가 지난 구간으로 남긴다. 그래서 그 전 근무 기록은 그대로다.
 //  · 지난 날짜를 바꾸면 시트 안에서 한 번 더 묻는다(§8 Q4). 확인해야 서버가 받는다(p_confirm_past).
+//  · 날짜 지정 근무 삭제는 되살릴 수 없어 같은 자리에서 묻는다. 지난 날짜와 겹치면 한 단계로 묻는다.
 import { useState } from 'react';
 import { View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -84,8 +85,10 @@ export function ShiftQuickSheet({
   // 반복 근무 고치기·지우기의 범위. 기본은 "이 날부터 계속"이다(업계 공통 · J1). 지난 기록은 그대로 남는다.
   const [scope, setScope] = useState<'from' | 'day'>('from');
   const [busy, setBusy] = useState(false);
-  // 지난 날짜 확인 단계 — 무엇을 보내려다 멈췄는지 들고 있다. null 이면 평소 버튼.
-  const [pastAsk, setPastAsk] = useState<null | { label: string; call: (confirmPast: boolean) => Promise<boolean> }>(null);
+  // 시트 안 확인 단계 — 무엇을 보내려다 멈췄는지 들고 있다. null 이면 평소 버튼.
+  //  past = 지난 날짜를 바꾼다(§8 Q4). del = 되살릴 수 없는 삭제다(날짜 지정 근무는 행을 지운다 · 0279 override_shift_day).
+  //  둘이 겹치면 두 번 묻지 않고 삭제 단계 하나에 지난 기록 문장을 붙인다.
+  const [ask, setAsk] = useState<null | { label: string; past: boolean; del: boolean; call: (confirmPast: boolean) => Promise<boolean> }>(null);
 
   const isEdit = !!editing;
   const editingSeries = isEdit && editing.date === null;
@@ -126,16 +129,16 @@ export function ShiftQuickSheet({
 
   // 저장·삭제 공통 — 서버 확인이 끝난 뒤에 닫는다(실패하면 시트가 남고 배너가 뜬다).
   async function send(past: boolean, call: (confirmPast: boolean) => Promise<boolean>) {
-    setPastAsk(null);
+    setAsk(null);
     setBusy(true);
     const ok = await call(past);
     setBusy(false);
     if (ok) onClose();
   }
-  // 지난 날짜면 시트 아래쪽에서 한 번 더 묻는다(§8 Q4). 확인창(Modal)을 시트(Modal) 위에 띄우지 않는다 — iOS 는 못 띄울 수 있다.
-  function run(confirmLabel: string, past: boolean, call: (confirmPast: boolean) => Promise<boolean>) {
+  // 지난 날짜거나 되살릴 수 없는 삭제면 시트 아래쪽에서 한 번 더 묻는다(§8 Q4). 확인창(Modal)을 시트(Modal) 위에 띄우지 않는다 — iOS 는 못 띄울 수 있다.
+  function run(confirmLabel: string, past: boolean, call: (confirmPast: boolean) => Promise<boolean>, del = false) {
     if (busy) return;
-    if (past) { setPastAsk({ label: confirmLabel, call }); return; }
+    if (past || del) { setAsk({ label: confirmLabel, past, del, call }); return; }
     void send(false, call);
   }
 
@@ -168,7 +171,8 @@ export function ShiftQuickSheet({
     if (!isEdit) return;
     if (!editingSeries || scope === 'day') {
       const day = editing.date ?? date;
-      run('삭제', day < today, (cp) => overrideShiftDay(editing.templateId, day, null, null, cp));
+      // 날짜 지정 근무는 행이 지워져 되살릴 수 없다 → 묻는다. "이 날만 빼기"는 근무표의 '되돌리기'로 되살린다 → 묻지 않는다.
+      run('삭제', day < today, (cp) => overrideShiftDay(editing.templateId, day, null, null, cp), !editingSeries);
     } else {
       // 이 날부터 그만 — 같은 요일의 뒤 구간도 끝낸다. 안 끝내면 뒤 구간 시작일부터 근무가 다시 선다.
       const ops = planFromScope(templates, editing.templateId, date, null);
@@ -195,11 +199,11 @@ export function ShiftQuickSheet({
       </Text>
       <Text style={s.sub}>{repeatText}</Text>
 
-      {/* 지난 날짜 확인 중에는 입력을 잠근다 — 확인한 값과 보내는 값이 달라지지 않게. */}
+      {/* 확인 중에는 입력을 잠근다 — 확인한 값과 보내는 값이 달라지지 않게. */}
       <ScrollView
         keyboardShouldPersistTaps="handled"
-        pointerEvents={pastAsk ? 'none' : 'auto'}
-        style={[s.scroll, pastAsk && { opacity: 0.5 }]}
+        pointerEvents={ask ? 'none' : 'auto'}
+        style={[s.scroll, ask && { opacity: 0.5 }]}
         contentContainerStyle={{ paddingBottom: Space.sm }}
         showsVerticalScrollIndicator={false}
       >
@@ -367,26 +371,34 @@ export function ShiftQuickSheet({
         )}
       </ScrollView>
 
-      {pastAsk && (
-        <View style={s.pastAsk} accessibilityRole="alert">
+      {ask && (
+        <View style={[s.pastAsk, ask.del && s.delAsk]} accessibilityRole="alert">
           <View style={s.noteRow}>
-            <Ionicons name="alert-circle-outline" size={16} color={BrandColors.warn} />
-            <Text style={s.pastAskTitle}>{PAST_CHANGE_TITLE}</Text>
+            <Ionicons
+              name={ask.del ? 'trash-outline' : 'alert-circle-outline'}
+              size={16}
+              color={ask.del ? BrandColors.badText : BrandColors.warn}
+            />
+            <Text style={[s.pastAskTitle, ask.del && s.delAskTitle]}>{ask.del ? '이 날짜 근무를 삭제할까요?' : PAST_CHANGE_TITLE}</Text>
           </View>
-          <Text style={s.pastAskBody}>{PAST_CHANGE_BODY}</Text>
+          <Text style={s.pastAskBody}>
+            {ask.del ? (ask.past ? '지난 근무 기록이 바뀌어요. 되돌릴 수 없어요.' : '되돌릴 수 없어요.') : PAST_CHANGE_BODY}
+          </Text>
         </View>
       )}
-      {pastAsk ? (
+      {ask ? (
         <View style={s.foot}>
-          <Pressable onPress={() => setPastAsk(null)} accessibilityRole="button" style={({ pressed }) => [s.btn, s.btnGhost, pressed && { opacity: 0.7 }]}>
+          <Pressable onPress={() => setAsk(null)} accessibilityRole="button" style={({ pressed }) => [s.btn, s.btnGhost, pressed && { opacity: 0.7 }]}>
             <Text style={s.btnGhostText}>취소</Text>
           </Pressable>
+          {/* 지난 날짜면 사장이 여기서 확인했으므로 p_confirm_past 를 보낸다. 앞날 삭제는 보내지 않는다. */}
           <Pressable
-            onPress={() => void send(true, pastAsk.call)}
+            onPress={() => void send(ask.past, ask.call)}
             accessibilityRole="button"
-            style={({ pressed }) => [s.btn, s.btnSolid, pressed && { opacity: 0.85 }]}
+            accessibilityLabel={ask.del ? '근무 삭제' : undefined}
+            style={({ pressed }) => [s.btn, ask.del ? s.btnDanger : s.btnSolid, pressed && { opacity: 0.85 }]}
           >
-            <Text style={s.btnSolidText}>{pastAsk.label}</Text>
+            <Text style={ask.del ? s.btnDangerText : s.btnSolidText}>{ask.label}</Text>
           </Pressable>
         </View>
       ) : (
@@ -459,6 +471,9 @@ const s = StyleSheet.create({
   pastAsk: { marginHorizontal: Space.lg, marginBottom: Space.sm, padding: Space.md, gap: Space.xs, borderRadius: Radius.md, backgroundColor: BrandColors.warnSoft },
   pastAskTitle: { ...Type.body, fontWeight: '800' },
   pastAskBody: { ...Type.desc, fontWeight: '700' },
+  // 삭제 확인 = 할일 삭제 확인(TaskComposerModal)과 같은 색 역할: 빨강 틴트 면 + 빨강 글자 · 빨강 솔리드 버튼.
+  delAsk: { backgroundColor: BrandColors.badSoft },
+  delAskTitle: { color: BrandColors.badText },
 
   delBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, minHeight: TAP, marginTop: Space.md },
   delText: { ...ButtonTextStyles.small, color: BrandColors.badText },
@@ -470,4 +485,6 @@ const s = StyleSheet.create({
   btnGhostText: { ...ButtonTextStyles.primary, color: TextColor.secondary },
   btnSolid: { backgroundColor: InkColors.ink },
   btnSolidText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  btnDanger: { backgroundColor: BrandColors.badSolid },
+  btnDangerText: { ...ButtonTextStyles.primary, color: InkColors.bg },
 });

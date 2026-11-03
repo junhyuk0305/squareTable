@@ -36,6 +36,7 @@ import { addDaysKst as addDays, linkLastDayLabel } from '@/lib/quiz/schedule';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { genId } from '@/lib/utils/id';
+import { confirmAction } from '@/lib/utils/confirm';
 import { BottomSheet } from '@/components/BottomSheet';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { EmptyState } from '@/components/EmptyState';
@@ -162,8 +163,17 @@ export function QuizDeployPanel({ course, onOpenResult }: { course: TrainingCour
   };
 
   /** 링크만 못 열게 한다 — 이미 푼 사람의 결과는 그대로 남는다. */
-  const remove = async (id: string) => {
+  const remove = async (link: QuizLinkRow) => {
     if (busy) return;
+    // 지운 링크는 다시 열 수 없다(revoked_at · 되살리는 길 없음) — 한 번 묻는다. 패널은 시트 밖 화면이라 공용 확인창을 쓴다.
+    const sure = await confirmAction(
+      '링크 삭제',
+      `${shortDate(link.expiresAt)}까지 열린 링크를 삭제할까요? 이 링크로는 더 못 들어와요. 푼 결과는 남아요.`,
+      '삭제',
+      { destructive: true, icon: 'trash-outline' },
+    );
+    if (!sure) return;
+    const id = link.id;
     setBusy(true);
     const ok = await guardWrite(revokeQuizLink(id), () => {}, '링크를 지우지 못했어요.');
     setBusy(false);
@@ -216,7 +226,7 @@ export function QuizDeployPanel({ course, onOpenResult }: { course: TrainingCour
                       문구·아이콘 정본은 link.ts, 동작 정본은 utils/shareText 다(웹·네이티브 모두 복사). */}
                   <IconAction icon={COPY_LINK_ICON} a11y={COPY_LINK_LABEL} onPress={() => void copy(l.token)} />
                   <RowAction label="기간" a11y="열어 둘 기간 바꾸기" onPress={() => openExtend(l)} />
-                  <RowAction label="지우기" a11y="링크 지우기" tone="danger" disabled={busy} onPress={() => void remove(l.id)} />
+                  <RowAction label="지우기" a11y="링크 지우기" tone="danger" disabled={busy} onPress={() => void remove(l)} />
                 </View>
               </View>
             ))}
