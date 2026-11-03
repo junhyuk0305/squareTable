@@ -119,7 +119,27 @@ async function clickText(page, text, timeout = 15000) {
   const ok = await page.waitFor(`(()=>{const w=${J_(text)};const els=[...document.querySelectorAll('body *')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&(e.innerText||'').trim()===w;});
     if(!els.length)return false;const leaf=els.filter(e=>!els.some(o=>o!==e&&e.contains(o)));leaf[leaf.length-1].setAttribute('data-qa-t',${J_(tag)});return true;})()`, timeout);
   if (!ok) throw new Error(`글자를 못 찾음: ${text}`);
-  await page.click(`[data-qa-t="${tag}"]`);
+  await clickSel(page, `[data-qa-t="${tag}"]`);
+}
+/** 응시 시트의 '퀴즈 시작하기' → 첫 문제. 시트가 올라오는 중이거나 늦게 뜬 코치마크가 클릭을 먹으면 시작 화면에 그대로
+ *  남는다(11-03 · 6회 중 3회) — 시작 버튼이 아직 있으면 덮개를 걷고 한 번 더 누른다. 문제 화면 판정 = 대체 문항 글 또는 정답 보기. */
+async function startQuiz(page, what) {
+  for (let t = 0; t < 2; t++) {
+    await clickText(page, '퀴즈 시작하기', 20000);
+    if (await page.waitFor(`/qa_jr 확인 문제 \\d+/.test(document.body.innerText)||!!document.querySelector('[aria-label^="정답 "]')`, 15000)) return;
+    if (!(await page.waitFor(bodyHas(/퀴즈 시작하기/), 1000))) return; // 시작 버튼이 없으면 클릭 문제가 아니다 — 호출부가 판정한다
+    console.log(`  · ${what} 재시도 = 문제가 안 열림 · 덮개 걷고 다시 누름`);
+    await dismissOverlays(page); await overlaysGone(page);
+  }
+}
+/** 누르기 — 늦게 뜬 첫 사용 안내(코치마크 · z 50)가 덮으면 걷고 한 번 더 누른다(qa-journey-task clickJs 와 같은 요령).
+ *  그래도 막히면 덮은 요소의 글자를 남긴다(11-03 K5 · 7-b: 덮은 것이 "DIV" 로만 찍혀 스플래시로 오판했다). */
+async function clickSel(page, sel) {
+  try { await page.click(sel); return; } catch { await dismissOverlays(page); await overlaysGone(page); }
+  try { await page.click(sel); } catch (e) {
+    const cover = await page.eval(`(()=>{const e=document.querySelector(${J_(sel)});if(!e)return '대상 없음 · '+location.pathname+location.search;const r=e.getBoundingClientRect();const t=document.elementFromPoint(r.x+Math.min(r.width/2,40),r.y+r.height/2);return t?(t.innerText||t.tagName).replace(/\\s+/g,' ').slice(0,80):'none';})()`).catch(() => '?');
+    throw new Error(`${e.message} · 덮은 것 글자: "${cover}"`);
+  }
 }
 
 /** 새 브라우저라 뜨는 첫 사용 안내(코치마크·알림 권한 시트)를 닫는다 — 덮인 채 누르면 클릭이 막힌다. */
@@ -278,8 +298,16 @@ try {
     await settle(S); await dismissOverlays(S);
     const seg = (await textOf(S, '[role="tab"][aria-label="문항"]')) ?? '';
     const segN = Number((seg.match(/(\d+)/) ?? [])[1] ?? 0);
+    return { segN, seg: seg.replace(/\n/g, ' ') };
+  }
+  /** 결과 탭 정보표 "문항 N개" — 결과 탭은 발송 전엔 빈 화면("아직 아무에게도 안 보냈어요" · 10-23 22393cb)이라 발송(6절) 뒤에 잰다. */
+  async function factCount(cid) {
+    await S.goto(`/owner/quiz/${cid}`);
+    await S.waitFor(vis('[role="tab"][aria-label="결과"]'), 120000);
+    await settle(S); await dismissOverlays(S);
+    await S.waitFor(bodyHas(/문항\s+\d+개|아직 아무에게도 안 보냈어요/), 15000);
     const fact = await bodyMatch(S, /문항\s+(\d+)개/);
-    return { segN, factN: fact ? Number(fact[1]) : null, seg: seg.replace(/\n/g, ' ') };
+    return { factN: fact ? Number(fact[1]) : null, empty: /아직 아무에게도 안 보냈어요/.test(await S.text()) };
   }
   /** 목록으로 돌아가(뒤로) 새로고침 없이 '응시 중'에 그 퀴즈가 보이는가 + 줄 문구. */
   // RN-web 이 탭에 aria-selected 를 안 그린다 — '응시 중' 칸인지는 탭 숫자(+1)와 '응시 중인 퀴즈' 머리글로 본다.
@@ -304,7 +332,6 @@ try {
   note('A 코스 id', A);
   const dA = await detailCounts();
   check('K2-1 A 상세 세그먼트 "문항" = 4 (단위: 문항)', dA.segN === 4, `탭="${dA.seg}"`);
-  check('K2-2 A 상세 결과표 "문항 N개" = 4 (단위: 문항)', dA.factN === 4, `N=${dA.factN}`);
   await net(S, 'S A 상세');
   const kA = await backToList(NAME_A, runBeforeOf[NAME_A]);
   check('K3-1 A 만든 뒤 목록 "응시 중"에 새로고침 없이 보인다(탭 숫자 +1)', kA.seen && kA.running, `${kA.secs}s · 응시 중 ${kA.runBefore}→${kA.runAfter}`);
@@ -315,7 +342,6 @@ try {
   note('B 코스 id', B);
   const dB = await detailCounts();
   check('K2-3 B 상세 세그먼트 "문항" = 4 (단위: 문항)', dB.segN === 4, `탭="${dB.seg}"`);
-  check('K2-4 B 상세 결과표 "문항 N개" = 4 (단위: 문항)', dB.factN === 4, `N=${dB.factN}`);
   await net(S, 'S B 상세');
   const kB = await backToList(NAME_B, runBeforeOf[NAME_B]);
   check('K3-2 B 만든 뒤 목록 "응시 중"에 새로고침 없이 보인다(탭 숫자 +1)', kB.seen && kB.running, `${kB.secs}s · 응시 중 ${kB.runBefore}→${kB.runAfter}`);
@@ -406,9 +432,8 @@ try {
       if (up) {
         await dismissOverlays(J);
         await overlaysGone(J);
-        await clickText(J, '퀴즈 시작하기', 20000);
-        await J.waitFor(bodyHas(/qa_jr 확인 문제 \d+/), 15000);
-        no = (await bodyMatch(J, /qa_jr 확인 문제 (\d+)/))?.[1] ?? null;
+        await startQuiz(J, `K4-b ${nm}`);
+        no =(await bodyMatch(J, /qa_jr 확인 문제 (\d+)/))?.[1] ?? null;
       }
       const got = no && nosB.has(no) && !nosA.has(no) ? 'B' : no && nosA.has(no) && !nosB.has(no) ? 'A' : null;
       opened.push({ nm, got, text: `${nm} 발송(${aid})→${got ?? '못 가름'}(문제 ${no ?? '없음'})` });
@@ -422,10 +447,11 @@ try {
     await dismissOverlays(J);
   }
 
-  section('8. 사장 결과 — 기기 0건 직원 줄(K6)');
-  await S.goto(`/owner/quiz/${A}`);
-  await S.waitFor(vis('[role="tab"][aria-label="결과"]'), 120000);
-  await settle(S); await dismissOverlays(S);
+  section('8. 사장 결과 — 결과표 "문항 N개"(K2-2·K2-4 · 발송 뒤) · 기기 0건 직원 줄(K6)');
+  const fB = await factCount(B);
+  check('K2-4 B 결과표 "문항 N개" = 4 (단위: 문항 · 발송 뒤)', fB.factN === 4, `N=${fB.factN} · 빈 화면=${fB.empty}`);
+  const fA = await factCount(A);
+  check('K2-2 A 결과표 "문항 N개" = 4 (단위: 문항 · 발송 뒤)', fA.factN === 4, `N=${fA.factN} · 빈 화면=${fA.empty}`);
   const jRowSel = `[aria-label="${attr(J_NAME)}"],[aria-label="${attr(J_NAME)} 응시 결과 보기"]`;
   const k6 = ((await textOf(S, jRowSel)) ?? '').replace(/\n/g, ' / ');
   note('K6 결과 탭 직원 줄 원문', `"${k6}" (기기 토큰 ${tokN})`);
@@ -439,11 +465,21 @@ try {
   const hasRemind = await S.waitFor(vis(remindSel), 60000);
   check('K5-0 다시 알리기 버튼이 보인다', hasRemind);
   if (hasRemind) {
+    // 진입 스플래시(SplashAnimation)와 늦게 뜨는 첫 사용 안내(CoachmarkTour)는 둘 다 absolute · z 50 이다. 스플래시 문구가
+    // 사라지고 안내가 걷힌 뒤 누른다(clickSel 이 늦게 뜬 안내를 한 번 더 걷는다). 덮인 시간은 원인 추적용으로 남긴다.
+    const t0 = Date.now();
+    const splashGone = await S.waitFor(`!/우리 매장 운영의 기준/.test(document.body.innerText)`, 30000);
+    note('K5 진입 스플래시', `${splashGone ? '걷힘' : '30초 넘게 남음'} ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+    await dismissOverlays(S); await overlaysGone(S);
     const cnt = async () => (await admin.from('quiz_assignments').select('id,scheduled_on,sent_at').eq('course_id', A)).data ?? [];
     const before = await cnt();
     const toasts = [];
+    let goneAfter1 = false;
     for (let i = 1; i <= 2; i++) {
-      await S.click(remindSel);
+      // 첫 알림이 새 발송 1건(아직 안 나감)으로 줄에 서면 그 사람은 '안 푼 사람'이 아니라 버튼이 사라진다(quiz/[id].tsx notDone).
+      // 11-03 K5 RED 의 "덮은 DIV" 는 이것으로 보인다 — 대상 상자가 없으면 cdp click 이 (0,0) 의 요소를 보고한다. 사라짐은 두 번째 발송 차단으로 센다.
+      if (i === 2 && !(await S.waitFor(vis(remindSel), 3000))) { goneAfter1 = true; toasts.push('(버튼 사라짐 · 첫 알림이 줄에 섬)'); break; }
+      try { await clickSel(S, remindSel); } catch (e) { throw new Error(`${i}번째 누름: ${e.message}`); }
       await sleep(1800);
       const m = await bodyMatch(S, /[^\n]*(못 ?했어요|이미 보내는 중이에요[^\n]*|다시 보낼게요)[^\n]*/);
       toasts.push(m?.[0] ?? '(문구 없음)');
@@ -453,6 +489,9 @@ try {
     note('K5 토스트 1·2', toasts.map((t) => `"${t}"`).join(' · '));
     note('K5 quiz_assignments(A) 행 수', `${before.length}→${after.length} · 새 행 날짜 ${after.filter((a) => !before.some((b) => b.id === a.id)).map((a) => a.scheduled_on).join(',') || '없음'}`);
     check('K5 다시 알리기 2회 · 오류 문구("못 했어요") 0건', toasts.every((t) => !/못 ?했어요/.test(t)), toasts.join(' | '));
+    // 두 번째는 버튼이 사라졌거나 "이미 보내는 중"이어야 한다 — 어느 쪽이든 새 발송은 1건이다(멱등).
+    const added = after.filter((a) => !before.some((b) => b.id === a.id)).length;
+    check('K5-2 두 번 눌러도 새 발송 1건(두 번째 = 버튼 사라짐 또는 "이미 보내는 중")', added === 1 && (goneAfter1 || /이미 보내는 중/.test(toasts[1] ?? '')), `새 행 ${added} · 두 번째 "${toasts[1]}"`);
   }
   await net(S, 'S A 설정');
 
@@ -480,7 +519,7 @@ try {
   /** 열린 시트 한 개를 끝까지 푼다(정답 고르기). 결과 화면 문구 + '제출됐어요' 표시·DB 제출 행 수를 돌려준다. */
   async function answerOpenSheet() {
     const tStart = Date.now();
-    await clickText(J, '퀴즈 시작하기', 20000);
+    await startQuiz(J, '응시');
     for (let q = 0; q < 5; q++) {
       if (!(await J.waitFor(vis('[aria-label^="정답 "]'), 15000))) {
         const fm = (await J.text()).slice(0, 200).replace(/\n/g, ' / ');
