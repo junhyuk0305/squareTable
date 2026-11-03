@@ -8,13 +8,17 @@
 //   K5 만료·회수된 토큰은 **안 열리는가**(닫힘이 실제로 닫히는가)
 //   K6 배포 주소 /q/<token> 가 앱을 돌려주는가(SPA 폴백) — QA_PROD_ORIGIN 있을 때만
 //
-// 계정: 고정 QA 계정(qa.owner@example.com). 없으면 scripts/qa-local-accounts.mjs 먼저.
-// 자가정리: 이 스크립트가 만든 코스·문항·링크는 끝에 지운다.
+// 계정: 라이브(npm run qa:quiz-link = --allow-remote) = 고정 계정 owner-solo@pilot(qa-fixed-accounts FIXED.other ·
+//   store_001 과 다른 매장이라 사용자 시범 매장을 건드리지 않는다). --local = qa.owner@example.com(qa-local-accounts.mjs 먼저).
+//   QA_EMAIL·QA_PASSWORD 로 바꿀 수 있다. (11-03: 라이브에 없는 로컬 계정으로 라이브를 쳐 로그인에서 멈췄다.)
+// 자가정리: 이 스크립트가 만든 노하우·코스·문항·링크는 끝에 지운다. 노하우는 사장 권한으로 지우면 보관(0248 soft delete)으로
+//   남으므로 service_role(.env.seed · 로컬은 supabase status)로 지운다. 키가 없으면 시드 전에 멈춘다.
 import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { IS_LOCAL, localEnv, assertLocalUrl } from './qa-local-target.mjs';
+import { FIXED, PW as FIXED_PW } from './lib/qa-fixed-accounts.mjs';
 
 const here = (r) => fileURLToPath(new URL(r, import.meta.url));
 function pe(f) { const o = {}; try { for (const l of readFileSync(f, 'utf8').split(/\r?\n/)) { const m = l.match(/^([A-Z0-9_]+)=(.*)$/); if (m) o[m[1]] = m[2].trim(); } } catch {} return o; }
@@ -23,9 +27,13 @@ if (IS_LOCAL) Object.assign(env, localEnv()); // 로컬 검사에서 배포 주�
 const URL_ = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
 if (IS_LOCAL) assertLocalUrl(URL_);
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-const EMAIL = env.QA_EMAIL ?? 'qa.owner@example.com';
-const PW = env.QA_PASSWORD ?? 'QaTest1234!';
+const EMAIL = env.QA_EMAIL ?? (IS_LOCAL ? 'qa.owner@example.com' : FIXED.other);
+const PW = env.QA_PASSWORD ?? (IS_LOCAL ? 'QaTest1234!' : FIXED_PW);
+const SRV = env.SUPABASE_SERVICE_ROLE_KEY;
+console.log(`TARGET ${new URL(URL_).host} · 계정 ${EMAIL}`);
 if (!URL_ || !ANON) { console.error('FAIL: .env 의 SUPABASE URL/ANON 필요'); process.exit(2); }
+// 키 없이 시드하면 노하우가 보관으로 남는다 — 만들기 전에 멈춘다.
+if (!SRV) { console.error('FAIL: service_role 키 필요(.env.seed · 로컬은 supabase status) — 정리를 못 해 시드하지 않는다'); process.exit(2); }
 
 let pass = 0, fail = 0;
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  ✓', n)) : (fail++, console.log('  ✗', n, extra)); };
@@ -43,6 +51,7 @@ async function main() {
   const { data: prof } = await owner.from('profiles').select('unit_id').eq('id', uid).maybeSingle();
   const UNIT = prof?.unit_id;
   if (!UNIT) { console.error('활성 매장이 없다'); process.exit(2); }
+  if (UNIT === 'store_001') { console.error('활성 매장이 사용자 시범 매장(store_001)이다 — 시드하지 않는다'); process.exit(2); }
 
   const courseId = id('tc'), entryId = id('pb'), itemId = id('qz'), linkId = id('ql');
   const tk = token(), tkDead = token();
@@ -62,7 +71,8 @@ async function main() {
       needs_review: false, correction_points: [], section: null, order_index: 0,
     });
     if (eErr) throw new Error('노하우 시드: ' + eErr.message);
-    cleanup.push(() => owner.from('playbook_entries').delete().eq('id', entryId));
+    // 사장 권한 delete 는 보관으로 바뀐다(0248 tg_playbook_entry_soft_delete) — service_role 로 지운다.
+    cleanup.push(() => createClient(URL_, SRV, { auth: { persistSession: false } }).from('playbook_entries').delete().eq('id', entryId));
 
     const { error: cErr } = await owner.from('training_courses').insert({
       id: courseId, unit_id: UNIT, key: `q_${courseId}`, name: '링크 검증 퀴즈',
@@ -148,6 +158,16 @@ async function main() {
     }
   } finally {
     for (const c of cleanup.reverse()) { try { await c(); } catch {} }
+  }
+  // 자가정리 확인 — 지운 줄 알았는데 남은 것은 실패다(보관으로 남은 노하우 포함).
+  {
+    const a = createClient(URL_, SRV, { auth: { persistSession: false } });
+    const left = [];
+    for (const [t, col, v] of [['playbook_entries', 'id', entryId], ['training_courses', 'id', courseId], ['course_entries', 'course_id', courseId], ['quiz_items', 'id', itemId], ['quiz_links', 'course_id', courseId]]) {
+      const { count, error } = await a.from(t).select('*', { count: 'exact', head: true }).eq(col, v);
+      if (error || count) left.push(`${t} ${error ? '확인 실패' : count}`);
+    }
+    check('정리 — 만든 행이 0으로 돌아감', left.length === 0, left.join(' · '));
   }
 
   console.log(`\n${fail === 0 ? '✅ PASS' : '❌ FAIL'}  통과 ${pass} · 실패 ${fail}`);

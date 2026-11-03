@@ -538,16 +538,28 @@ try {
     data: { id: NOTICE_ID, date: TODAY, kind: 'notice', text: TXT_NOTICE, authorId: ids.S, authorName: ownerName, authorRole: 'owner', createdAt: nAt, reactions: {}, important: false, pinned: false, roomId: 'room_main_store_001' },
   });
   info(`K4-p 셋업: 공지 1건 DB 삽입(id ${NOTICE_ID})`);
+  // 상단 줄 = 앱의 notices[0](WorkBoard) = sortNotices(src/lib/utils/notice.ts · 고정 먼저 → 최신순)의 맨 앞.
+  //   매장 기본방에 사장이 고정한 공지가 있으면 새 공지는 맨 위가 아니다(11-03 RED 원인: store_001 의 데모 고정 공지).
+  //   고정 공지를 풀지 않고 기대 줄을 DB 원본에서 같은 규칙으로 고른다. 기본방 = data.roomId 없음 또는 기본방 id(WorkBoard inRoom).
+  const roomNotices = (await sel(`work_feed?unit_id=eq.${UNIT}&data->>kind=eq.notice&select=data`))
+    .map((r) => r.data).filter((n) => !n.roomId || n.roomId === 'room_main_store_001');
+  const tsMs = (iso) => { const t = new Date(iso).getTime(); return Number.isNaN(t) ? 0 : t; };
+  const topN = [...roomNotices].sort((a, b) => (!!b.pinned !== !!a.pinned ? (b.pinned ? 1 : -1) : tsMs(b.createdAt) - tsMs(a.createdAt)))[0];
+  const topIsMine = topN?.id === NOTICE_ID;
+  const topUnread = !!topN && topN.authorId !== ids.J && !(topN.read_by ?? []).includes(ids.J); // isNoticeUnreadFor 와 같은 규칙
+  const LINE_LABEL = `${topUnread ? '안 읽은 ' : ''}공지: ${topN?.text}`;
+  info(`K4-p 기대 상단 줄 = ${topIsMine ? '새 공지' : `고정 공지 ${topN?.id}(새 공지는 패널 2번째 이하)`} · 기본방 공지 ${roomNotices.length}건`);
   await go(J.page, 'J', '/junior/work', '채팅(공지 줄)');
-  const LINE_SEL = `[aria-label$="공지: ${TXT_NOTICE}"]`;
-  const lineShown = await J.page.waitFor(`(()=>{const e=document.querySelector(${JSON.stringify(LINE_SEL)});if(!e)return false;const r=e.getBoundingClientRect();return r.width>0&&r.top>=0&&r.bottom<=innerHeight;})()`, 20000);
-  const lineLabel = await J.page.eval(`(document.querySelector(${JSON.stringify(LINE_SEL)})||{}).getAttribute?.('aria-label')`);
-  check('K4-p-a 직원 채팅 상단 고정 줄에 그 공지 본문이 보인다(안 읽음 점 포함) [문자열]', lineShown && String(lineLabel ?? '').startsWith('안 읽은 공지: '), `줄 라벨 "${lineLabel}"`);
+  const LINE_JS = `[...document.querySelectorAll('[aria-label]')].find(e=>e.getAttribute('aria-label')===${JSON.stringify(LINE_LABEL)})`;
+  const lineShown = await J.page.waitFor(`(()=>{const e=${LINE_JS};if(!e)return false;const r=e.getBoundingClientRect();return r.width>0&&r.top>=0&&r.bottom<=innerHeight;})()`, 20000);
+  const lineLabel = await J.page.eval(`(()=>{const e=[...document.querySelectorAll('[aria-label]')].find(e=>/^(안 읽은 )?공지: /.test(e.getAttribute('aria-label')));return e?e.getAttribute('aria-label'):null;})()`);
+  check('K4-p-a 직원 채팅 상단 고정 줄 = sortNotices 맨 앞 공지 본문(새 공지면 안 읽음 점 포함) [문자열]',
+    lineShown && (!topIsMine || LINE_LABEL.startsWith('안 읽은 공지: ')), `기대 "${LINE_LABEL.slice(0, 60)}" · 화면 "${String(lineLabel ?? '').slice(0, 60)}"`);
   let kp = { path: '?', panel: false, visible: false, lineGone: false };
   if (lineShown) {
-    await J.page.click(LINE_SEL);
+    await clickJs(J.page, LINE_JS, '공지 상단 줄');
     await sleep(2500);
-    kp = await J.page.eval(`(()=>{const l=${leafJs(TXT_NOTICE)};let v=false;if(l){const r=l.getBoundingClientRect();v=r.top>=0&&r.bottom<=innerHeight;}const lines=document.body.innerText.split('\\n').map(s=>s.trim());return {path:location.pathname,panel:lines.includes('공지'),visible:v,lineGone:!document.querySelector(${JSON.stringify(LINE_SEL)})};})()`);
+    kp = await J.page.eval(`(()=>{const l=${leafJs(TXT_NOTICE)};let v=false;if(l){const r=l.getBoundingClientRect();v=r.top>=0&&r.bottom<=innerHeight;}const lines=document.body.innerText.split('\\n').map(s=>s.trim());return {path:location.pathname,panel:lines.includes('공지'),visible:v,lineGone:!${LINE_JS}};})()`);
   }
   check('K4-p-b 고정 줄 탭 → 공지 패널이 열리고(제목 "공지" · 고정 줄 사라짐) 그 공지 본문이 보이는 영역에 있다 [문자열]',
     kp.path === '/junior/work' && kp.panel && kp.visible && kp.lineGone, `경로 ${kp.path} · 패널=${kp.panel} · 본문 보임=${kp.visible} · 줄 사라짐=${kp.lineGone}`);
