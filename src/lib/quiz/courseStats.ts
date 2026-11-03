@@ -12,20 +12,22 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { fetchQuizCourseStats, type QuizCourseStat } from '@/lib/db';
+import { currentSend } from '@/lib/quiz/progress';
 import type { QuizAssignment } from '@/lib/quiz/types';
 
 export type { QuizCourseStat };
 
-/** 수신자별 최신 예약·발송. 과거 완료가 새 발송의 상태를 덮지 않는다. */
+/**
+ * 수신자별 현재 발송. 판정은 progress.currentSend 하나다(직원 화면과 같다).
+ * 새로 나간 발송은 과거 완료에 가려지지 않고, 안 나간 대기 행은 이미 나간 발송을 가리지 않는다.
+ */
 export function latestQuizAssignments(rows: readonly QuizAssignment[]): QuizAssignment[] {
-  const latest = new Map<string, QuizAssignment>();
+  const byKey = new Map<string, QuizAssignment[]>();
   for (const row of rows) {
     const key = `${row.courseId}:${row.userId}`;
-    const prev = latest.get(key);
-    if (!prev || row.scheduledOn > prev.scheduledOn ||
-      (row.scheduledOn === prev.scheduledOn && (row.sentAt ?? '') > (prev.sentAt ?? ''))) latest.set(key, row);
+    byKey.set(key, [...(byKey.get(key) ?? []), row]);
   }
-  return [...latest.values()];
+  return [...byKey.values()].flatMap((list) => currentSend(list) ?? []);
 }
 
 /** 한 코스를 여러 번 나눠 푼 답안 중 문항별 마지막 답. null은 아직 발송 전이다. */

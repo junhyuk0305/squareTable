@@ -38,6 +38,24 @@ export function assignmentState(a: Assignment, row: Progress | undefined): QuizA
 }
 
 /**
+ * 한 사람·한 퀴즈의 "현재 발송" = 이미 나간 발송 중 가장 늦게 나간 것. 나간 것이 없으면 가장 늦은 예약.
+ * 직원 화면(quizTodo)과 사장 결과·목록(courseStats.latestQuizAssignments)이 이 판정 하나를 쓴다.
+ * 안 나간 행(다시 알리기·재확인 대기)은 이미 받은 발송을 가리지 않는다. 직원은 받은 발송만 풀고 끝낼 수 있다
+ * (mark_quiz_completed 는 sent_at 있는 행만 닫는다 · 0332).
+ * ★2026-11-03: 사장 쪽이 가장 늦은 예약(안 나간 다시 알리기 행)을 골라, 다 푼 직원이 '발송 전'으로 남았다.
+ */
+export function currentSend<A extends { sentAt: string | null; scheduledOn?: string }>(rows: readonly A[]): A | undefined {
+  let best: A | undefined;
+  for (const r of rows) {
+    if (!best) { best = r; continue; }
+    if (r.sentAt || best.sentAt) {
+      if ((r.sentAt ?? '') > (best.sentAt ?? '')) best = r;
+    } else if ((r.scheduledOn ?? '') > (best.scheduledOn ?? '')) best = r;
+  }
+  return best;
+}
+
+/**
  * 나에게 남은 퀴즈 목록. 홈 개수 = 벨 수 = 이 함수의 길이(cardRule 없이). 카드는 cardRule 을 켠 부분집합이다.
  *
  * - 퀴즈 하나 = 하나. 같은 퀴즈를 다시 보냈으면(다시 알리기·재확인) 최신 발송 하나만 본다.
@@ -59,10 +77,11 @@ export function quizTodo<A extends Assignment, P extends Progress>(
     : [...new Set([...mine].sort((a, b) => (b.sentAt ?? '').localeCompare(a.sentAt ?? '')).map((a) => a.courseId))];
   const picked: (QuizTodo<A, P> & { courseId: string; preferred: boolean })[] = [];
   for (const courseId of courseIds) {
-    const sends = mine.filter((a) => a.courseId === courseId).sort((a, b) => (b.sentAt ?? '').localeCompare(a.sentAt ?? ''));
-    if (sends.length === 0) continue;
+    const sends = mine.filter((a) => a.courseId === courseId);
+    const latest = currentSend(sends);
+    if (!latest) continue;
     const preferred = opts.preferredId ? sends.find((a) => a.id === opts.preferredId) : undefined;
-    const assignment = preferred ?? sends[0];
+    const assignment = preferred ?? latest;
     const row = progress?.find((p) => p.assignmentId === assignment.id);
     const state = progress ? assignmentState(assignment, row) : assignment.completedAt ? 'done' : 'todo';
     if (state !== 'todo' && state !== 'answered') continue;
