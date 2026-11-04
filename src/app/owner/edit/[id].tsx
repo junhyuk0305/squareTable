@@ -254,7 +254,7 @@ function ConversationalEdit({ entry, sugId }: { entry: PlaybookEntry; sugId?: st
                 </Pressable>
               );
             })}
-            {/* 미분류(기타)로 되돌리기 */}
+            {/* 미분류(기타) 칩 — 카테고리를 비우는 선택지다. */}
             <Pressable
               onPress={() => pickCategory(null)}
               style={({ pressed }) => [

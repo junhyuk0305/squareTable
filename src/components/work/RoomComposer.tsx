@@ -24,30 +24,25 @@ export type RoomLookDraft = { name: string; imageUrl?: string; color?: string };
  *
  * ★두 모드의 차이는 **저장 범위**다(카톡 규칙 · 판정 ⑥·⑦).
  *   · 만들기: 이름·사진·색이 work_rooms 에 들어가 **전원에게** 보인다. 초대할 사람도 여기서 고른다.
- *   · 바꾸기: work_room_prefs 에 들어가 **나에게만** 보인다. 되돌리기로 전역 값에 복귀한다.
+ *   · 바꾸기: work_room_prefs 에 들어가 **나에게만** 보인다. 되돌리기는 두지 않는다(2026-11-03 사용자 결정).
  *   그래서 '바꾸기'에는 초대 목록이 없다 — 인원은 서랍에서 관리한다.
  */
 export function RoomComposer({
   mode,
   initial,
   candidates,
-  hasPersonalLook,
   onClose,
   onCreate,
   onSaveLook,
-  onResetLook,
 }: {
   mode: 'create' | 'look';
   initial?: RoomLookDraft;
   /** 초대 후보(만들기 모드에서만 쓴다). */
   candidates?: Member[];
-  /** 개인 덮어쓰기가 이미 있는지 — 있으면 '되돌리기'를 띄운다. */
-  hasPersonalLook?: boolean;
   onClose: () => void;
   /** 서버 확인까지 기다린 결과를 돌려준다(낙관적 토스트 금지). */
   onCreate?: (draft: RoomLookDraft, memberIds: string[]) => Promise<boolean>;
   onSaveLook?: (draft: RoomLookDraft) => void;
-  onResetLook?: () => void;
 }) {
   const isCreate = mode === 'create';
   const [name, setName] = useState(initial?.name ?? '');
@@ -201,18 +196,6 @@ export function RoomComposer({
             <Text style={s.hint}>사장님도 고른 방에만 들어와요.</Text>
           </Field>
         )}
-
-        {!isCreate && hasPersonalLook && (
-          <Pressable
-            onPress={() => { onResetLook?.(); onClose(); }}
-            style={({ pressed }) => [s.reset, pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-            accessibilityLabel="되돌리기"
-          >
-            <Ionicons name="refresh" size={15} color={InkColors.ink2} />
-            <Text style={s.resetText}>되돌리기 — 처음 정한 이름·사진으로</Text>
-          </Pressable>
-        )}
       </ScrollView>
 
       <Pressable onPress={save} disabled={!canSave} style={({ pressed }) => [s.cta, !canSave && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
@@ -264,9 +247,6 @@ const s = StyleSheet.create({
   memberRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.md, minHeight: 48 },
   memberName: { ...Type.body, flex: 1, fontWeight: '700' },
   memberRole: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
-
-  reset: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.md, minHeight: 48 },
-  resetText: { fontWeight: '700', fontSize: Type.body.fontSize, color: TextColor.secondary },
 
   cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: Space.lg, alignItems: 'center', justifyContent: 'center', marginTop: Space.sm, marginHorizontal: Space.gutter, minHeight: 56 },
   ctaText: { fontSize: 15, fontWeight: '800', color: InkColors.bubbleText },

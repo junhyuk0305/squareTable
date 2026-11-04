@@ -2198,7 +2198,7 @@ export async function deleteTemplate(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return writeStrict('deleteTemplate', supabase.from('work_templates').delete().eq('id', id).select('id'));
 }
-/** 할일 목록에서 숨기기·되돌리기(0110) — 업무 행·노하우 링크·코스 소속은 그대로 남는다.
+/** 할일 목록에서 숨기기(0110) — 업무 행·노하우 링크·코스 소속은 그대로 남는다.
  *  updateTemplate 은 hidden 을 건드리지 않으므로 할일 수정이 이 표시를 지우지 않는다. */
 export async function setTemplateHidden(ids: string[], hidden: boolean): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
@@ -4001,18 +4001,6 @@ export async function fetchShiftExceptions(): Promise<ReadResult<ShiftException[
     return { data: [], error: true };
   }
   return { data: (data ?? []).map((r: any) => ({ template_id: r.template_id, date: r.date })), error: false };
-}
-
-/**
- * 그날 빼둔 반복 근무를 **되돌린다**(0178). 부분 교대로 쪼갠 근무표를 다시 합치는 유일한 길이다 —
- * 이게 없으면 한 번 쪼개진 날은 영영 그대로 남는다. 남은 조각은 사장이 근무 시트에서 지운다.
- */
-export async function deleteShiftException(templateId: string, date: string): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  return writeStrict(
-    'deleteShiftException',
-    supabase.from('shift_exceptions').delete().eq('template_id', templateId).eq('date', date).select('template_id'),
-  );
 }
 
 // ── 직원 근무 시간 수정 요청(J2 · 0243) — 그날 하루만 · 사장 승인 뒤 반영 ──────────────────────

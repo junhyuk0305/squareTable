@@ -752,8 +752,8 @@ type State = {
   removeCourseEntry: (courseId: string, entryId: string) => Promise<void>;
   /** 같은 코스 안에서 한 칸 위/아래로 — 이웃과 position 스왑. */
   moveCourseEntry: (courseId: string, entryId: string, dir: 'up' | 'down') => Promise<void>;
-  /** 껍데기 업무 정리(0110) — 할일에서 숨기기·되돌리기. 업무·노하우·코스 소속은 그대로. */
-  hideTasks: (templateIds: string[], hidden: boolean) => Promise<boolean>;
+  /** 껍데기 업무 정리(0110) — 할일에서 숨기기. 업무·노하우·코스 소속은 그대로. */
+  hideTasks: (templateIds: string[]) => Promise<boolean>;
   /** 퀴즈 요청 보내기(0102→0111) — 대상 직원들에게 즉시/매주 요청 + 푸시. 성공 여부 반환. */
   requestTraining: (entryId: string, entryTitle: string, staffIds: string[], recurrence: Recurrence | null) => Promise<boolean>;
   /** 퀴즈 요청 취소(관리 권한). */
@@ -1149,17 +1149,17 @@ export const useWorkStore = create<State>((set, get) => ({
     );
   },
 
-  // 껍데기 업무 정리(0110) — 할일에서 숨기기·되돌리기. 되돌릴 수 있어야 하므로 삭제가 아니다.
-  hideTasks: async (templateIds, hidden) => {
+  // 껍데기 업무 정리(0110) — 할일에서 숨기기. 지우면 링크·기록이 cascade 로 사라지므로 삭제가 아니다.
+  hideTasks: async (templateIds) => {
     if (templateIds.length === 0) return true;
-    // 되돌릴 값은 행별로 들고 간다 — templates 는 화면 전체가 공유하는 큰 배열이라
+    // 실패 시 돌려놓을 값은 행별로 들고 간다 — templates 는 화면 전체가 공유하는 큰 배열이라
     // 스냅샷으로 통째 덮으면 그 사이의 다른 할일 추가·수정이 조용히 되돌아간다.
     const before = new Map(get().templates.filter((t) => templateIds.includes(t.id)).map((t) => [t.id, !!t.hidden]));
-    set((s) => ({ templates: s.templates.map((t) => (before.has(t.id) ? { ...t, hidden } : t)) }));
+    set((s) => ({ templates: s.templates.map((t) => (before.has(t.id) ? { ...t, hidden: true } : t)) }));
     return guardWrite(
-      setTemplateHidden(templateIds, hidden),
+      setTemplateHidden(templateIds, true),
       () => set((s) => ({ templates: s.templates.map((t) => (before.has(t.id) ? { ...t, hidden: before.get(t.id) } : t)) })),
-      hidden ? '할일에서 숨기지 못했어요.' : '숨김 해제에 실패했어요.',
+      '할일에서 숨기지 못했어요.',
     );
   },
 

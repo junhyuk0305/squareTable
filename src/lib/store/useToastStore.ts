@@ -5,8 +5,8 @@ import { create } from 'zustand';
 export type ToastTone = 'good' | 'warn' | 'info';
 
 /**
- * 되돌리기 버튼 — 되돌릴 수 있는 동작에 확인 모달을 새로 만들지 않기 위한 자리다
- * (워딩 §4: "실행 + 실행취소 토스트"). 버튼이 있으면 읽고 누를 시간이 필요해 더 오래 띄운다.
+ * 이동 버튼('이용권 보기' 같은 다음 화면 안내) — 실행취소에는 쓰지 않는다(2026-11-03 사용자 결정: 되돌리기 없음 ·
+ * 실행 전에 confirmAction 으로 묻는다). 버튼이 있으면 읽고 누를 시간이 필요해 더 오래 띄운다.
  */
 export type ToastAction = { label: string; onPress: () => void };
 
@@ -14,7 +14,7 @@ type ToastState = {
   message: string | null;
   tone: ToastTone;
   action: ToastAction | null;
-  /** 메시지를 띄우고 일정 시간 뒤 자동으로 지운다(기본 2.4초, 되돌리기 버튼이 있으면 6초). */
+  /** 메시지를 띄우고 일정 시간 뒤 자동으로 지운다(기본 2.4초, 이동 버튼이 있으면 6초). */
   show: (message: string, tone?: ToastTone, action?: ToastAction) => void;
   clear: () => void;
 };

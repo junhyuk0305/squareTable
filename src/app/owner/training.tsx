@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { Screen, SectionStack, Section } from '@/components/Screen';
 import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
-import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useQuizBoard, type QuizListRow } from '@/lib/quiz/useQuizBoard';
@@ -167,18 +167,17 @@ export default function OwnerTrainingScreen() {
   useGuideOnce('owner_quiz_v1', ready);
 
   /**
-   * 보관을 되돌린다 — active 를 다시 켜는 것이 전부다(퀴즈 내용은 그대로 남아 있었다).
-   * `remake` 면 되돌린 뒤 곧장 만들기 4단계(문항 검토)로 — 근거 노하우가 바뀐 보관 퀴즈(§10-3)의 길.
+   * 보관한 퀴즈를 다시 보낸다 — active 를 다시 켜는 것이 전부다(퀴즈 내용은 그대로 남아 있었다).
+   * `remake` 면 켠 뒤 곧장 만들기 4단계(문항 검토)로 — 근거 노하우가 바뀐 보관 퀴즈(§10-3)의 길.
    */
   const unarchive = useCallback(
     async (course: QuizListRow['course'], remake = false) => {
-      // 눌린 동안만 막는다 — "이미 busy 면 return" 은 두지 않는다(토스트 쪽 닫힘값에 걸린다).
-      // 같은 행을 두 번 눌러도 active=true 를 두 번 쓰는 것뿐이라 결과가 같다.
+      // 눌린 동안만 막는다. 같은 행을 두 번 눌러도 active=true 를 두 번 쓰는 것뿐이라 결과가 같다.
       setBusy(true);
       const ok = await guardWrite(
         upsertTrainingCourse({ ...course, active: true }),
         () => {},
-        '되돌리지 못했어요.',
+        '다시 보내지 못했어요.',
       );
       setBusy(false);
       if (ok) {
@@ -193,26 +192,6 @@ export default function OwnerTrainingScreen() {
     },
     [reloadCourses, router],
   );
-
-  /**
-   * 보관 직후 실행취소 — 상세 화면이 `?undo=<코스id>` 를 달고 여기로 보낸다.
-   * ★토스트를 상세에서 띄우지 않는 이유: 그 화면은 곧 사라져서, 되돌려도 **홈이 다시 안 읽어**
-   *   퀴즈가 화면에 안 돌아온다. 되돌렸다고 말해 놓고 안 돌아오는 것이 제일 나쁘다.
-   * ★한 번만 띄운다 — 파라미터를 지워 뒤로가기·재렌더에 다시 뜨지 않게 한다(ref 라 렌더를 부르지 않는다).
-   */
-  const { undo } = useLocalSearchParams<{ undo?: string }>();
-  const undoShown = useRef(false);
-  useEffect(() => {
-    if (!undo || undoShown.current || !boardLoaded) return;
-    const c = archived.find((x) => x.id === undo);
-    undoShown.current = true;
-    router.setParams({ undo: undefined } as never);
-    if (!c) return;
-    showToast('보관했어요 · 직원에게 안 나가요', 'good', {
-      label: '실행취소',
-      onPress: () => { void unarchive(c); },
-    });
-  }, [undo, boardLoaded, archived, router, unarchive]);
 
   /**
    * 만들던 퀴즈 지우기(2026-09-13 사장 요청) — **초안만** 지운다.

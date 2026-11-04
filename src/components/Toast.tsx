@@ -50,7 +50,7 @@ export function Toast() {
         <Text style={styles.text} numberOfLines={2}>
           {message}
         </Text>
-        {/* 되돌리기 — 누르면 되돌린 뒤 토스트를 닫는다. 토스트 본체(닫기)와 겹치지 않게 안쪽에서 멈춘다. */}
+        {/* 이동 버튼 — 누르면 토스트를 닫고 실행한다. 토스트 본체(닫기)와 겹치지 않게 안쪽에서 멈춘다. */}
         {action ? (
           <Pressable
             onPress={() => { clear(); action.onPress(); }}

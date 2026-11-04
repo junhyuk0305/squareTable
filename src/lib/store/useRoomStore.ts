@@ -96,8 +96,6 @@ type State = {
   removeMember: (roomId: string, userId: string) => void;
   /** 내 개인 설정 저장(부분 갱신). 안 넘긴 칸은 그대로 둔다. */
   setPref: (roomId: string, userId: string, patch: Partial<Omit<RoomPref, 'roomId'>>) => void;
-  /** 개인이 바꾼 이름·사진·색을 지워 전역 값으로 되돌린다(showTaskDone 은 유지 — 다른 축이다). */
-  resetLook: (roomId: string, userId: string) => void;
   /** 이 방을 여기까지 읽었다고 표시(0154). 방을 열 때·나올 때 부른다. */
   markRead: (roomId: string, userId: string) => void;
   /** 그 사용자가 볼 수 있는 방 목록 = 기본방 + 내가 멤버인 방. 사장도 예외가 아니다(0147). */
@@ -289,7 +287,6 @@ export const useRoomStore = create<State>((set, get) => ({
     );
   },
 
-  // 되돌리기 = 이름·사진·색만 비운다. 완료 알림 스위치는 외형과 다른 축이라 건드리지 않는다.
   // 읽음 표시는 사용자가 '한' 일이 아니라 화면이 파생시킨 부수효과라 토스트를 띄우지 않는다.
   // 대신 실패하면 낙관적 갱신을 되돌린다 — 안 그러면 배지가 사라진 채 서버엔 안 읽음으로 남는다.
   markRead: (roomId, userId) => {
@@ -302,10 +299,6 @@ export const useRoomStore = create<State>((set, get) => ({
       set((s) => ({ prefs: before ? [...s.prefs.filter((p) => p.roomId !== roomId), before] : s.prefs.filter((p) => p.roomId !== roomId) }));
     });
   },
-  resetLook: (roomId, userId) => {
-    get().setPref(roomId, userId, { name: undefined, imageUrl: undefined, color: undefined });
-  },
-
   roomsFor: (userId) => visibleRooms(get().rooms, get().members, userId),
   membersOf: (roomId) => get().members.filter((m) => m.roomId === roomId).map((m) => m.userId),
 
