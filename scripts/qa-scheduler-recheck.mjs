@@ -16,9 +16,9 @@ const L = makeLocal(env);
 const { admin, psql } = L;
 const MIG = psql('select max(version) from supabase_migrations.schema_migrations');
 console.log(`— 대상 로컬 ${env.URL_} · schema_migrations 최고 ${MIG} · billing_free_mode ${psql('select public.billing_free_mode()')} —`);
-if (Number(MIG) >= 348) console.log(`  ⚠️ 경고: 로컬 DB 에 0348(quiz_resend_count_from · main 미머지)이 적용돼 있다. 결과는 main 이 아니라 0348 적용 DB 기준이다 — 결함 ②(완료자 재발송)는 0348 이 고친 상태라 RED 가 안 나올 수 있다.`);
+if (Number(MIG) >= 348) console.log(`  · 0348(11-04 main 머지) 이후 DB 다. ①퀴즈·②·④ 는 0348 이 고쳤으므로 재현 안 됨이 정상이다. 수정 전 RED 를 보려면 0348 이전 DB 가 필요하다.`);
 
-let pass = 0, fail = 0, skip = 0, executed = 0;
+let pass = 0, fail = 0, skip = 0, executed = 0, ref = 0; // ref = 단언 없이 사실만 찍은 참고 줄(통과로 안 센다)
 const PLANNED = 6;
 const check = (n, reproduced, extra = '') => { executed++; reproduced ? (fail++, console.log('  ✗ 재현됨 ·', n, extra)) : (pass++, console.log('  ✓ 재현 안 됨 ·', n, extra)); };
 const skipped = (n, why) => { executed++; skip++; console.log('  - skip ·', n, '·', why); };
@@ -70,22 +70,23 @@ async function seatLock() {
 async function multiStore() {
   const w = await makeWorld(L, env, { tag: 'x2', staffN: 4, plan: 'multi', courses: [{ items: 2, answerDays: 3 }] });
   worlds.push(w);
-  const [sDone, sJoin, sRe, sDue] = w.staff;
+  const [sDone, sCtl, sRe, sDue] = w.staff;
   const C = w.courses[0];
   const day = kstDay();
 
-  console.log('— ② 완료 뒤 대기 행(다시 알리기 manual · 대조군 join) —');
-  // A2 R-X2: 앞 발송을 이틀 전에 받고 어제 끝냈다. 대기 행은 그보다 먼저(3일 전) 만들어졌다.
-  for (const [s, origin] of [[sDone, 'manual'], [sJoin, 'join']]) {
+  console.log('— ② 완료 뒤 대기 행(다시 알리기 manual · 대조군 = 아직 안 푼 직원의 manual) —');
+  // A2 R-X2: 앞 발송을 이틀 전에 받았다. sDone 은 어제 끝냈고 sCtl 은 안 끝냈다. 대기 행은 그보다 먼저(3일 전) 만들어졌다.
+  // 대조군은 원래 join 행이었다. 0348(11-04)이 다 푼 사람의 join 도 막아 대조군이 될 수 없어 바꿨다.
+  for (const [s, done] of [[sDone, true], [sCtl, false]]) {
     const a1 = await insA({ unit_id: w.unit, course_id: C.id, user_id: s.id, scheduled_on: kstDay(-2) });
-    await ok(admin.from('quiz_assignments').update({ sent_at: ago(48), opened_at: ago(48), completed_at: ago(24) }).eq('id', a1), 'A1 done');
-    const a2 = await insA({ unit_id: w.unit, course_id: C.id, user_id: s.id, scheduled_on: day, origin });
+    await ok(admin.from('quiz_assignments').update({ sent_at: ago(48), opened_at: ago(48), completed_at: done ? ago(24) : null }).eq('id', a1), 'A1 sent');
+    const a2 = await insA({ unit_id: w.unit, course_id: C.id, user_id: s.id, scheduled_on: day, origin: 'manual' });
     await ok(admin.from('quiz_assignments').update({ created_at: ago(72) }).eq('id', a2), 'A2 created_at');
     s.a2 = a2;
   }
   let ids = await dueIds(w.unit);
-  if (!ids.includes(sJoin.a2)) skipped('②', '대조군(join 대기 행)도 후보가 아니다 — 다른 상한에 걸렸다');
-  else check('②: 다 푼 직원의 다시 알리기(manual) 대기 행이 후보다', ids.includes(sDone.a2), `manual ${ids.includes(sDone.a2) ? '후보' : '빠짐'} · join(대조) 후보`);
+  if (!ids.includes(sCtl.a2)) skipped('②', '대조군(안 푼 직원의 manual 대기 행)도 후보가 아니다 — 다른 상한에 걸렸다');
+  else check('②: 다 푼 직원의 다시 알리기(manual) 대기 행이 후보다', ids.includes(sDone.a2), `manual ${ids.includes(sDone.a2) ? '후보' : '빠짐'} · 대조군 후보`);
 
   console.log('— ③ 재확인 대기 행이 다시 확인 뒤에도 나가는가 —');
   // 통과 기록(3일 전) → 사장이 노하우를 고침(1시간 전) → 문항 검수(source_updated_at 갱신) → enqueue 가 재확인 행을 만든다.
@@ -107,19 +108,24 @@ async function multiStore() {
   console.log('— ④ 마감 지난 행 —');
   const a4 = await insA({ unit_id: w.unit, course_id: C.id, user_id: sDue.id, scheduled_on: kstDay(-5), due_date: kstDay(-1) });
   ids = await dueIds(w.unit);
-  check('④: 마감(due_date)이 어제인 대기 행이 후보다', ids.includes(a4), `due_date ${kstDay(-1)}`);
+  const due4 = ids.includes(a4);
+  check('④: 마감(due_date)이 어제인 대기 행이 후보다', due4, `due_date ${kstDay(-1)}`);
+  // ④b 는 ④ 의 결과다. 후보에서 빠지면 크론이 이 행을 선점하지 않으므로 정상 경로로는 생기지 않는다(0348 이후).
+  //   그때는 세지 않고 참고로만 찍는다(선점 함수 자체에 방어선이 없다는 사실).
   const claimed = await ok(admin.rpc('claim_quiz_send', { p_id: a4 }), 'claim');
   const r4 = await ok(admin.from('quiz_assignments').select('due_on, sent_at').eq('id', a4).single(), 'a4');
-  if (claimed !== true) skipped('④b', 'claim 이 false');
-  else check('④b: 선점하면 due_on 이 이미 지난 날짜로 찍힌다', !!r4.due_on && r4.due_on < kstDay(), `due_on ${r4.due_on} · 오늘 ${kstDay()}`);
+  const past4 = claimed === true && !!r4.due_on && r4.due_on < kstDay();
+  if (!due4) { ref++; console.log(`  · 참고 · ④b: 후보가 아니라 정상 경로로는 안 생긴다. 직접 선점하면 due_on ${r4.due_on ?? '없음'}${past4 ? '(지난 날짜 · 선점 함수에 방어선 없음)' : ''}`); }
+  else if (claimed !== true) skipped('④b', 'claim 이 false');
+  else check('④b: 선점하면 due_on 이 이미 지난 날짜로 찍힌다', past4, `due_on ${r4.due_on} · 오늘 ${kstDay()}`);
 }
 
 let crashed = null;
 try { await seatLock(); await multiStore(); } catch (e) { crashed = e; console.error('  ✗ 예외:', e?.stack ?? e); }
 const cl = await cleanupWorld(L, env, worlds).catch((e) => ({ units: 0, users: 0, left: -1, detail: [String(e.message)] }));
-const notRun = crashed ? PLANNED - executed : 0;
+const notRun = crashed ? PLANNED - executed - ref : 0;
 if (crashed) fail++;
 console.log(`  · 정리: 매장 ${cl.units} · 계정 ${cl.users} · 남은 행 ${cl.left}${cl.detail.length ? ' (' + cl.detail.join(', ') + ')' : ''}`);
-console.log(`\nPASS ${pass} · FAIL ${fail} · skip ${skip} · 실행 못 한 단언 ${notRun} · AI 호출 0회 · 정리 남은 행 ${cl.left}`);
+console.log(`\nPASS ${pass} · FAIL ${fail} · skip ${skip} · 참고 ${ref} · 실행 못 한 단언 ${notRun} · AI 호출 0회 · 정리 남은 행 ${cl.left}`);
 // skip 은 통과가 아니다(AGENTS "게이트가 거짓말하는 3가지").
 process.exit(fail === 0 && skip === 0 && !crashed ? 0 : 1);

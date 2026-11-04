@@ -89,7 +89,7 @@ const { admin, psql } = L;
 const MIG = psql('select max(version) from supabase_migrations.schema_migrations');
 const HAS_COUNT_FROM = psql(`select count(*) from information_schema.columns where table_schema='public' and table_name='quiz_assignments' and column_name='count_from'`) === '1';
 console.log(`— 대상 로컬 ${env.URL_} · schema_migrations 최고 ${MIG} · count_from 열 ${HAS_COUNT_FROM ? '있음(0348 로컬 적용)' : '없음'} · seed ${SEED} · steps ${STEPS} —`);
-if (Number(MIG) >= 348) console.log(`  ⚠️ 경고: 로컬 DB 에 0348(quiz_resend_count_from · main 미머지)이 적용돼 있다. 결과는 main 이 아니라 0348 적용 DB 기준이다 — 결함 ②(완료자 재발송)는 0348 이 고친 상태라 RED 가 안 나올 수 있다.`);
+if (Number(MIG) >= 348) console.log(`  · 0348(11-04 main 머지) 이후 DB 다. 결함 ②(완료자 재발송)는 0348 이 고쳤으므로 고정 시나리오 통과가 정상이다. 수정 전 RED 를 보려면 0348 이전 DB 가 필요하다.`);
 
 const COLS = 'id, course_id, user_id, scheduled_on, sent_at, due_on, due_date, opened_at, completed_at, origin';
 const toA = (r) => ({ id: r.id, courseId: r.course_id, userId: r.user_id, scheduledOn: r.scheduled_on, sentAt: r.sent_at ?? null, dueOn: r.due_on ?? null, dueDate: r.due_date ?? null, openedAt: r.opened_at ?? null, completedAt: r.completed_at ?? null, origin: r.origin ?? 'manual' });
@@ -233,7 +233,10 @@ class Runner {
         psql(`update public.quiz_assignments set scheduled_on = scheduled_on - 1000, sent_at = sent_at - interval '1000 days', opened_at = opened_at - interval '1000 days', completed_at = completed_at - interval '1000 days', created_at = created_at - interval '1000 days', due_on = due_on - 1000, due_date = due_date - 1000${cf} where unit_id = '${U}';
               update public.quiz_assignments set scheduled_on = scheduled_on + 999, sent_at = sent_at + interval '999 days', opened_at = opened_at + interval '999 days', completed_at = completed_at + interval '999 days', created_at = created_at + interval '999 days', due_on = due_on + 999, due_date = due_date + 999${cf2} where unit_id = '${U}';
               update public.quiz_attempt_items set created_at = created_at - interval '1 day' where unit_id = '${U}';
-              update public.quiz_attempts set taken_at = taken_at - interval '1 day' where unit_id = '${U}';`);
+              update public.quiz_attempts set taken_at = taken_at - interval '1 day' where unit_id = '${U}';
+              update public.unit_members set created_at = created_at - interval '1 day' where unit_id = '${U}';`);
+        // ★합류 시각도 같이 민다. 0348(11-04) 이어 풀기 트리거는 지금 멤버십이 생긴 뒤 나간 발송만 앞 회차로 본다.
+        //   안 밀면 하루 전 발송이 합류보다 먼저인 것처럼 보여 이어 풀기가 안 걸린다(실제 시간에서는 생기지 않는 착시 · I4 거짓 위반).
         break;
       }
       case 'staff_open': case 'staff_complete': {
@@ -412,19 +415,22 @@ async function main() {
   else check('고정 시나리오: 다 푼 직원에게 다시 알리기 대기 행이 나가지 않는다(I1)', !F.violations.some((v) => v.inv === 'I1'),
     `마지막 tick 선점 ${F.log[7].out.claimed}건 · I1 위반 ${F.violations.filter((v) => v.inv === 'I1').length}`);
 
-  // ② 검출기 자가검증: 같은 순서에서 remind 대신 origin='join' 대기 행을 service_role 로 심는다.
-  //    0348 ⓓ 는 manual 행만 거른다. join 행은 완료를 안 보므로 I1 이 반드시 울려야 한다(울리지 않으면 하니스가 거짓말한다).
+  // ② 검출기 자가검증: 완료 전에 심은 대기 행을, 완료 뒤 due_quiz_sends 를 거치지 않고 claim_quiz_send 로 직접 선점한다.
+  //    완료자에게 나간 행이므로 I1 이 반드시 울려야 한다(울리지 않으면 하니스가 거짓말한다).
+  //    0348(11-04) 전에는 due_quiz_sends 가 join 행을 안 걸러 tick 으로 충분했다. 이제 후보에서 빠지므로 직접 선점한다.
   console.log('— 검출기 자가검증(I1 이 RED 를 잡는가) —');
   {
     const w = await makeWorld(L, env, { tag: 'sc', staffN: 2, plan: 'multi', courses: COURSES });
     try {
       const R = new Runner(w, { only: 'I1' });
       await R.run([{ t: 'owner_send', c: 0, to: ['A'], due: null }, { t: 'tick' }]);
-      await ok(admin.from('quiz_assignments').insert({ unit_id: w.unit, course_id: w.courses[0].id, user_id: w.staff[0].id, scheduled_on: kstDay(1), origin: 'join' }), 'join row');
-      await R.run([{ t: 'staff_answer', s: 'A', c: 0, i: 0, ok: true }, { t: 'staff_answer', s: 'A', c: 0, i: 1, ok: true }, { t: 'staff_complete', s: 'A', c: 0 }, { t: 'advance_day' }, { t: 'tick' }]);
+      const planted = await ok(admin.from('quiz_assignments').insert({ unit_id: w.unit, course_id: w.courses[0].id, user_id: w.staff[0].id, scheduled_on: kstDay(1), origin: 'join' }).select('id').single(), 'planted row');
+      await R.run([{ t: 'staff_answer', s: 'A', c: 0, i: 0, ok: true }, { t: 'staff_answer', s: 'A', c: 0, i: 1, ok: true }, { t: 'staff_complete', s: 'A', c: 0 }, { t: 'advance_day' }]);
+      const claimedPlanted = await ok(admin.rpc('claim_quiz_send', { p_id: planted.id }), 'claim planted');
+      if (claimedPlanted === true) await R.claimChecks(planted.id);
       const hit = R.violations.filter((v) => v.inv === 'I1');
-      result.selfcheck = { violations: R.violations, log: R.log };
-      check('검출기 자가검증: 완료 뒤 남은 join 대기 행 재발송을 I1 이 잡는다', hit.length > 0, `I1 ${hit.length}건`);
+      result.selfcheck = { violations: R.violations, log: R.log, claimedPlanted };
+      check('검출기 자가검증: 완료자에게 직접 선점한 대기 행을 I1 이 잡는다', hit.length > 0, `선점 ${claimedPlanted} · I1 ${hit.length}건`);
     } finally { allCleanups.push(await cleanupWorld(L, env, [w])); }
   }
 
