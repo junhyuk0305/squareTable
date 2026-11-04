@@ -5,7 +5,7 @@
 //   [1] 코드 입력 → 바로 멤버(unit_members) · 대기(pending_unit_id) 0 · 첫 매장이면 주매장·활성.
 //   [2] 사장 몫 member_joined 1행(명부의 그 직원 주소 · actor_id = 직원) · 매니저·본인 0행. 크론 스윕이 그 행을 돌려준다.
 //   [3] 이미 멤버인데 approve_member → 오류 없음 · 알림·멤버십 변화 없음(옛 사장 앱·하니스).
-//   [4] 첫 퀴즈 배정(created_by = 매장 주인)과 게스트 응시 승계가 즉시 합류에서도 일어난다.
+//   [4] 즉시 합류에서도 게스트 응시가 승계된다. 퀴즈 자동 배정은 없다(0348 · 2026-11-04 사용자 결정 · 사장이 보내야 받는다).
 //   [5] 무료 좌석이 차면 staff_limit · 멤버 아님 · report_join_full → 사장 몫 join_full 1행 · 하루 두 번 해도 1행 ·
 //       매니저 0행 · 틀린 코드·이미 멤버·좌석 여유는 행을 넣지 않는다.
 //   [6] 격리 — 다른 매장 사장은 이 행을 못 읽는다 · 허브(my_units_notif_data schednotice)는 사장에게만 준다.
@@ -181,11 +181,11 @@ try {
   }
 
   // ═══════ 4. 첫 퀴즈 · 게스트 승계 ═══════
-  console.log('\n[4] 즉시 합류에서도 첫 퀴즈 배정 · 게스트 응시 승계');
+  // ★0348(2026-11-04 사용자 결정): 신입 첫 퀴즈 자동 예약을 없앴다. 사장이 보내야 받는다.
+  console.log('\n[4] 즉시 합류: 퀴즈 자동 배정 없음 · 게스트 응시 승계');
   {
     const { data: qa } = await admin.from('quiz_assignments').select('course_id, origin, created_by').eq('user_id', J.id).eq('unit_id', UNIT);
-    check('4-1 ★첫 퀴즈 1개(origin join)', (qa ?? []).length === 1 && qa[0].origin === 'join', JSON.stringify(qa));
-    check('4-2 배정한 사람 = 매장 주인(본인이 아니다)', qa?.[0]?.created_by === O.id, JSON.stringify(qa?.[0] ?? {}));
+    check('4-1 ★합류만으로는 퀴즈가 배정되지 않는다(0348)', (qa ?? []).length === 0, JSON.stringify(qa));
     const { data: at } = await admin.from('quiz_attempts').select('staff_id, guest_phone, former_guest_name').eq('submission_id', `qs_ij_${s}`);
     check('4-3 ★게스트 응시가 이 직원 것으로 넘어온다', (at ?? []).length === 1 && at[0].staff_id === J.id && at[0].guest_phone === null && at[0].former_guest_name === '게스트QA', JSON.stringify(at));
   }

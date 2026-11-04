@@ -13,8 +13,8 @@
 //   ⑦ 크론이 부르는 엣지 엔드포인트를 그대로 쳐서 퀴즈 갈래까지 실증한다.
 //   ⑧ 열었다/다 풀었다(0140): 직원 직접 UPDATE 는 막히고 definer RPC 만 통한다. 남의 것·안 나간 것은 false.
 //   ⑨ 완료·열기가 실제로 자동 정지를 푸는가 — ④에서 막힌 사람이 다시 대상이 되는지.
-//   ⑩ 입사 트리거(0169): 승인(approve_member)에서 첫 퀴즈 **코스 1개**만 배정된다. 신청(pending)
-//      단계에는 안 생기고, 담긴 노하우가 없는 코스는 고르지 않으며, 신입용 코스가 position 을 이긴다.
+//   ⑩ 합류(0346 _admit_member): 신청(pending)에도 확정에도 퀴즈가 자동 배정되지 않는다.
+//      0169 의 신입 첫 퀴즈 자동 예약은 0348 에서 없앴다(2026-11-04 사용자 결정 · 사장이 보내야 받는다).
 //   ⑪ 변경 트리거(0169): 사장이 노하우를 고치면 **이미 통과한 직원**에게 재확인이 생긴다.
 //      ★문항 스냅샷(0114 source_updated_at)이 낡은 동안은 안 나간다 — 옛 정답을 다시 묻지 않는다.
 //      ★폭주 방지: 3건을 한 번에 고쳐도 1건 · 대기 중이면 더 안 만듦 · (매장,직원)당 7일 1건 ·
@@ -74,9 +74,9 @@ const constOf = (name) => {
 const MAX_PER_DAY = constOf('MAX_SENDS_PER_DAY');
 const MAX_PER_WEEK = constOf('MAX_SENDS_PER_WEEK');
 const AUTO_STOP = constOf('AUTO_STOP_AFTER_IGNORED');
-// 0169 입사·변경 트리거의 생성 상한도 같은 SSOT 에서 온다(한쪽만 고치면 이 게이트가 red).
+// 0169 변경 트리거의 생성 상한도 같은 SSOT 에서 온다(한쪽만 고치면 이 게이트가 red).
+// 입사 트리거(JOIN_FIRST_QUIZ_COURSES)는 0348 에서 없앴다(2026-11-04 사용자 결정).
 const RECHECK_WEEK = constOf('MAX_AUTO_RECHECKS_PER_WEEK');
-const JOIN_COURSES = constOf('JOIN_FIRST_QUIZ_COURSES');
 const INTERVALS = JSON.parse(
   SCHED.match(/export const REVIEW_INTERVALS_DAYS\s*=\s*(\[[^\]]*\])/)[1],
 );
@@ -429,7 +429,9 @@ async function main() {
   const { data: eRows } = await admin.from('quiz_assignments').select('id').eq('unit_id', UNIT).eq('user_id', eId);
   check('신청(pending)만으로는 배정 없음', (eRows ?? []).length === 0, `n=${eRows?.length}`);
 
-  // 합류 확정(0346 즉시 합류 · 이어 부르는 approve_member 는 no-op) → 첫 퀴즈 1건.
+  // 합류 확정(0346 즉시 합류 · 이어 부르는 approve_member 는 no-op).
+  // ★0348(2026-11-04 사용자 결정): 신입 첫 퀴즈 자동 예약을 없앴다. 사장이 보내야 받는다.
+  //   신입용(first_day)·외부용·만들던 퀴즈가 다 있는 매장에서도 합류만으로는 발송 행이 0건이어야 한다.
   const jD = mk();
   const dId = await signUpSession(jD, `qa_qs_d_${s}@example.com`, { name: 'QA직원D', role: 'junior', phone: `0102${s.slice(0,7)}` });
   await joinAsStaff(jD, CODE);
@@ -437,12 +439,8 @@ async function main() {
   check('이미 멤버인데 approve_member 를 불러도 오류 없음(0346 · 옛 사장 앱)', !apErr, apErr?.message ?? '');
   const { data: dRows } = await admin.from('quiz_assignments')
     .select('course_id, origin, scheduled_on, sent_at, created_by').eq('unit_id', UNIT).eq('user_id', dId);
-  check(`입사 즉시 코스 ${JOIN_COURSES}개만 배정(첫날에 전부 쏟지 않는다)`, (dRows ?? []).length === JOIN_COURSES, `n=${dRows?.length}`);
-  check('origin=join', dRows?.[0]?.origin === 'join', `${dRows?.[0]?.origin}`);
-  check('신입용 코스가 뽑힌다(position 보다 우선)', dRows?.[0]?.course_id === CJ, `${dRows?.[0]?.course_id}`);
-  check('★외부용·만들던 퀴즈는 신입 첫 퀴즈로 안 고른다(E1)', !(dRows ?? []).some((r) => r.course_id === CG || r.course_id === CD), `${dRows?.[0]?.course_id}`);
-  check('예약일=오늘 · 아직 안 나감(도착은 근무표가 정한다)', dRows?.[0]?.scheduled_on === DAY && !dRows?.[0]?.sent_at, `${dRows?.[0]?.scheduled_on}`);
-  check('담긴 노하우가 없는 코스는 안 고른다(빈 퀴즈 방지)', dRows?.[0]?.course_id !== QUIZ && dRows?.[0]?.course_id !== QUIZ_B, `${dRows?.[0]?.course_id}`);
+  check('★합류만으로는 퀴즈가 배정되지 않는다(0348 · 사장이 보내야 받는다)', (dRows ?? []).length === 0, `n=${dRows?.length} ${JSON.stringify(dRows)}`);
+  void CJ; void CJ2; void CG; void CD; void QUIZ_B;
   check('사장 발행 행은 origin=manual 그대로', (await admin.from('quiz_assignments').select('origin').eq('id', A1).maybeSingle()).data?.origin === 'manual');
   const { error: ogErr } = await admin.from('quiz_assignments').insert({ ...asg(`qz_og_${s}`, cId, TOMORROW), origin: 'bogus' });
   check('origin 은 아는 값만(제약)', !!ogErr, ogErr?.code ?? '거부 안 됨');
