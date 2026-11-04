@@ -446,7 +446,7 @@
       "type": "external",
       "name": "알림 설정과 세션 대상 및 착지",
       "aliases": [],
-      "current": "deliver는 계정 push_enabled, 매장 muted/방해금지 설정으로 후보를 걸러낸다. 설정 조회 오류는 fail-open이고 대상 RPC 오류는 발송을 중단한다. 최신 0255 web/device targets는 탈퇴자와 유효 세션 없는 토큰을 제외하며 session_id 없는 옛 토큰은 갱신 이전 생성된 유효 세션이 있어야 한다. question 착지는 owners가 /owner/coach?uqId, staff가 /junior/chat?uqId다. 웹 자동 구독은 WEB_PUSH_ENABLED=false로 건너뛰지만 잔존 웹 대상 발송을 없애는 조건은 아니다.",
+      "current": "deliver는 계정 push_enabled, 매장 muted/방해금지 설정으로 후보를 걸러낸다. 설정 조회 오류와 대상 RPC 오류는 둘 다 발송을 중단한다(fail-closed · 2026-11-04). 최신 0255 web/device targets는 탈퇴자와 유효 세션 없는 토큰을 제외하며 session_id 없는 옛 토큰은 갱신 이전 생성된 유효 세션이 있어야 한다. question 착지는 owners가 /owner/coach?uqId, staff가 /junior/chat?uqId다. 웹 자동 구독은 WEB_PUSH_ENABLED=false로 건너뛰지만 잔존 웹 대상 발송을 없애는 조건은 아니다.",
       "evidence": [
         "push-delivery",
         "push-targets",
