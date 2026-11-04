@@ -73,6 +73,11 @@ export const MAX_SENDS_PER_WEEK = 2;
 export const MAX_ITEMS_PER_ROUND = 3;
 /** 연속으로 이만큼 무시하면 자동으로 멈춘다. 다시 시작은 **그 사람이 열었을 때**. */
 export const AUTO_STOP_AFTER_IGNORED = 2;
+/**
+ * 다시 알리기를 보낸 뒤 같은 (퀴즈, 사람)에게 다시 보낼 수 없는 시간(분). 판정은 서버 quiz_resend_cooldown()(0348) 한 곳이다.
+ * 여기 값은 화면 문구에만 쓴다. qa:quiz-resend 가 서버 값과 대조한다(한쪽만 고치면 RED).
+ */
+export const RESEND_COOLDOWN_MINUTES = 10;
 
 // ── 자동 출제 계기의 생성 상한 (0169 입사·변경 트리거) ──────────────────────
 /**

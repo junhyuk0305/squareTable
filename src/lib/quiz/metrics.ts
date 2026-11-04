@@ -135,6 +135,24 @@ export function doneLabel(p: StaffProgress): string {
   return p.recipients > 0 ? `완료 ${p.done}/${p.recipients}명` : '';
 }
 
+/**
+ * 다시 알리기 결과 토스트(0348 quiz_resend). 사람별 결과를 센다.
+ * sent = 지금 보냄 · queued = 최근 7일에 2번 받아 창이 풀리면 나감 · cooldown = 10분 안에 이미 받음.
+ * not_member 등 나머지는 "보내지 못했어요"로 센다. 10 = schedule.ts RESEND_COOLDOWN_MINUTES(이 파일은 import 를 못 한다).
+ * 반환 tone: 하나라도 보냈거나 줄에 섰으면 good.
+ */
+export function resendResultLabel(results: readonly { result: string }[]): { text: string; good: boolean } {
+  const n = (r: string) => results.filter((x) => x.result === r).length;
+  const sent = n('sent'), queued = n('queued'), cool = n('cooldown');
+  const other = results.length - sent - queued - cool;
+  const parts: string[] = [];
+  if (sent > 0) parts.push(results.length === 1 ? '다시 알렸어요' : `${sent}명에게 다시 알렸어요`);
+  if (cool > 0) parts.push(results.length === 1 ? '방금 보냈어요. 10분 뒤에 다시 보낼 수 있어요' : `${cool}명은 방금 받아 10분 뒤에 보낼 수 있어요`);
+  if (queued > 0) parts.push(results.length === 1 ? '최근 7일에 2번 보내 그 뒤에 나가요' : `${queued}명은 최근 7일에 2번 받아 그 뒤에 나가요`);
+  if (other > 0) parts.push(results.length === 1 ? '보내지 못했어요' : `${other}명은 보내지 못했어요`);
+  return { text: parts.join(' · '), good: sent + queued > 0 };
+}
+
 /** "푸는 중 N명". 0명이면 빈 문자열. */
 export function startedLabel(p: StaffProgress): string {
   return p.started > 0 ? `푸는 중 ${p.started}명` : '';

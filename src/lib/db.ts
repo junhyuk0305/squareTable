@@ -3389,6 +3389,22 @@ export async function restartQuizAssignment(assignmentId: string): Promise<'ok' 
   return data === true ? 'ok' : 'noop';
 }
 
+/**
+ * 다시 알리기 = 지금 보내기(0348 quiz_resend). 사람별 결과(sent · queued · cooldown · not_member)를 돌려준다.
+ * 판정(10분 쿨다운 · 7일 상한 · 권한)은 전부 서버다. 전원이 쿨다운이면 error.message = 'resend_cooldown'.
+ * 오류 원문은 화면에 내지 않는다. 호출부는 quizErrorMessage 로 문구를 고른다.
+ */
+export async function resendQuiz(courseId: string, userIds: string[]): Promise<DbResult<{ userId: string; result: string }[]>> {
+  if (!HAS_SUPABASE) return { data: userIds.map((userId) => ({ userId, result: 'sent' })), error: null };
+  const { data, error } = await supabase.rpc('quiz_resend', { p_course_id: courseId, p_user_ids: userIds });
+  if (error) {
+    // 쿨다운은 정상 결과다. 계측에 오류로 쌓지 않는다.
+    if (!/^resend_cooldown/.test(error.message ?? '')) reportError('db.write:resendQuiz', error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: ((data ?? []) as any[]).map((r) => ({ userId: r.user_id, result: String(r.result ?? '') })), error: null };
+}
+
 // ── 외부 공유 링크(0113) — 단기 직원용. 로그인 없이 도는 유일한 경로 ────────────
 export type QuizLinkRow = {
   id: string;

@@ -133,13 +133,22 @@ assert.equal(e.linkSubmitResultOf({ message: 'bad_phone' }), 'bad_input');
 assert.equal(e.linkSubmitResultOf({ message: 'Failed to fetch' }), 'network');
 for (const k of ['ok', 'link_closed', 'rate_limited', 'bad_input', 'network']) assert.ok(e.LINK_SUBMIT_MESSAGE[k], k);
 assert.equal(e.quizErrorMessage({ message: 'last_quiz_item' }).includes('보관'), true);
+// 0348 다시 알리기: raise 코드마다 사람 말이 있다(⑨) · 사람별 결과 토스트.
+assert.equal(e.quizErrorMessage({ message: 'resend_cooldown' }), '방금 보냈어요. 10분 뒤에 다시 보낼 수 있어요');
+for (const c of ['forbidden', 'quiz_not_found']) assert.notEqual(e.quizErrorMessage({ message: c }), e.quizErrorMessage({ message: 'x' }), c);
+assert.deepEqual({ ...m.resendResultLabel([{ result: 'sent' }]) }, { text: '다시 알렸어요', good: true });
+assert.deepEqual({ ...m.resendResultLabel([{ result: 'sent' }, { result: 'cooldown' }, { result: 'queued' }]) },
+  { text: '1명에게 다시 알렸어요 · 1명은 방금 받아 10분 뒤에 보낼 수 있어요 · 1명은 최근 7일에 2번 받아 그 뒤에 나가요', good: true }, '(j) partial result says counts');
+assert.equal(m.resendResultLabel([{ result: 'cooldown' }, { result: 'not_member' }]).good, false);
+// 화면 문구의 10 = schedule.ts 상수(서버 값은 qa:quiz-resend 가 대조한다).
+const cooldownMin = Number(fs.readFileSync(new URL('../src/lib/quiz/schedule.ts', import.meta.url), 'utf8').match(/export const RESEND_COOLDOWN_MINUTES\s*=\s*(\d+)/)?.[1]);
+assert.ok(e.quizErrorMessage({ message: 'resend_cooldown' }).includes(`${cooldownMin}분`) && m.resendResultLabel([{ result: 'cooldown' }]).text.includes(`${cooldownMin}분`), 'cooldown copy matches RESEND_COOLDOWN_MINUTES');
 console.log('PASS quiz metrics: state, progress, Q1/Q2 rate, guest submissions, item answers, person board, link submit results');
 
 // ── P5-4 래칫: 화면에서 숫자에 "명"·"정답률"·"완료"를 직접 붙이지 않는다(metrics.ts 가 만든다).
 // 대상 = src/app/owner/quiz* · training.tsx · TrainingCard.tsx. 주석은 뺀다.
 // 예외는 아래 표에만 둔다. 줄 조각(파일 안에서 유일해야 한다) + 이유. 쓰이지 않는 예외도 실패다(표가 썩지 않게).
 const RATCHET_ALLOW = [
-  { file: 'src/app/owner/quiz/[id].tsx', snippet: '${quotaOut}명은 최근 7일에', why: '다시 알리기 토스트. 주 2회 상한에 걸린 사람 수(recipientReadiness)라 퀴즈 진행 숫자가 아니다' },
   { file: 'src/app/owner/quiz-new.tsx', snippet: '`${to.length}명에게 보내요`', why: '만들기 화면에서 고른 받는 사람 수. 발송 전 선택 인원이라 metrics 정의 밖이다' },
   { file: 'src/app/owner/quiz-new.tsx', snippet: '`${to.length}명에게 보내기` : `${to.length}명에게 예약하기`', why: '같은 선택 인원의 버튼 문구' },
 ];
