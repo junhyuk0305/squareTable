@@ -322,7 +322,8 @@ console.log('\n[D9] 대타 확정·시간 수정 결과·사장의 근무 변경
   const st = strip(read('src/lib/store/useScheduleStore.ts'));
   // 타입 선언(인터페이스)에도 같은 이름이 있어 마지막(구현) 것을 본다.
   const method = (m) => ([...st.matchAll(new RegExp(`\\n  ${m}: [\\s\\S]*?(?=\\n  [a-zA-Z]+: )`, 'g'))].pop() || [''])[0];
-  for (const m of ['addTemplate', 'applySeriesOps', 'overrideShiftDay', 'restoreException']) {
+  // restoreException 은 2026-11-04 에 지웠다(되돌리기 없음 · 사용자 결정 11-03).
+  for (const m of ['addTemplate', 'applySeriesOps', 'overrideShiftDay']) {
     check(`★스토어 ${m} 가 저장 성공 뒤 당사자에게 알린다(notifyShiftChanged)`, /notifyShiftChanged\(/.test(method(m)));
   }
   check('★스토어가 내 근무 알림(member_notices)을 읽는다', /fetchScheduleNotices\(\)/.test(st) && /\bnotices:/.test(st));

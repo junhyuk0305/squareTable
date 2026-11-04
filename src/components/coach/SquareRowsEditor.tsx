@@ -16,7 +16,7 @@ import type { SquareBlock } from '@/types';
  * ★ 편집 '모드'가 없다(2026-08-08, E2). 옛 구조는 '고칠래요'로 카드 전체를 입력창으로 바꾸고
  *   '수정 완료'로 빠져나오는 2단 모드였는데, 그 때문에 ⓐ 편집 중엔 저장 버튼이 사라져 저장이 2단계가 되고
  *   ⓑ 고칠 게 한 칸이어도 화면 전체가 입력창이 됐다. 이제 누른 칸만 열리고 나머지는 계속 읽힌다.
- * ★ 되돌리기는 **연 시점의 값**으로 돌린다(전체 취소가 아니라 그 칸만).
+ * ★ 칸 되돌리기는 없다(2026-11-03 사용자 결정) — 고친 값이 그대로 남고, 저장 전까지는 다시 눌러 고친다.
  * ★ 여기서 고치는 것은 square 뿐이다. 저장·발행은 호출부가 한다(계층 경계).
  */
 
@@ -38,8 +38,6 @@ const ADD_LABEL: Partial<Record<KnowhowRowKind, string>> = {
 export function SquareRowsEditor({ square, editable, onPatch, source, onOpenChange }: Props) {
   /** 지금 열린 칸. null = 전부 읽기. */
   const [open, setOpen] = useState<KnowhowRowKind | null>(null);
-  /** 연 시점의 square — '되돌리기'가 돌아갈 지점. */
-  const [snapshot, setSnapshot] = useState<SquareBlock | null>(null);
 
   const steps = square.action?.steps ?? [];
   const dont = square.extract?.dont ?? '';
@@ -47,12 +45,10 @@ export function SquareRowsEditor({ square, editable, onPatch, source, onOpenChan
   const situation = square.situation ?? '';
 
   const openCell = (kind: KnowhowRowKind) => {
-    setSnapshot(square);
     setOpen(kind);
     onOpenChange?.(kind);
   };
-  const closeCell = () => { setOpen(null); setSnapshot(null); onOpenChange?.(null); };
-  const revert = () => { if (snapshot) onPatch(snapshot); closeCell(); };
+  const closeCell = () => { setOpen(null); onOpenChange?.(null); };
 
   const setList = (list: string[]) =>
     onPatch({ ...square, action: { ...square.action, steps: list } });
@@ -74,10 +70,6 @@ export function SquareRowsEditor({ square, editable, onPatch, source, onOpenChan
 
   const cellFooter = (
     <View style={styles.cellFoot}>
-      <Pressable onPress={revert} accessibilityRole="button" accessibilityLabel="이 칸 되돌리기"
-        style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.6 }]}>
-        <Text style={styles.ghostText}>되돌리기</Text>
-      </Pressable>
       <Pressable onPress={closeCell} accessibilityRole="button" accessibilityLabel="이 칸 다 고쳤어요"
         style={({ pressed }) => [styles.doneBtn, pressed && { opacity: 0.85 }]}>
         <Text style={styles.doneText}>이 칸 다 고쳤어요</Text>
@@ -229,8 +221,6 @@ const styles = StyleSheet.create({
   addText: { fontSize: 15, fontWeight: '700', color: BrandColors.goodText },
 
   cellFoot: { flexDirection: 'row', gap: Space.sm, alignItems: 'center', marginTop: Space.sm },
-  ghostBtn: { minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.sm },
-  ghostText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
   // 작은 버튼(44 알약 · 15/800 · 내용 폭 · 2026-11-02).
   doneBtn: { ...ButtonStyles.small, backgroundColor: InkColors.ink },
   doneText: { ...ButtonTextStyles.small, color: InkColors.bubbleText },

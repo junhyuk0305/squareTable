@@ -1234,10 +1234,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
         <RoomComposer
           mode="look"
           initial={{ name: currentPref?.name ?? currentRoom.name, imageUrl: currentPref?.imageUrl ?? currentRoom.imageUrl, color: currentPref?.color ?? currentRoom.color }}
-          hasPersonalLook={!!(currentPref?.name || currentPref?.imageUrl || currentPref?.color)}
           onClose={() => setRoomComposer(null)}
           onSaveLook={(draft) => useRoomStore.getState().setPref(currentRoom.id, userId, { name: draft.name, imageUrl: draft.imageUrl, color: draft.color })}
-          onResetLook={() => useRoomStore.getState().resetLook(currentRoom.id, userId)}
         />
       )}
 

@@ -25,6 +25,7 @@ import { BrandCopyPanel } from '@/components/owner/BrandCopyPanel';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
+import { confirmAction } from '@/lib/utils/confirm';
 import {
   fetchQuizItems,
   fetchQuizCourseAttemptItems,
@@ -243,18 +244,23 @@ export default function QuizDetailScreen() {
   };
 
   /**
-   * 보관 — 되돌릴 수 있는 동작이라 확인 시트를 세우지 않는다(워딩 §4: 실행 + 실행취소 토스트).
+   * 보관 — 실행 전에 한 번 묻는다(2026-11-03 사용자 결정: 실행취소 대신 확인 단계 · confirmAction 하나로).
    * ★2026-08-26까지는 보관하면 목록에서 사라지고 **다시 볼 자리가 코드에 없어** 사실상 삭제였다.
-   *   지금은 퀴즈 홈 상단바의 보관함에서 되돌린다. 여기 토스트는 그 자리까지 안 가고 무르는 길이다.
+   *   지금은 퀴즈 홈 상단바의 보관함에서 다시 보낸다.
+   * 메뉴 시트를 닫은 뒤 부른다 — 시트가 상시 마운트(visible 토글)라 BottomSheet 가 닫힘을 붙잡고 DialogHost 가 기다렸다 띄운다(iOS 겹침).
    */
   const archive = async () => {
     if (!course) return;
+    const go = await confirmAction(
+      '퀴즈 보관하기',
+      `'${course.name}'을 보관해요.\n직원에게 더 안 나가요. 퀴즈 홈의 보관함에서 다시 보낼 수 있어요.`,
+      '보관하기',
+      { icon: 'archive-outline' },
+    );
+    if (!go) return;
     const ok = await saveCourse({ active: false });
     if (!ok) return;
-    /* ★토스트는 **퀴즈 홈이** 띄운다(`?undo=`). 여기서 띄우면 이 화면은 곧 사라지므로,
-       사장이 실행취소를 눌러도 되살아난 퀴즈를 **홈이 다시 읽지 않아** 화면에 안 돌아온다
-       (되돌렸다고 말해 놓고 안 돌아오는 것이 제일 나쁘다). */
-    router.replace(`/owner/training?undo=${course.id}` as never);
+    router.replace('/owner/training' as never);
   };
 
   /**
@@ -652,9 +658,9 @@ export default function QuizDetailScreen() {
       </ScrollView>
       </KeyboardShift>
 
-      {/* ── C3 더보기 ── */}
-      {moreOpen && (
-        <BottomSheet visible onClose={() => setMoreOpen(false)}>
+      {/* ── C3 더보기 — 상시 마운트(visible 토글). 조건부 마운트면 닫힘을 BottomSheet 가 못 보고(holdForDismiss 안 걸림)
+             iOS 에서 보관 확인창이 닫히는 시트와 겹친다(2026-11-04 검토). ── */}
+      <BottomSheet visible={moreOpen} onClose={() => setMoreOpen(false)}>
           <SheetHead title={course.name} onClose={() => setMoreOpen(false)} />
           <View style={st.sheetBody}>
             {/* ★탭으로 닿는 것은 여기 두지 않는다(2026-09-11). 같은 일에 입구가 둘이면 사장은 어느 쪽이
@@ -667,11 +673,7 @@ export default function QuizDetailScreen() {
             <SheetOption label="퀴즈 복제" onPress={() => { setMoreOpen(false); void duplicate(); }} />
             <SheetOption label="보관하기" danger onPress={() => { setMoreOpen(false); void archive(); }} />
           </View>
-        </BottomSheet>
-      )}
-
-      {/* ── D8 보관 — 확인 시트가 없다. 되돌릴 수 있는 동작이라 실행 + 실행취소 토스트다(워딩 §4).
-             퀴즈 홈 상단바의 보관함에서도 되돌릴 수 있다. ── */}
+      </BottomSheet>
 
       {/* ── 문항 줄 메뉴(2026-09-13) — 낸 퀴즈의 문항도 여기서 고치고 뺀다.
              그전에는 줄을 누르면 미리보기만 떴고, 고치는 길은 '낡은 문항' 상자의 [새로 만들기] 하나뿐이었다
