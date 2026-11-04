@@ -10,8 +10,10 @@ import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
 import {
   PERSON_STATE_LABEL,
   countFromOf,
+  doneBefore,
   guestSubmissions,
   guestSubmissionsLabel,
+  isCurrentStaff,
   itemAnswers,
   itemAnswersLabel,
   personState,
@@ -96,6 +98,7 @@ export default function QuizDetailScreen() {
   const entries = usePlaybookStore((s) => s.entries);
   const staff = useStaffStore((s) => s.staff);
   const staffLoaded = useStaffStore((s) => s.loaded);
+  const staffError = useStaffStore((s) => s.loadError);
   const hydrateStaff = useStaffStore((s) => s.hydrate);
   useEffect(() => {
     void hydrateStaff();
@@ -200,9 +203,14 @@ export default function QuizDetailScreen() {
     }),
     [allUserIds, staff, latestSends, quizAnswers],
   );
-  /** 이번 발송 진행(N11·N17) — 링 분모 = 실제로 받은 사람. 다시 알리기 = 받았고 완료 전(푸는 중 + 아직 안 풂). */
-  const progress = useMemo(() => staffProgress(latestSends, quizAnswers), [latestSends, quizAnswers]);
-  const notDone = people.filter((p) => p.state === 'in_progress' || p.state === 'not_started');
+  /**
+   * 이번 발송 진행(N11·N17) — 링 분모 = 실제로 받은 사람. 다시 알리기 = 받았고 완료 전(푸는 중 + 아직 안 풂).
+   * 나간 직원은 숫자·다시 알리기 대상에서 빠지고 사람 줄(기록)만 남는다(metrics.isCurrentStaff · 11-04 사용자).
+   */
+  const memberIds = useMemo(() => (staffLoaded && !staffError ? new Set(staff.map((x) => x.id)) : null), [staffLoaded, staffError, staff]);
+  const progress = useMemo(() => staffProgress(latestSends, quizAnswers, memberIds), [latestSends, quizAnswers, memberIds]);
+  // 다시 알리기 대상 = 지금 직원 · 이 퀴즈를 한 번도 다 풀지 않음(doneBefore · 서버 quiz_course_done_by 짝) · 최신 발송이 미완료.
+  const notDone = people.filter((p) => isCurrentStaff(p.id, memberIds) && !doneBefore(sends, p.id) && (p.state === 'in_progress' || p.state === 'not_started'));
   /** 결과 탭 빈 상태(N10) — 받은 직원도 답도(손님 포함) 없을 때만. */
   const noResults = resultsEmpty(sends, quizAnswers);
   const guestCount = guestSubmissions(quizAnswers);

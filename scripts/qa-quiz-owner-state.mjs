@@ -140,6 +140,20 @@ assert.deepEqual({ ...m.resendResultLabel([{ result: 'sent' }]) }, { text: '다�
 assert.deepEqual({ ...m.resendResultLabel([{ result: 'sent' }, { result: 'cooldown' }, { result: 'queued' }]) },
   { text: '1명에게 다시 알렸어요 · 1명은 방금 받아 10분 뒤에 보낼 수 있어요 · 1명은 최근 7일에 2번 받아 그 뒤에 나가요', good: true }, '(j) partial result says counts');
 assert.equal(m.resendResultLabel([{ result: 'cooldown' }, { result: 'not_member' }]).good, false);
+// (o) 다 푼 사람은 다시 받지 않는다(11-04) — 결과를 따로 말한다.
+assert.deepEqual({ ...m.resendResultLabel([{ result: 'completed' }]) }, { text: '이미 다 풀어서 보내지 않았어요', good: false });
+assert.equal(m.resendResultLabel([{ result: 'sent' }, { result: 'completed' }]).text, '1명에게 다시 알렸어요 · 1명은 이미 다 풀어서 보내지 않았어요');
+// 다 푼 적이 있으면(최신 발송이 미완료 재확인이어도) 다시 알리기 대상이 아니다(서버 quiz_course_done_by 짝).
+assert.equal(m.doneBefore([{ userId: 'x', completedAt: '2026-10-01' }, { userId: 'x', completedAt: null }], 'x'), true);
+assert.equal(m.doneBefore([{ userId: 'x', completedAt: null }, { userId: 'y', completedAt: 'z' }], 'x'), false);
+// (p) 나간 직원은 진행 숫자·다시 알리기 대상에서 빠진다(명단을 모르면 빼지 않는다).
+const members = new Set(['a', 'b']);
+assert.equal(m.isCurrentStaff('c', members), false);
+assert.equal(m.isCurrentStaff('c', null), true, 'unknown roster does not hide anyone');
+assert.deepEqual({ ...m.staffProgress(sends, ans, members) }, { recipients: 2, done: 1, started: 0, notStarted: 1, notDone: 1 }, 'left staff c is not counted');
+// (m) 좌석 잠김은 따로 말한다("보내지 못했어요"로 뭉개지 않는다).
+assert.deepEqual({ ...m.resendResultLabel([{ result: 'locked' }]) }, { text: '인원 한도를 넘어 받을 수 없어요', good: false });
+assert.equal(m.resendResultLabel([{ result: 'sent' }, { result: 'locked' }]).text, '1명에게 다시 알렸어요 · 1명은 인원 한도를 넘어 받을 수 없어요');
 // 화면 문구의 10 = schedule.ts 상수(서버 값은 qa:quiz-resend 가 대조한다).
 const cooldownMin = Number(fs.readFileSync(new URL('../src/lib/quiz/schedule.ts', import.meta.url), 'utf8').match(/export const RESEND_COOLDOWN_MINUTES\s*=\s*(\d+)/)?.[1]);
 assert.ok(e.quizErrorMessage({ message: 'resend_cooldown' }).includes(`${cooldownMin}분`) && m.resendResultLabel([{ result: 'cooldown' }]).text.includes(`${cooldownMin}분`), 'cooldown copy matches RESEND_COOLDOWN_MINUTES');
