@@ -15,7 +15,18 @@
 // ── 입력 모양 ────────────────────────────────────────────────────────────
 
 /** 발송 원장 한 줄(QuizAssignment 와 같은 모양). 사람별 최신 발송은 latestQuizAssignments 로 먼저 고른다. */
-export type MetricAssignment = { userId: string; sentAt: string | null; completedAt: string | null };
+export type MetricAssignment = { userId: string; sentAt: string | null; completedAt: string | null; countFrom?: string | null };
+
+/**
+ * 이 발송의 진행을 세기 시작하는 시각(0348 · 서버 짝 = quiz_assignment_count_from).
+ * 보통은 sent_at 이다. 푸는 중에 다시 알리기가 나가면 앞 회차의 시작 시각을 이어받는다(이어 풀기).
+ * 직원이 처음부터 다시 풀기를 누르면 그 시각이다. null = 아직 안 나감.
+ * "언제부터 세나"는 서버·클라 모두 이 값 하나만 본다(personState · latestCourseAnswers 호출부 · progress.restartOffered).
+ */
+export function countFromOf(a: { sentAt: string | null; countFrom?: string | null }): string | null {
+  if (!a.sentAt) return null;
+  return a.countFrom ?? a.sentAt;
+}
 
 /**
  * 답 한 줄(fetchQuizCourseAttemptItems 의 CourseAttemptItemRow 와 같은 모양).
@@ -83,7 +94,7 @@ export const PERSON_STATE_LABEL: Record<PersonState, string> = {
 
 /**
  * 한 사람의 이번 발송 상태(N17).
- * 누구를: 직원 1명. 언제부터: 그 사람의 최신 발송 sent_at 뒤.
+ * 누구를: 직원 1명. 언제부터: 그 사람의 최신 발송의 집계 시작 시각(countFromOf) 뒤.
  * 완료 = completed_at(서버 mark_quiz_completed 가 문항 단위로 찍는다).
  * 푸는 중 = 완료 전이고 이번 발송 뒤 답 1개 이상. 아직 안 풂 = 받았고 답 0개.
  * Q1: source='self' 답은 세지 않는다.
@@ -91,8 +102,8 @@ export const PERSON_STATE_LABEL: Record<PersonState, string> = {
 export function personState(a: MetricAssignment | undefined, answers: readonly MetricAnswer[]): PersonState {
   if (!a || !a.sentAt) return 'not_sent';
   if (a.completedAt) return 'done';
-  const sentAt = a.sentAt;
-  const any = answers.some((r) => r.staffId === a.userId && r.source !== 'self' && r.takenAt >= sentAt);
+  const from = countFromOf(a) ?? a.sentAt;
+  const any = answers.some((r) => r.staffId === a.userId && r.source !== 'self' && Date.parse(r.takenAt) >= Date.parse(from));
   return any ? 'in_progress' : 'not_started';
 }
 
@@ -104,10 +115,12 @@ export type StaffProgress = { recipients: number; done: number; started: number;
  * recipients = 실제로 받은 사람(sent_at 있음). 예약만 된 사람은 분모에 안 넣는다.
  * done = 완료. started = 푸는 중. notStarted = 받았고 답 0개. notDone = 받았고 완료 전(= started + notStarted).
  * 라벨: doneLabel → "완료 3/5명", startedLabel → "푸는 중 N명". 다시 알리기 대상은 notDone 이다.
+ * members 를 넘기면 나간 직원은 세지 않는다(isCurrentStaff · 11-04 사용자).
  */
-export function staffProgress(latest: readonly MetricAssignment[], answers: readonly MetricAnswer[]): StaffProgress {
+export function staffProgress(latest: readonly MetricAssignment[], answers: readonly MetricAnswer[], members?: ReadonlySet<string> | null): StaffProgress {
   const out: StaffProgress = { recipients: 0, done: 0, started: 0, notStarted: 0, notDone: 0 };
   for (const a of latest) {
+    if (!isCurrentStaff(a.userId, members)) continue;
     const s = personState(a, answers);
     if (s === 'not_sent') continue;
     out.recipients += 1;
@@ -119,9 +132,48 @@ export function staffProgress(latest: readonly MetricAssignment[], answers: read
   return out;
 }
 
+/**
+ * 지금 이 매장 직원인가(2026-11-04 사용자 결정 · 판정 한 곳).
+ * 나간 직원은 진행 숫자·"안 푼 사람"·다시 알리기 대상에서 뺀다. 사람 줄과 푼 답(기록)은 사장 화면에 남긴다.
+ * members 를 모르면(명단 조회 전·실패) 빼지 않는다. 서버도 같은 사람을 거른다(due_quiz_sends 멤버 조건 · quiz_resend not_member).
+ */
+export function isCurrentStaff(userId: string, members: ReadonlySet<string> | null | undefined): boolean {
+  return !members || members.has(userId);
+}
+
+/**
+ * 이 사람이 이 퀴즈를 한 번이라도 다 풀었나(2026-11-04 사용자 결정 · 서버 짝 = quiz_course_done_by · 0348).
+ * 다 푼 사람은 어떤 경로로도 다시 받지 않는다. 그래서 다시 알리기 대상에서 뺀다.
+ * 입력 = 이 퀴즈의 발송 행 전부(최신 발송만이 아니다 · 예전에 끝내고 최신 재확인만 미완료여도 다 푼 사람이다).
+ */
+export function doneBefore(sends: readonly { userId: string; completedAt: string | null }[], userId: string): boolean {
+  return sends.some((a) => a.userId === userId && !!a.completedAt);
+}
+
 /** "완료 3/5명". 받은 사람이 없으면 빈 문자열(링크만 낸 퀴즈는 이 줄이 없다). */
 export function doneLabel(p: StaffProgress): string {
   return p.recipients > 0 ? `완료 ${p.done}/${p.recipients}명` : '';
+}
+
+/**
+ * 다시 알리기 결과 토스트(0348 quiz_resend). 사람별 결과를 센다.
+ * sent = 지금 보냄 · queued = 최근 7일에 2번 받아 창이 풀리면 나감 · cooldown = 10분 안에 이미 받음 · locked = 무료 인원 한도를 넘어 잠김
+ * · completed = 그 퀴즈를 이미 다 풀어 다시 안 보냄(11-04).
+ * not_member 등 나머지는 "보내지 못했어요"로 센다. 10 = schedule.ts RESEND_COOLDOWN_MINUTES(이 파일은 import 를 못 한다).
+ * 반환 tone: 하나라도 보냈거나 줄에 섰으면 good.
+ */
+export function resendResultLabel(results: readonly { result: string }[]): { text: string; good: boolean } {
+  const n = (r: string) => results.filter((x) => x.result === r).length;
+  const sent = n('sent'), queued = n('queued'), cool = n('cooldown'), locked = n('locked'), done = n('completed');
+  const other = results.length - sent - queued - cool - locked - done;
+  const parts: string[] = [];
+  if (sent > 0) parts.push(results.length === 1 ? '다시 알렸어요' : `${sent}명에게 다시 알렸어요`);
+  if (cool > 0) parts.push(results.length === 1 ? '방금 보냈어요. 10분 뒤에 다시 보낼 수 있어요' : `${cool}명은 방금 받아 10분 뒤에 보낼 수 있어요`);
+  if (queued > 0) parts.push(results.length === 1 ? '최근 7일에 2번 보내 그 뒤에 나가요' : `${queued}명은 최근 7일에 2번 받아 그 뒤에 나가요`);
+  if (done > 0) parts.push(results.length === 1 ? '이미 다 풀어서 보내지 않았어요' : `${done}명은 이미 다 풀어서 보내지 않았어요`);
+  if (locked > 0) parts.push(results.length === 1 ? '인원 한도를 넘어 받을 수 없어요' : `${locked}명은 인원 한도를 넘어 받을 수 없어요`);
+  if (other > 0) parts.push(results.length === 1 ? '보내지 못했어요' : `${other}명은 보내지 못했어요`);
+  return { text: parts.join(' · '), good: sent + queued > 0 };
 }
 
 /** "푸는 중 N명". 0명이면 빈 문자열. */

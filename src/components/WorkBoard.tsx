@@ -1,4 +1,4 @@
-import { staffQuizTodo, isNextQuizRequest } from '@/lib/quiz/progress';
+import { staffQuizTodo, isNextQuizRequest, restartOffered } from '@/lib/quiz/progress';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
@@ -20,6 +20,7 @@ import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { sanitizeDayparts } from '@/lib/store/daypartLabels';
 import { fmtDateKo } from '@/lib/utils/schedule';
 import { showToast } from '@/lib/store/useToastStore';
+import { confirmAction } from '@/lib/utils/confirm';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { CaptureKnowhowSheet } from '@/components/work/CaptureKnowhowSheet';
 import { UnderstandingCheckSheet } from '@/components/work/UnderstandingCheckSheet';
@@ -66,6 +67,8 @@ type TrainingCardView = {
   sentIds?: string[];
   assignmentId?: string;
   completionRecovery?: boolean;
+  /** 이어 풀기 중이라 '처음부터 다시 풀기'를 보여 준다(progress.restartOffered). */
+  restartable?: boolean;
 };
 
 // 채팅에 한 번에 보낼 수 있는 사진 최대 장수.
@@ -512,6 +515,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
         sentIds: assignments.filter((a) => a.courseId === c.id && a.userId === userId && !!a.sentAt && !a.completedAt).map((a) => a.id),
         progress: { answered: pending.answeredItems, total: pending.totalItems },
         fromTodo: true,
+        restartable: restartOffered(todo.assignment, todo.state),
       });
     }
 
@@ -610,6 +614,25 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     },
     [entryById, sopsOf, quizProgress],
   );
+
+  /**
+   * 처음부터 다시 풀기(0348 · 2026-11-03 사용자 결정). 기본은 이어 풀기다. 진행이 0으로 돌아가므로 한 번 묻는다.
+   * 서버가 바꿨으면 스토어가 다시 읽어 카드 진행이 0부터 보이고 버튼이 사라진다.
+   */
+  const restartQuiz = useCallback(async (assignmentId: string) => {
+    const done = quizProgress.find((p) => p.assignmentId === assignmentId)?.answeredItems ?? 0;
+    const ok = await confirmAction(
+      '처음부터 다시 풀까요?',
+      `지난번에 푼 ${done}문항은 진행에 안 들어가고 처음부터 다시 세어요.`,
+      '처음부터 풀기',
+      { cancelLabel: '이어서 풀기', icon: 'refresh-outline' },
+    );
+    if (!ok) return;
+    const res = await useWorkStore.getState().restartQuiz(assignmentId);
+    // 'noop' = 서버가 바꿀 것이 없었다(이미 처음부터 · 그새 완료). 다시 읽었으니 카드가 사실대로 바뀐다. 오류 문구를 띄우지 않는다.
+    if (res === 'ok') showToast('처음부터 다시 풀어요', 'good');
+    else if (res === 'error') showToast('다시 풀기를 시작하지 못했어요. 다시 시도해 주세요.');
+  }, [quizProgress]);
 
   /**
    * ?quiz=<발송 id> — 들어오자마자 **그 발송의 카드**(sentId 일치)의 다음 노하우로 응시 시트를 연다(2026-10-15 QA #5 · P1 역 ⑤).
@@ -995,6 +1018,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
               lastSubmission={lastSubmissionOf(c.course.id)}
               onOpenKnowhow={openKnowhow}
               onStartCheck={(entryId, courseId) => startTrainingCheck(entryId, courseId, c.assignmentId)}
+              onRestart={c.restartable && c.assignmentId ? () => void restartQuiz(c.assignmentId!) : undefined}
             />
             )}
           </Appear>

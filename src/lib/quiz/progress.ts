@@ -4,9 +4,10 @@
  * "할 퀴즈" 판정은 quizTodo 하나다(계획서 P3 · N15). 홈 개수·업무 카드·벨 배지·알림 목록이 전부 이 결과를 쓴다.
  * 서버 짝 = quiz_assignment_state(0332) → progress.state.
  */
+import { countFromOf } from './metrics';
 import { staffCanSeeCourse } from './schedule';
 
-type Assignment = { id: string; courseId: string; userId: string; sentAt: string | null; completedAt: string | null };
+type Assignment = { id: string; courseId: string; userId: string; sentAt: string | null; completedAt: string | null; countFrom?: string | null };
 type Progress = {
   assignmentId: string;
   pendingEntryIds: string[];
@@ -53,6 +54,19 @@ export function currentSend<A extends { sentAt: string | null; scheduledOn?: str
     } else if ((r.scheduledOn ?? '') > (best.scheduledOn ?? '')) best = r;
   }
   return best;
+}
+
+/**
+ * '처음부터 다시 풀기'를 보여 주나(0348 · 2026-11-03 사용자 결정).
+ * = 앞 회차에 답이 있고 미완료인 채로 새 발송이 나가 이어 풀고 있다. 서버가 그때만 집계 시작 시각을 sent_at 앞으로 둔다.
+ * 다시 풀기를 누르면 시작 시각이 sent_at 뒤가 되어 저절로 꺼진다. 서버 짝 = quiz_assignment_restart 의 같은 조건.
+ * 화면만 state='todo' 를 더 본다. 다 푼 발송(answered)은 완료 갱신 카드가 대신 서므로 버튼 자리가 없다. 서버는 이 조건을 안 본다.
+ * 직원 업무 카드가 이 판정 하나를 쓴다.
+ */
+export function restartOffered(a: Assignment, state: QuizAssignmentState | null): boolean {
+  if (state !== 'todo' || a.completedAt || !a.sentAt) return false;
+  const from = countFromOf(a);
+  return !!from && Date.parse(from) < Date.parse(a.sentAt);
 }
 
 /**

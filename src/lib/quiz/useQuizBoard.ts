@@ -387,6 +387,8 @@ export function useQuizBoard() {
    *   사장이 직접 정한 고정 주기(due_days)만 "N개월마다"로 말한다.
    */
   const buildQuizzes = useCallback((): QuizListRow[] => {
+    // 나간 직원은 진행 숫자에서 뺀다(metrics.isCurrentStaff · 상세 화면과 같은 규칙 · 11-04 사용자).
+    const memberIds = staffLoaded && !staffError ? new Set(staff.map((x) => x.id)) : null;
     return courses.map((c) => {
       const entryIds = courseEntriesOf(courseEntries, c.id).map((r) => r.entryId);
       const sends = sendsByCourse.get(c.id) ?? [];
@@ -442,11 +444,11 @@ export function useQuizBoard() {
         entryCount: entryIds.length,
         itemCount: mine.length,
         staleCount: mine.filter((q) => isStale(q)).length,
-        progress: staffProgress(latestSends, []),
+        progress: staffProgress(latestSends, [], memberIds),
         caption,
       };
     });
-  }, [courses, courseEntries, sendsByCourse, links, now, quizItems, entries, isStale]);
+  }, [courses, courseEntries, sendsByCourse, links, now, quizItems, entries, isStale, staffLoaded, staffError, staff]);
 
   /**
    * 홈 상단 지표 — `buildQuizzes()` 결과에서만 센다. 화면이 다시 세지 않는다(판정 복제 금지).

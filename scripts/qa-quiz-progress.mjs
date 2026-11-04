@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 
 const out = mkdtempSync(join(tmpdir(), 'quiz-progress-'));
 execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', 'src/lib/quiz/progress.ts', '--outDir', out, '--module', 'commonjs', '--target', 'es2020', '--skipLibCheck', '--ignoreConfig'], { stdio: 'pipe' });
-const { isNextQuizRequest, quizTodo, legacyQuizOpen } =createRequire(import.meta.url)(join(out, 'progress.js'));
+const { isNextQuizRequest, quizTodo, legacyQuizOpen, restartOffered } =createRequire(import.meta.url)(join(out, 'progress.js'));
 const a = { id: 'a', courseId: 'A', userId: 'me', sentAt: '2026-10-22', completedAt: null };
 const b = { ...a, id: 'b', courseId: 'B', completedAt: '2026-10-22' };
 const progress = [{ assignmentId: 'a', pendingEntryIds: ['shared'], totalItems: 4, answeredItems: 3 }, { assignmentId: 'b', pendingEntryIds: [], totalItems: 4, answeredItems: 4 }];
@@ -57,4 +57,13 @@ assert.equal(copy.cardProgressText({ answered: 3, total: 6 }), '3/6문제', 'N12
 assert.equal(legacyQuizOpen(['e1', 'e2'], new Set(['e1', 'e2'])), false, 'legacy quiz fully submitted is done');
 assert.equal(legacyQuizOpen(['e1', 'e2'], new Set(['e1'])), true, 'legacy quiz with unsubmitted entry stays open');
 assert.equal(legacyQuizOpen(['e1'], null), true, 'legacy read failure keeps the quiz (no vanish)');
-console.log('quiz progress: 31 regression checks passed');
+// 0348 '처음부터 다시 풀기' 조건 = 이어 풀기 중(집계 시작 시각 < sent_at) · 미완료 · todo.
+const sentR = '2026-11-03T09:00:00.123456+00:00';
+const carried = q('r', 'A', sentR, { countFrom: '2026-11-01T09:00:00+00:00' });
+assert.equal(restartOffered(carried, 'todo'), true, 'resend mid-quiz: restart is offered');
+assert.equal(restartOffered({ ...carried, countFrom: null }, 'todo'), false, 'fresh send (count_from null = sent_at): no restart');
+assert.equal(restartOffered({ ...carried, countFrom: '2026-11-03T09:05:00+00:00' }, 'todo'), false, 'after restart (count_from >= sent_at): hidden');
+assert.equal(restartOffered({ ...carried, completedAt: 'x' }, 'todo'), false, 'completed: hidden');
+assert.equal(restartOffered(carried, 'answered'), false, 'all answered: hidden');
+assert.equal(restartOffered({ ...carried, sentAt: null }, null), false, 'not sent: hidden');
+console.log('quiz progress: 37 regression checks passed');

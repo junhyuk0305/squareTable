@@ -321,7 +321,7 @@ export function QuizSettingsPanel({
           {removed.length > 0 ? (
             <Text style={s.warnText}>{removed.length}명의 아직 안 나간 배정을 취소해요.</Text>
           ) : null}
-          {/* 다시 알리기 — 새 발송 1건이라 빈도 상한을 그대로 탄다(오늘 이미 받았으면 안 간다). */}
+          {/* 다시 알리기 — 지금 보낸다(0348 quiz_resend · 10분 쿨다운 · 7일 2회 상한은 서버가 본다). */}
           {remind ? (
             <View style={s.remind}>
               <GhostButton

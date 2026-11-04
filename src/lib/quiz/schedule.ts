@@ -73,8 +73,13 @@ export const MAX_SENDS_PER_WEEK = 2;
 export const MAX_ITEMS_PER_ROUND = 3;
 /** 연속으로 이만큼 무시하면 자동으로 멈춘다. 다시 시작은 **그 사람이 열었을 때**. */
 export const AUTO_STOP_AFTER_IGNORED = 2;
+/**
+ * 다시 알리기를 보낸 뒤 같은 (퀴즈, 사람)에게 다시 보낼 수 없는 시간(분). 판정은 서버 quiz_resend_cooldown()(0348) 한 곳이다.
+ * 여기 값은 화면 문구에만 쓴다. qa:quiz-resend 가 서버 값과 대조한다(한쪽만 고치면 RED).
+ */
+export const RESEND_COOLDOWN_MINUTES = 10;
 
-// ── 자동 출제 계기의 생성 상한 (0169 입사·변경 트리거) ──────────────────────
+// ── 자동 출제 계기의 생성 상한 (0169 변경 트리거 · 입사 트리거는 0348 에서 없앴다) ──────────
 /**
  * 노하우가 바뀌어서 **시스템이 스스로** 만드는 재확인 발송의 상한(매장·직원당 7일).
  *
@@ -88,13 +93,7 @@ export const AUTO_STOP_AFTER_IGNORED = 2;
  */
 export const MAX_AUTO_RECHECKS_PER_WEEK = 1;
 
-/**
- * 입사 즉시 배정하는 코스 수. **첫날 퀴즈는 압축돼야 한다** — 전부 쏟으면 그날 앱을 끈다.
- * 나머지는 사장 발행과 주기가 이어받는다.
- *
- * ★SQL 사본: 0169 approve_member 의 `limit 1`. 바꿀 때 양쪽을 같이 고친다.
- */
-export const JOIN_FIRST_QUIZ_COURSES = 1;
+// 입사 즉시 첫 퀴즈 배정(JOIN_FIRST_QUIZ_COURSES · 0169)은 0348 에서 없앴다(2026-11-04 사용자 결정 · 사장이 보내야 받는다).
 
 /**
  * 발송 원장(0139)이 생기기 전 코스의 경계. 이보다 먼저 만든 코스는 원장 0건이어도 직원에게 보인다(하위 호환).

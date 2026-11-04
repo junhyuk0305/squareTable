@@ -9,11 +9,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
 import {
   PERSON_STATE_LABEL,
+  countFromOf,
+  doneBefore,
   guestSubmissions,
   guestSubmissionsLabel,
+  isCurrentStaff,
   itemAnswers,
   itemAnswersLabel,
   personState,
+  resendResultLabel,
   resultsEmpty,
   roundLabel,
   staffProgress,
@@ -32,7 +36,7 @@ import {
   fetchQuizSendStatus,
   fetchRecipientReadiness,
   upsertTrainingCourse,
-  insertQuizAssignments,
+  resendQuiz,
   insertQuizItem,
   archiveQuizItem,
   type CourseAttemptItemRow,
@@ -46,7 +50,7 @@ import { quizErrorMessage } from '@/lib/quiz/errors';
 import { itemsOfCourse } from '@/lib/quiz/courseItems';
 import { latestQuizAssignments, latestCourseAnswers } from '@/lib/quiz/courseStats';
 // KST 오늘은 일정 SSOT 하나만 쓴다(이 파일·만들기·설정 패널에 복붙돼 있던 것을 걷었다).
-import { todayKst, addDaysKst, cycleLabel } from '@/lib/quiz/schedule';
+import { cycleLabel } from '@/lib/quiz/schedule';
 import { Appear, stagger } from '@/components/Appear';
 import { BottomSheet } from '@/components/BottomSheet';
 import { SegmentTabs, type SegmentItem } from '@/components/SegmentTabs';
@@ -95,6 +99,7 @@ export default function QuizDetailScreen() {
   const entries = usePlaybookStore((s) => s.entries);
   const staff = useStaffStore((s) => s.staff);
   const staffLoaded = useStaffStore((s) => s.loaded);
+  const staffError = useStaffStore((s) => s.loadError);
   const hydrateStaff = useStaffStore((s) => s.hydrate);
   useEffect(() => {
     void hydrateStaff();
@@ -188,7 +193,8 @@ export default function QuizDetailScreen() {
       const a = latestSends.find((x) => x.userId === uid);
       const history = quizAnswers.filter((r) => r.staffId === uid);
       // 한 코스를 노하우별로 나눠 푼다. 제출 하나 대신 이번 발송의 문항별 마지막 답을 센다.
-      const mine = latestCourseAnswers(history, a?.sentAt);
+      // 언제부터 = 집계 시작 시각(0348 · 이어 풀기면 앞 회차부터 · 다시 풀기면 누른 때부터). 직원 화면 진행과 같은 기준이다.
+      const mine = latestCourseAnswers(history, a ? countFromOf(a) : undefined);
       return {
         id: uid,
         name: s?.name ?? '나간 직원',
@@ -198,9 +204,14 @@ export default function QuizDetailScreen() {
     }),
     [allUserIds, staff, latestSends, quizAnswers],
   );
-  /** 이번 발송 진행(N11·N17) — 링 분모 = 실제로 받은 사람. 다시 알리기 = 받았고 완료 전(푸는 중 + 아직 안 풂). */
-  const progress = useMemo(() => staffProgress(latestSends, quizAnswers), [latestSends, quizAnswers]);
-  const notDone = people.filter((p) => p.state === 'in_progress' || p.state === 'not_started');
+  /**
+   * 이번 발송 진행(N11·N17) — 링 분모 = 실제로 받은 사람. 다시 알리기 = 받았고 완료 전(푸는 중 + 아직 안 풂).
+   * 나간 직원은 숫자·다시 알리기 대상에서 빠지고 사람 줄(기록)만 남는다(metrics.isCurrentStaff · 11-04 사용자).
+   */
+  const memberIds = useMemo(() => (staffLoaded && !staffError ? new Set(staff.map((x) => x.id)) : null), [staffLoaded, staffError, staff]);
+  const progress = useMemo(() => staffProgress(latestSends, quizAnswers, memberIds), [latestSends, quizAnswers, memberIds]);
+  // 다시 알리기 대상 = 지금 직원 · 이 퀴즈를 한 번도 다 풀지 않음(doneBefore · 서버 quiz_course_done_by 짝) · 최신 발송이 미완료.
+  const notDone = people.filter((p) => isCurrentStaff(p.id, memberIds) && !doneBefore(sends, p.id) && (p.state === 'in_progress' || p.state === 'not_started'));
   /** 결과 탭 빈 상태(N10) — 받은 직원도 답도(손님 포함) 없을 때만. */
   const noResults = resultsEmpty(sends, quizAnswers);
   const guestCount = guestSubmissions(quizAnswers);
@@ -334,47 +345,21 @@ export default function QuizDetailScreen() {
   };
 
   /**
-   * 아직 안 푼 사람에게 한 번 더. 새 발송 1건이라 **빈도 상한을 그대로 탄다**(하루 1회 · 주 2회).
-   *
-   * ★2026-10-15(안드로이드 QA #6): 예전엔 전원을 **오늘 날짜로** 다시 넣었다. 그런데 오늘 보낸 퀴즈는 같은
-   *   (퀴즈·사람·날짜) 행이 이미 있어 upsert 가 0행으로 끝나고, 그걸 실패로 세어 "다시 알리지 못했어요"가 떴다.
-   *   이제 사람마다 날짜를 정한다 — 아직 안 나간 발송이 있으면 건너뛰고(이미 줄에 서 있다), 오늘 행이 있으면
-   *   내일로 잡는다(하루 1회 상한으로 오늘은 어차피 안 간다). 마감은 이 퀴즈의 고정 마감을 그대로 싣는다.
+   * 아직 안 푼 사람에게 지금 다시 알린다(0348 quiz_resend · 2026-11-03 사용자 결정).
+   * 어떤 행을 쓰고 언제 나가는지는 전부 서버가 정한다(10분 쿨다운 · 7일 2회 상한 · 줄에 선 행 재사용 · 날짜 · 마감).
+   * 화면은 사람별 결과를 metrics.resendResultLabel 로 말하기만 한다.
+   * ★예전(옛 앱)은 여기서 행을 직접 넣었고 오늘 행이 있으면 내일로 잡아 다음 날 나갔다(2026-10-15 QA #6 의 날짜 규칙은 서버로 옮겼다).
    */
   const remind = async () => {
     if (!id || notDone.length === 0) return;
-    const today = todayKst();
-    const byDay = new Map<string, string[]>();
-    for (const p of notDone) {
-      const mine = sends.filter((a) => a.userId === p.id);
-      if (mine.some((a) => !a.sentAt)) continue;
-      const on = mine.some((a) => a.scheduledOn === today) ? addDaysKst(today, 1) : today;
-      byDay.set(on, [...(byDay.get(on) ?? []), p.id]);
-    }
-    if (byDay.size === 0) {
-      showToast('이미 보내는 중이에요. 근무 시간에 맞춰 나가요');
+    const res = await resendQuiz(id, notDone.map((p) => p.id));
+    if (res.error) {
+      showToast(quizErrorMessage(res.error, '다시 알리지 못했어요. 잠시 뒤 다시 시도해 주세요.'));
       return;
     }
-    let ok = true;
-    for (const [on, userIds] of byDay) {
-      ok = await guardWrite(
-        insertQuizAssignments(id, userIds, on, fixedDue && fixedDue >= on ? fixedDue : null),
-        () => {},
-        '다시 알리지 못했어요.',
-      );
-      if (!ok) break;
-    }
-    if (ok) {
-      bumpSends();
-      // 주 2회 상한(0301 ③)에 걸린 사람은 이번 7일 창에선 안 나간다 — 막지 않고 미리 말한다(P5).
-      const quotaOut = [...byDay.values()].flat().filter((uid) => readiness[uid]?.weeklyQuotaLeft === 0).length;
-      showToast(
-        quotaOut > 0
-          ? `근무 시간에 맞춰 다시 보낼게요 · ${quotaOut}명은 최근 7일에 2번 보내 그 뒤에 나가요`
-          : '근무 시간에 맞춰 다시 보낼게요',
-        'good',
-      );
-    }
+    bumpSends();
+    const label = resendResultLabel(res.data ?? []);
+    showToast(label.text, label.good ? 'good' : undefined);
   };
 
   /**
