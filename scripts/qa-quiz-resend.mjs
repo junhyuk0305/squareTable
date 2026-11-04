@@ -7,6 +7,12 @@
 //   (d) 옛 앱 경로(새 RPC 안 부름 · 옛 서명 quiz_staff_record(p_rows))도 (b) 와 같다.
 //   (e) 재확인(origin recheck)은 그대로다. 완료 뒤에도 후보로 남고 · 나가면 0 부터 센다.
 //   + 직원은 count_from 을 직접 못 쓴다(RLS) · 이어 풀기 행만 count_from < sent_at 이다(버튼 조건의 서버 근거).
+//   (f) quiz_resend → 다음 스윕 후보에 바로 든다 · claim 으로 sent_at · 이어 풀기 트리거를 탄다.
+//   (g) 10분 안 두 번째 → resend_cooldown · 새 행·후보 0.  (h) 10분 뒤 → 다시 보낸다(오늘 이미 받았어도).
+//   (i) 옛 앱 예약 행(사장 insert)은 완료 순간 지워진다 · 재확인 행·나간 행·응시 기록은 남는다.
+//   (j) 여러 명 중 일부 쿨다운·일부 7일 상한 → 사람별 결과(sent · cooldown · queued) · 7일 상한 행은 후보가 아니다 · 직원은 forbidden.
+//   (k) 그 퀴즈를 끝낸 사람의 join 행은 후보가 아니다.  (l) 재합류 join 발송은 앞 회차를 이어 푼다(실제 remove_staff → join_by_invite).
+//   + 쿨다운 상수 서버 = 앱(schedule.ts) · 앱 상수가 없으면 skip 으로 찍는다.
 //
 // 사용: node scripts/qa-quiz-resend.mjs --local   (로컬 도커 · `npx supabase status` 키)
 //       node scripts/qa-quiz-resend.mjs --allow-remote   (.env + .env.seed · 라이브는 0348 적용 뒤)
@@ -40,7 +46,7 @@ console.log(`— 대상 ${LOCAL ? '로컬' : '원격(.env)'} ${URL_} —`);
 const mk = () => createClient(URL_, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
 const admin = createClient(URL_, SRV, { auth: { persistSession: false, autoRefreshToken: false } });
 const s = String(Date.now()).slice(-9);
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, skip = 0;
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  ✓', n, extra)) : (fail++, console.log('  ✗', n, extra)); };
 
 const kst = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
@@ -49,8 +55,9 @@ const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate(
 const dayOff = (n) => ymd(new Date(kst.getFullYear(), kst.getMonth(), kst.getDate() + n));
 const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
 
-const PEOPLE = ['a', 'b', 'c', 'd', 'e', 'f'];
-const qaPhones = [`0100${s.slice(0, 7)}`, ...PEOPLE.map((_, i) => `010${i + 1}${s.slice(0, 7)}`)];
+const PEOPLE = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'i', 'j1', 'j2', 'j3', 'k1', 'k2', 'l'];
+// 010 + 두 자리 순번 + 6자리(실행마다 다름) = 11자리. 0번 = 사장.
+const qaPhones = [0, ...PEOPLE.map((_, i) => i + 1)].map((n) => `010${String(n).padStart(2, '0')}${s.slice(0, 6)}`);
 let UNIT = null;
 const made = { users: [], entries: [] };
 
@@ -244,6 +251,130 @@ async function main() {
     check('(e) 재확인 행은 이어 풀기가 아니다(count_from 없음)', !cf?.error && !cf?.count_from, JSON.stringify(cf));
   }
 
+  // ── (f)~(j) 즉시 다시 알리기(quiz_resend) · 10분 쿨다운 · 완료 시 대기 행 삭제 ─────────
+  // 배달은 크론 스윕과 같은 길이다: quiz_resend 가 행에 resend_at 을 찍고 스윕을 앞당긴다 → due_quiz_sends → claim_quiz_send → 푸시.
+  // 여기서는 스윕 한 번을 due() + claim 으로 재현한다(엣지 배달 자체는 qa:quiz-schedule ⑦ 이 잰다).
+  const resend = (users) => owner.rpc('quiz_resend', { p_course_id: QUIZ, p_user_ids: users.map((k) => P[k].id) });
+  const resultOf = (data, k) => (data ?? []).find((r) => r.user_id === P[k].id)?.result;
+  // 조회 오류를 빈 목록으로 삼키면 "지워졌다"가 거짓 통과한다(수정 전 RED 에서 실제로 그랬다). 오류는 던진다.
+  const rowsOf = async (k) => {
+    const { data, error } = await admin.from('quiz_assignments').select('id, sent_at, resend_at, origin, count_from, scheduled_on').eq('unit_id', UNIT).eq('user_id', P[k].id);
+    if (error) throw new Error(`rowsOf(${k}): ${error.message}`);
+    return data ?? [];
+  };
+
+  console.log('— (f) 다시 알리기 → 바로 나간다 —');
+  let gResend = null;
+  {
+    const g1 = `qz_qr_g1_${s}`;
+    await owner.from('quiz_assignments').insert(asg(g1, P.g.id, dayOff(-8)));
+    await admin.from('quiz_assignments').update({ sent_at: daysAgo(8), opened_at: daysAgo(8) }).eq('id', g1);
+    await answer('g', ITEMS.slice(0, 2), 'g-half');
+    const { data, error } = await resend(['g']);
+    check('(f) quiz_resend 결과 = sent', !error && resultOf(data, 'g') === 'sent', error?.message ?? JSON.stringify(data));
+    const cand = (await due()).filter((x) => x.out_user_id === P.g.id);
+    check('(f) 다음 스윕 후보에 바로 든다(알림 1건)', cand.length === 1, `후보 ${cand.length}건`);
+    gResend = cand[0]?.out_assignment_id ?? null;
+    if (gResend) await claim(gResend);
+    const row = (await rowsOf('g')).find((r) => r.id === gResend);
+    check('(f) sent_at 이 찍히고 이어 풀기 트리거를 탄다(count_from < sent_at)', !!row?.sent_at && !!row?.count_from && row.count_from < row.sent_at, JSON.stringify(row));
+  }
+
+  console.log('— (g) 10분 안 두 번째 → resend_cooldown —');
+  {
+    const before = (await rowsOf('g')).length;
+    const { error } = await resend(['g']);
+    check('(g) 한 사람이 쿨다운이면 resend_cooldown 으로 끝난다', /resend_cooldown/.test(error?.message ?? ''), error?.message ?? '막히지 않음');
+    const cand = (await due()).filter((x) => x.out_user_id === P.g.id);
+    check('(g) 새 행 0 · 후보 0', (await rowsOf('g')).length === before && cand.length === 0, `행 ${before}→${(await rowsOf('g')).length} · 후보 ${cand.length}`);
+  }
+
+  console.log('— (h) 10분 지난 뒤 → 다시 보낸다(하루 1회는 사장의 다시 알리기를 막지 않는다) —');
+  {
+    const back = new Date(Date.now() - 11 * 60_000).toISOString();
+    if (gResend) await admin.from('quiz_assignments').update({ sent_at: back, resend_at: back }).eq('id', gResend);
+    const { data, error } = await resend(['g']);
+    check('(h) 10분 뒤에는 sent', !error && resultOf(data, 'g') === 'sent', error?.message ?? JSON.stringify(data));
+    const cand = (await due()).filter((x) => x.out_user_id === P.g.id);
+    check('(h) 오늘 이미 받았어도 후보에 든다', cand.length === 1, `후보 ${cand.length}건`);
+  }
+
+  console.log('— (i) 옛 앱 예약 행 → 완료 순간 삭제 · 재확인 행은 남는다 —');
+  {
+    const i1 = await firstSend('i');
+    const old = `qz_qr_i2_${s}`, rc = `qz_qr_i3_${s}`;
+    // 옛 앱 다시 알리기 = 사장 세션이 내일 날짜 행을 직접 넣는다(quiz/[id].tsx 옛 remind · insertQuizAssignments).
+    const { error: oe } = await owner.from('quiz_assignments').insert(asg(old, P.i.id, dayOff(1)));
+    check('(i) 옛 앱 경로 insert 는 그대로 된다', !oe, oe?.message ?? '');
+    await admin.from('quiz_assignments').insert(asg(rc, P.i.id, dayOff(2), 'recheck'));
+    await answer('i', ITEMS, 'i-all');
+    const { data: done } = await P.i.c.rpc('mark_quiz_completed', { p_id: i1 });
+    const ids = (await rowsOf('i')).map((r) => r.id);
+    check('(i) 완료 true', done === true, `got=${done}`);
+    check('(i) 안 나간 manual 행은 지워진다', !ids.includes(old), ids.join(','));
+    check('(i) 재확인 행·나간 행은 남는다', ids.includes(rc) && ids.includes(i1), ids.join(','));
+    const { count } = await admin.from('quiz_attempt_items').select('id', { count: 'exact', head: true }).eq('unit_id', UNIT).eq('staff_id', P.i.id);
+    check('(i) 응시 기록은 그대로(4)', count === 4, `count=${count}`);
+  }
+
+  console.log('— (j) 여러 명 중 일부 쿨다운 · 일부 7일 상한 → 사람별 결과 —');
+  {
+    // j1 = 2분 전에 일반 발송을 받음(쿨다운 아님 · 기준은 다시 알리기뿐) · j2 = 2분 전에 다시 알리기를 받음(쿨다운)
+    // j3 = 최근 7일에 2번 받음(7일 상한 → 줄에 선다)
+    const put = async (id, k, on, sentAt, extra = {}) => {
+      await owner.from('quiz_assignments').insert(asg(id, P[k].id, on));
+      await admin.from('quiz_assignments').update({ sent_at: sentAt, opened_at: sentAt, ...extra }).eq('id', id);
+    };
+    const twoMin = new Date(Date.now() - 2 * 60_000).toISOString();
+    await put(`qz_qr_j1_${s}`, 'j1', dayOff(0), twoMin);
+    await put(`qz_qr_j2_${s}`, 'j2', dayOff(0), twoMin, { resend_at: twoMin });
+    await put(`qz_qr_j3a_${s}`, 'j3', dayOff(-3), daysAgo(3));
+    await put(`qz_qr_j3b_${s}`, 'j3', dayOff(-4), daysAgo(4));
+    const { data, error } = await resend(['j1', 'j2', 'j3']);
+    check('(j) 일부가 막혀도 오류로 끝나지 않는다', !error, error?.message ?? '');
+    check('(j) j1 sent · j2 cooldown · j3 queued', resultOf(data, 'j1') === 'sent' && resultOf(data, 'j2') === 'cooldown' && resultOf(data, 'j3') === 'queued', JSON.stringify(data));
+    const cand = await due();
+    check('(j) 후보 = j1 만(j3 는 7일 상한이 풀릴 때 나간다)', cand.some((x) => x.out_user_id === P.j1.id) && !cand.some((x) => x.out_user_id === P.j3.id || x.out_user_id === P.j2.id), cand.map((x) => x.out_user_id).join(','));
+    const { error: se } = await P.j1.c.rpc('quiz_resend', { p_course_id: QUIZ, p_user_ids: [P.j1.id] });
+    check('(j) 직원은 다시 알리기를 못 부른다(forbidden)', /forbidden/.test(se?.message ?? ''), se?.message ?? '거부 안 됨');
+  }
+
+  // ── (k)(l) 입사(join) 행 · 오류 탐지 11-03 10번 ──────────────────────────
+  console.log('— (k) 이 퀴즈를 이미 끝낸 사람에게 join 행은 안 나간다 —');
+  {
+    // k1 = join 대기 행이 먼저 있고 다른 발송으로 끝냄 · k2 = 끝낸 뒤 join 행이 생김(재합류와 같은 모양)
+    const k1 = await firstSend('k1');
+    await admin.from('quiz_assignments').insert(asg(`qz_qr_k1j_${s}`, P.k1.id, dayOff(0), 'join'));
+    await answer('k1', ITEMS, 'k1-all');
+    const { data: d1 } = await P.k1.c.rpc('mark_quiz_completed', { p_id: k1 });
+    const k2 = await firstSend('k2');
+    await answer('k2', ITEMS, 'k2-all');
+    const { data: d2 } = await P.k2.c.rpc('mark_quiz_completed', { p_id: k2 });
+    await admin.from('quiz_assignments').insert(asg(`qz_qr_k2j_${s}`, P.k2.id, dayOff(0), 'join'));
+    check('(k) 셋업: 둘 다 완료 true', d1 === true && d2 === true, `${d1}/${d2}`);
+    const cand = (await due()).filter((x) => x.out_user_id === P.k1.id || x.out_user_id === P.k2.id);
+    check('(k) 완료자의 join 행은 후보가 아니다(완료 전·후에 생긴 것 모두)', cand.length === 0, cand.map((x) => x.out_assignment_id).join(','));
+    const ids = [...(await rowsOf('k1')), ...(await rowsOf('k2'))].map((r) => r.id);
+    check('(k) join 행은 지우지 않는다(완료 시 삭제는 manual 만)', ids.includes(`qz_qr_k1j_${s}`) && ids.includes(`qz_qr_k2j_${s}`), ids.join(','));
+  }
+
+  console.log('— (l) 재합류 join 발송은 앞 회차를 이어 푼다 —');
+  {
+    await firstSend('l');
+    await answer('l', ITEMS.slice(0, 2), 'l-half');
+    const { error: re } = await owner.rpc('remove_staff', { p_staff_id: P.l.id });
+    if (re) throw new Error('remove_staff: ' + re.message);
+    await joinAsStaff(P.l.c, CODE);
+    await P.l.c.rpc('switch_active_unit', { p_unit_id: UNIT });
+    const join = (await rowsOf('l')).find((r) => r.origin === 'join' && !r.sent_at);
+    check('(l) 셋업: 재합류가 이 퀴즈의 join 행을 만들었다(실제 _admit_member 경로)', !!join, JSON.stringify(await rowsOf('l')));
+    if (join) {
+      await claim(join.id);
+      const p = await progressOf(P.l.c, join.id);
+      check('(l) 재합류 발송 진행 = 2/4(이어 풀기)', p?.answered_items === 2 && p?.total_items === 4, show(p));
+    }
+  }
+
   // ── 쓰기 경계 ─────────────────────────────────────────────────────────
   console.log('— 쓰기 경계 —');
   {
@@ -252,6 +383,18 @@ async function main() {
     const anon = mk();
     const { error: ae } = await anon.rpc('quiz_assignment_restart', { p_assignment_id: 'x' });
     check('anon 은 다시 풀기를 못 부른다(권한 42501)', ae?.code === '42501', ae?.code ?? '거부 안 됨');
+    const { error: ae2 } = await anon.rpc('quiz_resend', { p_course_id: QUIZ, p_user_ids: [P.a.id] });
+    check('anon 은 다시 알리기를 못 부른다(권한 42501)', ae2?.code === '42501', ae2?.code ?? '거부 안 됨');
+  }
+
+  // ── 쿨다운 상수: 서버 quiz_resend_cooldown() = 앱 schedule.ts RESEND_COOLDOWN_MINUTES(화면 문구) ──
+  {
+    const { data: iv, error: ie } = await admin.rpc('quiz_resend_cooldown');
+    const serverMin = /^(\d+):(\d+):(\d+)$/.test(iv ?? '') ? (() => { const [h, m] = iv.split(':').map(Number); return h * 60 + m; })() : NaN;
+    let clientMin = NaN;
+    try { clientMin = Number(readFileSync(here('../src/lib/quiz/schedule.ts'), 'utf8').match(/export const RESEND_COOLDOWN_MINUTES\s*=\s*(\d+)/)?.[1]); } catch { /* 없음 */ }
+    if (!Number.isFinite(clientMin)) { skip++; console.log('  - skip 쿨다운 상수 대조(schedule.ts 에 RESEND_COOLDOWN_MINUTES 없음 · 앱 브랜치 머지 전)', `서버 ${serverMin}분`); }
+    else check('쿨다운 상수 서버 = 앱', !ie && serverMin === clientMin, ie?.message ?? `서버 ${serverMin} · 앱 ${clientMin}`);
   }
   void ownerId;
 }
@@ -277,5 +420,5 @@ try {
   await cleanup().catch((e) => console.error('  ! 정리 실패:', e?.message ?? e));
   await cleanupSeededPhones(URL_, SRV, qaPhones).catch(() => {});
 }
-console.log(`\n${fail === 0 ? 'GREEN' : 'RED'} — pass ${pass} / fail ${fail} · LLM 호출 0회`);
+console.log(`\n${fail === 0 ? 'GREEN' : 'RED'} — pass ${pass} / fail ${fail}${skip ? ` · skip ${skip} (앱 상수 없음 · 통과로 안 셈)` : ''} · LLM 호출 0회`);
 process.exitCode = fail === 0 ? 0 : 1;
