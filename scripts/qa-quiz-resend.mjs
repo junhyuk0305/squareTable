@@ -1,17 +1,22 @@
 // 퀴즈 '다시 알리기' 서버 판정 QA(0348) — 실 백엔드 대상·자가정리 · LLM 호출 0회.
 //
-// 무엇을 증명하나(2026-11-03 사용자 결정):
+// 무엇을 증명하나(2026-11-03 · 11-04 사용자 결정):
 //   (a) 다시 알리기 대기 행(origin manual · 안 나감)은 그 행이 생긴 뒤 같은 (퀴즈, 사람)이 완료하면 due_quiz_sends 후보가 아니다.
 //   (b) 2/4 푼 상태에서 다시 알리기가 나가면 이어 풀기가 기본이다. 새 발송 진행 = 2/4 · 남은 2문항만 나오고 · 그걸로 완료된다.
 //   (c) 같은 상황에서 quiz_assignment_restart 를 부르면 0/4 부터 다시 센다. 남의 발송·두 번째 호출은 false.
 //   (d) 옛 앱 경로(새 RPC 안 부름 · 옛 서명 quiz_staff_record(p_rows))도 (b) 와 같다.
-//   (e) 재확인(origin recheck)은 그대로다. 완료 뒤에도 후보로 남고 · 나가면 0 부터 센다.
+//   (e) 재확인(origin recheck): 다 푼 사람에게는 안 나간다(11-04) · 푸는 중에 나가면 0 부터 센다(이어받지 않음).
 //   + 직원은 count_from 을 직접 못 쓴다(RLS) · 이어 풀기 행만 count_from < sent_at 이다(버튼 조건의 서버 근거).
 //   (f) quiz_resend → 다음 스윕 후보에 바로 든다 · claim 으로 sent_at · 이어 풀기 트리거를 탄다.
 //   (g) 10분 안 두 번째 → resend_cooldown · 새 행·후보 0.  (h) 10분 뒤 → 다시 보낸다(오늘 이미 받았어도).
 //   (i) 옛 앱 예약 행(사장 insert)은 완료 순간 지워진다 · 재확인 행·나간 행·응시 기록은 남는다.
 //   (j) 여러 명 중 일부 쿨다운·일부 7일 상한 → 사람별 결과(sent · cooldown · queued) · 7일 상한 행은 후보가 아니다 · 직원은 forbidden.
-//   (k) 그 퀴즈를 끝낸 사람의 join 행은 후보가 아니다.  (l) 재합류 join 발송은 앞 회차를 이어 푼다(실제 remove_staff → join_by_invite).
+//   (k) 그 퀴즈를 끝낸 사람의 join 행은 후보가 아니다(남아 있던 행이어도).
+//   (l) 합류는 퀴즈를 자동 배정하지 않는다 · 재합류 뒤 사장이 보내면 이전 회차를 이어받지 않는다(0/4 · 실제 remove_staff → join_by_invite).
+//   (o) 다 푼 사람에게 다시 알리기 = completed · 행 0 · 후보 0.  (e) 다 푼 사람의 재확인 행도 후보가 아니다(11-04 사용자 결정).
+//   (p) 나간 직원: 나간 발송은 남는다 · 새 앱 다시 알리기는 not_member 로 그 사람만 빠진다 · 옛 앱 upsert 42501 은 재현만 찍는다.
+//   (n) 마감(due_date)이 지난 대기 행은 후보가 아니다 · 다시 알리기는 지난 마감을 비우고 보낸다(due_on 이 과거로 안 찍힘).
+//   (m) 무료 인원 한도로 좌석이 잠긴 직원(seat_locked_for)은 후보가 아니고 다시 알리기 결과는 locked 다. 매장을 무료로 바꾸므로 맨 끝.
 //   + 쿨다운 상수 서버 = 앱(schedule.ts) · 앱 상수가 없으면 skip 으로 찍는다.
 //
 // 사용: node scripts/qa-quiz-resend.mjs --local   (로컬 도커 · `npx supabase status` 키)
@@ -55,7 +60,8 @@ const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate(
 const dayOff = (n) => ymd(new Date(kst.getFullYear(), kst.getMonth(), kst.getDate() + n));
 const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
 
-const PEOPLE = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'i', 'j1', 'j2', 'j3', 'k1', 'k2', 'l'];
+// 'm' 은 반드시 마지막이다. 마지막에 합류해 좌석 순위가 가장 뒤라 (m) 에서 잠긴다.
+const PEOPLE = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'i', 'j1', 'j2', 'j3', 'k1', 'k2', 'l', 'n', 'p', 'p2', 'm'];
 // 010 + 두 자리 순번 + 6자리(실행마다 다름) = 11자리. 0번 = 사장.
 const qaPhones = [0, ...PEOPLE.map((_, i) => i + 1)].map((n) => `010${String(n).padStart(2, '0')}${s.slice(0, 6)}`);
 let UNIT = null;
@@ -102,7 +108,11 @@ async function main() {
     await joinAsStaff(P[k].c, CODE);
     await P[k].c.rpc('switch_active_unit', { p_unit_id: UNIT });
   }
-  check('셋업: 매장 + 직원 6명 합류', !!UNIT, `unit=${UNIT}`);
+  // 아래 첫 발송은 이틀~9일 전으로 당긴다. 실제로는 멤버가 된 뒤에만 발송 행이 생기므로(qz_insert) 합류 시각도 30일 전으로 당긴다.
+  //   0348 이어 풀기는 "지금 멤버십 뒤에 나간 앞 회차"만 본다(재합류는 이어받지 않음 · 11-04 사용자).
+  const { error: me } = await admin.from('unit_members').update({ created_at: daysAgo(30) }).eq('unit_id', UNIT).neq('role', 'owner');
+  if (me) throw new Error('backdate members: ' + me.message);
+  check(`셋업: 매장 + 직원 ${PEOPLE.length}명 합류`, !!UNIT, `unit=${UNIT}`);
 
   // 퀴즈 1개 · 문항 4개(노하우 4개). 합류 뒤에 만들어 입사 트리거가 배정하지 않게 한다.
   const QUIZ = `tc_qr_${s}`;
@@ -230,8 +240,9 @@ async function main() {
     check('(d) 남은 2문항으로 완료 true', done === true, `got=${done}`);
   }
 
-  // ── (e) 재확인은 그대로 ───────────────────────────────────────────────
-  console.log('— (e) 재확인(origin recheck)은 그대로 —');
+  // ── (e) 재확인 ─────────────────────────────────────────────────────────
+  // 11-04 사용자: 그 퀴즈를 다 푼 사람은 재확인으로도 다시 받지 않는다(어떤 경로로도). 이어 풀기는 여전히 안 물려받는다.
+  console.log('— (e) 재확인: 완료자에게는 안 나간다 · 푸는 중이면 0 부터 —');
   {
     const e1 = await firstSend('e');
     const r = await remind('e', 'recheck');
@@ -239,7 +250,7 @@ async function main() {
     const { data: done } = await P.e.c.rpc('mark_quiz_completed', { p_id: e1 });
     check('(e) 셋업: 완료 true', done === true, `got=${done}`);
     const cand = (await due()).filter((x) => x.out_assignment_id === r);
-    check('(e) 완료 뒤에도 재확인 행은 후보다', cand.length === 1, `후보 ${cand.length}건`);
+    check('(e) 완료자의 재확인 행은 후보가 아니다', cand.length === 0, `후보 ${cand.length}건`);
 
     await firstSend('f');
     await answer('f', ITEMS.slice(0, 2), 'f-half');
@@ -339,10 +350,12 @@ async function main() {
     check('(j) 직원은 다시 알리기를 못 부른다(forbidden)', /forbidden/.test(se?.message ?? ''), se?.message ?? '거부 안 됨');
   }
 
-  // ── (k)(l) 입사(join) 행 · 오류 탐지 11-03 10번 ──────────────────────────
-  console.log('— (k) 이 퀴즈를 이미 끝낸 사람에게 join 행은 안 나간다 —');
+  // ── (k)(l) 입사(join) · 재합류 · 오류 탐지 11-03 10번 + 11-04 사용자 결정 ─────────────
+  // 11-04: 신입 첫 퀴즈 자동 예약을 없앤다(사장이 보내야 받는다) · 줄에 선 join 행은 0348 이 지운다.
+  //   (k) 는 지워지기 전에 남아 있을 수 있는 join 행(0348 과 동시에 생긴 것 등)도 완료자에게는 안 나가는지 본다.
+  console.log('— (k) 그 퀴즈를 끝낸 사람에게 join 행은 안 나간다 —');
   {
-    // k1 = join 대기 행이 먼저 있고 다른 발송으로 끝냄 · k2 = 끝낸 뒤 join 행이 생김(재합류와 같은 모양)
+    // k1 = join 대기 행이 먼저 있고 다른 발송으로 끝냄 · k2 = 끝낸 뒤 join 행이 생김
     const k1 = await firstSend('k1');
     await admin.from('quiz_assignments').insert(asg(`qz_qr_k1j_${s}`, P.k1.id, dayOff(0), 'join'));
     await answer('k1', ITEMS, 'k1-all');
@@ -354,11 +367,9 @@ async function main() {
     check('(k) 셋업: 둘 다 완료 true', d1 === true && d2 === true, `${d1}/${d2}`);
     const cand = (await due()).filter((x) => x.out_user_id === P.k1.id || x.out_user_id === P.k2.id);
     check('(k) 완료자의 join 행은 후보가 아니다(완료 전·후에 생긴 것 모두)', cand.length === 0, cand.map((x) => x.out_assignment_id).join(','));
-    const ids = [...(await rowsOf('k1')), ...(await rowsOf('k2'))].map((r) => r.id);
-    check('(k) join 행은 지우지 않는다(완료 시 삭제는 manual 만)', ids.includes(`qz_qr_k1j_${s}`) && ids.includes(`qz_qr_k2j_${s}`), ids.join(','));
   }
 
-  console.log('— (l) 재합류 join 발송은 앞 회차를 이어 푼다 —');
+  console.log('— (l) 재합류: 자동 배정 없음 · 사장이 다시 보내면 이전 회차를 이어받지 않는다 —');
   {
     await firstSend('l');
     await answer('l', ITEMS.slice(0, 2), 'l-half');
@@ -366,13 +377,85 @@ async function main() {
     if (re) throw new Error('remove_staff: ' + re.message);
     await joinAsStaff(P.l.c, CODE);
     await P.l.c.rpc('switch_active_unit', { p_unit_id: UNIT });
-    const join = (await rowsOf('l')).find((r) => r.origin === 'join' && !r.sent_at);
-    check('(l) 셋업: 재합류가 이 퀴즈의 join 행을 만들었다(실제 _admit_member 경로)', !!join, JSON.stringify(await rowsOf('l')));
-    if (join) {
-      await claim(join.id);
-      const p = await progressOf(P.l.c, join.id);
-      check('(l) 재합류 발송 진행 = 2/4(이어 풀기)', p?.answered_items === 2 && p?.total_items === 4, show(p));
-    }
+    const join = (await rowsOf('l')).filter((r) => r.origin === 'join');
+    check('(l) 합류(실제 _admit_member 경로)는 join 행을 만들지 않는다', join.length === 0, JSON.stringify(join));
+    const { data, error } = await resend(['l']);
+    check('(l) 재합류 뒤 사장이 다시 알리면 sent', !error && resultOf(data, 'l') === 'sent', error?.message ?? JSON.stringify(data));
+    const cand = (await due()).filter((x) => x.out_user_id === P.l.id);
+    if (cand[0]) await claim(cand[0].out_assignment_id);
+    const p = cand[0] ? await progressOf(P.l.c, cand[0].out_assignment_id) : null;
+    check('(l) 재합류 뒤 발송 진행 = 0/4(이전 회차를 이어받지 않는다)', p?.answered_items === 0 && p?.total_items === 4, show(p));
+  }
+
+  console.log('— (o) 그 퀴즈를 다 푼 사람에게는 다시 알리기도 안 간다 —');
+  {
+    const before = (await rowsOf('a')).length;
+    const { data, error } = await resend(['a']);
+    check('(o) 다 푼 사람 = completed', !error && resultOf(data, 'a') === 'completed', error?.message ?? JSON.stringify(data));
+    check('(o) 행을 만들지 않는다', (await rowsOf('a')).length === before, `${before}→${(await rowsOf('a')).length}`);
+    const cand = (await due()).filter((x) => x.out_user_id === P.a.id);
+    check('(o) 후보 0', cand.length === 0, `후보 ${cand.length}건`);
+  }
+
+  console.log('— (p) 나간 직원: 다시 알리기·발송 대상에서 빠진다 · 기록은 남는다 —');
+  {
+    const p1 = await firstSend('p');
+    const p2 = await firstSend('p2');
+    const { error: re } = await owner.rpc('remove_staff', { p_staff_id: P.p.id });
+    if (re) throw new Error('remove_staff(p): ' + re.message);
+    const kept = (await rowsOf('p')).map((r) => r.id);
+    check('(p) 나간 직원의 나간 발송은 지우지 않는다(사장이 기록을 본다)', kept.includes(p1), kept.join(','));
+    // remove_staff 는 안 나간 행을 지운다. 그래도 남는 대기 행(동시에 들어온 행 등)을 service_role 로 심어 발송 판정 자체를 본다.
+    const pw = `qz_qr_pw_${s}`;
+    await admin.from('quiz_assignments').insert(asg(pw, P.p.id, dayOff(0)));
+    const pc = (await due()).filter((x) => x.out_assignment_id === pw);
+    check('(p) 나간 직원의 대기 행은 발송 후보가 아니다(quiz_recipient_is_member)', pc.length === 0, `후보 ${pc.length}건`);
+    // 옛 앱 다시 알리기 = 사장 세션 upsert(insertQuizAssignments). 나간 직원이 섞이면 어떻게 되나(문서 42501 의심 재현).
+    const { error: oe } = await owner.from('quiz_assignments').upsert(
+      [P.p.id, P.p2.id].map((uid) => ({ unit_id: UNIT, course_id: QUIZ, user_id: uid, scheduled_on: dayOff(3), due_date: null })),
+      { onConflict: 'course_id,user_id,scheduled_on', ignoreDuplicates: true }).select('id');
+    console.log(`  · (p) 옛 앱 경로 재현: 나간 직원 + 남은 직원 upsert → ${oe ? `${oe.code} ${oe.message}` : '성공'}`);
+    const { data, error } = await resend(['p', 'p2']);
+    check('(p) 새 앱: 나간 직원 not_member · 남은 직원 sent(한 사람 때문에 전체가 죽지 않는다)',
+      !error && resultOf(data, 'p') === 'not_member' && resultOf(data, 'p2') === 'sent', error?.message ?? JSON.stringify(data));
+    void p2;
+  }
+
+  // ── (n) 마감 지난 발송 · 오류 탐지 11-03 9번(최소 재현 = 마감 오늘로 보냄 → 하루 → tick) ─────
+  console.log('— (n) 마감이 지난 대기 행은 안 나간다 · 다시 알리기는 마감 없이 보낸다 —');
+  {
+    const n1 = `qz_qr_n1_${s}`;
+    // 어제 날짜로 예약하고 마감도 어제로 고른 행이 아직 안 나갔다(어제 근무가 아니었다) = 오늘 tick 시점의 모양.
+    await owner.from('quiz_assignments').insert({ ...asg(n1, P.n.id, dayOff(-1)), due_date: dayOff(-1) });
+    const cand = (await due()).filter((x) => x.out_assignment_id === n1);
+    check('(n) 마감(due_date)이 어제인 대기 행은 후보가 아니다', cand.length === 0, `후보 ${cand.length}건`);
+    const { data, error } = await resend(['n']);
+    check('(n) 다시 알리기는 보낸다(sent)', !error && resultOf(data, 'n') === 'sent', error?.message ?? JSON.stringify(data));
+    const after = (await due()).filter((x) => x.out_user_id === P.n.id);
+    check('(n) 다시 알린 행은 후보다', after.length === 1, `후보 ${after.length}건`);
+    if (after[0]) await claim(after[0].out_assignment_id);
+    const { data: row } = await admin.from('quiz_assignments').select('due_date, due_on').eq('id', after[0]?.out_assignment_id ?? '').maybeSingle();
+    check('(n) 보낸 순간 due_on 이 오늘보다 앞이 아니다(지난 마감을 안 싣는다)', !!row && (row.due_on === null || row.due_on >= dayOff(0)) && (row.due_date === null || row.due_date >= dayOff(0)), JSON.stringify(row));
+  }
+
+  // ── (m) 좌석 잠긴 직원 · 오류 탐지 11-03 7번 ── 마지막에 둔다(매장을 무료로 바꾼다) ─────────
+  console.log('— (m) 인원 한도를 넘어 잠긴 직원에게는 안 나간다 —');
+  {
+    // 유료일 때 직원이 다 들어왔다 → 이용 기간이 끝나 무료가 됐다(잠금이 실제로 생기는 길 · st-qa 재현과 같음).
+    // 좌석 순위 = unit_members.created_at → user_id 순(seat_rank). 셋업에서 합류 시각을 모두 같게 당겼으므로 m 을 가장 늦은 합류로 되돌린다.
+    await admin.from('unit_members').update({ created_at: new Date().toISOString() }).eq('unit_id', UNIT).eq('user_id', P.m.id);
+    const { error: ee } = await admin.from('unit_subscriptions').update({ paid_until: daysAgo(1) }).eq('unit_id', UNIT);
+    if (ee) throw new Error('expire: ' + ee.message);
+    const { data: lockedM } = await admin.rpc('seat_locked_for', { p_unit: UNIT, p_uid: P.m.id });
+    check('(m) 셋업: 마지막 직원이 좌석 잠김(seat_locked_for)', lockedM === true, `got=${lockedM}`);
+    const m1 = `qz_qr_m1_${s}`;
+    await admin.from('quiz_assignments').insert(asg(m1, P.m.id, dayOff(0)));
+    const cand = (await due()).filter((x) => x.out_assignment_id === m1);
+    check('(m) 잠긴 직원의 예약 행은 후보가 아니다', cand.length === 0, `후보 ${cand.length}건`);
+    const { data, error } = await resend(['m']);
+    check('(m) 다시 알리기 결과 = locked', !error && resultOf(data, 'm') === 'locked', error?.message ?? JSON.stringify(data));
+    const { data: mRow } = await admin.from('quiz_assignments').select('resend_at').eq('id', m1).maybeSingle();
+    check('(m) 잠긴 직원 행에는 resend_at 을 안 찍는다', !mRow?.resend_at, JSON.stringify(mRow));
   }
 
   // ── 쓰기 경계 ─────────────────────────────────────────────────────────
