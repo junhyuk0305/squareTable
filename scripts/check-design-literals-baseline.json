@@ -1,7 +1,7 @@
 {
   "totals": {
     "hex": 166,
-    "fontSize": 605,
+    "fontSize": 604,
     "spacing": 1541
   },
   "files": {
@@ -183,7 +183,7 @@
     },
     "src/app/owner/quiz-new.tsx": {
       "hex": 3,
-      "fontSize": 10,
+      "fontSize": 9,
       "spacing": 2
     },
     "src/app/owner/quiz/[id].tsx": {
