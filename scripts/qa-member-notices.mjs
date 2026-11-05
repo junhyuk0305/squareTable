@@ -10,12 +10,14 @@
 //   [5] 엣지 push/index.ts — 크론 갈래 sweepMemberNotices 가 반드시 deliver() 를 지난다(세션·음소거 판정이 적용된다).
 //   [6] 0345 처리한 합류 신청 — approve·reject 가 처리자(actor_id)를 찍는다 · join_history_rows 는 그 매장 사장만 읽는다
 //       (매니저·신청자·다른 매장 사장·anon 은 0행 또는 거부) · 허브 my_units_notif_data 'join_done' 이 같은 행을 준다.
+//   [7] M2(2026-11-05) 스윕 재선점 — 선점 뒤 10분~1시간 안에 결과(delivered)가 안 남은 행은 한 번 더 준다(같은 update 로 delivered=0).
+//       N1 -15분·null 재선점+delivered=0 · N2 delivered=0 제외 · N3 -5분 제외 · N4 배정 취소 행(assign · delivered=0) 재선점 안 됨.
 //
 // 지금(0246)은 알림이 어디에도 없다. 내보낸 직원은 앱을 열기 전까지 모르고, 엣지 user 대상은 같은 매장 멤버만
 //   받아서 내보낸 뒤에는 클라이언트가 보낼 수도 없다.
 //
 // ★로컬 전용: 실행할 때마다 계정을 가입시킨다. URL 이 로컬이 아니면 멈춘다.
-// 실행: node scripts/qa-member-notices.mjs   자가정리(계정·매장·OTP 시드).
+// 실행: node scripts/qa-member-notices.mjs   자가정리(계정·매장·OTP 시드). 키 파일 없는 worktree 는 --local(npx -y supabase@2 status).
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { seedPending } from './lib/qa-staff.mjs';
@@ -23,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import ts from 'typescript';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
+import { IS_LOCAL, localEnv } from './qa-local-target.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 function loadEnv() {
@@ -37,7 +40,7 @@ function loadEnv() {
   }
   return env;
 }
-const env = loadEnv();
+const env = IS_LOCAL ? { ...process.env, ...localEnv() } : loadEnv();
 const URL_ = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL, ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY, SRV = env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL_ || !ANON || !SRV) { console.error('FAIL: URL/ANON/SERVICE_ROLE 필요(.env + .env.seed)'); process.exit(2); }
 if (!/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(URL_)) {
@@ -51,6 +54,7 @@ const admin = createClient(URL_, SRV, { auth: { persistSession: false, autoRefre
 const s = String(Date.now()).slice(-9);
 const pw = 'Test1234!qa';
 let pass = 0, fail = 0;
+const skip = 0; // 이 하니스에 건너뛰는 검사는 없다. 최종 줄 규약(pass n fail n skip n)만 맞춘다.
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  PASS', n)) : (fail++, console.log('  FAIL', n, extra)); };
 
 const phones = ['0131', '0132', '0133', '0134', '0135', '0136', '0137'].map((p) => `${p}${s.slice(0, 7)}`);
@@ -246,6 +250,33 @@ try {
     check('4-5 ★두 번째 스윕은 0행(이미 claim 됨)', !s2.error && (s2.data ?? []).length === 0, s2.error?.message ?? `rows=${(s2.data ?? []).length}`);
   }
 
+  // ═══════ 7. M2 스윕 재선점 (N1~N4) ═══════
+  console.log('\n[7] M2 — 선점 뒤 결과가 안 남은 행(delivered null · 10분~1시간)은 한 번 더 준다');
+  {
+    const minsAgo = (m) => new Date(Date.now() - m * 60_000).toISOString();
+    const nowIso = new Date().toISOString();
+    const mn = (extra) => ({ user_id: O.id, unit_id: UNIT, kind: 'left', title: 'QA 재선점', body: 'b', url: '/owner/staff', ...extra });
+    const ins = async (row) => {
+      const r = await admin.from('member_notices').insert(row).select('id').single();
+      if (r.error) throw new Error(`member_notices 시드: ${r.error.message}`);
+      return r.data.id;
+    };
+    const n1 = await ins(mn({ claimed_at: minsAgo(15), delivered: null }));
+    const n2 = await ins(mn({ claimed_at: minsAgo(15), delivered: 0 }));
+    const n3 = await ins(mn({ claimed_at: minsAgo(5), delivered: null }));
+    const n4 = await ins(mn({ kind: 'assign', claimed_at: minsAgo(15), delivered: 0 })); // 배정 취소 행(0339 트리거가 delivered=0 으로 닫은 모양)
+    const sw = await admin.rpc('sweep_member_notices', { p_now: nowIso });
+    const got = (sw.data ?? []).map((r) => r.out_id).filter((id) => [n1, n2, n3, n4].includes(id));
+    const { data: after } = await admin.from('member_notices').select('id, claimed_at, delivered').in('id', [n1, n2, n3, n4]);
+    const by = Object.fromEntries((after ?? []).map((r) => [r.id, r]));
+    check('N1 ★claimed_at=-15분·delivered null 행은 재선점 · delivered=0 · claimed_at 갱신',
+      !sw.error && got.includes(n1) && by[n1]?.delivered === 0 && new Date(by[n1]?.claimed_at) >= new Date(nowIso), sw.error?.message ?? JSON.stringify({ got, row: by[n1] }));
+    check('N2 delivered=0(이미 한 번 다시 준) 행은 안 나온다', !got.includes(n2) && by[n2]?.delivered === 0, JSON.stringify(by[n2]));
+    check('N3 -5분 행은 안 나온다(엣지가 아직 보내는 중일 수 있다)', !got.includes(n3) && by[n3]?.delivered === null, JSON.stringify(by[n3]));
+    check('N4 배정 취소 행(assign · delivered=0)은 재선점 안 됨', !got.includes(n4) && by[n4]?.delivered === 0, JSON.stringify(by[n4]));
+    await admin.from('member_notices').delete().in('id', [n1, n2, n3, n4]);
+  }
+
   // ═══════ 5. 엣지 — 순수 검사 ═══════
   console.log('\n[5] 엣지 push/index.ts — sweepMemberNotices 는 deliver() 를 지난다(정책 L7)');
   {
@@ -280,7 +311,8 @@ try {
       check('5-4 반환 = swept 2 · sent 2', res?.swept === 2 && res?.sent === 2, JSON.stringify(res));
     }
     const serve = edgeSrc.slice(edgeSrc.indexOf('Deno.serve('));
-    check('5-5 ★크론 갈래(task_reminders)가 sweepMemberNotices 를 부른다', /await sweepMemberNotices\(token\)/.test(serve));
+    // M2(D3): 갈래는 safe(() => sweepMemberNotices(token)) 로 감싼다 — 부르는 사실만 본다.
+    check('5-5 ★크론 갈래(task_reminders)가 sweepMemberNotices 를 부른다', /sweepMemberNotices\(token\)/.test(serve));
     check('5-6 발송은 deliver() 밖에서 하지 않는다(webpush · deliverExpoPush 직접 호출 없음)',
       !!src && !/sendNotification|deliverExpoPush/.test(src));
   }
@@ -293,5 +325,5 @@ try {
   if (UNIT2) { try { await admin.from('units').delete().eq('id', UNIT2); } catch { /* best-effort */ } }
   try { await cleanupSeededPhones(URL_, SRV, phones); } catch { /* best-effort */ }
 }
-console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
+console.log(`\nRESULT: pass ${pass} fail ${fail} skip ${skip}`);
 process.exit(fail ? 1 : 0);

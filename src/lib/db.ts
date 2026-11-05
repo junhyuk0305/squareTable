@@ -1390,19 +1390,23 @@ export async function rotateInviteCode(): Promise<{ inviteCode: string; expiresA
 
 // ── 플레이북 ───────────────────────────────────────────────
 // 노하우 전체 목록은 서버 응답 상한(PostgREST max_rows=1000)을 넘을 수 있다 → 끝까지 페이지로 읽는다.
-// 바뀌지 않는 id를 커서로 쓴다. 앞 페이지 행이 삭제돼도 다음 행을 건너뛰지 않는다.
-// 서버 상한이 요청 크기보다 작을 수 있어 빈 페이지를 받아야 끝낸다.
-async function readAllPages<T extends { id: string }>(
-  page: (after: string | null) => PromiseLike<{ data: T[] | null; error: any }>,
+// 바뀌지 않는 키를 커서로 쓴다(마지막 행을 콜백에 넘긴다 · id 하나든 복합 키든 콜백이 정한다). 앞 페이지 행이 삭제돼도 다음 행을 건너뛰지 않는다.
+// 종료 = 받은 행이 pageSize 보다 적을 때(M1 · 2026-11-04). 서버 상한(config.toml 1000)이 pageSize 보다 커야 안전하다 → PAGE_SIZE 500.
+/** 페이지 한 장의 행 수 — 콜백의 `.range(0, PAGE_SIZE - 1)` 과 종료 판정이 같은 수를 본다. */
+const PAGE_SIZE = 500;
+async function readAllPages<T>(
+  page: (last: T | null) => PromiseLike<{ data: T[] | null; error: any }>,
+  pageSize = PAGE_SIZE,
 ): Promise<{ data: T[]; error: any }> {
   const rows: T[] = [];
-  let after: string | null = null;
+  let last: T | null = null;
   for (;;) {
-    const { data, error } = await page(after);
+    const { data, error } = await page(last);
     if (error) return { data: [], error };
     if (!data?.length) break;
     rows.push(...data);
-    after = data[data.length - 1].id;
+    if (data.length < pageSize) break;
+    last = data[data.length - 1];
   }
   return { data: rows, error: null };
 }
@@ -1411,18 +1415,18 @@ export async function fetchEntries(): Promise<ReadResult<PlaybookEntry[]>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
   // 보관한 노하우(0248 archived_at)는 뺀다. 서버 RLS 도 막지만 앱이 먼저 기대지 않게 여기서도 거른다.
   // 0248 전 서버(웹이 먼저 나간 경우)에는 열이 없어 42703 이 온다 → 거르지 않고 한 번 더 읽는다.
-  let { data, error } = await readAllPages<PlaybookEntry>((after) => {
+  let { data, error } = await readAllPages<PlaybookEntry>((last) => {
     const q = supabase
     .from('playbook_entries')
     .select('*')
     .is('archived_at', null)
     .order('id');
-    return (after === null ? q : q.gt('id', after)).range(0, 999);
+    return (last === null ? q : q.gt('id', last.id)).range(0, PAGE_SIZE - 1);
   });
   if (error?.code === '42703') {
-    ({ data, error } = await readAllPages<PlaybookEntry>((after) => {
+    ({ data, error } = await readAllPages<PlaybookEntry>((last) => {
       const q = supabase.from('playbook_entries').select('*').order('id');
-      return (after === null ? q : q.gt('id', after)).range(0, 999);
+      return (last === null ? q : q.gt('id', last.id)).range(0, PAGE_SIZE - 1);
     }));
   }
   if (error) {
@@ -1450,9 +1454,9 @@ function stripNonColumns<T extends Record<string, unknown>>(obj: T): Omit<T, 'so
 export async function fetchOwnerKnowhowEntries(): Promise<DbResult<PlaybookEntry[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
   // setof RPC 결과에도 max_rows 가 걸린다 → 같은 페이지 읽기(서버 계약 그대로 · 정렬·범위만 요청에 싣는다).
-  const { data, error } = await readAllPages<PlaybookEntry>((after) => {
+  const { data, error } = await readAllPages<PlaybookEntry>((last) => {
     const q = supabase.rpc('owner_knowhow_entries').order('id');
-    return (after === null ? q : q.gt('id', after)).range(0, 999);
+    return (last === null ? q : q.gt('id', last.id)).range(0, PAGE_SIZE - 1);
   });
   if (error) readFail('fetchOwnerKnowhowEntries', error);
   return { data: error ? null : data.sort((a, b) => b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id)), error: error as DbErr };
@@ -1691,13 +1695,15 @@ export async function fetchChatQueries(juniorId: string): Promise<ReadResult<Cha
     .select('*')
     .eq('junior_id', juniorId)
     .gte('asked_at', sinceTs(CHAT_WINDOW_DAYS))
-    .order('asked_at', { ascending: true })
+    // ★내림차순으로 잘라야 상한에 걸렸을 때 **최근** 대화가 남는다(오름차순 + limit 은 가장 오래된 것만 온다 · M1 2026-11-04).
+    //   화면은 오래된 것부터 읽으므로 받은 뒤 뒤집는다.
+    .order('asked_at', { ascending: false })
     .limit(PAGE_LIMIT);
   if (error) {
     readFail('fetchChatQueries', error);
     return { data: [], error: true };
   }
-  return { data: (data ?? []) as ChatQuery[], error: false };
+  return { data: ((data ?? []) as ChatQuery[]).reverse(), error: false };
 }
 
 /**
@@ -1708,7 +1714,7 @@ export async function fetchChatQueries(juniorId: string): Promise<ReadResult<Cha
  *   직원 세션이 부르면 자기 기록만 온다. definer RPC 를 만들지 않는다.
  * ★ 거르기는 **matched_entry_ids 가 비지 않은 것**이다 — "노하우로 답이 나갔다"의 유일한 증거고,
  *   "아직 등록되지 않았어요"로 끝난 질문(빈 배열)은 여기 들어오면 안 된다.
- *   서버에서 거를 수단이 마땅치 않아(배열 비교) 최근 창을 읽고 클라에서 거른다.
+ *   서버에서 `neq.{}` 로 거른다(배열 컬럼의 빈 배열 비교 · M1 2026-11-04).
  */
 export type AiAnswerRow = {
   id: string;
@@ -1726,14 +1732,16 @@ export async function fetchAiAnswers(days = 30, limit = AI_ANSWER_LIMIT): Promis
     .from('chat_queries')
     .select('id, query_text, junior_name, asked_at, matched_entry_ids, satisfaction')
     .gte('asked_at', sinceTs(days))
+    // 컬럼이 `text[] not null default '{}'`(0001)라 빈 배열을 서버에서 거른다(`neq.{}` · 로컬 실호출 200 확인 · M1 2026-11-04).
+    // 전에는 최근 창 PAGE_LIMIT 을 받아 클라에서 걸렀다 — 월 캡 3000이면 30일 창이 1000을 넘어 **노하우로 답한 질문이 잘렸다**.
+    .neq('matched_entry_ids', '{}')
     .order('asked_at', { ascending: false })
-    .limit(PAGE_LIMIT);
+    .limit(limit);
   if (error) {
     readFail('fetchAiAnswers', error);
     return { data: null, error: error as DbErr };
   }
-  const rows = ((data ?? []) as AiAnswerRow[]).filter((r) => (r.matched_entry_ids ?? []).length > 0);
-  return { data: rows.slice(0, limit), error: null };
+  return { data: (data ?? []) as AiAnswerRow[], error: null };
 }
 
 /** 동료가 사장 대신 답한 질문(0320 peer_answer_log) — 서버가 적고 관리자만 읽는다. 답한 질문은 사장 목록에서 빠지므로 여기서 본다. */
@@ -2123,9 +2131,9 @@ function mapTemplateRow(r: any): TaskTemplate {
 export async function fetchTemplates(): Promise<ReadResult<TaskTemplate[]>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
   // select('*') — 0013 마이그레이션 적용 전후 모두 안전(없는 컬럼은 undefined).
-  const { data, error } = await readAllPages<any>((after) => {
+  const { data, error } = await readAllPages<any>((last) => {
     const q = supabase.from('work_templates').select('*').order('id');
-    return (after === null ? q : q.gt('id', after)).range(0, 999);
+    return (last === null ? q : q.gt('id', last.id)).range(0, PAGE_SIZE - 1);
   });
   if (error) {
     readFail('fetchTemplates', error);
@@ -2253,7 +2261,13 @@ export type UnderstandingRow = { entryId: string; staffId: string; staffName: st
  *  N08: 실패를 빈 배열로 숨기지 않는다. */
 export async function fetchKnowhowUnderstandingResult(): Promise<ReadResult<UnderstandingRow[]>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
-  const { data, error } = await supabase.from('knowhow_understanding').select('entry_id, staff_id, staff_name, verified_at');
+  // 격자(노하우 × 직원)라 시간 윈도가 없다 → (entry_id, staff_id) 복합 커서로 끝까지 읽는다(M1 · 2026-11-04).
+  type Row = { entry_id: string; staff_id: string; staff_name: string; verified_at: string | null };
+  const { data, error } = await readAllPages<Row>((last) => {
+    let q = supabase.from('knowhow_understanding').select('entry_id, staff_id, staff_name, verified_at');
+    if (last !== null) q = q.or(`entry_id.gt."${last.entry_id}",and(entry_id.eq."${last.entry_id}",staff_id.gt."${last.staff_id}")`);
+    return q.order('entry_id').order('staff_id').range(0, PAGE_SIZE - 1);
+  });
   if (error) {
     readFail('fetchKnowhowUnderstanding', error);
     return { data: [], error: true };
@@ -3568,9 +3582,35 @@ export async function submitQuizLink(
 // ── 업무보드: 완료 체크 ────────────────────────────────────
 // ★ReadResult 로 올린 이유: 실패를 빈 맵으로 돌려주면 **완료 체크가 전부 미완료로 보여**
 //   직원이 이미 끝낸 일을 다시 한다(2026-08-25 감사 #56). "0건"과 "못 불러옴"은 달라야 한다.
+// ★윈도(M1 · 2026-11-04): hydrate 는 최근 DONE_WINDOW_DAYS(=90 · 완료 피드와 같은 창)만 읽는다. 전체를 읽으면
+//   하루 10~20개 업무 매장은 몇 달 만에 서버 상한(max_rows)을 넘겨 **오늘 체크가 잘려 나간다**.
+//   윈도 밖 달은 화면이 그 달로 이동할 때 fetchDoneRange 로 따로 읽는다(useWorkStore.loadDoneMonth · 선례 fetchAttendanceMonth).
+//   everDone 소비처 2곳(WorkBoard 캡처 넛지 · settings 정리 후보)은 90일 기준이 된다 — 넛지 1회 더/정리 후보 1개 더 = 무해.
+const DONE_WINDOW_DAYS = FEED_WINDOW_DAYS;
+/** 완료 윈도의 시작일(YYYY-MM-DD). 화면은 숫자를 적지 않고 이 값으로 경계를 판정한다. */
+export function doneWindowStart(): string {
+  return sinceDate(DONE_WINDOW_DAYS);
+}
+/** 그 달(YYYY-MM)에 윈도 밖 날짜가 있는가 — 있으면 loadDoneMonth 로 따로 읽어야 한다. */
+export function monthOutsideDoneWindow(ym: string): boolean {
+  return `${ym}-01` < doneWindowStart();
+}
 export async function fetchDone(): Promise<ReadResult<Record<string, Record<string, DoneMark>>>> {
+  return fetchDoneRange(doneWindowStart(), null);
+}
+/**
+ * 완료 체크 구간 읽기. from ≤ work_date (≤ to). 반환 모양은 fetchDone 과 같다(date → template_id → mark).
+ * 커서 = PK (unit_id, work_date, template_id) 의 (work_date desc, template_id asc) 복합 키 — id 컬럼이 없어 복합 커서다.
+ */
+export async function fetchDoneRange(from: string, to: string | null): Promise<ReadResult<Record<string, Record<string, DoneMark>>>> {
   if (!HAS_SUPABASE) return { data: {}, error: false };
-  const { data, error } = await supabase.from('work_done').select('work_date, template_id, data');
+  type Row = { work_date: string; template_id: string; data: DoneMark };
+  const { data, error } = await readAllPages<Row>((last) => {
+    let q = supabase.from('work_done').select('work_date, template_id, data').gte('work_date', from);
+    if (to !== null) q = q.lte('work_date', to);
+    if (last !== null) q = q.or(`work_date.lt.${last.work_date},and(work_date.eq.${last.work_date},template_id.gt."${last.template_id}")`);
+    return q.order('work_date', { ascending: false }).order('template_id', { ascending: true }).range(0, PAGE_SIZE - 1);
+  });
   if (error) {
     readFail('fetchDone', error);
     return { data: {}, error: true };
@@ -3948,7 +3988,12 @@ function shiftRow(t: ShiftTemplate) {
  */
 export async function fetchShiftTemplates(): Promise<ReadResult<ShiftTemplate[]>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
-  const { data, error } = await supabase.rpc('shift_templates_all');
+  // setof RPC 에도 max_rows 가 걸린다. RPC 본문은 shift_date 오름차순이라 잘리면 **가장 최근 날짜 지정 근무**가 사라진다
+  // → id 커서로 끝까지 읽는다(M1 · 2026-11-04). 판정(shiftsOn)은 순서에 기대지 않는다.
+  const { data, error } = await readAllPages<any>((last) => {
+    const q = supabase.rpc('shift_templates_all').order('id');
+    return (last === null ? q : q.gt('id', last.id)).range(0, PAGE_SIZE - 1);
+  });
   if (error) {
     readFail('fetchShiftTemplates', error);
     return { data: [], error: true };
@@ -4027,7 +4072,12 @@ export async function overrideShiftDayRpc(id: string, date: string, start: strin
  */
 export async function fetchShiftExceptions(): Promise<ReadResult<ShiftException[]>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
-  const { data, error } = await supabase.from('shift_exceptions').select('template_id, date');
+  // 순서 없이 상한에 걸리면 임의 누락이다 → 최신 날짜부터(M1 · 2026-11-04). 기간 윈도는 근무표 과거 조회 범위가 정해진 뒤.
+  const { data, error } = await supabase
+    .from('shift_exceptions')
+    .select('template_id, date')
+    .order('date', { ascending: false })
+    .limit(PAGE_LIMIT);
   if (error) {
     readFail('fetchShiftExceptions', error);
     return { data: [], error: true };
@@ -4189,7 +4239,8 @@ export async function fetchSwaps(): Promise<ReadResult<SwapRequest[]>> {
   const { data, error } = await supabase
     .from('swap_requests')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(PAGE_LIMIT);
   if (error) {
     readFail('fetchSwaps', error);
     return { data: [], error: true };

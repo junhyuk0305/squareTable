@@ -1,6 +1,6 @@
 // qa-journey-task.mjs — 할일 여정 하니스(2026-10-15). 사장 창(S)과 직원 창(J)을 한 스크립트에서 같이 연다.
 //   사장 할일 만들기(담당 2명 반복 1 + 단건 1) → 직원 목록 → 직원 완료(사진 1장) → 사장 확인.
-//   화면 문자열을 DB 원본(service_role 읽기)과 맞대어 단언한다. DB 쓰기는 셋업(K2 비오늘 반복 1건 · K4-m 멘션 글 1건 · K7 근무 1건+시간 수정 요청 1건)·정리에만 쓴다.
+//   화면 문자열을 DB 원본(service_role 읽기)과 맞대어 단언한다. DB 쓰기는 셋업(K2 비오늘 반복 1건 · K4-m 멘션 글 1건 · K7 근무 1건+시간 수정 요청 1건 · K-R4 숨김 할일 12 + 완료 1008행)·정리에만 쓴다.
 //
 //   node scripts/qa-journey-task.mjs      (개발 서버 http://localhost:8081 · QA_ORIGIN 으로 바꾼다 · .env + .env.seed 필요)
 //
@@ -711,6 +711,44 @@ try {
   if (tokN === 0) check('K6-a 기기 0건 직원 배정 직후 "알림 받을 기기가 없어요" 류 안내가 있다 [문자열]', /기기|알림을? (못|안) 받|앱을? 설치/.test(k6Text), `안내="${k6Text}" ${k6Note}`);
   else check('K6-a (전제) 직원 기기 토큰 0건 [건]', false, `토큰 ${tokN}건 — 기기 0건 상태가 아님`);
   await stat(S.page, 'S', 'K6-a');
+
+  // ── 7-b. K-R4 완료 표 서버 상한(M1 · 2026-11-05) — work_done 이 1000행을 넘어도 오늘 체크가 사라지지 않는다 ──
+  //   store_001 에 접두사 할일(숨김) 12개 × 최근 84일 = 1008행을 service_role 로 심는다 → 직원이 오늘 반복 할일을 완료
+  //   → 새로고침 → 화면 체크 = DB. 옛 fetchDone(전부 select)은 서버 상한 1000 에 잘려 **오늘 행이 빠질 수 있다**(어느 행인지 정해지지 않음).
+  //   되돌리면 RED: fetchDone 의 윈도·페이징을 빼면 새로고침 뒤 체크가 풀려 보인다. 정리는 끝의 cleanup 이 접두사로 수거한다(할일 → work_done).
+  section('6-b. K-R4 work_done 1008행(접두사 할일 · 숨김) → 직원 오늘 완료 → 새로고침 뒤 체크 표시 = DB');
+  const capTpls = Array.from({ length: 12 }, (_, k) => ({
+    id: `t_qajr_cap_${STAMP}_${String(k).padStart(2, '0')}`, unit_id: UNIT, section: 'open', text: `${PREFIX}상한_${k}_${STAMP}`,
+    scope: 'shared', created_by: ids.S, room_id: 'room_main_store_001', hidden: true,
+  }));
+  await ins('work_templates', capTpls);
+  const dayStr = (back) => new Date(new Date(`${TODAY}T00:00:00Z`).getTime() - back * 864e5).toISOString().slice(0, 10);
+  const capRows = [];
+  for (let d = 0; d < 84; d++) for (const t of capTpls) capRows.push({ unit_id: UNIT, work_date: dayStr(d), template_id: t.id, room_id: null, data: { by: ids.J, byName: NAME_J, at: new Date().toISOString() } });
+  await ins('work_done', capRows);
+  const countOf = async (path) => {
+    const r = await fetch(`${SB}/rest/v1/${path}`, { method: 'HEAD', headers: { ...H, Prefer: 'count=exact' } });
+    return Number(String(r.headers.get('content-range') ?? '').split('/')[1]) || 0;
+  };
+  const capTotal = await countOf(`work_done?unit_id=eq.${UNIT}&select=template_id`);
+  check('K-R4-① 전제: 매장 work_done 총 행 > 1000 [건]', capTotal > 1000, `${capTotal}행(심은 1008 포함)`);
+  await go(J.page, 'J', '/junior/work?view=todo', '할일(상한 전)');
+  await readTodoRows(J.page);
+  if (await todoDone(J.page, TXT_REPEAT)) await toggle(J.page, TXT_REPEAT, false, 'K-R4 셋업: 반복 해제');
+  await toggle(J.page, TXT_REPEAT, true, 'K-R4 직원 반복 완료');
+  await sleep(1500);
+  const r4Db = await sel(`work_done?unit_id=eq.${UNIT}&template_id=eq.${R.id}&work_date=eq.${TODAY}&select=data`);
+  check('K-R4-② 완료 직후: 화면 완료 · DB work_done 1행 [건]', (await todoDone(J.page, TXT_REPEAT)) && r4Db.length === 1, `DB ${r4Db.length}행`);
+  await go(J.page, 'J', '/junior/work?view=todo', '할일(새로고침)');
+  await readTodoRows(J.page);
+  const r4Shown = await todoDone(J.page, TXT_REPEAT);
+  check('K-R4-③ 새로고침 뒤에도 체크 표시 = DB(있음) — 1000행 상한에 오늘 행이 밀리지 않는다 [문자열]', r4Shown && r4Db.length === 1, `화면 완료=${r4Shown} · DB ${r4Db.length}행 · 매장 총 ${capTotal}행`);
+  await go(J.page, 'J', '/junior/home', '홈(상한 뒤)');
+  await dismiss(J.page);
+  const r4Remain = await readJuniorHome(J.page);
+  const o4 = await oracle(ids);
+  check('K-R4-④ 직원 홈 "남은 할일 N개" = DB(오늘 미완료) — 완료 표가 잘리면 수가 어긋난다 [단위: 미완료]', r4Remain === o4.jRemain, `화면 ${r4Remain} · DB ${o4.jRemain}`);
+  await stat(J.page, 'J', 'K-R4');
 
   // ── 8. 전환별 콘솔 에러·≥400 합계 ───────────────────────────────────────
   section('7. 화면 전환 합계');

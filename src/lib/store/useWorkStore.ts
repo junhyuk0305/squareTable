@@ -10,6 +10,8 @@ import {
   updateTemplate,
   deleteTemplate,
   fetchDone,
+  fetchDoneRange,
+  doneWindowStart,
   setDone,
   clearDone,
   fetchFeed,
@@ -198,6 +200,8 @@ function applyDonePatch(done: State['done'], feed: FeedItem[], p: DonePatch): { 
 const pendingDone = new Map<string, { patch: DonePatch; settledAt?: number }>();
 /** 저장 중인 내 메시지 id(D4). hydrate 가 서버 스냅샷으로 바꿀 때 이 메시지를 지우지 않게 한다. */
 const sendingIds = new Set<string>();
+/** loadDoneMonth 가 읽는 중인 달 — 달력을 빠르게 넘겨도 같은 달을 두 번 읽지 않는다. */
+const loadingMonths = new Set<string>();
 /** 서버 스냅샷(fetchedAt 에 조회 시작) 위에 아직 반영이 보장되지 않은 토글을 다시 얹는다.
  *  ★쓰기가 끝난 뒤에도 바로 지우지 않는다(2026-09-03 실기기): A·B 연속 체크 → A 의 재조회가 **B 쓰기 완료 직전**에
  *    시작되면 스냅샷엔 B 가 없는데 B 는 이미 pending 에서 빠져 있어 B 체크가 잠깐 풀렸다가 다음 재조회에서 돌아왔다.
@@ -698,7 +702,10 @@ export type NewTask = {
 
 type State = {
   templates: TaskTemplate[];
+  /** 완료 체크 — hydrate 는 최근 윈도(db.ts DONE_WINDOW_DAYS)만 새로 채우고, 윈도 밖은 loadDoneMonth 가 읽은 달을 보존한다. */
   done: Record<string, Record<string, DoneMark>>;
+  /** loadDoneMonth 로 읽어 둔 달(YYYY-MM). 매장 전환 리셋이 비운다. 바꿀 땐 새 Set 을 만든다(초기 상태 객체를 공유한다). */
+  loadedMonths: Set<string>;
   feed: FeedItem[];
   /** 업무↔노하우 링크(0069) — 평평한 배열. 정/역방향은 knowhowIdsForTask/taskIdsForKnowhow 로 파생. */
   knowhowLinks: KnowhowLink[];
@@ -728,6 +735,8 @@ type State = {
    *  특히 fetchDone 실패는 **완료 체크가 전부 미완료로 보여** 직원이 이미 끝낸 일을 다시 하게 만든다(#56). */
   loadError: boolean;
   hydrate: () => Promise<void>;
+  /** 윈도 밖 달(YYYY-MM)의 완료 체크를 따로 읽어 done 에 얹는다. 이미 읽은 달은 no-op. 실패는 readFail 보고만 하고 다음 이동에서 다시 시도한다. */
+  loadDoneMonth: (ym: string) => Promise<void>;
   /** 재시도 — 실패 화면의 '다시 시도' 버튼이 부르는 경로. */
   retry: () => Promise<void>;
   subscribe: () => () => void;
@@ -788,6 +797,7 @@ type State = {
 export const useWorkStore = create<State>((set, get) => ({
   templates: HAS_SUPABASE ? [] : seedTemplates,
   done: HAS_SUPABASE ? {} : seedDone,
+  loadedMonths: new Set<string>(),
   feed: HAS_SUPABASE ? [] : seedFeed,
   knowhowLinks: [],
   understanding: [],
@@ -843,8 +853,12 @@ export const useWorkStore = create<State>((set, get) => ({
     if (all === null) { set({ loaded: true, loadError: true, quizProgressError: true, quizProgress: [] }); return; }
     const [templates, done, feed, knowhowLinks, understanding, courseEntries, training, courses, trainingRequests, quizCounts, assignments, quizAttempts, quizProgress] = all;
     failed = Object.entries({ templates, done, feed, understanding, courseEntries }).filter(([, r]) => r.error).map(([k]) => k);
+    // 윈도 밖(loadDoneMonth 로 읽은 과거 달)은 이 스냅샷에 없다 → 그 날짜들은 보존하고 윈도 안만 서버 스냅샷으로 바꾼다.
+    const windowStart = doneWindowStart();
+    const merged: State['done'] = { ...done.data };
+    for (const [date, day] of Object.entries(get().done)) if (date < windowStart && !(date in merged)) merged[date] = day;
     // 아직 서버에 안 닿은 체크는 스냅샷 위에 다시 얹는다 — 안 그러면 빠른 연속 체크가 되돌아간다.
-    const live = overlayPendingDone(done.data, feed.data, fetchedAt);
+    const live = overlayPendingDone(merged, feed.data, fetchedAt);
     set({
       // 서버에 아직 없는 실패·저장 중 내 메시지는 다시 얹는다(D4 · J15 ① 재전송이 새로고침에 지워지지 않게).
       templates: templates.data, done: live.done, feed: carryUnsent(live.feed, get().feed, sendingIds),
@@ -870,6 +884,24 @@ export const useWorkStore = create<State>((set, get) => ({
     }
   }),
 
+  loadDoneMonth: async (ym) => {
+    if (!HAS_SUPABASE || get().loadedMonths.has(ym) || loadingMonths.has(ym)) return;
+    loadingMonths.add(ym);
+    const epoch = currentTenantEpoch();
+    try {
+      // 그 달 전체(1일~말일). `-31` 은 짧은 달에서도 상한으로만 쓰여 안전하다(fetchAttendanceMonth 와 같은 꼴).
+      const { data, error } = await fetchDoneRange(`${ym}-01`, `${ym}-31`);
+      if (isStaleEpoch(epoch) || error) return;
+      set((s) => {
+        // 그 달 날짜는 서버 행으로 바꾼다(지운 체크도 사라지게). 다른 달은 그대로.
+        const next: State['done'] = {};
+        for (const [date, day] of Object.entries(s.done)) if (!date.startsWith(ym)) next[date] = day;
+        return { done: { ...next, ...data }, loadedMonths: new Set(s.loadedMonths).add(ym) };
+      });
+    } finally {
+      loadingMonths.delete(ym);
+    }
+  },
   retry: async () => {
     await get().hydrate();
   },
@@ -1592,7 +1624,7 @@ export const useWorkStore = create<State>((set, get) => ({
   applyMock: (demo) =>
     set(
       demo
-        ? { templates: seedTemplates, done: seedDone, feed: seedFeed, knowhowLinks: [], understanding: [], loaded: true, loadError: false }
-        : { templates: [], done: {}, feed: [], knowhowLinks: [], understanding: [], loaded: true, loadError: false },
+        ? { templates: seedTemplates, done: seedDone, loadedMonths: new Set<string>(), feed: seedFeed, knowhowLinks: [], understanding: [], loaded: true, loadError: false }
+        : { templates: [], done: {}, loadedMonths: new Set<string>(), feed: [], knowhowLinks: [], understanding: [], loaded: true, loadError: false },
     ),
 }));
