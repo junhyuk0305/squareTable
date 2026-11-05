@@ -64,11 +64,16 @@ console.log('[E1] 초안·외부용 퀴즈는 직원 카드와 자동 배정에 
   const board = strip(read('src/components/WorkBoard.tsx'));
   check('★직원 카드가 staffCanSeeCourse 로 거른다', /if \(!staffCanSeeCourse\(c, sends\.length\)\) continue;/.test(board));
 
-  for (const fn of ['approve_member', 'enqueue_knowhow_rechecks']) {
+  for (const fn of ['enqueue_knowhow_rechecks']) {
     const d = lastDef(fn);
     check(`★${fn} 이 외부용 코스를 고르지 않는다`, /coalesce\(c\.audience, 'staff'\) = 'staff'/.test(d.body), d.file);
     check(`★${fn} 이 만들던 퀴즈(일정·사장 발송 없음)를 고르지 않는다(0139 이전 코스는 예외)`,
       /c\.start_at is not null/.test(d.body) && /x\.origin = 'manual'/.test(d.body) && /c\.created_at < timestamptz '2026-08-11 00:00:00\+09'/.test(d.body), d.file);
+  }
+  // ★0348(2026-11-04 사용자 결정): 신입 첫 퀴즈 자동 예약을 없앴다. 합류 본문(_admit_member 최고 정의)이 발송 행을 넣지 않는다.
+  {
+    const d = lastDef('_admit_member');
+    check('★합류(_admit_member)는 퀴즈 발송 행을 만들지 않는다', !!d.body && !/insert into public\.quiz_assignments/.test(d.body), d.file);
   }
 }
 

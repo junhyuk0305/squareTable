@@ -86,9 +86,9 @@ export function ShiftQuickSheet({
   const [scope, setScope] = useState<'from' | 'day'>('from');
   const [busy, setBusy] = useState(false);
   // 시트 안 확인 단계 — 무엇을 보내려다 멈췄는지 들고 있다. null 이면 평소 버튼.
-  //  past = 지난 날짜를 바꾼다(§8 Q4). del = 되살릴 수 없는 삭제다(날짜 지정 근무는 행을 지운다 · 0279 override_shift_day).
+  //  past = 지난 날짜를 바꾼다(§8 Q4). del = 삭제·빼기다(되돌리기를 두지 않으므로 전부 묻는다 · 2026-11-03 사용자 결정).
   //  둘이 겹치면 두 번 묻지 않고 삭제 단계 하나에 지난 기록 문장을 붙인다.
-  const [ask, setAsk] = useState<null | { label: string; past: boolean; del: boolean; call: (confirmPast: boolean) => Promise<boolean> }>(null);
+  const [ask, setAsk] = useState<null | { title: string; label: string; past: boolean; del: boolean; call: (confirmPast: boolean) => Promise<boolean> }>(null);
 
   const isEdit = !!editing;
   const editingSeries = isEdit && editing.date === null;
@@ -135,10 +135,11 @@ export function ShiftQuickSheet({
     setBusy(false);
     if (ok) onClose();
   }
-  // 지난 날짜거나 되살릴 수 없는 삭제면 시트 아래쪽에서 한 번 더 묻는다(§8 Q4). 확인창(Modal)을 시트(Modal) 위에 띄우지 않는다 — iOS 는 못 띄울 수 있다.
-  function run(confirmLabel: string, past: boolean, call: (confirmPast: boolean) => Promise<boolean>, del = false) {
+  // 지난 날짜거나 삭제·빼기면 시트 아래쪽에서 한 번 더 묻는다(§8 Q4). 확인창(Modal)을 시트(Modal) 위에 띄우지 않는다 — iOS 는 못 띄울 수 있다.
+  //  del 이면 그 단계의 제목을 같이 받는다(삭제와 빼기는 묻는 말이 다르다).
+  function run(confirmLabel: string, past: boolean, call: (confirmPast: boolean) => Promise<boolean>, del?: string) {
     if (busy) return;
-    if (past || del) { setAsk({ label: confirmLabel, past, del, call }); return; }
+    if (past || del) { setAsk({ title: del ?? PAST_CHANGE_TITLE, label: confirmLabel, past, del: !!del, call }); return; }
     void send(false, call);
   }
 
@@ -171,8 +172,13 @@ export function ShiftQuickSheet({
     if (!isEdit) return;
     if (!editingSeries || scope === 'day') {
       const day = editing.date ?? date;
-      // 날짜 지정 근무는 행이 지워져 되살릴 수 없다 → 묻는다. "이 날만 빼기"는 근무표의 '되돌리기'로 되살린다 → 묻지 않는다.
-      run('삭제', day < today, (cp) => overrideShiftDay(editing.templateId, day, null, null, cp), !editingSeries);
+      // 날짜 지정 근무는 행이 지워지고, "이 날만 빼기"는 그날 예외가 남는다. 둘 다 되돌리기가 없으니 묻는다.
+      run(
+        editingSeries ? '빼기' : '삭제',
+        day < today,
+        (cp) => overrideShiftDay(editing.templateId, day, null, null, cp),
+        editingSeries ? '이 날만 뺄까요?' : '이 날짜 근무를 삭제할까요?',
+      );
     } else {
       // 이 날부터 그만 — 같은 요일의 뒤 구간도 끝낸다. 안 끝내면 뒤 구간 시작일부터 근무가 다시 선다.
       const ops = planFromScope(templates, editing.templateId, date, null);
@@ -379,7 +385,7 @@ export function ShiftQuickSheet({
               size={16}
               color={ask.del ? BrandColors.badText : BrandColors.warn}
             />
-            <Text style={[s.pastAskTitle, ask.del && s.delAskTitle]}>{ask.del ? '이 날짜 근무를 삭제할까요?' : PAST_CHANGE_TITLE}</Text>
+            <Text style={[s.pastAskTitle, ask.del && s.delAskTitle]}>{ask.title}</Text>
           </View>
           <Text style={s.pastAskBody}>
             {ask.del ? (ask.past ? '지난 근무 기록이 바뀌어요. 되돌릴 수 없어요.' : '되돌릴 수 없어요.') : PAST_CHANGE_BODY}
@@ -395,7 +401,7 @@ export function ShiftQuickSheet({
           <Pressable
             onPress={() => void send(ask.past, ask.call)}
             accessibilityRole="button"
-            accessibilityLabel={ask.del ? '근무 삭제' : undefined}
+            accessibilityLabel={ask.del ? `근무 ${ask.label}` : undefined}
             style={({ pressed }) => [s.btn, ask.del ? s.btnDanger : s.btnSolid, pressed && { opacity: 0.85 }]}
           >
             <Text style={ask.del ? s.btnDangerText : s.btnSolidText}>{ask.label}</Text>

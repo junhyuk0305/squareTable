@@ -268,9 +268,9 @@ check('허브 직원 오늘 탭(fetchMyCrossSummary)이 기간을 주는 my_cros
 // 시트(Modal) 위에 확인창(Modal)을 띄우지 않는다(iOS) — 시트 안 확인 단계가 같은 문구(PAST_CHANGE_*)를 쓴다.
 check('ShiftQuickSheet: 지난 날짜는 확인 단계(같은 경고 문구)를 거친 뒤에만 p_confirm_past 를 보낸다',
   /PAST_CHANGE_TITLE/.test(quick) && /PAST_CHANGE_BODY/.test(quick) && /send\(ask\.past,/.test(quick) && !/confirmPastChange\(/.test(quick));
-// 날짜 지정 근무 삭제는 행이 지워져 되살릴 수 없다 — 시트 안에서 묻고, 지난 날짜와 겹치면 한 단계로 묻는다(2026-11-03).
-check('ShiftQuickSheet: 날짜 지정 근무 삭제는 시트 안에서 한 번 묻는다(되돌릴 수 없어요)',
-  /if \(past \|\| del\)/.test(quick) && /이 날짜 근무를 삭제할까요\?/.test(quick) && /되돌릴 수 없어요\./.test(quick) && /!editingSeries\);/.test(quick));
+// 날짜 지정 근무 삭제·"이 날만 빼기" 둘 다 시트 안에서 묻는다(되돌리기 없음 · 2026-11-03 사용자 결정). 지난 날짜와 겹치면 한 단계로 묻는다.
+check('ShiftQuickSheet: 날짜 지정 근무 삭제·이 날만 빼기는 시트 안에서 한 번 묻는다(되돌릴 수 없어요)',
+  /if \(past \|\| del\)/.test(quick) && /이 날짜 근무를 삭제할까요\?/.test(quick) && /이 날만 뺄까요\?/.test(quick) && /되돌릴 수 없어요\./.test(quick));
 check('경고창 문구 = "지난 기간이에요" · "지난 근무 기록이 바뀌어요."',
   /지난 기간이에요/.test(read('src/lib/utils/confirm.ts')) && /지난 근무 기록이 바뀌어요\./.test(read('src/lib/utils/confirm.ts')));
 

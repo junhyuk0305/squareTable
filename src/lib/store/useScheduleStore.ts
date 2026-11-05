@@ -11,7 +11,6 @@ import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import {
   fetchShiftExceptions,
-  deleteShiftException,
   acceptSwapRpc,
   approveSwapRpc,
   fetchScheduleConfig,
@@ -200,8 +199,6 @@ type ScheduleState = {
   requestShiftTime: (templateId: string, date: string, start: string, end: string) => Promise<boolean>;
   /** 사장이 시간 수정 요청을 승인·반려한다(사장만 · 지난 날짜 승인은 confirmPast · §8 Q4). */
   decideShiftTime: (id: string, approve: boolean, confirmPast: boolean) => Promise<boolean>;
-  /** 그날 빼둔 반복 근무를 되돌린다(0178) — 쪼갠 근무표를 합치는 길. 관리자만. */
-  restoreException: (templateId: string, date: string) => void;
 };
 
 // ── 유일 id ─────────────────────────────────────────────
@@ -555,17 +552,6 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     );
     void get().hydrate();
     return ok;
-  },
-  restoreException: (templateId, date) => {
-    const before = get().exceptions;
-    const epoch = currentTenantEpoch(); // setConfig 와 같은 이유
-    const who = get().templates.find((t) => t.id === templateId)?.staff_id;
-    set({ exceptions: before.filter((e) => !(e.template_id === templateId && e.date === date)) });
-    void guardWrite(
-      deleteShiftException(templateId, date),
-      () => { if (!isStaleEpoch(epoch)) set({ exceptions: before }); },
-      '되돌리기에 실패했어요.',
-    ).then((ok) => { if (ok) notifyShiftChanged(who, date); });
   },
   rejectSwap: (id) => {
     const before = get().swaps.find((r) => r.id === id);

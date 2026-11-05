@@ -141,6 +141,9 @@ try {
   const row = Array.isArray(st) ? st[0] : st;
   if (e1 || !row?.unit_id) throw new Error('create_store: ' + (e1?.message ?? 'no row'));
   UNIT = row.unit_id;
+  // 무료 매장은 직원 2명까지다(0336). 이 하니스는 3명(J · M · J2)을 들인다 → 테스트 매장만 하루 유료로 켠다(다른 하니스와 같은 방식).
+  //   안 켜면 J2 합류가 staff_limit 로 막혀 [3-C] 가 거짓으로 통과한다(2026-11-04 발견).
+  await admin.rpc('admin_activate_store', { p_unit_id: UNIT, p_days: 1, p_plan: 'multi' });
   await O.rpc('switch_active_unit', { p_unit_id: UNIT });
   for (const [c, id] of [[J, jId], [M, mId]]) {
     await c.rpc('join_by_invite', { p_code: row.invite_code });
@@ -263,13 +266,16 @@ try {
   }
 
   // ═══ C. 신입 첫 퀴즈 ═══
-  console.log('\n[3-C] approve_member — 노하우가 전부 보관된 코스를 첫 퀴즈로 고르지 않는다');
+  // ★0348(2026-11-04 사용자 결정): 신입 첫 퀴즈 자동 예약을 없앴다. 보관된 코스를 고를 일 자체가 없다.
+  console.log('\n[3-C] approve_member — 합류만으로는 퀴즈가 배정되지 않는다(보관된 코스도 당연히 안 나간다)');
   {
-    await J2.rpc('join_by_invite', { p_code: row.invite_code });
+    // 합류가 실패하면 아래 "배정 0건"이 거짓 통과한다. 합류 결과부터 본다.
+    const jr = await J2.rpc('join_by_invite', { p_code: row.invite_code });
+    check('C-0 합류 성공(즉시 합류 0346)', !jr.error, jr.error?.message ?? '');
     const { error } = await O.rpc('approve_member', { p_uid: j2Id });
     check('C-1 승인 성공', !error, error?.message ?? '');
     const qa = (await admin.from('quiz_assignments').select('course_id').eq('unit_id', UNIT).eq('user_id', j2Id)).data ?? [];
-    check('C-2 ★첫 퀴즈 = 보관 안 된 코스(E0 퀴즈 또는 E4 퀴즈 중 position 순 = E4)', qa.length === 1 && qa[0].course_id === `kha_c4_${s}`, JSON.stringify(qa));
+    check('C-2 ★합류 배정 0건(0348)', qa.length === 0, JSON.stringify(qa));
   }
 
   // ═══ D. 매니저 ═══

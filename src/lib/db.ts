@@ -2198,7 +2198,7 @@ export async function deleteTemplate(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return writeStrict('deleteTemplate', supabase.from('work_templates').delete().eq('id', id).select('id'));
 }
-/** 할일 목록에서 숨기기·되돌리기(0110) — 업무 행·노하우 링크·코스 소속은 그대로 남는다.
+/** 할일 목록에서 숨기기(0110) — 업무 행·노하우 링크·코스 소속은 그대로 남는다.
  *  updateTemplate 은 hidden 을 건드리지 않으므로 할일 수정이 이 표시를 지우지 않는다. */
 export async function setTemplateHidden(ids: string[], hidden: boolean): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
@@ -3217,7 +3217,8 @@ export async function fetchMyGuestQuizHistory(): Promise<MyGuestQuizRow[]> {
 // 수신자 명단과 발송 기록이 같은 행이다. 나누면 "보냈는데 명단에 없다"가 따로 생긴다.
 // ★sent_at·due_on 은 **크론만** 채운다(claim_quiz_send). 앱은 절대 쓰지 않는다 —
 //   앱이 쓰면 빈도 상한 판정의 근거가 화면에서 흔들린다.
-const QUIZ_ASSIGNMENT_COLS = 'id, course_id, user_id, scheduled_on, sent_at, due_on, due_date, opened_at, completed_at, origin';
+// ★count_from(0348)은 서버가 정한다(발송 트리거 · quiz_assignment_restart). 이 열을 읽으려면 0348 이 먼저 라이브에 있어야 한다.
+const QUIZ_ASSIGNMENT_COLS = 'id, course_id, user_id, scheduled_on, sent_at, due_on, due_date, opened_at, completed_at, origin, count_from';
 
 const toAssignment = (r: any): QuizAssignment => ({
   id: r.id,
@@ -3230,6 +3231,7 @@ const toAssignment = (r: any): QuizAssignment => ({
   openedAt: r.opened_at ?? null,
   completedAt: r.completed_at ?? null,
   origin: r.origin ?? 'manual',
+  countFrom: r.count_from ?? null,
 });
 
 /** 활성 매장의 발송 원장 — 관리 권한은 전체, 직원은 본인 것만(RLS qz_select). */
@@ -3371,6 +3373,36 @@ export async function markQuizCompleted(assignmentId: string): Promise<boolean> 
   const { data, error } = await supabase.rpc('mark_quiz_completed', { p_id: assignmentId });
   if (error) reportError('db.write:markQuizCompleted', error);
   return !error && data === true;
+}
+
+/**
+ * 처음부터 다시 풀기(0348). 이어 풀기 중인 내 발송의 집계 시작 시각을 지금으로 옮긴다.
+ * ok = 바뀜. noop = 바꿀 것이 없음(이미 처음부터 · 완료 · 내 것 아님). error = 실패(원문은 계측으로만 보낸다).
+ */
+export async function restartQuizAssignment(assignmentId: string): Promise<'ok' | 'noop' | 'error'> {
+  if (!HAS_SUPABASE) return 'ok';
+  const { data, error } = await supabase.rpc('quiz_assignment_restart', { p_assignment_id: assignmentId });
+  if (error) {
+    reportError('db.write:restartQuizAssignment', error);
+    return 'error';
+  }
+  return data === true ? 'ok' : 'noop';
+}
+
+/**
+ * 다시 알리기 = 지금 보내기(0348 quiz_resend). 사람별 결과(sent · queued · cooldown · not_member)를 돌려준다.
+ * 판정(10분 쿨다운 · 7일 상한 · 권한)은 전부 서버다. 전원이 쿨다운이면 error.message = 'resend_cooldown'.
+ * 오류 원문은 화면에 내지 않는다. 호출부는 quizErrorMessage 로 문구를 고른다.
+ */
+export async function resendQuiz(courseId: string, userIds: string[]): Promise<DbResult<{ userId: string; result: string }[]>> {
+  if (!HAS_SUPABASE) return { data: userIds.map((userId) => ({ userId, result: 'sent' })), error: null };
+  const { data, error } = await supabase.rpc('quiz_resend', { p_course_id: courseId, p_user_ids: userIds });
+  if (error) {
+    // 쿨다운은 정상 결과다. 계측에 오류로 쌓지 않는다.
+    if (!/^resend_cooldown/.test(error.message ?? '')) reportError('db.write:resendQuiz', error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: ((data ?? []) as any[]).map((r) => ({ userId: r.user_id, result: String(r.result ?? '') })), error: null };
 }
 
 // ── 외부 공유 링크(0113) — 단기 직원용. 로그인 없이 도는 유일한 경로 ────────────
@@ -4001,18 +4033,6 @@ export async function fetchShiftExceptions(): Promise<ReadResult<ShiftException[
     return { data: [], error: true };
   }
   return { data: (data ?? []).map((r: any) => ({ template_id: r.template_id, date: r.date })), error: false };
-}
-
-/**
- * 그날 빼둔 반복 근무를 **되돌린다**(0178). 부분 교대로 쪼갠 근무표를 다시 합치는 유일한 길이다 —
- * 이게 없으면 한 번 쪼개진 날은 영영 그대로 남는다. 남은 조각은 사장이 근무 시트에서 지운다.
- */
-export async function deleteShiftException(templateId: string, date: string): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  return writeStrict(
-    'deleteShiftException',
-    supabase.from('shift_exceptions').delete().eq('template_id', templateId).eq('date', date).select('template_id'),
-  );
 }
 
 // ── 직원 근무 시간 수정 요청(J2 · 0243) — 그날 하루만 · 사장 승인 뒤 반영 ──────────────────────

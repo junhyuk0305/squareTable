@@ -96,6 +96,12 @@ function kstNowHHMM(): string {
   // en-GB + hour12:false → "HH:MM:SS". 앞 5글자가 "HH:MM".
   return new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour12: false }).slice(0, 5);
 }
+// 설정 조회 1회 재시도 — 일시 오류(연결 끊김·타임아웃)만 살린다. 두 번째도 실패하면 그 결과를 그대로 돌려준다.
+async function readOnceRetry<T extends { error: unknown }>(run: () => PromiseLike<T>): Promise<T> {
+  const first = await run();
+  if (!first.error) return first;
+  return await run();
+}
 // now 가 [start, end) 방해금지 구간 안인가. start>end 면 자정 넘김(예: 22:00~08:00).
 function inQuietWindow(now: string, start?: string | null, end?: string | null): boolean {
   const s = String(start ?? '').slice(0, 5);
@@ -255,8 +261,9 @@ async function deliverExpoPush(
  *   방해금지·음소거는 매장별 unit_member_prefs(user × unit) 로 판정 — 전역 quiet 는 여기서 더 안 본다
  *   (기존 유저의 전역 방해금지값 무시 = 의도된 동작 변화. 매장별 설정 화면이 새 SSOT).
  * 행이 없는 수신자는 기본값(켜짐·음소거/방해금지 꺼짐)으로 발송 대상 유지(신규 사용자 무음화 방지).
- * 선호 조회 실패 = fail-open(전원 발송) — 과알림이 무음 드롭보다 안전. 단 조용히 넘기지 않고
- * 로그를 남긴다(스키마 드리프트가 나도 엣지 로그로 감지 가능 — 2026-07-24 리뷰 반영).
+ * 선호 조회 실패 = 발송 안 함(fail-closed · 2026-11-04 사용자 결정 · 그 전엔 fail-open 이었다).
+ *   방해금지·음소거를 켠 사람에게 한 번 울리는 것이 약속 위반이고, 인앱 알림함은 어차피 남는다.
+ *   로그는 남긴다(스키마 드리프트가 나도 엣지 로그로 감지 가능 — 2026-07-24 리뷰 반영).
  *
  * nativeIn = 앱 기기(Expo)에만 다르게 보낼 제목·본문. 없으면 웹과 같은 문구가 간다. 'skip' 이면 앱 기기에는
  *   보내지 않는다(사장 카드 알림만 쓴다 — nativeOwnerAlertText).
@@ -271,21 +278,32 @@ async function deliver(
 ): Promise<{ sent: number; recipients: number; suppressed: number; pruned: number }> {
   if (targets.length === 0) return { sent: 0, recipients: 0, suppressed: 0, pruned: 0 };
 
-  const { data: prefRows, error: prefErr } = await admin
+  // ★설정 조회는 1회 재시도하고, 그래도 못 읽으면 보내지 않는다(2026-11-04 사용자 결정 · fail-closed).
+  //   알림 끔·음소거·방해금지를 켠 사람에게 한 번 울리는 것보다 이번 발송을 거르는 쪽이 낫다 —
+  //   인앱 알림함은 도메인 행에서 파생하므로 그대로 남는다(qa:push T13c). 아래 기기 토큰 조회 실패와 같은 방향이다.
+  //   비용: 크론 스윕(할일·퀴즈·사장 알림·닫힘·구성원 알림)은 선점 → deliver 순서라, 여기서 거르면 그 푸시는
+  //   다시 안 나간다. 재시도 1회가 그 비용을 줄이려는 것이다(일시 오류가 두 번 연속 나야 유실).
+  const { data: prefRows, error: prefErr } = await readOnceRetry(() => admin
     .from('notification_prefs')
     .select('user_id, push_enabled')
-    .in('user_id', targets);
-  if (prefErr) console.error('[push] notification_prefs read failed (fail-open):', prefErr.message);
+    .in('user_id', targets));
+  if (prefErr) {
+    console.error('[push] notification_prefs read failed (발송 안 함):', prefErr.message);
+    return { sent: 0, recipients: 0, suppressed: targets.length, pruned: 0 };
+  }
   const prefByUser = new Map(
     (prefRows ?? []).map((p: { user_id: string; push_enabled: boolean }) => [p.user_id, p]),
   );
   // 매장별 개인 설정 — 발송 범위 매장(scopeUnit) 기준. join_owners 도 수신자(사장)는 scopeUnit 소속이라 동일 축.
-  const { data: unitPrefRows, error: unitPrefErr } = await admin
+  const { data: unitPrefRows, error: unitPrefErr } = await readOnceRetry(() => admin
     .from('unit_member_prefs')
     .select('user_id, muted, quiet_enabled, quiet_start, quiet_end, nickname')
     .eq('unit_id', scopeUnit)
-    .in('user_id', targets);
-  if (unitPrefErr) console.error('[push] unit_member_prefs read failed (fail-open):', unitPrefErr.message);
+    .in('user_id', targets));
+  if (unitPrefErr) {
+    console.error('[push] unit_member_prefs read failed (발송 안 함):', unitPrefErr.message);
+    return { sent: 0, recipients: 0, suppressed: targets.length, pruned: 0 };
+  }
   const unitPrefByUser = new Map(
     (unitPrefRows ?? []).map((p: { user_id: string; muted: boolean; quiet_enabled: boolean; quiet_start: string; quiet_end: string; nickname?: string | null }) => [p.user_id, p]),
   );

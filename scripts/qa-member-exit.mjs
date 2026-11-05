@@ -10,6 +10,8 @@
 //   [2] 사장 탈퇴 분기는 그대로다(J5 서버 차단은 P7-1). 매장 소프트삭제 + 사장 멤버십 유지. 세션·토큰만 정리.
 //   [3] Q20 — 내보낸 뒤(remove_staff) 다시 승인해도 예전 비공개 방 메시지가 보이지 않는다.
 //   [4] Q20 — 스스로 나간 뒤(leave_store) 다시 승인해도 같다. 나갈 때 퇴사 스냅샷을 남긴다(0246 부터 member_tenures).
+//   [3]·[4] 0352 — 출근 중에 내보내거나 나가면 열린 출근을 그 시각으로 닫는다(11-04 사용자 결정 · 오류 탐지 11-03 2번).
+//         이미 닫힌 출근은 그대로다.
 //   [5] 권한 — 세 함수 모두 anon 실행 불가(3역할 회수 후 authenticated 만).
 //
 // ★로컬 전용: 실행할 때마다 계정을 가입시키고 탈퇴시킨다. URL 이 로컬이 아니면 멈춘다.
@@ -126,6 +128,16 @@ try {
     const r = (data ?? [])[0];
     return r ? { name: r.name_snapshot, phone_last4: r.phone_last4, departed_at: r.left_at, reason: r.left_reason } : null;
   };
+  // 출근 기록 시드(service_role · 앱 트리거 판정 밖). 열린 출근 = 3시간 전 출근 · 퇴근 없음.
+  const today = new Date().toISOString().slice(0, 10);
+  const seedAtt = async (id, uid, checkIn, checkOut) => {
+    const { error } = await admin.from('attendance').insert({ id, unit_id: UNIT, staff_id: uid, date: today, check_in: checkIn, check_out: checkOut, work_minutes: 0 });
+    if (error) throw new Error('출근 시드: ' + error.message);
+  };
+  const att = async (id) => (await admin.from('attendance').select('check_in, check_out, work_minutes').eq('id', id).maybeSingle()).data;
+  /** 열린 출근이 나간 시각(t0~지금)으로 닫혔고 근무 분이 출퇴근 시각과 맞는가. */
+  const closedAtExit = (r, t0) => !!r?.check_out && Date.parse(r.check_out) >= t0 - 1000 && Date.parse(r.check_out) <= Date.now() + 1000
+    && r.work_minutes === Math.min(24 * 60, Math.max(0, Math.round((Date.parse(r.check_out) - Date.parse(r.check_in)) / 60000)));
   console.log(`셋업 — 매장 ${UNIT} · 비밀방 ${ROOM}(멤버=사장·A·C·D)`);
   check('0-1 셋업: 방 멤버 A 는 비밀방 메시지를 본다', (await seesRoom(A)) === 1, `rows=${await seesRoom(A)}`);
 
@@ -180,8 +192,17 @@ try {
   // ═══════ 3. 내보낸 뒤 다시 승인 ═══════
   console.log('\n[3] remove_staff → 다시 승인 = 예전 비공개 방이 보이지 않는다(Q20)');
   {
+    const openA = `att_mex_a_${s}`, doneA = `att_mex_a2_${s}`;
+    const doneOut = new Date(Date.now() - 20 * 3600e3).toISOString();
+    await seedAtt(openA, A.id, new Date(Date.now() - 3 * 3600e3).toISOString(), null);
+    await seedAtt(doneA, A.id, new Date(Date.now() - 26 * 3600e3).toISOString(), doneOut);
+    const t0 = Date.now();
     const r = await O.c.rpc('remove_staff', { p_staff_id: A.id });
     check('3-1 remove_staff 성공', !r.error, r.error?.message);
+    const oa = await att(openA);
+    check('3-1b ★출근 중에 내보내면 열린 출근이 내보낸 시각으로 닫힌다(근무 분 포함)', closedAtExit(oa, t0), JSON.stringify(oa));
+    const da = await att(doneA);
+    check('3-1c 이미 닫힌 출근은 그대로다', da && Date.parse(da.check_out) === Date.parse(doneOut), JSON.stringify(da));
     check('3-2 ★내보내면 비공개 방 멤버십이 지워진다', (await roomMember(A.id)) === 0, `rows=${await roomMember(A.id)}`);
     check('3-3 퇴사 스냅샷(0246 재직 기간 removed)', (await former(A.id))?.name === 'QA내보냄직원' && (await former(A.id))?.reason === 'removed', JSON.stringify(await former(A.id)));
     await joinApprove(A, 'A 재합류');
@@ -191,8 +212,13 @@ try {
   // ═══════ 4. 스스로 나간 뒤 다시 승인 ═══════
   console.log('\n[4] leave_store → 다시 승인 = 예전 비공개 방이 보이지 않는다(Q20) + 스냅샷');
   {
+    const openC = `att_mex_c_${s}`;
+    await seedAtt(openC, C.id, new Date(Date.now() - 2 * 3600e3).toISOString(), null);
+    const t0 = Date.now();
     const r = await C.c.rpc('leave_store');
     check('4-1 leave_store 성공', !r.error, r.error?.message);
+    const oc = await att(openC);
+    check('4-1b ★출근 중에 스스로 나가도 열린 출근이 나간 시각으로 닫힌다', closedAtExit(oc, t0), JSON.stringify(oc));
     check('4-2 ★나가면 비공개 방 멤버십이 지워진다', (await roomMember(C.id)) === 0, `rows=${await roomMember(C.id)}`);
     const f = await former(C.id);
     check('4-3 ★나갈 때도 퇴사 스냅샷을 남긴다', f?.name === 'QA나감직원' && f?.phone_last4 === phones[2].slice(-4) && f?.reason === 'left', JSON.stringify(f));

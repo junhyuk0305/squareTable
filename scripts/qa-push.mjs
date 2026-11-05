@@ -247,8 +247,15 @@ try {
   const inStart = hhmm(now - 30), inEnd = hhmm(now + 30); // 지금을 감싸는 60분 창(자정 넘김도 엣지가 처리)
   const t13s = await saveUnitPrefs(staffA2, unitA, { muted: false, quiet: true, start: inStart, end: inEnd });
   check('T13a save 매장 quiet(지금 포함) 성공', !t13s.error, t13s.error?.message ?? '');
-  const t13 = await invokePush(ownerA, { audience: 'staff', tag: 'question', itemId: await ask(ownerA), title: '동료 질문' });
+  const q13 = await ask(ownerA);
+  const t13 = await invokePush(ownerA, { audience: 'staff', tag: 'question', itemId: q13, title: '동료 질문' });
   check(`T13b ★매장 방해금지 지금 포함(${inStart}~${inEnd}): staffA2 억제 → recipients=1`, t13.status === 200 && t13.json?.recipients === 1, JSON.stringify(t13.json));
+  // 방해금지는 푸시만 막는다 — 인앱 알림함(벨·허브)은 도메인 행에서 파생하므로 그대로 쌓여야 한다.
+  //   억제된 staffA2 세션으로 허브 공급 RPC(my_units_notif_data · 0313)를 읽어 그 질문(source='uq')이 있는지 본다.
+  const { data: hub13, error: hub13e } = await staffA2.rpc('my_units_notif_data');
+  const inList13 = (hub13 ?? []).some((r) => r.unit_id === unitA && r.source === 'uq' && r.payload?.id === q13);
+  check('T13c ★방해금지 중에도 알림함에는 남음: staffA2 허브 데이터에 그 질문이 있음', !hub13e && inList13,
+    hub13e?.message ?? `uq rows=${(hub13 ?? []).filter((r) => r.source === 'uq').length}`);
 
   const outStart = hhmm(now + 120), outEnd = hhmm(now + 180);
   const t14s = await saveUnitPrefs(staffA2, unitA, { muted: false, quiet: true, start: outStart, end: outEnd });

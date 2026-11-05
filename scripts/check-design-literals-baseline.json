@@ -1,8 +1,8 @@
 {
   "totals": {
     "hex": 166,
-    "fontSize": 608,
-    "spacing": 1542
+    "fontSize": 605,
+    "spacing": 1541
   },
   "files": {
     "src/app/+html.tsx": {
@@ -199,7 +199,7 @@
       "spacing": 1
     },
     "src/app/owner/schedule.tsx": {
-      "spacing": 6
+      "spacing": 5
     },
     "src/app/owner/settings.tsx": {
       "fontSize": 1
@@ -340,7 +340,7 @@
       "spacing": 12
     },
     "src/components/coach/SquareRowsEditor.tsx": {
-      "fontSize": 2,
+      "fontSize": 1,
       "spacing": 1
     },
     "src/components/CoachmarkTour.tsx": {
@@ -606,7 +606,7 @@
     },
     "src/components/owner/quiz/ShellTaskCleanupSheet.tsx": {
       "hex": 1,
-      "fontSize": 4
+      "fontSize": 2
     },
     "src/components/owner/quiz/TrainingInsights.tsx": {
       "hex": 1,

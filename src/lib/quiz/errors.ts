@@ -7,6 +7,10 @@ const MESSAGES: Record<string, string> = {
   // 0326·0327 문항 0개 금지
   last_quiz_item: '마지막 문항은 뺄 수 없어요. 퀴즈를 그만 내려면 퀴즈를 보관해 주세요.',
   quiz_no_items: '문항이 없는 퀴즈는 보낼 수 없어요. 문항을 하나 이상 만들어 주세요.',
+  // 0348 다시 알리기(quiz_resend). 10 = schedule.ts RESEND_COOLDOWN_MINUTES(이 파일은 import 를 못 해 숫자로 둔다 · qa:quiz-resend 가 대조).
+  resend_cooldown: '방금 보냈어요. 10분 뒤에 다시 보낼 수 있어요',
+  forbidden: '사장님이나 매니저만 다시 알릴 수 있어요.',
+  quiz_not_found: '퀴즈를 찾을 수 없어요. 화면을 새로고침해 주세요.',
 };
 
 /**

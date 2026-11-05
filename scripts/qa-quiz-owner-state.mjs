@@ -98,6 +98,14 @@ const ans = [
 const p = m.staffProgress(sends, ans);
 assert.deepEqual({ ...p }, { recipients: 3, done: 1, started: 0, notStarted: 2, notDone: 2 }, 'N11/N17 scheduled excluded, self and old-round answers do not start');
 assert.equal(m.doneLabel(p), '완료 1/3명');
+// 0348 이어 풀기: 다시 알리기가 앞 회차를 이어받으면(countFrom < sentAt) 앞 회차 답으로 '푸는 중'이다. 직원 화면 진행과 같은 기준.
+const carriedB = { ...sends[1], countFrom: '2026-10-21T00:00:00Z' };
+assert.equal(m.personState(carriedB, ans), 'in_progress', '0348 carried send counts the previous round answers');
+assert.equal(m.countFromOf(carriedB), '2026-10-21T00:00:00Z');
+assert.equal(m.countFromOf(sends[1]), sends[1].sentAt, 'count_from null = sent_at');
+assert.equal(m.countFromOf(sends[3]), null, 'not sent = null');
+// 처음부터 다시 풀기: 시작 시각이 누른 때로 가면 그 전 답은 진행이 아니다.
+assert.equal(m.personState({ ...sends[1], countFrom: '2026-10-22T06:00:00Z' }, ans), 'not_started', '0348 restart starts from the tap');
 assert.equal(m.allDone(m.staffProgress([], ans)), false, 'link-only is not done');
 const r = m.quizRate(ans);
 // staff first: a:i1 false, a:i2 true, b:i1 true (cumulative), c self excluded; guests: false, true
@@ -125,13 +133,36 @@ assert.equal(e.linkSubmitResultOf({ message: 'bad_phone' }), 'bad_input');
 assert.equal(e.linkSubmitResultOf({ message: 'Failed to fetch' }), 'network');
 for (const k of ['ok', 'link_closed', 'rate_limited', 'bad_input', 'network']) assert.ok(e.LINK_SUBMIT_MESSAGE[k], k);
 assert.equal(e.quizErrorMessage({ message: 'last_quiz_item' }).includes('보관'), true);
+// 0348 다시 알리기: raise 코드마다 사람 말이 있다(⑨) · 사람별 결과 토스트.
+assert.equal(e.quizErrorMessage({ message: 'resend_cooldown' }), '방금 보냈어요. 10분 뒤에 다시 보낼 수 있어요');
+for (const c of ['forbidden', 'quiz_not_found']) assert.notEqual(e.quizErrorMessage({ message: c }), e.quizErrorMessage({ message: 'x' }), c);
+assert.deepEqual({ ...m.resendResultLabel([{ result: 'sent' }]) }, { text: '다시 알렸어요', good: true });
+assert.deepEqual({ ...m.resendResultLabel([{ result: 'sent' }, { result: 'cooldown' }, { result: 'queued' }]) },
+  { text: '1명에게 다시 알렸어요 · 1명은 방금 받아 10분 뒤에 보낼 수 있어요 · 1명은 최근 7일에 2번 받아 그 뒤에 나가요', good: true }, '(j) partial result says counts');
+assert.equal(m.resendResultLabel([{ result: 'cooldown' }, { result: 'not_member' }]).good, false);
+// (o) 다 푼 사람은 다시 받지 않는다(11-04) — 결과를 따로 말한다.
+assert.deepEqual({ ...m.resendResultLabel([{ result: 'completed' }]) }, { text: '이미 다 풀어서 보내지 않았어요', good: false });
+assert.equal(m.resendResultLabel([{ result: 'sent' }, { result: 'completed' }]).text, '1명에게 다시 알렸어요 · 1명은 이미 다 풀어서 보내지 않았어요');
+// 다 푼 적이 있으면(최신 발송이 미완료 재확인이어도) 다시 알리기 대상이 아니다(서버 quiz_course_done_by 짝).
+assert.equal(m.doneBefore([{ userId: 'x', completedAt: '2026-10-01' }, { userId: 'x', completedAt: null }], 'x'), true);
+assert.equal(m.doneBefore([{ userId: 'x', completedAt: null }, { userId: 'y', completedAt: 'z' }], 'x'), false);
+// (p) 나간 직원은 진행 숫자·다시 알리기 대상에서 빠진다(명단을 모르면 빼지 않는다).
+const members = new Set(['a', 'b']);
+assert.equal(m.isCurrentStaff('c', members), false);
+assert.equal(m.isCurrentStaff('c', null), true, 'unknown roster does not hide anyone');
+assert.deepEqual({ ...m.staffProgress(sends, ans, members) }, { recipients: 2, done: 1, started: 0, notStarted: 1, notDone: 1 }, 'left staff c is not counted');
+// (m) 좌석 잠김은 따로 말한다("보내지 못했어요"로 뭉개지 않는다).
+assert.deepEqual({ ...m.resendResultLabel([{ result: 'locked' }]) }, { text: '인원 한도를 넘어 받을 수 없어요', good: false });
+assert.equal(m.resendResultLabel([{ result: 'sent' }, { result: 'locked' }]).text, '1명에게 다시 알렸어요 · 1명은 인원 한도를 넘어 받을 수 없어요');
+// 화면 문구의 10 = schedule.ts 상수(서버 값은 qa:quiz-resend 가 대조한다).
+const cooldownMin = Number(fs.readFileSync(new URL('../src/lib/quiz/schedule.ts', import.meta.url), 'utf8').match(/export const RESEND_COOLDOWN_MINUTES\s*=\s*(\d+)/)?.[1]);
+assert.ok(e.quizErrorMessage({ message: 'resend_cooldown' }).includes(`${cooldownMin}분`) && m.resendResultLabel([{ result: 'cooldown' }]).text.includes(`${cooldownMin}분`), 'cooldown copy matches RESEND_COOLDOWN_MINUTES');
 console.log('PASS quiz metrics: state, progress, Q1/Q2 rate, guest submissions, item answers, person board, link submit results');
 
 // ── P5-4 래칫: 화면에서 숫자에 "명"·"정답률"·"완료"를 직접 붙이지 않는다(metrics.ts 가 만든다).
 // 대상 = src/app/owner/quiz* · training.tsx · TrainingCard.tsx. 주석은 뺀다.
 // 예외는 아래 표에만 둔다. 줄 조각(파일 안에서 유일해야 한다) + 이유. 쓰이지 않는 예외도 실패다(표가 썩지 않게).
 const RATCHET_ALLOW = [
-  { file: 'src/app/owner/quiz/[id].tsx', snippet: '${quotaOut}명은 최근 7일에', why: '다시 알리기 토스트. 주 2회 상한에 걸린 사람 수(recipientReadiness)라 퀴즈 진행 숫자가 아니다' },
   { file: 'src/app/owner/quiz-new.tsx', snippet: '`${to.length}명에게 보내요`', why: '만들기 화면에서 고른 받는 사람 수. 발송 전 선택 인원이라 metrics 정의 밖이다' },
   { file: 'src/app/owner/quiz-new.tsx', snippet: '`${to.length}명에게 보내기` : `${to.length}명에게 예약하기`', why: '같은 선택 인원의 버튼 문구' },
 ];

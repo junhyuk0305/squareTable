@@ -45,6 +45,7 @@ import {
   fetchQuizAttempts,
   markQuizOpened,
   markQuizCompleted,
+  restartQuizAssignment,
   type TrainingItemRow,
   type CourseEntryRow,
   type TrainingCourse,
@@ -746,14 +747,16 @@ type State = {
   noteQuizOpened: (entryIds: string[], assignmentId?: string) => void;
   /** 응시를 마쳤다(맞힘과 무관 · E4). 직접 연 발송의 완료 여부는 서버가 판정한다. */
   noteQuizFinished: (entryIds: string[], assignmentId?: string) => Promise<void>;
+  /** 처음부터 다시 풀기(0348). ok = 바뀜 · noop = 바꿀 것 없음 · error = 실패. ok·noop 이면 원장·진행을 다시 읽는다. */
+  restartQuiz: (assignmentId: string) => Promise<'ok' | 'noop' | 'error'>;
   /** 코스에 노하우 담기(0111) — 껍데기 업무를 만들지 않는다. 성공 여부 반환. */
   addCourseEntry: (courseId: string, entryId: string) => Promise<boolean>;
   /** 코스에서 노하우 빼기 — 노하우·통과 기록·다른 코스 소속은 남는다. */
   removeCourseEntry: (courseId: string, entryId: string) => Promise<void>;
   /** 같은 코스 안에서 한 칸 위/아래로 — 이웃과 position 스왑. */
   moveCourseEntry: (courseId: string, entryId: string, dir: 'up' | 'down') => Promise<void>;
-  /** 껍데기 업무 정리(0110) — 할일에서 숨기기·되돌리기. 업무·노하우·코스 소속은 그대로. */
-  hideTasks: (templateIds: string[], hidden: boolean) => Promise<boolean>;
+  /** 껍데기 업무 정리(0110) — 할일에서 숨기기. 업무·노하우·코스 소속은 그대로. */
+  hideTasks: (templateIds: string[]) => Promise<boolean>;
   /** 퀴즈 요청 보내기(0102→0111) — 대상 직원들에게 즉시/매주 요청 + 푸시. 성공 여부 반환. */
   requestTraining: (entryId: string, entryTitle: string, staffIds: string[], recurrence: Recurrence | null) => Promise<boolean>;
   /** 퀴즈 요청 취소(관리 권한). */
@@ -1081,6 +1084,12 @@ export const useWorkStore = create<State>((set, get) => ({
     }
   },
 
+  restartQuiz: async (assignmentId) => {
+    const res = await restartQuizAssignment(assignmentId);
+    if (res !== 'error') await get().hydrate();
+    return res;
+  },
+
   markUnderstood: async (entryIds, staffId) => {
     if (entryIds.length === 0) return true;
     // 0333: 제출 트랜잭션이 만든 이해 기록만 읽는다. 앱에서 성공 행을 만들어 넣지 않는다.
@@ -1149,17 +1158,17 @@ export const useWorkStore = create<State>((set, get) => ({
     );
   },
 
-  // 껍데기 업무 정리(0110) — 할일에서 숨기기·되돌리기. 되돌릴 수 있어야 하므로 삭제가 아니다.
-  hideTasks: async (templateIds, hidden) => {
+  // 껍데기 업무 정리(0110) — 할일에서 숨기기. 지우면 링크·기록이 cascade 로 사라지므로 삭제가 아니다.
+  hideTasks: async (templateIds) => {
     if (templateIds.length === 0) return true;
-    // 되돌릴 값은 행별로 들고 간다 — templates 는 화면 전체가 공유하는 큰 배열이라
+    // 실패 시 돌려놓을 값은 행별로 들고 간다 — templates 는 화면 전체가 공유하는 큰 배열이라
     // 스냅샷으로 통째 덮으면 그 사이의 다른 할일 추가·수정이 조용히 되돌아간다.
     const before = new Map(get().templates.filter((t) => templateIds.includes(t.id)).map((t) => [t.id, !!t.hidden]));
-    set((s) => ({ templates: s.templates.map((t) => (before.has(t.id) ? { ...t, hidden } : t)) }));
+    set((s) => ({ templates: s.templates.map((t) => (before.has(t.id) ? { ...t, hidden: true } : t)) }));
     return guardWrite(
-      setTemplateHidden(templateIds, hidden),
+      setTemplateHidden(templateIds, true),
       () => set((s) => ({ templates: s.templates.map((t) => (before.has(t.id) ? { ...t, hidden: before.get(t.id) } : t)) })),
-      hidden ? '할일에서 숨기지 못했어요.' : '숨김 해제에 실패했어요.',
+      '할일에서 숨기지 못했어요.',
     );
   },
 

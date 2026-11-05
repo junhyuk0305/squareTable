@@ -477,7 +477,7 @@ function Rules({ row, dates, rules, onEnded, onChanged }: {
               style={styles.ruleCol}
             >
               <HqButton
-                label={rules?.content_required ? '숨길 수 있게 되돌리기' : '필수로 바꾸기'}
+                label={rules?.content_required ? '권장으로 바꾸기' : '필수로 바꾸기'}
                 variant={rules?.content_required ? undefined : 'dark'}
                 disabled={busy}
                 testID="hq-content-required"
@@ -495,7 +495,7 @@ function Rules({ row, dates, rules, onEnded, onChanged }: {
               style={styles.ruleCol}
             >
               <HqButton
-                label={rules?.owner_can_end === false ? '끊을 수 있게 되돌리기' : '본사 문의로 바꾸기'}
+                label={rules?.owner_can_end === false ? '끊을 수 있게 바꾸기' : '본사 문의로 바꾸기'}
                 variant={rules?.owner_can_end === false ? undefined : 'dark'}
                 disabled={busy}
                 testID="hq-owner-can-end"
