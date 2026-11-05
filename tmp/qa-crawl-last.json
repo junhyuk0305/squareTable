@@ -1,0 +1,7514 @@
+{
+ "at": "2026-11-05T02:28:36.500Z",
+ "results": [
+  {
+   "route": "/",
+   "role": "owner",
+   "path": "/",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 계정 · 설정\" @399,20 40×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/hub",
+   "shot": "tmp/qa-crawl-1.png"
+  },
+  {
+   "route": "/",
+   "role": "junior",
+   "path": "/",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 계정 · 설정\" @399,20 40×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "pass",
+     "detail": [
+      "빈 문구 1 · 행동 4"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/hub",
+   "shot": "tmp/qa-crawl-2.png"
+  },
+  {
+   "route": "/+not-found",
+   "role": "owner",
+   "path": "/qa-crawl-missing-route",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hub"
+     ]
+    }
+   },
+   "landed": "/qa-crawl-missing-route"
+  },
+  {
+   "route": "/+not-found",
+   "role": "junior",
+   "path": "/qa-crawl-missing-route",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hub"
+     ]
+    }
+   },
+   "landed": "/qa-crawl-missing-route"
+  },
+  {
+   "route": "/account-edit",
+   "role": "owner",
+   "path": "/account-edit",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/account-edit"
+  },
+  {
+   "route": "/account-edit",
+   "role": "junior",
+   "path": "/account-edit",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/account-edit"
+  },
+  {
+   "route": "/account-settings",
+   "role": "owner",
+   "path": "/account-settings",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/account-settings"
+  },
+  {
+   "route": "/account-settings",
+   "role": "junior",
+   "path": "/account-settings",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/account-settings"
+  },
+  {
+   "route": "/billing",
+   "role": "owner",
+   "path": "/billing",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /stores"
+     ]
+    }
+   },
+   "landed": "/billing"
+  },
+  {
+   "route": "/billing",
+   "role": "junior",
+   "path": "/billing",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /stores"
+     ]
+    }
+   },
+   "landed": "/billing"
+  },
+  {
+   "route": "/billing-card",
+   "role": "owner",
+   "path": "/billing-card",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /stores"
+     ]
+    }
+   },
+   "landed": "/billing"
+  },
+  {
+   "route": "/billing-card",
+   "role": "junior",
+   "path": "/billing-card",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /stores"
+     ]
+    }
+   },
+   "landed": "/billing"
+  },
+  {
+   "route": "/complete-profile",
+   "role": "owner",
+   "path": "/complete-profile",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 계정 · 설정\" @399,20 40×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /stores"
+     ]
+    }
+   },
+   "landed": "/hub",
+   "shot": "tmp/qa-crawl-3.png"
+  },
+  {
+   "route": "/complete-profile",
+   "role": "junior",
+   "path": "/complete-profile",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 계정 · 설정\" @399,20 40×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "pass",
+     "detail": [
+      "빈 문구 1 · 행동 4"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /stores"
+     ]
+    }
+   },
+   "landed": "/hub",
+   "shot": "tmp/qa-crawl-4.png"
+  },
+  {
+   "route": "/downgrade",
+   "role": "owner",
+   "path": "/downgrade",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 계정 · 설정\" @399,20 40×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hub"
+     ]
+    }
+   },
+   "landed": "/hub",
+   "shot": "tmp/qa-crawl-5.png"
+  },
+  {
+   "route": "/downgrade",
+   "role": "junior",
+   "path": "/downgrade",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 계정 · 설정\" @399,20 40×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "pass",
+     "detail": [
+      "빈 문구 1 · 행동 4"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hub"
+     ]
+    }
+   },
+   "landed": "/hub",
+   "shot": "tmp/qa-crawl-6.png"
+  },
+  {
+   "route": "/email-changed",
+   "role": "owner",
+   "path": "/email-changed",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hub"
+     ]
+    }
+   },
+   "landed": "/email-changed"
+  },
+  {
+   "route": "/email-changed",
+   "role": "junior",
+   "path": "/email-changed",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hub"
+     ]
+    }
+   },
+   "landed": "/email-changed"
+  },
+  {
+   "route": "/forgot-password",
+   "role": "owner",
+   "path": "/forgot-password",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /login"
+     ]
+    }
+   },
+   "landed": "/forgot-password"
+  },
+  {
+   "route": "/forgot-password",
+   "role": "junior",
+   "path": "/forgot-password",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /login"
+     ]
+    }
+   },
+   "landed": "/forgot-password"
+  },
+  {
+   "route": "/hq",
+   "role": "owner",
+   "path": "/hq",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /login"
+     ]
+    }
+   },
+   "landed": "/hq",
+   "shot": "tmp/qa-crawl-7.png"
+  },
+  {
+   "route": "/hq",
+   "role": "junior",
+   "path": "/hq",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /login"
+     ]
+    }
+   },
+   "landed": "/hq",
+   "shot": "tmp/qa-crawl-8.png"
+  },
+  {
+   "route": "/hq/join",
+   "role": "owner",
+   "path": "/hq/join",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq/join"
+  },
+  {
+   "route": "/hq/join",
+   "role": "junior",
+   "path": "/hq/join",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq/join"
+  },
+  {
+   "route": "/hq/knowhow",
+   "role": "owner",
+   "path": "/hq/knowhow",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq",
+   "shot": "tmp/qa-crawl-9.png"
+  },
+  {
+   "route": "/hq/knowhow/[id]",
+   "role": "owner",
+   "path": null,
+   "mode": "full",
+   "rules": {},
+   "noSample": true
+  },
+  {
+   "route": "/hq/knowhow",
+   "role": "junior",
+   "path": "/hq/knowhow",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq",
+   "shot": "tmp/qa-crawl-10.png"
+  },
+  {
+   "route": "/hq/knowhow/[id]",
+   "role": "junior",
+   "path": null,
+   "mode": "full",
+   "rules": {},
+   "noSample": true
+  },
+  {
+   "route": "/hq/knowhow/status",
+   "role": "owner",
+   "path": "/hq/knowhow/status",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq",
+   "shot": "tmp/qa-crawl-11.png"
+  },
+  {
+   "route": "/hq/knowhow/status",
+   "role": "junior",
+   "path": "/hq/knowhow/status",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq",
+   "shot": "tmp/qa-crawl-12.png"
+  },
+  {
+   "route": "/hq/quizzes",
+   "role": "owner",
+   "path": "/hq/quizzes",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq",
+   "shot": "tmp/qa-crawl-13.png"
+  },
+  {
+   "route": "/hq/quizzes/[id]",
+   "role": "owner",
+   "path": null,
+   "mode": "full",
+   "rules": {},
+   "noSample": true
+  },
+  {
+   "route": "/hq/quizzes",
+   "role": "junior",
+   "path": "/hq/quizzes",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq",
+   "shot": "tmp/qa-crawl-14.png"
+  },
+  {
+   "route": "/hq/quizzes/[id]",
+   "role": "junior",
+   "path": null,
+   "mode": "full",
+   "rules": {},
+   "noSample": true
+  },
+  {
+   "route": "/hq/quizzes/status",
+   "role": "owner",
+   "path": "/hq/quizzes/status",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq",
+   "shot": "tmp/qa-crawl-15.png"
+  },
+  {
+   "route": "/hq/quizzes/status",
+   "role": "junior",
+   "path": "/hq/quizzes/status",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq",
+   "shot": "tmp/qa-crawl-16.png"
+  },
+  {
+   "route": "/hq/settings",
+   "role": "owner",
+   "path": "/hq/settings",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq",
+   "shot": "tmp/qa-crawl-17.png"
+  },
+  {
+   "route": "/hq/settings",
+   "role": "junior",
+   "path": "/hq/settings",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq",
+   "shot": "tmp/qa-crawl-18.png"
+  },
+  {
+   "route": "/hq/settings/billing",
+   "role": "owner",
+   "path": "/hq/settings/billing",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq",
+   "shot": "tmp/qa-crawl-19.png"
+  },
+  {
+   "route": "/hq/settings/billing",
+   "role": "junior",
+   "path": "/hq/settings/billing",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq",
+   "shot": "tmp/qa-crawl-20.png"
+  },
+  {
+   "route": "/hq/settings/members",
+   "role": "owner",
+   "path": "/hq/settings/members",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq"
+  },
+  {
+   "route": "/hq/settings/members",
+   "role": "junior",
+   "path": "/hq/settings/members",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq"
+  },
+  {
+   "route": "/hq/stores",
+   "role": "owner",
+   "path": "/hq/stores",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq"
+  },
+  {
+   "route": "/hq/stores/[id]",
+   "role": "owner",
+   "path": null,
+   "mode": "full",
+   "rules": {},
+   "noSample": true
+  },
+  {
+   "route": "/hq/stores",
+   "role": "junior",
+   "path": "/hq/stores",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq"
+  },
+  {
+   "route": "/hq/stores/[id]",
+   "role": "junior",
+   "path": null,
+   "mode": "full",
+   "rules": {},
+   "noSample": true
+  },
+  {
+   "route": "/hq/stores/invites",
+   "role": "owner",
+   "path": "/hq/stores/invites",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq"
+  },
+  {
+   "route": "/hq/stores/invites",
+   "role": "junior",
+   "path": "/hq/stores/invites",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 매장으로\" @172,500 116×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hq"
+  },
+  {
+   "route": "/hub",
+   "role": "owner",
+   "path": "/hub",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 계정 · 설정\" @399,20 40×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hub"
+  },
+  {
+   "route": "/hub",
+   "role": "junior",
+   "path": "/hub",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 계정 · 설정\" @399,20 40×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "pass",
+     "detail": [
+      "빈 문구 1 · 행동 4"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hub"
+  },
+  {
+   "route": "/hub-growth",
+   "role": "owner",
+   "path": "/hub-growth",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 계정 · 설정\" @399,20 40×40",
+      "<44 \"노하우 복사하기\" @38,743 384×39"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "pass",
+     "detail": [
+      "빈 문구 1 · 행동 14"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hub-growth"
+  },
+  {
+   "route": "/hub-knowhow",
+   "role": "owner",
+   "path": "/hub-knowhow",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "fail",
+     "detail": [
+      "\"알바\" 7건: 손님이 음식/음료에서 이물질 발견. 사장 부재 시 알바 1차 응대. | 손님이 다른 손님 다 들리도록 큰 소리로 매장·음료·서비스에 대해 불만 발화. 알바 혼자  | 사장이 발주·외출 등으로 자리 비울 때 알바가 즉시 결정해야 할 상황 발생."
+     ]
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/hub-knowhow"
+  },
+  {
+   "route": "/hub-growth",
+   "role": "junior",
+   "path": "/hub-growth",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 계정 · 설정\" @399,20 40×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "fail",
+     "detail": [
+      "\"0개류\" 1건: 0개"
+     ]
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/hub-growth"
+  },
+  {
+   "route": "/inquiry",
+   "role": "owner",
+   "path": "/inquiry",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"매장의 정석\" @16,19 82×29",
+      "<44 \"무료로 시작\" @295,15 84×36"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "fail",
+     "detail": [
+      "\"알바\" 2건: 사장님 머릿속 노하우로 새 알바를 가르치는 AI. 음식점 · 카페 알바·직원 교육 서비스."
+     ]
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/inquiry.html"
+  },
+  {
+   "route": "/hub-knowhow",
+   "role": "junior",
+   "path": "/hub-knowhow",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "fail",
+     "detail": [
+      "\"아직 등록된 노하우가 없어요\" 옆에 행동 버튼 0"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/hub-knowhow"
+  },
+  {
+   "route": "/junior/attendance",
+   "role": "owner",
+   "path": "/junior/attendance",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/dashboard"
+  },
+  {
+   "route": "/inquiry",
+   "role": "junior",
+   "path": "/inquiry",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"매장의 정석\" @16,19 82×29",
+      "<44 \"무료로 시작\" @295,15 84×36"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "fail",
+     "detail": [
+      "\"알바\" 2건: 사장님 머릿속 노하우로 새 알바를 가르치는 AI. 음식점 · 카페 알바·직원 교육 서비스."
+     ]
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/inquiry.html"
+  },
+  {
+   "route": "/junior/chat",
+   "role": "owner",
+   "path": "/junior/chat",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/dashboard"
+  },
+  {
+   "route": "/junior/home",
+   "role": "owner",
+   "path": "/junior/home",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/dashboard"
+  },
+  {
+   "route": "/junior/attendance",
+   "role": "junior",
+   "path": "/junior/attendance",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/attendance"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "pass",
+     "detail": [
+      "빈 문구 1 · 행동 2"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/attendance"
+  },
+  {
+   "route": "/junior/hub",
+   "role": "owner",
+   "path": "/junior/hub",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/dashboard"
+  },
+  {
+   "route": "/junior/chat",
+   "role": "junior",
+   "path": "/junior/chat",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/chat"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"도움 됐어요\" @34,573 108×34",
+      "<44 \"도움 안 됐어요\" @150,573 96×34",
+      "<44 \"내 경우가 다르면 사장님께 물어보기\" @29,642 221×33"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "fail",
+     "detail": [
+      "\"알바\" 1건: 피크타임(주로 14~16시) 손님이 음료에서 머리카락을 발견하고 컴플레인. 사장 부재 시 "
+     ]
+    },
+    "R6": {
+     "status": "pass",
+     "detail": [
+      "빈 문구 2 · 행동 17"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/chat"
+  },
+  {
+   "route": "/junior/join",
+   "role": "owner",
+   "path": "/junior/join",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/dashboard"
+  },
+  {
+   "route": "/junior/notifications",
+   "role": "owner",
+   "path": "/junior/notifications",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/dashboard"
+  },
+  {
+   "route": "/junior/home",
+   "role": "junior",
+   "path": "/junior/home",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 계정 · 설정\" @399,22 40×40",
+      "<44 \"오늘 업무 전체보기\" @331,339 104×18"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/junior/onboarding",
+   "role": "owner",
+   "path": "/junior/onboarding",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/dashboard"
+  },
+  {
+   "route": "/junior/hub",
+   "role": "junior",
+   "path": "/junior/hub",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/hub"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/junior/hub"
+  },
+  {
+   "route": "/junior/practice",
+   "role": "owner",
+   "path": "/junior/practice",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/dashboard"
+  },
+  {
+   "route": "/junior/schedule",
+   "role": "owner",
+   "path": "/junior/schedule",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/dashboard"
+  },
+  {
+   "route": "/junior/join",
+   "role": "junior",
+   "path": "/junior/join",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/hub"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /hq"
+     ]
+    }
+   },
+   "landed": "/junior/hub"
+  },
+  {
+   "route": "/junior/settings",
+   "role": "owner",
+   "path": "/junior/settings",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/dashboard"
+  },
+  {
+   "route": "/junior/notifications",
+   "role": "junior",
+   "path": "/junior/notifications",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/notifications"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/notifications"
+  },
+  {
+   "route": "/junior/suggest",
+   "role": "owner",
+   "path": "/junior/suggest",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/dashboard"
+  },
+  {
+   "route": "/junior/timesheet",
+   "role": "owner",
+   "path": "/junior/timesheet",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/dashboard"
+  },
+  {
+   "route": "/junior/onboarding",
+   "role": "junior",
+   "path": "/junior/onboarding",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/onboarding"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/onboarding"
+  },
+  {
+   "route": "/junior/work",
+   "role": "owner",
+   "path": "/junior/work",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/dashboard"
+  },
+  {
+   "route": "/legal/[doc]",
+   "role": "owner",
+   "path": "/legal/collect",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/legal/collect"
+  },
+  {
+   "route": "/junior/practice",
+   "role": "junior",
+   "path": "/junior/practice",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/practice"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/practice"
+  },
+  {
+   "route": "/junior/schedule",
+   "role": "junior",
+   "path": "/junior/schedule",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/schedule"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/schedule"
+  },
+  {
+   "route": "/login",
+   "role": "owner",
+   "path": "/login",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /hub"
+     ]
+    }
+   },
+   "landed": "/login"
+  },
+  {
+   "route": "/junior/settings",
+   "role": "junior",
+   "path": "/junior/settings",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/settings"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/settings"
+  },
+  {
+   "route": "/notifications",
+   "role": "owner",
+   "path": "/notifications",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/notifications"
+  },
+  {
+   "route": "/junior/suggest",
+   "role": "junior",
+   "path": "/junior/suggest",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/suggest"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/suggest"
+  },
+  {
+   "route": "/owner/ask",
+   "role": "owner",
+   "path": "/owner/ask",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/ask"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/ask"
+  },
+  {
+   "route": "/junior/timesheet",
+   "role": "junior",
+   "path": "/junior/timesheet",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/timesheet"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "fail",
+     "detail": [
+      "이 달 출퇴근 기록이 없어요.(384×53)"
+     ]
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/timesheet"
+  },
+  {
+   "route": "/owner/brand-consent",
+   "role": "owner",
+   "path": "/owner/brand-consent",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/brand-consent"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "pass",
+     "detail": [
+      "빈 문구 1 · 행동 1"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /hub"
+     ]
+    }
+   },
+   "landed": "/owner/brand-consent"
+  },
+  {
+   "route": "/owner/brand-link",
+   "role": "owner",
+   "path": "/owner/brand-link",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/brand-link"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "pass",
+     "detail": [
+      "빈 문구 2 · 행동 4"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/settings"
+     ]
+    }
+   },
+   "landed": "/owner/brand-link"
+  },
+  {
+   "route": "/junior/work",
+   "role": "junior",
+   "path": "/junior/work",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/work"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"전체 항목 보기\" @38,161 384×40",
+      "<44 \"전체 항목 보기\" @38,361 384×40",
+      "<44 \"음성으로 입력\" @353,770 40×44",
+      "<44 \"전체 채팅방\" @15,488 50×40",
+      "<44 \"주말팀 채팅방\" @71,488 62×40",
+      "<44 \"채팅방 만들기\" @139,488 40×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "fail",
+     "detail": [
+      "느낌표 2건: 이번 주 토요일 14시 단체예약 20명! 오후타임 인원 미리 준비 부탁해요. | 사장님 우유 거의 떨어져서 발주 넣었습니다!",
+      "그림 이모지 1건: 👍"
+     ]
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/work"
+  },
+  {
+   "route": "/owner/categories",
+   "role": "owner",
+   "path": "/owner/categories",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/categories"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"에스프레소 머신 청소, 한 달간 안 물어봄\" @38,296 28×28",
+      "<44 \"포스 마감 정산 순서, 한 달간 2번 물어봄 · 오래 손 안 댐\" @38,376 28×28",
+      "<44 \"마감 시재 정산, 한 달간 안 물어봄\" @38,457 28×28",
+      "<44 \"포인트 적립 안내 기준, 한 달간 안 물어봄 · 오래 손 안 댐\" @38,537 28×28",
+      "<44 \"목록 관리 열기\" @411,727 28×28"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /owner/settings"
+     ]
+    }
+   },
+   "landed": "/owner/categories"
+  },
+  {
+   "route": "/legal/[doc]",
+   "role": "junior",
+   "path": "/legal/collect",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/legal/collect"
+  },
+  {
+   "route": "/owner/coach",
+   "role": "owner",
+   "path": "/owner/coach",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/coach"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"추가 메뉴 열기\" @19,844 38×38",
+      "<44 \"보내기\" @403,844 38×38"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/coach"
+  },
+  {
+   "route": "/owner/create-store",
+   "role": "owner",
+   "path": "/owner/create-store",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/create-store"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /stores"
+     ]
+    }
+   },
+   "landed": "/owner/create-store"
+  },
+  {
+   "route": "/login",
+   "role": "junior",
+   "path": "/login",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /hub"
+     ]
+    }
+   },
+   "landed": "/login"
+  },
+  {
+   "route": "/owner/dashboard",
+   "role": "owner",
+   "path": "/owner/dashboard",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/dashboard"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 계정 · 설정\" @399,22 40×40",
+      "<44 \"오늘 업무 전체보기\" @331,394 104×18",
+      "<44 \"오늘 근무 보기\" @38,465 384×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /stores"
+     ]
+    }
+   },
+   "landed": "/owner/dashboard"
+  },
+  {
+   "route": "/notifications",
+   "role": "junior",
+   "path": "/notifications",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/notifications"
+  },
+  {
+   "route": "/owner/edit/[id]",
+   "role": "owner",
+   "path": "/owner/edit/pb_event_004",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/edit/pb_event_004"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"카테고리 기타, 변경\" @21,77 140×40",
+      "<44 \"퀴즈 만들기\" @169,77 108×40",
+      "<44 \"설명 고치기\" @104,270 322×22",
+      "<44 \"금지 고치기\" @104,655 322×22",
+      "<44 \"추가 메뉴 열기\" @19,844 38×38",
+      "<44 \"보내기\" @403,844 38×38"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "fail",
+     "detail": [
+      "\"알바\" 1건: 손님이 다른 손님 다 들리도록 큰 소리로 매장·음료·서비스에 대해 불만 발화. 알바 혼자 "
+     ]
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/edit/pb_event_004"
+  },
+  {
+   "route": "/owner/ask",
+   "role": "junior",
+   "path": "/owner/ask",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/handover",
+   "role": "owner",
+   "path": "/owner/handover",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/handover"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/handover"
+  },
+  {
+   "route": "/owner/brand-consent",
+   "role": "junior",
+   "path": "/owner/brand-consent",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/import-knowhow",
+   "role": "owner",
+   "path": "/owner/import-knowhow",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/import-knowhow"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/import-knowhow"
+  },
+  {
+   "route": "/owner/brand-link",
+   "role": "junior",
+   "path": "/owner/brand-link",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/categories",
+   "role": "junior",
+   "path": "/owner/categories",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/inbox",
+   "role": "owner",
+   "path": "/owner/inbox",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/categories"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"우유 떨어졌을 때 (1L 미만) 노하우 보기\" @38,551 173×29",
+      "<44 \"우유 떨어졌을 때 (1L 미만) 노하우 보기\" @38,669 173×29",
+      "<44 \"홍대점 오픈 절차 (08:00) 점검 완료로 표시\" @38,875 384×37"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/categories"
+  },
+  {
+   "route": "/owner/coach",
+   "role": "junior",
+   "path": "/owner/coach",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/knowledge",
+   "role": "owner",
+   "path": "/owner/knowledge",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/knowledge"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"에스프레소 머신 청소, 한 달간 안 물어봄\" @38,282 28×28",
+      "<44 \"포스 마감 정산 순서, 한 달간 2번 물어봄 · 오래 손 안 댐\" @38,362 28×28",
+      "<44 \"마감 시재 정산, 한 달간 안 물어봄\" @38,443 28×28",
+      "<44 \"포인트 적립 안내 기준, 한 달간 안 물어봄 · 오래 손 안 댐\" @38,523 28×28",
+      "<44 \"목록 관리 열기\" @411,713 28×28"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/knowledge"
+  },
+  {
+   "route": "/owner/create-store",
+   "role": "junior",
+   "path": "/owner/create-store",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/notifications",
+   "role": "owner",
+   "path": "/owner/notifications",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/notifications"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/notifications"
+  },
+  {
+   "route": "/owner/dashboard",
+   "role": "junior",
+   "path": "/owner/dashboard",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/edit/[id]",
+   "role": "junior",
+   "path": "/owner/edit/pb_event_004",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/onboarding",
+   "role": "owner",
+   "path": "/owner/onboarding",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/onboarding"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/onboarding"
+  },
+  {
+   "route": "/owner/handover",
+   "role": "junior",
+   "path": "/owner/handover",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/previous-stores",
+   "role": "owner",
+   "path": "/owner/previous-stores",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/previous-stores"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "pass",
+     "detail": [
+      "빈 문구 1 · 행동 1"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /account-settings"
+     ]
+    }
+   },
+   "landed": "/owner/previous-stores"
+  },
+  {
+   "route": "/owner/import-knowhow",
+   "role": "junior",
+   "path": "/owner/import-knowhow",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/quiz-list",
+   "role": "owner",
+   "path": "/owner/quiz-list",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/training"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"에스프레소 머신 청소, 문항 없음\" @38,367 28×28",
+      "<44 \"포스 마감 정산 순서, 노하우 이해 0/2명\" @38,435 28×28",
+      "<44 \"마감 시재 정산, 노하우 이해 0/2명\" @38,502 28×28",
+      "<44 \"포인트 적립 안내 기준, 문항 없음\" @38,570 28×28"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "fail",
+     "detail": [
+      "영문 코드: \"testfff\"",
+      "영문 코드: \"test\""
+     ]
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /account-settings"
+     ]
+    }
+   },
+   "landed": "/owner/training"
+  },
+  {
+   "route": "/owner/inbox",
+   "role": "junior",
+   "path": "/owner/inbox",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/knowledge",
+   "role": "junior",
+   "path": "/owner/knowledge",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/notifications",
+   "role": "junior",
+   "path": "/owner/notifications",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/quiz-new",
+   "role": "owner",
+   "path": "/owner/quiz-new",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/quiz-new"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"우리 직원\" @21,164 77×34",
+      "<44 \"외부 사람\" @102,164 77×34"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/quiz-new"
+  },
+  {
+   "route": "/owner/onboarding",
+   "role": "junior",
+   "path": "/owner/onboarding",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/quiz/[id]",
+   "role": "owner",
+   "path": "/owner/quiz/tc_323c365f85c780bd60707e385ef37c42",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/quiz/tc_323c365f85c780bd60707e385ef37c42"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/quiz/tc_323c365f85c780bd60707e385ef37c42"
+  },
+  {
+   "route": "/owner/quiz/guest/[sub]",
+   "role": "owner",
+   "path": null,
+   "mode": "full",
+   "rules": {},
+   "noSample": true
+  },
+  {
+   "route": "/owner/previous-stores",
+   "role": "junior",
+   "path": "/owner/previous-stores",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/quiz/person",
+   "role": "owner",
+   "path": "/owner/quiz/person",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/quiz/person"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/quiz/person"
+  },
+  {
+   "route": "/owner/quiz-list",
+   "role": "junior",
+   "path": "/owner/quiz-list",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/quiz-new",
+   "role": "junior",
+   "path": "/owner/quiz-new",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/rooms",
+   "role": "owner",
+   "path": "/owner/rooms",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/work"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"음성으로 입력\" @353,770 40×44",
+      "<44 \"전체 채팅방\" @15,66 50×40",
+      "<44 \"홀팀 채팅방\" @71,66 50×40",
+      "<44 \"주말팀 채팅방\" @127,66 62×40",
+      "<44 \"채팅방 만들기\" @195,66 40×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "fail",
+     "detail": [
+      "느낌표 2건: 이번 주 토요일 14시 단체예약 20명! 오후타임 인원 미리 준비 부탁해요. | 사장님 우유 거의 떨어져서 발주 넣었습니다!",
+      "그림 이모지 1건: 👍"
+     ]
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/work"
+  },
+  {
+   "route": "/owner/quiz/[id]",
+   "role": "junior",
+   "path": "/owner/quiz/tc_323c365f85c780bd60707e385ef37c42",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/quiz/guest/[sub]",
+   "role": "junior",
+   "path": null,
+   "mode": "boundary",
+   "rules": {},
+   "noSample": true
+  },
+  {
+   "route": "/owner/schedule",
+   "role": "owner",
+   "path": "/owner/schedule",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/schedule"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "pass",
+     "detail": [
+      "빈 문구 1 · 행동 12"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/schedule"
+  },
+  {
+   "route": "/owner/quiz/person",
+   "role": "junior",
+   "path": "/owner/quiz/person",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/settings",
+   "role": "owner",
+   "path": "/owner/settings",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/settings"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/settings"
+  },
+  {
+   "route": "/owner/rooms",
+   "role": "junior",
+   "path": "/owner/rooms",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/staff",
+   "role": "owner",
+   "path": "/owner/staff",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/staff"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/staff"
+  },
+  {
+   "route": "/owner/schedule",
+   "role": "junior",
+   "path": "/owner/schedule",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/settings",
+   "role": "junior",
+   "path": "/owner/settings",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/store-config",
+   "role": "owner",
+   "path": "/owner/store-config",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/store-config"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "pass",
+     "detail": [
+      "빈 문구 1 · 행동 1"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/store-config"
+  },
+  {
+   "route": "/owner/suggestions",
+   "role": "owner",
+   "path": "/owner/suggestions",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/suggestions"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "fail",
+     "detail": [
+      "\"알바\" 1건: 박지원 · 개선 · 보조냉장고 위치를 모르는 알바가 많아요. 주방 안쪽 위치 사진 한 장 "
+     ]
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/suggestions"
+  },
+  {
+   "route": "/owner/staff",
+   "role": "junior",
+   "path": "/owner/staff",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/templates",
+   "role": "owner",
+   "path": "/owner/templates",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/templates"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/templates"
+  },
+  {
+   "route": "/owner/store-config",
+   "role": "junior",
+   "path": "/owner/store-config",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/suggestions",
+   "role": "junior",
+   "path": "/owner/suggestions",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/timesheet/[staffId]",
+   "role": "owner",
+   "path": "/owner/timesheet/0df5dd40-1e15-42f4-916d-06f3a98e389c",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/timesheet/0df5dd40-1e15-42f4-916d-06f3a98e389c"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "fail",
+     "detail": [
+      "이 달 출퇴근 기록이 없어요.(384×53)"
+     ]
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/timesheet/0df5dd40-1e15-42f4-916d-06f3a98e389c"
+  },
+  {
+   "route": "/owner/templates",
+   "role": "junior",
+   "path": "/owner/templates",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/training",
+   "role": "owner",
+   "path": "/owner/training",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/training"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"에스프레소 머신 청소, 문항 없음\" @38,367 28×28",
+      "<44 \"포스 마감 정산 순서, 노하우 이해 0/2명\" @38,435 28×28",
+      "<44 \"마감 시재 정산, 노하우 이해 0/2명\" @38,502 28×28",
+      "<44 \"포인트 적립 안내 기준, 문항 없음\" @38,570 28×28"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "fail",
+     "detail": [
+      "영문 코드: \"testfff\"",
+      "영문 코드: \"test\""
+     ]
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/training"
+  },
+  {
+   "route": "/owner/timesheet/[staffId]",
+   "role": "junior",
+   "path": "/owner/timesheet/0df5dd40-1e15-42f4-916d-06f3a98e389c",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/training",
+   "role": "junior",
+   "path": "/owner/training",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/owner/work",
+   "role": "owner",
+   "path": "/owner/work",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /owner/work"
+     ]
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"음성으로 입력\" @353,770 40×44",
+      "<44 \"전체 채팅방\" @15,66 50×40",
+      "<44 \"홀팀 채팅방\" @71,66 50×40",
+      "<44 \"주말팀 채팅방\" @127,66 62×40",
+      "<44 \"채팅방 만들기\" @195,66 40×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "fail",
+     "detail": [
+      "느낌표 2건: 이번 주 토요일 14시 단체예약 20명! 오후타임 인원 미리 준비 부탁해요. | 사장님 우유 거의 떨어져서 발주 넣었습니다!",
+      "그림 이모지 1건: 👍"
+     ]
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/owner/work"
+  },
+  {
+   "route": "/owner/work",
+   "role": "junior",
+   "path": "/owner/work",
+   "mode": "boundary",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R10": {
+     "status": "pass",
+     "detail": [
+      "→ /junior/home"
+     ]
+    }
+   },
+   "landed": "/junior/home"
+  },
+  {
+   "route": "/privacy",
+   "role": "owner",
+   "path": "/privacy",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/privacy"
+  },
+  {
+   "route": "/q/[token]",
+   "role": "owner",
+   "path": null,
+   "mode": "full",
+   "rules": {},
+   "noSample": true
+  },
+  {
+   "route": "/privacy",
+   "role": "junior",
+   "path": "/privacy",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/privacy"
+  },
+  {
+   "route": "/q/[token]",
+   "role": "junior",
+   "path": null,
+   "mode": "full",
+   "rules": {},
+   "noSample": true
+  },
+  {
+   "route": "/report",
+   "role": "owner",
+   "path": "/report",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"스퀘어 카페 신촌점\" @38,171 129×34",
+      "<44 \"스퀘어 카페 홍대점\" @175,171 129×34",
+      "<44 \"박지원 매니저\" @38,252 101×34",
+      "<44 \"이수민님\" @147,252 74×34",
+      "<44 \"AI 답변 문제\" @229,252 94×34",
+      "<44 \"괴롭힘·폭언\" @38,333 89×34",
+      "<44 \"성희롱\" @135,333 62×34",
+      "<44 \"부적절한 말·사진\" @205,333 117×34",
+      "<44 \"스팸·광고\" @330,333 77×34",
+      "<44 \"기타\" @38,375 50×34",
+      "<44 \"오늘\" @38,623 50×34",
+      "<44 \"어제\" @96,623 50×34",
+      "<44 \"그저께\" @154,623 62×34"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /account-settings"
+     ]
+    }
+   },
+   "landed": "/report"
+  },
+  {
+   "route": "/report",
+   "role": "junior",
+   "path": "/report",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"김영자 사장님\" @38,171 101×34",
+      "<44 \"박지원 매니저\" @147,171 101×34",
+      "<44 \"AI 답변 문제\" @257,171 94×34",
+      "<44 \"괴롭힘·폭언\" @38,252 89×34",
+      "<44 \"성희롱\" @135,252 62×34",
+      "<44 \"부적절한 말·사진\" @205,252 117×34",
+      "<44 \"스팸·광고\" @330,252 77×34",
+      "<44 \"기타\" @38,294 50×34",
+      "<44 \"오늘\" @38,542 50×34",
+      "<44 \"어제\" @96,542 50×34",
+      "<44 \"그저께\" @154,542 62×34"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /account-settings"
+     ]
+    }
+   },
+   "landed": "/report"
+  },
+  {
+   "route": "/signup",
+   "role": "owner",
+   "path": "/signup",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 계정 · 설정\" @399,20 40×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /account-settings"
+     ]
+    }
+   },
+   "landed": "/hub"
+  },
+  {
+   "route": "/signup",
+   "role": "junior",
+   "path": "/signup",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 계정 · 설정\" @399,20 40×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "pass",
+     "detail": [
+      "빈 문구 1 · 행동 4"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /account-settings"
+     ]
+    }
+   },
+   "landed": "/hub"
+  },
+  {
+   "route": "/stores",
+   "role": "owner",
+   "path": "/stores",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 계정 · 설정\" @399,20 40×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /account-settings"
+     ]
+    }
+   },
+   "landed": "/stores"
+  },
+  {
+   "route": "/stores",
+   "role": "junior",
+   "path": "/stores",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "fail",
+     "detail": [
+      "<44 \"내 계정 · 설정\" @399,20 40×40"
+     ]
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "브라우저: → /account-settings"
+     ]
+    }
+   },
+   "landed": "/stores"
+  },
+  {
+   "route": "/terms",
+   "role": "owner",
+   "path": "/terms",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /owner/dashboard"
+     ]
+    }
+   },
+   "landed": "/terms"
+  },
+  {
+   "route": "/terms",
+   "role": "junior",
+   "path": "/terms",
+   "mode": "full",
+   "rules": {
+    "R1": {
+     "status": "pass",
+     "detail": []
+    },
+    "R2": {
+     "status": "pass",
+     "detail": []
+    },
+    "R3": {
+     "status": "pass",
+     "detail": []
+    },
+    "R4": {
+     "status": "pass",
+     "detail": []
+    },
+    "R5": {
+     "status": "pass",
+     "detail": []
+    },
+    "R6": {
+     "status": "skip",
+     "detail": [
+      "빈 상태 문구 없음"
+     ]
+    },
+    "R8": {
+     "status": "pass",
+     "detail": []
+    },
+    "R11": {
+     "status": "pass",
+     "detail": []
+    },
+    "R12": {
+     "status": "pass",
+     "detail": []
+    },
+    "R9": {
+     "status": "pass",
+     "detail": []
+    },
+    "R7": {
+     "status": "pass",
+     "detail": [
+      "헤더: → /junior/home"
+     ]
+    }
+   },
+   "landed": "/terms"
+  }
+ ]
+}

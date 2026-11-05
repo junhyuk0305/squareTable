@@ -204,11 +204,10 @@ export function OwnerKnowhowBrowse({
   const loadError = usePlaybookStore((s) => s.loadError);
   const hydrate = usePlaybookStore((s) => s.hydrate);
   // 노하우 임팩트 = 이 노하우를 첨부한 업무 수(0069 역조회). 카운트가 실제이려면 업무 링크가 로드돼 있어야
-  // 하므로 이 화면에서도 업무 스토어를 hydrate 한다(coalesce 로 중복 방지). 미로드로 인한 '0 위장' 방지.
+  // 하므로 오래됐을 때만 다시 읽는다(미로드로 인한 '0 위장' 방지). 구독은 레이아웃이 한다(M4).
   const workLoaded = useWorkStore((s) => s.loaded);
   useEffect(() => {
-    useWorkStore.getState().hydrate();
-    return useWorkStore.getState().subscribe();
+    void useWorkStore.getState().hydrateIfStale(10_000);
   }, []);
   // '할 일' 칸(OwnerTodoSegment)이 그리는 원격 소스도 이 화면의 게이트가 함께 든다 —
   // 한 화면에 스피너 둘이 따로 돌면 '할 일'이 먼저 서고 노하우가 나중에 붙는다.

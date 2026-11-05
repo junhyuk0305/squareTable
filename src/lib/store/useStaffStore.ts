@@ -52,6 +52,10 @@ type StaffState = {
   loaded: boolean;
   loadError: boolean; // 마지막 hydrate 실패 여부 — 명부가 "직원 0명"과 "못 불러옴"을 구분한다.
   hydrate: () => Promise<void>;
+  /** 마지막 hydrate 시작 시각(ms · 0 = 아직). 화면 포커스의 "다시 읽기"가 이 값으로 생략 여부를 정한다(M4). */
+  fetchedAt: number;
+  /** fetchedAt 이 maxAgeMs 보다 오래됐을 때만 hydrate — 합류 신청(pending) 표는 publication 밖이라 포커스가 최신화 시점이다. */
+  hydrateIfStale: (maxAgeMs: number) => Promise<void>;
   applyMock: (demo: boolean) => void;
   getStaff: (id: string) => Junior | undefined;
   // 사장이 직원을 매장에서 내보낸다(소속 해제). 낙관적 제거 + 실패 시 복원.
@@ -98,11 +102,13 @@ export const useStaffStore = create<StaffState>((set, get) => ({
   tenures: [],
   loaded: !HAS_SUPABASE,
   loadError: false,
+  fetchedAt: 0,
 
   hydrate: async () => {
     if (!HAS_SUPABASE) return;
     // 화면 포커스·승인 성공·실시간 이벤트도 이 길로 다시 당긴다 — 전부 같은 가드를 지난다.
     const epoch = currentTenantEpoch();
+    set({ fetchedAt: Date.now() });
     // 재직 기간은 사장에게만 행이 온다(RLS). 0246 이 없는 서버에서는 실패한다 — 실패는 명부 실패로 보지 않고 빈 기간으로 둔다.
     const isOwner = useSessionStore.getState().role === 'owner';
     const [staffRes, pendingRes, tenRes, joinRes, doneRes] = await Promise.all([
@@ -208,5 +214,12 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     });
   },
 
-  subscribe: () => subscribeDebounced(subscribeStaff, () => get().hydrate()),
+  hydrateIfStale: (maxAgeMs) => {
+    const { fetchedAt } = get();
+    if (fetchedAt === 0 || Date.now() - fetchedAt > maxAgeMs) return get().hydrate();
+    return Promise.resolve();
+  },
+
+  // 구독은 레이아웃 한 곳(이름 = __DEV__ 중복 계측).
+  subscribe: () => subscribeDebounced(subscribeStaff, () => get().hydrate(), 300, 'staff'),
 }));

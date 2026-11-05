@@ -87,8 +87,8 @@ export default function OwnerTrainingScreen() {
    */
   useFocusEffect(
     useCallback(() => {
-      void usePlaybookStore.getState().hydrate();
-      void useWorkStore.getState().hydrate();
+      void usePlaybookStore.getState().hydrateIfStale(10_000);
+      void useWorkStore.getState().hydrateIfStale(10_000);
       bumpQuiz();
       // 퀴즈·발송 원장도 다시 읽는다(2026-10-15 안드로이드 QA #2) — 만들기에서 보낸 뒤 돌아오면 이 화면의
       // 훅 상태는 마운트 때 그대로라, 방금 보낸 퀴즈가 '응시 중'에 안 떴다(문항만 새로 읽고 코스는 안 읽었다).

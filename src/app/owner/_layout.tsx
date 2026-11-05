@@ -45,7 +45,7 @@ function hydrateOwnerStores() {
   // 사장 알림(0191 좌석 잠김·AI 사용량)도 벨 배지 축.
   void useOwnerAlertStore.getState().hydrate();
   // 업무방 — 매장이 바뀌면 tenantReset 이 비운다. 업무 탭이 열려 있는 채로 바뀌어도 게이트가 풀리게
-  // 여기서 다시 채운다(구독은 업무 탭 WorkBoard 가 맡는다).
+  // 여기서 다시 채운다(구독도 아래 effect 가 맡는다 · M4).
   void useRoomStore.getState().hydrate();
 }
 
@@ -70,6 +70,8 @@ export default function OwnerLayout() {
     hydrateOwnerStores();
   });
 
+  // ★구독 책임 = 레이아웃 한 곳(M4 · 2026-11-04). 화면은 subscribe 를 부르지 않고 필요하면 `hydrateIfStale` 만 부른다.
+  //   같은 스토어를 화면이 또 구독하면 채널이 둘이 되고 이벤트마다 hydrate 가 두 번 돈다(__DEV__ 에서 activeSubs 경고).
   useEffect(() => {
     if (status !== 'signed_in') return;
     hydrateOwnerStores();
@@ -80,6 +82,7 @@ export default function OwnerLayout() {
     const offS = useScheduleStore.getState().subscribe();
     const offSt = useStaffStore.getState().subscribe(); // 신규 직원 합류가 즉시 직원 목록에 반영
     const offSg = useSuggestionStore.getState().subscribe(); // 새 노하우 제안이 알림벨에 즉시 반영
+    const offR = useRoomStore.getState().subscribe(); // 업무방 — 예전엔 WorkBoard 가 구독했다
     return () => {
       offQ();
       offP();
@@ -88,6 +91,7 @@ export default function OwnerLayout() {
       offS();
       offSt();
       offSg();
+      offR();
     };
     // unitId 의존: 다점포 전환(switchUnit) 시 활성 매장이 바뀌면 전 스토어를 새 매장으로 재hydrate·재subscribe.
   }, [status, unitId]);

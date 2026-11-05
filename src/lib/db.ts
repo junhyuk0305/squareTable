@@ -3797,20 +3797,53 @@ export async function deleteAttendance(id: string): Promise<boolean> {
 }
 
 // ── 업무보드/출퇴근 Realtime 구독 ─────────────────────────
-export function subscribeWork(onChange: () => void): () => void {
+/** 업무 스토어가 구독하는 6표. 스토어는 이 이름으로 어느 축을 다시 읽을지 정한다(M4 축 무효화). */
+export type WorkTable = 'work_feed' | 'work_done' | 'work_templates' | 'work_template_knowhow' | 'knowhow_understanding' | 'quiz_assignments';
+const WORK_TABLES: readonly WorkTable[] = [
+  'work_feed',
+  'work_done',
+  'work_templates',
+  'work_template_knowhow',
+  // 0111 publication 멤버(AGENTS.md ⑤) — 직원이 통과하면 사장 배지가 즉시 바뀐다.
+  'knowhow_understanding',
+  // 0139 발송 원장 — 크론이 sent_at 을 채우는 순간 직원 화면에 퀴즈 카드가 떠야 한다.
+  // 구독이 없으면 푸시는 가는데 앱은 그대로라 "알림은 왔는데 앱엔 없다"가 된다(재하이드레이트 전까지).
+  'quiz_assignments',
+];
+/**
+ * 업무 6표 구독 — 핸들러에 **바뀐 표 이름**을 넘긴다(payload 내용은 쓰지 않는다 · 재조회가 RLS 를 거친다).
+ *
+ * 필터 규칙(2026-11-04 · 계획_M4 §1-(3)):
+ *  - INSERT·UPDATE 는 `unit_id=eq.<내 매장>` 으로 거른다. 다른 매장 이벤트로 재조회가 돌지 않게 한다.
+ *  - DELETE 는 **필터 없이** 따로 건다. 어느 표에도 REPLICA IDENTITY FULL 이 없어 DELETE payload 는 PK 열만 오고,
+ *    DELETE 에는 RLS 도 적용되지 않는다. 5표(work_feed·work_templates=id · work_template_knowhow=(template_id,entry_id)
+ *    · knowhow_understanding=(entry_id,staff_id) · quiz_assignments=id)는 PK 에 unit_id 가 없어 필터를 걸면 DELETE 가
+ *    영영 안 온다(필터는 payload 에 있는 열만 비교). work_done 만 PK=(unit_id,work_date,template_id) 라 DELETE 도 거른다.
+ *    남의 매장 DELETE 가 와도 표 이름만 쓰고 재조회는 RLS 가 거르므로 새는 것은 없다.
+ *  - `_unitId` 가 아직 없으면 구독하지 않는다(fail-closed). 필터 없는 구독으로 떨어뜨리지 않는다.
+ */
+export function subscribeWork(onChange: (table: WorkTable) => void): () => void {
   if (!HAS_SUPABASE) return () => {};
-  const ch = supabase
-    .channel(uniqueChannel('work'))
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'work_feed' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'work_done' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'work_templates' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'work_template_knowhow' }, onChange)
-    // 0111 publication 멤버(AGENTS.md ⑤) — 직원이 통과하면 사장 배지가 즉시 바뀐다.
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'knowhow_understanding' }, onChange)
-    // 0139 발송 원장 — 크론이 sent_at 을 채우는 순간 직원 화면에 퀴즈 카드가 떠야 한다.
-    // 구독이 없으면 푸시는 가는데 앱은 그대로라 "알림은 왔는데 앱엔 없다"가 된다(재하이드레이트 전까지).
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'quiz_assignments' }, onChange)
-    .subscribe();
+  if (!_unitId) {
+    console.warn('[subscribeWork] 매장이 아직 정해지지 않아 구독하지 않는다');
+    return () => {};
+  }
+  const filter = `unit_id=eq.${_unitId}`;
+  const handler = (p: { table: string }) => onChange(p.table as WorkTable);
+  let ch = supabase.channel(uniqueChannel('work'));
+  for (const table of WORK_TABLES) {
+    ch = ch
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table, filter }, handler)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table, filter }, handler)
+      .on(
+        'postgres_changes',
+        table === 'work_done'
+          ? { event: 'DELETE', schema: 'public', table, filter }
+          : { event: 'DELETE', schema: 'public', table },
+        handler,
+      );
+  }
+  ch.subscribe();
   return () => {
     supabase.removeChannel(ch);
   };

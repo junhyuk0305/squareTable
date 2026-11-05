@@ -1,13 +1,16 @@
 // qa-journey-task.mjs — 할일 여정 하니스(2026-10-15). 사장 창(S)과 직원 창(J)을 한 스크립트에서 같이 연다.
 //   사장 할일 만들기(담당 2명 반복 1 + 단건 1) → 직원 목록 → 직원 완료(사진 1장) → 사장 확인.
 //   화면 문자열을 DB 원본(service_role 읽기)과 맞대어 단언한다. DB 쓰기는 셋업(K2 비오늘 반복 1건 · K4-m 멘션 글 1건 · K7 근무 1건+시간 수정 요청 1건)·정리에만 쓴다.
+//   M4 동기 예산(2026-11-04 · 계획_M4_변경반영증분화.md §4): K8-①② 채팅 1건 교차 세션 + 사장 창 REST ≤4 · K8-③ 채널 수 ≤ 레이아웃 구독 수 · K8-④ 중복 구독 0.
+//   기존 K3(완료 INSERT)·K5-b0(해제 DELETE)이 그대로 있어 세 가지 이벤트(INSERT·DELETE·채팅 INSERT)의 교차 세션 반영이 모두 잡힌다.
 //
 //   node scripts/qa-journey-task.mjs      (개발 서버 http://localhost:8081 · QA_ORIGIN 으로 바꾼다 · .env + .env.seed 필요)
 //
 // 고정 계정만 쓴다(qa-fixed-accounts) — 사장 owner@ · 직원 staff2@(이수민) · 매니저 staff@(박지원) · store_001.
 // 이 하니스가 만든 데이터 = 할일 text 접두사 'qa_jr_task_'. 시작·끝에 그것만 지운다(work_templates·work_done·work_feed·사진).
 // 포트: S 9343 · J 9344 · 매니저 9345(K5 비담당 완료 한 번만 열고 닫는다). 다른 하니스가 9333/9334 를 쓴다.
-// ★건너뛴 단언은 ✗ 로 센다. 마지막 줄 GREEN n/0 또는 RED n/m.
+// ★건너뛴 단언은 ✗ 로 센다. 예외 = 측정 수단이 없을 때(프로덕션 번들에 __stSync 없음 · 프레임 관측 0)만 ○ skip 으로 따로 세고 pass 에 넣지 않는다.
+//   마지막 줄 GREEN/RED · pass n / fail n / skip n.
 import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -47,6 +50,8 @@ const NOTICE_ID = `f_qajrn_${STAMP}`;
 const SHIFT_TPL_ID = `${PREFIX}tpl_${STAMP}`; // K7 근무(shift_templates) · 시간 수정 요청(shift_change_requests) 씨앗
 const SHIFT_REQ_ID = `scr_qajr_${STAMP}`;
 const TXT_K6 = `${PREFIX}전제안내배정_${STAMP}`; // 할일 이름에 '기기'·'알림' 을 넣지 않는다(K6-a 정규식이 토스트 대신 이름에 걸린다)
+const TXT_CHAT = `${PREFIX}채팅_${STAMP}`; // K8-① 직원이 보내는 채팅 1건(kind=message · 본문 접두사로 끝 정리가 지운다)
+const CHAT_ID = `f_qajrc_${STAMP}`; // 화면 전송이 안 될 때 service_role 로 심는 행의 id
 const NAME_J = '이수민';
 const NAME_M = '박지원';
 const STORAGE_KEY = storageKeyFor(SB);
@@ -54,9 +59,12 @@ const ERR_RE = /실패|못 했어요|못했어요|올리지 못|못 올렸/g;
 
 let pass = 0;
 let fail = 0;
+let skip = 0;
 const check = (n, ok, extra = '') => {
   if (ok) { pass++; console.log('  ✓', n, extra ? `— ${extra}` : ''); } else { fail++; console.log('  ✗', n, extra); }
 };
+/** 측정 수단이 없어 판정 자체를 못 할 때만. pass 에 안 들어가고 최종 줄에 skip n 으로 남는다(AGENTS.md "건너뛴 것을 통과로 세지 않는다"). */
+const skipCheck = (n, why) => { skip++; console.log('  ○', n, `— skip: ${why}`); };
 const section = (t) => console.log(`\n── ${t}`);
 const info = (t) => console.log('  ·', t);
 
@@ -98,7 +106,7 @@ async function cleanup(label) {
     if (!r.ok) info(`사진 정리 실패 ${r.status}`);
   }
   if (feed.length) await del(`work_feed?id=in.${inList(feed.map((f) => f.id))}`);
-  // K4-m 이 심은 멘션 글 · K4-p 가 심은 공지(본문 접두사).
+  // K4-m 이 심은 멘션 글 · K4-p 가 심은 공지 · K8-① 채팅(본문 접두사 · 화면 전송분과 DB 삽입분 모두).
   const mentions = (await sel(`work_feed?unit_id=eq.${UNIT}&data->>kind=in.(message,notice)&select=id,data&order=created_at.desc&limit=500`))
     .filter((f) => String(f.data?.text ?? '').startsWith(PREFIX));
   if (mentions.length) await del(`work_feed?id=in.${inList(mentions.map((f) => f.id))}`);
@@ -110,7 +118,7 @@ async function cleanup(label) {
     await del(`work_template_knowhow?template_id=in.${inList(ids)}`).catch(() => {});
     await del(`work_templates?id=in.${inList(ids)}`);
   }
-  info(`정리(${label}): 할일 ${ids.length} · 피드 ${feed.length} · 멘션 글·공지 ${mentions.length} · 사진 ${photos.length}`);
+  info(`정리(${label}): 할일 ${ids.length} · 피드 ${feed.length} · 멘션 글·공지·채팅 ${mentions.length} · 사진 ${photos.length}`);
 }
 const createdPhotos = [];
 
@@ -712,6 +720,90 @@ try {
   else check('K6-a (전제) 직원 기기 토큰 0건 [건]', false, `토큰 ${tokN}건 — 기기 0건 상태가 아님`);
   await stat(S.page, 'S', 'K6-a');
 
+  // ── 7-b. K8-①② 채팅 1건 교차 세션 + 사장 창 REST 예산(M4 · 2026-11-04) ─────────
+  //   직원 창이 채팅 1건을 보내면 사장 창(업무 탭 채팅 · 새로고침 없음)이 10초 안에 그 본문을 그린다.
+  //   그 10초 동안 사장 창의 /rest/v1/ 요청 수 ≤4 = work_feed INSERT 1건 → board 축(done+feed · feed 는 2요청일 수 있음)만 재조회.
+  //   전체 hydrate(13 fetcher · HTTP 15회+)면 RED. 시작 전 사장 창이 유휴(직전 3초 요청 0)인지 확인해 다른 활동이 섞이지 않게 한다.
+  //   ⚠️ 사장 레이아웃의 refreshMembership 30초 폴링(1요청)이 창에 겹칠 수 있다 — 메모의 url 목록으로 가른다.
+  section('6-b. K8-①② 직원 채팅 1건 → 사장 업무 탭 10초 안 표시 · 그동안 사장 창 REST 요청 ≤4');
+  await go(S.page, 'S', '/owner/work', '채팅(대기)');
+  await S.page.waitFor(`!!document.querySelector('[placeholder="메시지 보내기"]')`, 30000);
+  await go(J.page, 'J', '/junior/work', '채팅');
+  await J.page.waitFor(`!!document.querySelector('[placeholder="메시지 보내기"]')`, 30000);
+  // 사장 창 유휴 대기 — 직전 3초에 REST 요청 0 이 될 때까지(최대 30초). 못 되면 그대로 진행하고 메모에 남긴다.
+  let idle = false;
+  const tIdle0 = Date.now();
+  while (Date.now() - tIdle0 < 30000) {
+    if (S.page.countRest(Date.now() - 3000) === 0) { idle = true; break; }
+    await sleep(300);
+  }
+  const sRestBefore = S.page.rest.length;
+  info(`사장 창 유휴=${idle}(${((Date.now() - tIdle0) / 1000).toFixed(1)}초 대기 · 지금까지 REST ${sRestBefore}건)`);
+  // 직원이 보낸다 — 화면(MentionInput + '메시지 전송')이 우선. 안 되면 service_role 로 직원 명의 행을 심는다(라벨에 경로를 적는다).
+  let chatVia = '화면 전송';
+  // ★창의 기준 시각은 "행이 DB 에 생긴 순간"(tSent)이다. 화면 전송 시도 시각(sinceMs)으로 재면 폴백 대기 5초가 창을 잡아먹어
+  //   재조회가 창 밖으로 밀려 과소 계측된다(2026-11-05 첫 실행: 표시 11.3초 · 창 안 요청 1건).
+  const sinceMs = Date.now();
+  let tSent = sinceMs;
+  try {
+    await J.page.type('[placeholder="메시지 보내기"]', TXT_CHAT);
+    await sleep(200);
+    await J.page.click('[aria-label="메시지 전송"]');
+    let row = null;
+    for (let i = 0; i < 20 && !row; i++) { await sleep(250); row = (await sel(`work_feed?unit_id=eq.${UNIT}&data->>kind=eq.message&data->>text=eq.${encodeURIComponent(TXT_CHAT)}&select=id`))[0]; }
+    if (!row) throw new Error('DB 에 채팅 행이 안 생김');
+    tSent = Date.now();
+  } catch (e) {
+    chatVia = `DB 삽입(화면 전송 실패: ${e.message})`;
+    const cAt = new Date().toISOString();
+    await ins('work_feed', {
+      id: CHAT_ID, unit_id: UNIT, feed_date: TODAY, room_id: 'room_main_store_001',
+      data: { id: CHAT_ID, date: TODAY, kind: 'message', text: TXT_CHAT, authorId: ids.J, authorName: NAME_J, authorRole: 'junior', createdAt: cAt, reactions: {}, mentions: [], roomId: 'room_main_store_001' },
+    });
+    tSent = Date.now();
+  }
+  const shown = await S.page.waitFor(`document.body.innerText.includes(${JSON.stringify(TXT_CHAT)})`, 10000);
+  const shownSecs = ((Date.now() - tSent) / 1000).toFixed(1);
+  // 10초 창을 끝까지 채운 뒤 센다 — 반영이 빨라도 뒤따르는 재조회(디바운스 뒤 fetch)가 창 안에 들어온다.
+  const remain = tSent + 10000 - Date.now();
+  if (remain > 0) await sleep(remain);
+  const win = S.page.restSince(tSent).filter((r) => r.at <= tSent + 10000);
+  const urlShort = (u) => { try { const x = new URL(u); return `${x.pathname.replace('/rest/v1', '')}${x.search ? '?' + x.search.slice(1, 40) : ''}`; } catch { return u.slice(-60); } };
+  const winSummary = win.map((r) => `${r.method} ${urlShort(r.url)}`).join(' | ').slice(0, 400);
+  check(`K8-① 직원 채팅 1건(${chatVia.split('(')[0]}) → 사장 업무 탭에 새로고침 없이 10초 안 표시 [문자열]`, shown, `${shown ? `${shownSecs}초` : '10초 동안 안 보임'} · 경로=${chatVia}`);
+  check('K8-② 사장 창 REST 요청 ≤4 [건]', win.length <= 4, `${win.length}건(10초 창 · 유휴 시작=${idle}) · ${winSummary || '요청 없음'}`);
+  await stat(S.page, 'S', 'K8-①②');
+  await stat(J.page, 'J', 'K8-①②');
+
+  // ── 7-c. K8-③ 채널 예산 · K8-④ 중복 구독 0 ─────────────────────────────
+  //   상한 = 레이아웃 소스의 subscribe 호출 수를 하니스가 직접 센다(src/app/{owner,junior}/_layout.tsx · `.subscribe(`·`subscribeMy*(`).
+  //   구독 책임이 레이아웃 한 곳이면 업무 탭의 채널 수가 이 수를 넘지 않는다. 화면(WorkBoard 등)이 따로 구독하면 초과 → RED.
+  //   채널 수 = WebSocket phx_join 토픽 수 − phx_leave(cdp.mjs channelCount · 앱이 supabase 클라이언트를 전역에 안 내놓는다).
+  section('6-c. K8-③ 업무 탭 Realtime 채널 수 ≤ 레이아웃 구독 수 · K8-④ 스토어별 활성 구독 ≤1');
+  const layoutSubs = (file) => {
+    const src = readFileSync(join(ROOT, 'src/app', file, '_layout.tsx'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
+    return (src.match(/(?:\.subscribe|\bsubscribe[A-Z]\w*)\(/g) ?? []).length;
+  };
+  const cap = { S: layoutSubs('owner'), J: layoutSubs('junior') };
+  for (const [tag, w, role] of [['S', S, 'owner'], ['J', J, 'junior']]) {
+    const topics = w.page.channelTopics();
+    const n = topics.length;
+    const label = `K8-③ ${tag} 업무 탭 채널 수 ≤ ${role}/_layout.tsx 구독 수(${cap[tag]}) [건]`;
+    const names = topics.map((t) => t.replace(/^realtime:/, '').replace(/_\d+$/, '')).sort().join(',');
+    if (n === 0) skipCheck(label, 'phx_join 프레임 관측 0 — 소켓이 이 세션 전에 열렸거나 realtime 미연결');
+    else check(label, n <= cap[tag], `채널 ${n} · 토픽 ${names}`);
+  }
+  for (const [tag, w] of [['S', S], ['J', J]]) {
+    const sync = await w.page.eval('globalThis.__stSync ? JSON.parse(JSON.stringify(globalThis.__stSync)) : null').catch(() => null);
+    const label = `K8-④ ${tag} 스토어별 활성 구독 ≤1(__stSync.activeSubs) [건]`;
+    if (!sync) { skipCheck(label, 'globalThis.__stSync 없음(프로덕션 번들 또는 미구현)'); continue; }
+    const subs = sync.activeSubs ?? {};
+    const dup = Object.entries(subs).filter(([, v]) => Number(v) > 1);
+    info(`${tag} __stSync: hydrates=${sync.hydrates} · axisRuns=${sync.axisRuns} · activeSubs=${JSON.stringify(subs)}`);
+    check(label, dup.length === 0, dup.length ? `중복 ${dup.map(([k, v]) => `${k}×${v}`).join(', ')}` : `${Object.keys(subs).length}개 스토어 모두 ≤1`);
+  }
+
   // ── 8. 전환별 콘솔 에러·≥400 합계 ───────────────────────────────────────
   section('7. 화면 전환 합계');
   await stat(S.page, 'S', '끝');
@@ -729,5 +821,5 @@ try {
   await restoreActive(cm, prevActive.M);
 }
 console.log(`\n소요 ${((Date.now() - T0) / 1000).toFixed(0)}초`);
-console.log(fail ? `RED ${pass}/${fail}` : `GREEN ${pass}/0`);
+console.log(`${fail ? 'RED' : 'GREEN'} pass ${pass} / fail ${fail} / skip ${skip}`);
 process.exit(fail ? 1 : 0);

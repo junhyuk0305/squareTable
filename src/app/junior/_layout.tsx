@@ -39,7 +39,7 @@ function hydrateJuniorStores() {
   // 내 제안 검토 결과(반영/반려)가 벨 배지·알림에 잡히도록 레이아웃에서 하이드레이트+구독(사장 레이아웃과 동형).
   useSuggestionStore.getState().hydrate();
   // 매장 미답질문·업무방 — 매장이 바뀌면 tenantReset 이 비운다. 물어보기·업무 탭이 열려 있는 채로 바뀌어도
-  // 로딩 게이트가 풀리게 여기서 다시 채운다(구독은 각 탭이 맡는다).
+  // 로딩 게이트가 풀리게 여기서 다시 채운다(구독도 아래 effect 가 맡는다 · M4).
   void useUnknownQueueStore.getState().hydrate();
   void useRoomStore.getState().hydrate();
 }
@@ -64,6 +64,8 @@ export default function JuniorLayout() {
     hydrateJuniorStores();
   });
 
+  // ★구독 책임 = 레이아웃 한 곳(M4 · 2026-11-04). 화면은 subscribe 를 부르지 않고 필요하면 `hydrateIfStale` 만 부른다.
+  //   같은 스토어를 화면이 또 구독하면 채널이 둘이 되고 이벤트마다 hydrate 가 두 번 돈다(__DEV__ 에서 activeSubs 경고).
   useEffect(() => {
     if (status !== 'signed_in' || !unitId) return;
     hydrateJuniorStores();
@@ -73,6 +75,8 @@ export default function JuniorLayout() {
     const offS = useScheduleStore.getState().subscribe();
     const offSg = useSuggestionStore.getState().subscribe();
     const offSt = useStaffStore.getState().subscribe(); // 내 profiles 행이 바뀌면(합류 승인·반려) 명부와 합류 결과(joinNotices)를 다시 읽는다
+    const offQ = useUnknownQueueStore.getState().subscribe(); // 매장 미답질문('내 공간' 배지) — 예전엔 junior/chat 이 구독했다
+    const offR = useRoomStore.getState().subscribe(); // 업무방 — 예전엔 WorkBoard 가 구독했다
     return () => {
       offP();
       offW();
@@ -80,6 +84,8 @@ export default function JuniorLayout() {
       offS();
       offSg();
       offSt();
+      offQ();
+      offR();
     };
   }, [status, unitId]);
 

@@ -163,7 +163,7 @@ export const useRoomStore = create<State>((set, get) => ({
     await get().hydrate();
   },
 
-  subscribe: () => subscribeDebounced(subscribeRooms, () => get().hydrate()),
+  subscribe: () => subscribeDebounced(subscribeRooms, () => get().hydrate(), 300, 'room'),
 
   setCurrentRoom: (id) => set({ currentRoomId: id }),
 
