@@ -71,14 +71,12 @@ export default function JuniorNotificationsScreen() {
   // 내 합류 결과(0247 approved·rejected) — 명부 스토어가 명부와 같이 당긴다.
   const joinNotices = useStaffStore((s) => s.joinNotices);
   const staffLoaded = useStaffStore((s) => s.loaded);
-  // 내 제안 검토 결과(반영/반려+사유) 알림용 — 이 화면 진입 시 당긴다(내공간 밖에선 미로드일 수 있음).
+  // 내 제안 검토 결과(반영/반려+사유) 알림용 — 직원 레이아웃이 hydrate·구독한다(M4).
   const suggestions = useSuggestionStore((s) => s.suggestions);
   const suggestionLoaded = useSuggestionStore((s) => s.loaded);
-  useEffect(() => { void useSuggestionStore.getState().hydrate(); }, []);
-  // '도와줄 수 있는 질문'(D4) — 같은 이유로 당긴다(벨에서 바로 들어오면 물어보기 탭을 안 거쳐 큐가 비어 있다).
+  // '도와줄 수 있는 질문'(D4) — 같은 이유로 레이아웃이 당긴다(벨에서 바로 들어와도 큐가 비어 있지 않다).
   const queue = useUnknownQueueStore((s) => s.queue);
   const queueLoaded = useUnknownQueueStore((s) => s.loaded);
-  useEffect(() => { void useUnknownQueueStore.getState().hydrate(); }, []);
   const today = todayStr();
   // '모두 읽기' 기준 시각(0078) — read 개념이 없는 배정·교대의 배지·강조 해제 축.
   const unitId = useSessionStore((s) => s.unitId);

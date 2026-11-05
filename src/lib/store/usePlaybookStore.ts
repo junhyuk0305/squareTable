@@ -29,6 +29,10 @@ type PlaybookState = {
   /** 카테고리(section) 일괄 이동(개명·삭제→기타). bulk 1쿼리 — per-entry 재색인 없음. */
   renameSection: (from: string, to: string | null) => Promise<boolean>;
   hydrate: () => Promise<void>;
+  /** 마지막 hydrate 시작 시각(ms · 0 = 아직). 화면 포커스의 "다시 읽기"가 이 값으로 생략 여부를 정한다(M4). */
+  fetchedAt: number;
+  /** fetchedAt 이 maxAgeMs 보다 오래됐을 때만 hydrate — 구독은 레이아웃이 맡고 화면은 이것만 부른다. */
+  hydrateIfStale: (maxAgeMs: number) => Promise<void>;
   subscribe: () => () => void;
   add: (entry: PlaybookEntry) => Promise<boolean>;
   /** 다른 경로(RPC · 0311 질문 답하기)로 서버에 이미 저장된 노하우를 목록 맨 앞에 올리고 색인한다 — add 의 후처리와 같고 저장만 없다. */
@@ -55,10 +59,12 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
   loadError: false,
   customCategories: [],
   categoryLoadError: false,
+  fetchedAt: 0,
 
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
     const epoch = currentTenantEpoch();
+    set({ fetchedAt: Date.now() });
     const [{ data, error }, rawCats] = await Promise.all([fetchEntries(), fetchKnowhowCategories()]);
     if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 노하우를 쓰지 않는다
     // ★레지스트리 조회가 실패하면 customCategories 를 **건드리지 않는다**(#21). 빈 배열로 덮으면
@@ -95,8 +101,14 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
     return ok;
   },
 
-  // 다른 기기(사장님)가 노하우를 발행하면 실시간으로 다시 당겨온다.
-  subscribe: () => subscribeDebounced(subscribePlaybook, () => get().hydrate()),
+  hydrateIfStale: (maxAgeMs) => {
+    const { fetchedAt } = get();
+    if (fetchedAt === 0 || Date.now() - fetchedAt > maxAgeMs) return get().hydrate();
+    return Promise.resolve();
+  },
+
+  // 다른 기기(사장님)가 노하우를 발행하면 실시간으로 다시 당겨온다. 구독은 레이아웃 한 곳(이름 = __DEV__ 중복 계측).
+  subscribe: () => subscribeDebounced(subscribePlaybook, () => get().hydrate(), 300, 'playbook'),
 
   add: async (entry) => {
     // 맨 앞에 추가(최신 우선). 실패 시 제거 롤백. ok 를 반환해 호출부가 성공 UI를 조건부로 띄운다.
@@ -135,7 +147,7 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
   },
   reset: () => {
     setCustomCategoryRegistry([]); // 매장 전환 시 이전 매장 커스텀 라벨 누출 방지(hydrate가 다시 채움)
-    set({ entries: HAS_SUPABASE ? [] : seed, loadError: false, customCategories: [], categoryLoadError: false });
+    set({ entries: HAS_SUPABASE ? [] : seed, loadError: false, customCategories: [], categoryLoadError: false, fetchedAt: 0 });
   },
   // 데모 매장이면 시드, 신규 계정이면 빈 채로(가짜 노하우 노출 방지).
   applyMock: (demo) => set({ entries: demo ? seed : [], loaded: true, loadError: false }),

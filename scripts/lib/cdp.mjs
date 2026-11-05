@@ -2,7 +2,7 @@
 //
 // 왜: 브라우저 하니스(qa-hq-browser)는 playwright 가 있어야 도는데, 이 저장소에는 설치하지 않는다(사용자 결정).
 //   Chrome 하나와 Node 내장 WebSocket 만으로 클릭·입력·주소·뒤로가기·네트워크 관찰·응답 강제 실패까지 된다.
-// 쓰는 곳: scripts/qa-hq-structure.mjs.
+// 쓰는 곳: scripts/qa-hq-structure.mjs · qa-journey-*.mjs(REST 요청 수·Realtime 채널 수 예산 = rest/countRest/channelCount).
 //
 // ★클릭은 element.click() 이 아니라 **좌표 마우스 이벤트**다 — RN-web Pressable 은 click 이벤트만으로는 눌리지 않는다.
 // ★클릭 전에 최상단 요소가 대상인지 확인한다 — 스플래시·커버가 덮은 채 누르면 조용히 아무 일도 안 일어난다.
@@ -68,6 +68,13 @@ export async function launch({ origin, storageKey, width = 1600, height = 1000, 
   const requests = [];
   /** 같은 것에 본문까지 — 같은 RPC 를 인자로 구별해야 할 때(목록 쪽 조회 vs 한 매장 조회). */
   const calls = [];
+  /** 모든 /rest/v1/ 요청(RPC 포함) = { method, url, at }. 요청 수 예산 검사용(M4 2026-11-04 · "채팅 1건에 REST 몇 번 읽나").
+   *  requests/calls 는 RPC 이름만 모아 표 조회(GET /rest/v1/work_feed?…)가 안 잡힌다 → 따로 둔다. 지우지 않고 쌓이므로 sinceMs 로 창을 자른다. */
+  const rest = [];
+  /** Realtime(phoenix) 채널 토픽 — WebSocket 프레임 { topic, event:'phx_join'|'phx_leave' } 를 소켓(requestId)별 집합으로 센다.
+   *  왜: 앱이 supabase 클라이언트를 전역에 노출하지 않아 getChannels() 를 못 부른다. 소켓이 닫히면(이동·새로고침) 그 집합을 버린다.
+   *  재조인(phx_join 두 번)은 집합이라 1로 센다. 쓰는 곳: 채널 예산 검사(레이아웃 구독 수 ≤). */
+  const wsTopics = new Map();
   const errors = [];
   let failing = new Set();
   /** 이름 → 응답 바꾸기 함수. 실제 응답을 받은 뒤 고쳐서 돌려준다(빈 상태·여러 곳 같은 파일럿에 없는 모양 실측용). */
@@ -90,7 +97,28 @@ export async function launch({ origin, storageKey, width = 1600, height = 1000, 
         try { body = JSON.parse(m.params.request.postData ?? 'null'); } catch { /* 본문 없음 */ }
         calls.push({ name: rpc[1], body });
       }
+      if (m.params.request.url.includes('/rest/v1/')) rest.push({ method: m.params.request.method, url: m.params.request.url, at: Date.now() });
     }
+    if (m.method === 'Network.webSocketFrameSent') {
+      // 하트비트(phoenix 토픽)·메시지 프레임은 건너뛴다. 파싱 실패 = 바이너리·조각 프레임 → 무시.
+      // ★realtime-js v2(vsn=2.0.0)는 객체가 아니라 배열 [join_ref, ref, topic, event, payload] 로 보낸다(serializer.js encode).
+      //   객체 모양(vsn 1.0.0)도 같이 받는다. 2026-11-05 첫 실측에서 배열을 못 읽어 관측 0 → skip 이 났다.
+      let f = null;
+      try {
+        const raw = JSON.parse(m.params.response?.payloadData ?? '');
+        f = Array.isArray(raw) ? { topic: raw[2], event: raw[3] } : raw;
+      } catch { /* JSON 아님 */ }
+      if (f && typeof f.topic === 'string' && f.topic.startsWith('realtime:')) {
+        if (!wsTopics.has(m.params.requestId)) wsTopics.set(m.params.requestId, new Set());
+        const set = wsTopics.get(m.params.requestId);
+        if (f.event === 'phx_join') set.add(f.topic);
+        else if (f.event === 'phx_leave') set.delete(f.topic);
+      }
+    }
+    // ★페이지 이동(location 바꿈)으로 죽은 소켓은 webSocketClosed 가 안 온다(2026-11-05 실측: 소켓 8~9개 집합이 쌓여 채널 72·90).
+    //   앱은 realtime 소켓을 하나만 쓰므로 새 소켓이 열리면 이전 집합을 전부 버린다.
+    if (m.method === 'Network.webSocketCreated') wsTopics.clear();
+    if (m.method === 'Network.webSocketClosed') wsTopics.delete(m.params.requestId);
     if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails?.exception?.description ?? 'exception');
     if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') {
       errors.push(m.params.args.map((a) => a.value ?? a.description).join(' ').slice(0, 300));
@@ -126,7 +154,17 @@ export async function launch({ origin, storageKey, width = 1600, height = 1000, 
   });
 
   const page = {
-    requests, calls, errors, send: s,
+    requests, calls, rest, errors, send: s,
+    /** sinceMs(Date.now() 기준) 이후의 /rest/v1/ 요청 수. pattern(RegExp 또는 문자열)이 있으면 url 에 걸리는 것만. */
+    countRest(sinceMs, pattern) { return page.restSince(sinceMs, pattern).length; },
+    /** 같은 조건의 요청 목록 — 예산 초과 시 "무엇을 읽었나" 진단용. */
+    restSince(sinceMs, pattern) {
+      const re = pattern == null ? null : pattern instanceof RegExp ? pattern : new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      return rest.filter((r) => r.at >= sinceMs && (!re || re.test(r.url)));
+    },
+    /** 지금 열린 소켓들의 조인 토픽 수(= supabase 채널 수에 해당). 토픽 목록은 channelTopics(). */
+    channelCount() { return page.channelTopics().length; },
+    channelTopics() { return [...wsTopics.values()].flatMap((set) => [...set]); },
     async seedSession(session) {
       await s('Page.addScriptToEvaluateOnNewDocument', {
         source: `try{localStorage.clear();localStorage.setItem(${JSON.stringify(storageKey)}, ${JSON.stringify(JSON.stringify(session))});}catch(e){}`,

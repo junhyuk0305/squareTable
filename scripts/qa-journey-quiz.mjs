@@ -94,6 +94,8 @@ async function net(page, tag) {
   const errs = page.errors.splice(0);
   let bad = [];
   try { bad = (await page.eval(`(()=>{try{const b=JSON.parse(sessionStorage.getItem('qaBad')||'[]');sessionStorage.setItem('qaBad','[]');return b}catch(e){return []}})()`)) ?? []; } catch { /* 이동 중 */ }
+  // 0348(11-04) 뒤 다시 알리기 두 번째 누름은 서버가 `resend_cooldown` 으로 거부한다(400 rpc/quiz_resend). 의도된 응답이라 세지 않는다.
+  bad = bad.filter((b) => !/^400 rpc\/quiz_resend$/.test(b));
   netLog.err += errs.length; netLog.bad += bad.length;
   console.log(`  · [${tag}] 콘솔 에러 ${errs.length} · ≥400 ${bad.length}${errs.length ? ' · ' + errs.slice(0, 2).map((e) => e.slice(0, 120)).join(' | ') : ''}${bad.length ? ' · ' + bad.slice(0, 4).join(', ') : ''}`);
 }
@@ -483,7 +485,7 @@ try {
       if (i === 2 && !(await S.waitFor(vis(remindSel), 3000))) { goneAfter1 = true; toasts.push('(버튼 사라짐 · 첫 알림이 줄에 섬)'); break; }
       try { await clickSel(S, remindSel); } catch (e) { throw new Error(`${i}번째 누름: ${e.message}`); }
       await sleep(1800);
-      const m = await bodyMatch(S, /[^\n]*(못 ?했어요|이미 보내는 중이에요[^\n]*|다시 보낼게요)[^\n]*/);
+      const m = await bodyMatch(S, /[^\n]*(못 ?했어요|이미 보내는 중이에요[^\n]*|방금 보냈어요[^\n]*|다시 보낼게요)[^\n]*/);
       toasts.push(m?.[0] ?? '(문구 없음)');
       await sleep(4500);
     }
@@ -492,8 +494,10 @@ try {
     note('K5 quiz_assignments(A) 행 수', `${before.length}→${after.length} · 새 행 날짜 ${after.filter((a) => !before.some((b) => b.id === a.id)).map((a) => a.scheduled_on).join(',') || '없음'}`);
     check('K5 다시 알리기 2회 · 오류 문구("못 했어요") 0건', toasts.every((t) => !/못 ?했어요/.test(t)), toasts.join(' | '));
     // 두 번째는 버튼이 사라졌거나 "이미 보내는 중"이어야 한다 — 어느 쪽이든 새 발송은 1건이다(멱등).
+    // 0348(11-04 · 다시 알리기 즉시 발송 + 10분 쿨다운) 뒤에는 첫 알림이 바로 나가 버튼이 남고, 두 번째는 서버 `resend_cooldown`
+    // → 화면 문구 "방금 보냈어요. 10분 뒤에 다시 보낼 수 있어요"(src/lib/quiz/errors.ts). 그 문구도 차단으로 센다(2026-11-05).
     const added = after.filter((a) => !before.some((b) => b.id === a.id)).length;
-    check('K5-2 두 번 눌러도 새 발송 1건(두 번째 = 버튼 사라짐 또는 "이미 보내는 중")', added === 1 && (goneAfter1 || /이미 보내는 중/.test(toasts[1] ?? '')), `새 행 ${added} · 두 번째 "${toasts[1]}"`);
+    check('K5-2 두 번 눌러도 새 발송 1건(두 번째 = 버튼 사라짐 또는 "이미 보내는 중")', added === 1 && (goneAfter1 || /이미 보내는 중|방금 보냈어요/.test(toasts[1] ?? '')), `새 행 ${added} · 두 번째 "${toasts[1]}"`);
   }
   await net(S, 'S A 설정');
 

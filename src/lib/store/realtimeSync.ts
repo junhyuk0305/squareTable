@@ -1,18 +1,42 @@
 /**
- * realtime 구독 → 전체 재조회(hydrate) 공통 배선.
+ * realtime 구독 → 재조회(hydrate · 축 무효화) 공통 배선.
  *
- * 문제: 쓰기 1건이 여러 테이블/이벤트로 에코되면 이벤트마다 풀 hydrate가 돈다.
- *       (예: 할일 체크 1번 = work_done+work_feed 2쓰기 → 2이벤트 → 매번 3쿼리 재조회 + 전체 리렌더.)
+ * 문제: 쓰기 1건이 여러 테이블/이벤트로 에코되면 이벤트마다 재조회가 돈다.
+ *       (예: 할일 체크 1번 = work_done+work_feed 2쓰기 → 2이벤트 → 이벤트마다 스토어 전체 재조회 + 전체 리렌더.)
  *       빠른 연속 작업(체크 연타·출퇴근 다회·교대요청 등)에선 이게 폭주해 UI가 입력을 못 따라가
  *       밀리고, 서버 스냅샷이 낙관적 상태를 잠깐 덮어써 깜빡인다.
  *
- * 해결 두 겹:
- *   1) coalesce — hydrate 동시 호출 합치기. 이미 돌고 있으면 새 fetch를 또 띄우지 않고
+ * 해결 세 겹:
+ *   1) coalesce — hydrate(또는 축 러너) 동시 호출 합치기. 이미 돌고 있으면 새 fetch를 또 띄우지 않고
  *      '한 번 더' 플래그만 세워, 끝나고 1회만 더 돈다(병렬 풀 fetch 차단).
  *   2) subscribeDebounced — realtime 이벤트 버스트를 트레일링 디바운스로 1회 재조회에 합친다.
  *      마운트 시의 명시적 hydrate() 호출은 디바운스를 타지 않으니 첫 로딩은 즉시다.
+ *   3) subscribeDebouncedKeyed — 디바운스 창 동안 **어느 표가 바뀌었나(key)** 를 Set 으로 모아 1회 발화한다.
+ *      스토어는 표→축으로 바꿔 그 축만 다시 읽는다(M4 축 무효화 · 2026-11-04). 전체 재조회는 마운트·포그라운드
+ *      복귀 같은 명시적 hydrate() 에만 남는다.
+ *
+ * `__DEV__` 계측(syncStats): hydrate 수·축 실행 수·이름별 활성 구독 수. 하니스가 `globalThis.__stSync` 로 읽는다.
+ * 프로덕션 번들에서는 카운터를 올리지 않는다(비용 0).
  */
 import { reportError, connectivityMeta, flushUnsentErrors } from '@/lib/analytics/track';
+
+/** 개발 계측 — 전체 hydrate 수 · 축 러너 실행 수 · 구독 이름별 활성 구독 수(레이아웃 한 곳이면 전부 ≤1). */
+export const syncStats = { hydrates: 0, axisRuns: 0, activeSubs: {} as Record<string, number> };
+if (__DEV__) (globalThis as any).__stSync = syncStats;
+
+/**
+ * 이름 붙은 구독의 활성 수를 센다(증가 → 돌려준 함수가 감소).
+ * 같은 이름이 둘 이상이면 어떤 화면이 레이아웃과 중복 구독한 것이다 — 구독 책임은 레이아웃 한 곳이다.
+ */
+export function trackActiveSub(name: string): () => void {
+  if (!__DEV__) return () => {};
+  const n = (syncStats.activeSubs[name] ?? 0) + 1;
+  syncStats.activeSubs[name] = n;
+  if (n > 1) console.warn('[sync] 중복 구독', name, n);
+  return () => {
+    syncStats.activeSubs[name] = Math.max(0, (syncStats.activeSubs[name] ?? 1) - 1);
+  };
+}
 
 /** 동시 호출 합치기: 진행 중이면 재실행만 예약하고 진행 중 Promise를 돌려준다. */
 export function coalesce(run: () => Promise<void>): () => Promise<void> {
@@ -35,24 +59,45 @@ export function coalesce(run: () => Promise<void>): () => Promise<void> {
   };
 }
 
-/** subscribeFn(onChange) 를 트레일링 디바운스(기본 300ms)로 감싸 구독한다. */
-export function subscribeDebounced(
-  subscribeFn: (onChange: () => void) => () => void,
-  onChange: () => void,
+/**
+ * subscribeFn(onChange) 를 트레일링 디바운스(기본 300ms)로 감싸 구독한다.
+ * 디바운스 창 동안 들어온 key 를 Set 에 모아 onFlush 에 한 번 넘긴다(어느 표가 바뀌었는지 안 버린다).
+ * name 을 주면 활성 구독 수를 센다(`__DEV__`).
+ */
+export function subscribeDebouncedKeyed<K>(
+  subscribeFn: (onChange: (key: K) => void) => () => void,
+  onFlush: (keys: Set<K>) => void,
   ms = 300,
+  name?: string,
 ): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null;
-  const unsub = subscribeFn(() => {
+  let keys = new Set<K>();
+  const untrack = name ? trackActiveSub(name) : null;
+  const unsub = subscribeFn((key) => {
+    keys.add(key);
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
       timer = null;
-      onChange();
+      const batch = keys;
+      keys = new Set<K>();
+      onFlush(batch);
     }, ms);
   });
   return () => {
     if (timer) clearTimeout(timer);
     unsub();
+    untrack?.();
   };
+}
+
+/** key 없는 형태 — 이벤트가 몇 번 왔든 창이 닫힐 때 onChange 1회. 전체 재조회만 하는 스토어가 쓴다. */
+export function subscribeDebounced(
+  subscribeFn: (onChange: () => void) => () => void,
+  onChange: () => void,
+  ms = 300,
+  name?: string,
+): () => void {
+  return subscribeDebouncedKeyed<void>((emit) => subscribeFn(() => emit()), () => onChange(), ms, name);
 }
 
 /**

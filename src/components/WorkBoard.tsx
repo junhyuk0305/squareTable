@@ -149,14 +149,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const assignments = useWorkStore((s) => s.assignments);
   const quizProgress = useWorkStore((s) => s.quizProgress);
   const quizProgressError = useWorkStore((s) => s.quizProgressError);
-  // 노하우 첨부 검색·칩 제목 해석용 — 업무 화면에서도 노하우를 로드해 둔다(coalesce 로 중복 방지).
+  // 노하우 첨부 검색·칩 제목 해석용 — hydrate·구독은 레이아웃이 한다(M4 · 화면은 구독하지 않는다).
   const entries = usePlaybookStore((s) => s.entries);
   const addEntry = usePlaybookStore((s) => s.add);
   const submitSuggestion = useSuggestionStore((s) => s.submit);
-  useEffect(() => {
-    usePlaybookStore.getState().hydrate();
-    return usePlaybookStore.getState().subscribe();
-  }, []);
   const [detailEntry, setDetailEntry] = useState<PlaybookEntry | null>(null);
   // 완료 직후 1턴 캡처(②) — 대상 업무(있으면 시트 노출).
   const [capture, setCapture] = useState<{ templateId: string; text: string } | null>(null);
@@ -216,12 +212,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // 채팅방('전부 방 단위') — 활성 방 기준으로 대화·공지·할일을 거른다.
   const currentRoomId = useRoomStore((s) => s.currentRoomId);
   const rooms = useRoomStore((s) => s.rooms);
+  // 방 hydrate·구독은 레이아웃이 한다(M4). 여기 남은 건 mock 분기뿐이다.
   useEffect(() => {
-    useRoomStore.getState().hydrate();
-    const off = useRoomStore.getState().subscribe();
     // mock 신규 매장: 사장이 들어오면 기본방을 보장(Supabase는 hydrate가 자가치유).
     if (!HAS_SUPABASE && isOwner) useRoomStore.getState().ensureDefaultRoom();
-    return off;
   }, [isOwner]);
   const roomPrefs = useRoomStore((s) => s.prefs);
   const currentRoom = useMemo(() => rooms.find((r) => r.id === currentRoomId), [rooms, currentRoomId]);

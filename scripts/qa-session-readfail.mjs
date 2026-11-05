@@ -123,5 +123,38 @@ check('목록을 읽었으면 방금 만든 매장 표식보다 목록이 이긴
   check('G1 다른 탭 로그아웃·토큰 만료(SIGNED_OUT 이벤트)도 세대를 올린다', /_signOutGen \+= 1;[\s\S]*?set\(SIGNED_OUT\);/.test(auth));
 }
 
+// ══ M3(2026-11-05): 세션 로드 정책 진리표 (sessionLoadPolicy.ts · 계획 §4 ①) ══════════════════════
+// auth-js 는 리스너 등록 시 INITIAL_SESSION 을 다시 쏘고 웹 탭 복귀마다 SIGNED_IN 을 재발화한다. 그걸 전부 로드로
+// 받으면 부팅 2회·복귀 2회가 된다. 판정을 순수함수로 분리했고 여기서 실제로 불러 고정한다(소스 정규식 아님).
+{
+  const { authEventAction, shouldStartLoad, LOAD_FRESH_MS, MEMBERSHIP_POLL_MS } = await import('../src/lib/store/sessionLoadPolicy.ts');
+  const me = { id: UID, email: 'a@b.c' };
+  const inState = { status: 'signed_in', userId: UID };
+  const outState = { status: 'signed_out', userId: '' };
+  check('M3 INITIAL_SESSION(세션 있음) → ignore(init 이 이미 로드)', authEventAction('INITIAL_SESSION', me, inState) === 'ignore');
+  check('★M3 INITIAL_SESSION(null) → ignore(오프라인 표시를 로그인 화면으로 덮지 않는다 · Q26)', authEventAction('INITIAL_SESSION', null, outState) === 'ignore');
+  check('M3 TOKEN_REFRESHED → ignore', authEventAction('TOKEN_REFRESHED', me, inState) === 'ignore');
+  check('M3 PASSWORD_RECOVERY → ignore', authEventAction('PASSWORD_RECOVERY', me, inState) === 'ignore');
+  check('M3 MFA_CHALLENGE_VERIFIED → ignore', authEventAction('MFA_CHALLENGE_VERIFIED', me, inState) === 'ignore');
+  check('★M3 SIGNED_IN 같은 uid·signed_in → soft(탭 복귀 재발화)', authEventAction('SIGNED_IN', me, inState) === 'soft');
+  check('★M3 SIGNED_IN 다른 uid → load', authEventAction('SIGNED_IN', { id: 'someone_else' }, inState) === 'load');
+  check('M3 SIGNED_IN status≠signed_in → load(새 로그인)', authEventAction('SIGNED_IN', me, outState) === 'load');
+  check('M3 SIGNED_IN 세션 없음 → ignore', authEventAction('SIGNED_IN', null, outState) === 'ignore');
+  check('M3 USER_UPDATED → email(이메일만 갱신)', authEventAction('USER_UPDATED', me, inState) === 'email');
+  check('M3 SIGNED_OUT → signout', authEventAction('SIGNED_OUT', null, inState) === 'signout');
+  check('M3 모르는 이벤트 → ignore', authEventAction('SOMETHING_NEW', me, inState) === 'ignore');
+
+  const now = 1_000_000;
+  check('★M3 soft + 진행 중 → join', shouldStartLoad({ inflight: true, lastOkAt: null, now, soft: true }) === 'join');
+  check('★M3 soft + 직전 성공 5초 안 → skip', shouldStartLoad({ inflight: false, lastOkAt: now - LOAD_FRESH_MS + 1, now, soft: true }) === 'skip');
+  check('M3 soft + 직전 성공 5초 지남 → start', shouldStartLoad({ inflight: false, lastOkAt: now - LOAD_FRESH_MS, now, soft: true }) === 'start');
+  check('M3 soft + 성공 기록 없음 → start', shouldStartLoad({ inflight: false, lastOkAt: null, now, soft: true }) === 'start');
+  check('★M3 force(쓰기 뒤) → start(진행 중·방금 성공이어도)', shouldStartLoad({ inflight: true, lastOkAt: now, now, soft: false }) === 'start');
+  check('★M3 expectedUnitId(매장 전환) → start(soft 여도)', shouldStartLoad({ inflight: true, lastOkAt: now, now, soft: true, expectedUnitId: 'u_b' }) === 'start');
+  check('M3 LOAD_FRESH_MS=5000 · MEMBERSHIP_POLL_MS=120000(사용자 결정)', LOAD_FRESH_MS === 5000 && MEMBERSHIP_POLL_MS === 120_000);
+}
+
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+// process.exit() 이 아니라 exitCode — Node 24.13(Windows)은 .ts 동적 import 가 4개째부터 exit() 에서
+// libuv 단언(UV_HANDLE_CLOSING)으로 죽어 exit 127 이 됐다(2026-11-05 실측). 결과 줄·판정은 그대로다.
+process.exitCode = fail ? 1 : 0;

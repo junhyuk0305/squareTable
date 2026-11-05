@@ -223,6 +223,33 @@ export async function fetchSessionUnit(): Promise<DbResult<string>> {
   return { data: (data as string | null) ?? null, error: error as DbErr };
 }
 
+// ── 세션 로드 1회 RPC(0354 · M3) — loadProfile 이 따로 부르던 11개 읽기를 서버가 한 번에 묶는다 ──
+// 키 이름은 서버 JSON 그대로다(camelCase 로 바꾸지 않는다 · 0354 머리말과 1:1). 하위 모양은 기존 행 타입을 재사용한다.
+//   ★deleted=true 면 서버는 {deleted:true} 만 보낸다(탈퇴 계정). 호출부는 deleted 를 먼저 보고 끝내야 한다 —
+//     그 뒤의 키는 그때 undefined 다(지금의 deleted 경로와 같이 다른 값을 읽지 않는다).
+//   profile=null 은 "행 없음"(신규/트리거 레이스)이지 오류가 아니다. 오류는 error 로만 온다.
+//   my_seat_locked·my_unit_locked·needs_downgrade_choice 는 역할 조건 없이 서버 값 그대로다(대상 아니면 서버가 false).
+export type SessionBootstrap = {
+  deleted: boolean;
+  profile: SessionProfileRow | null;
+  unit_id: string | null;
+  unit: UnitInfoRow | null;
+  subscription: UnitSubscriptionRow | null;
+  free_mode: boolean;
+  iap_enabled: boolean;
+  needs_downgrade_choice: boolean;
+  my_units: MyUnitRow[];
+  my_seat_locked: boolean;
+  my_unit_locked: boolean;
+  my_brand: MyBrandRow | null;
+};
+/** 서버 안 개별 함수가 실패하면 전체가 error 로 온다(부분 성공 없음). 함수가 없는 옛 서버는 PGRST202(isMissingRpc). */
+export async function fetchSessionBootstrap(): Promise<DbResult<SessionBootstrap>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase.rpc('session_bootstrap');
+  return { data: (data as SessionBootstrap | null) ?? null, error: error as DbErr };
+}
+
 // ── 다점포 노하우 가져오기(0059) — 다른 내 매장 노하우를 활성매장으로 복제 ──────────
 // RLS는 활성 매장만 노출하므로 "다른 내 매장" 목록/복제는 definer RPC로만 가능(소유검증은 RPC 내부).
 export type UnitKnowhowRow = {
@@ -3837,20 +3864,53 @@ export async function deleteAttendance(id: string): Promise<boolean> {
 }
 
 // ── 업무보드/출퇴근 Realtime 구독 ─────────────────────────
-export function subscribeWork(onChange: () => void): () => void {
+/** 업무 스토어가 구독하는 6표. 스토어는 이 이름으로 어느 축을 다시 읽을지 정한다(M4 축 무효화). */
+export type WorkTable = 'work_feed' | 'work_done' | 'work_templates' | 'work_template_knowhow' | 'knowhow_understanding' | 'quiz_assignments';
+const WORK_TABLES: readonly WorkTable[] = [
+  'work_feed',
+  'work_done',
+  'work_templates',
+  'work_template_knowhow',
+  // 0111 publication 멤버(AGENTS.md ⑤) — 직원이 통과하면 사장 배지가 즉시 바뀐다.
+  'knowhow_understanding',
+  // 0139 발송 원장 — 크론이 sent_at 을 채우는 순간 직원 화면에 퀴즈 카드가 떠야 한다.
+  // 구독이 없으면 푸시는 가는데 앱은 그대로라 "알림은 왔는데 앱엔 없다"가 된다(재하이드레이트 전까지).
+  'quiz_assignments',
+];
+/**
+ * 업무 6표 구독 — 핸들러에 **바뀐 표 이름**을 넘긴다(payload 내용은 쓰지 않는다 · 재조회가 RLS 를 거친다).
+ *
+ * 필터 규칙(2026-11-04 · 계획_M4 §1-(3)):
+ *  - INSERT·UPDATE 는 `unit_id=eq.<내 매장>` 으로 거른다. 다른 매장 이벤트로 재조회가 돌지 않게 한다.
+ *  - DELETE 는 **필터 없이** 따로 건다. 어느 표에도 REPLICA IDENTITY FULL 이 없어 DELETE payload 는 PK 열만 오고,
+ *    DELETE 에는 RLS 도 적용되지 않는다. 5표(work_feed·work_templates=id · work_template_knowhow=(template_id,entry_id)
+ *    · knowhow_understanding=(entry_id,staff_id) · quiz_assignments=id)는 PK 에 unit_id 가 없어 필터를 걸면 DELETE 가
+ *    영영 안 온다(필터는 payload 에 있는 열만 비교). work_done 만 PK=(unit_id,work_date,template_id) 라 DELETE 도 거른다.
+ *    남의 매장 DELETE 가 와도 표 이름만 쓰고 재조회는 RLS 가 거르므로 새는 것은 없다.
+ *  - `_unitId` 가 아직 없으면 구독하지 않는다(fail-closed). 필터 없는 구독으로 떨어뜨리지 않는다.
+ */
+export function subscribeWork(onChange: (table: WorkTable) => void): () => void {
   if (!HAS_SUPABASE) return () => {};
-  const ch = supabase
-    .channel(uniqueChannel('work'))
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'work_feed' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'work_done' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'work_templates' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'work_template_knowhow' }, onChange)
-    // 0111 publication 멤버(AGENTS.md ⑤) — 직원이 통과하면 사장 배지가 즉시 바뀐다.
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'knowhow_understanding' }, onChange)
-    // 0139 발송 원장 — 크론이 sent_at 을 채우는 순간 직원 화면에 퀴즈 카드가 떠야 한다.
-    // 구독이 없으면 푸시는 가는데 앱은 그대로라 "알림은 왔는데 앱엔 없다"가 된다(재하이드레이트 전까지).
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'quiz_assignments' }, onChange)
-    .subscribe();
+  if (!_unitId) {
+    console.warn('[subscribeWork] 매장이 아직 정해지지 않아 구독하지 않는다');
+    return () => {};
+  }
+  const filter = `unit_id=eq.${_unitId}`;
+  const handler = (p: { table: string }) => onChange(p.table as WorkTable);
+  let ch = supabase.channel(uniqueChannel('work'));
+  for (const table of WORK_TABLES) {
+    ch = ch
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table, filter }, handler)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table, filter }, handler)
+      .on(
+        'postgres_changes',
+        table === 'work_done'
+          ? { event: 'DELETE', schema: 'public', table, filter }
+          : { event: 'DELETE', schema: 'public', table },
+        handler,
+      );
+  }
+  ch.subscribe();
   return () => {
     supabase.removeChannel(ch);
   };
@@ -4322,14 +4382,28 @@ export function subscribeStaff(onChange: () => void): () => void {
   };
 }
 
+// 채널이 끊겼다(CHANNEL_ERROR·TIMED_OUT) 다시 SUBSCRIBED 가 되면 onResubscribe 를 1회 부른다(M3 계획 §1 (2)).
+// 끊긴 사이 놓친 UPDATE 는 다시 오지 않으므로 호출부가 한 번 다시 읽어야 한다. 첫 SUBSCRIBED 는 부르지 않는다.
+function resubscribeWatcher(onResubscribe?: () => void): (status: string) => void {
+  let broken = false;
+  return (status) => {
+    const s = String(status);
+    if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') broken = true;
+    else if (s === 'SUBSCRIBED' && broken) {
+      broken = false;
+      onResubscribe?.();
+    }
+  };
+}
+
 // 내 profiles 행 실시간 — 사장이 합류를 승인(approve_member → unit_id 부여)하거나 내보내면(unit_id=null)
 // 직원 앱이 20초 폴링을 기다리지 않고 바로 소속을 다시 읽게. (RLS profiles_read 가 본인 행을 흘려보낸다.)
-export function subscribeMyProfile(userId: string, onChange: () => void): () => void {
+export function subscribeMyProfile(userId: string, onChange: () => void, onResubscribe?: () => void): () => void {
   if (!HAS_SUPABASE) return () => {};
   const ch = supabase
     .channel(uniqueChannel('my-profile'))
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, onChange)
-    .subscribe();
+    .subscribe(resubscribeWatcher(onResubscribe));
   return () => {
     supabase.removeChannel(ch);
   };
@@ -4337,12 +4411,12 @@ export function subscribeMyProfile(userId: string, onChange: () => void): () => 
 
 // 내 unit_members 행 실시간(0315) — 사장이 매니저로 지정·해제하면(set_member_role) 역할을 바로 다시 읽는다.
 // 역할은 profiles 가 아니라 unit_members 에 있어 위 구독으로는 안 잡혔다. 해제는 profiles 쪽이 잡는다.
-export function subscribeMyMembership(userId: string, onChange: () => void): () => void {
+export function subscribeMyMembership(userId: string, onChange: () => void, onResubscribe?: () => void): () => void {
   if (!HAS_SUPABASE) return () => {};
   const ch = supabase
     .channel(uniqueChannel('my-membership'))
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'unit_members', filter: `user_id=eq.${userId}` }, onChange)
-    .subscribe();
+    .subscribe(resubscribeWatcher(onResubscribe));
   return () => {
     supabase.removeChannel(ch);
   };

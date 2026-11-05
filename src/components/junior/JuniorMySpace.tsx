@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -64,16 +64,7 @@ export function JuniorMySpace({ me }: { me: string }) {
   const storeName = useSessionStore((s) => s.storeName);
   const { copied, copy } = useCopyToClipboard();
 
-  // 제안·내 채팅을 로드·구독한다(미답질문 큐는 컨테이너 junior/chat 가 배지용으로 이미 hydrate·subscribe 중).
-  useEffect(() => {
-    const sg = useSuggestionStore.getState();
-    void sg.hydrate();
-    const offSg = sg.subscribe();
-    if (me) void useChatStore.getState().hydrate(me);
-    // 퀴즈 통과 기록(히트맵 색) — 업무 탭이 이미 채워 뒀으면 coalesce 가 재요청을 삼킨다.
-    void useWorkStore.getState().hydrate();
-    return offSg;
-  }, [me]);
+  // 제안·내 채팅·업무(히트맵 색)·미답질문 큐는 전부 직원 레이아웃이 hydrate·구독한다(M4). 이 화면은 읽기만 한다.
 
   const [answerFor, setAnswerFor] = useState<UnknownQuery | null>(null);
   const [detailEntry, setDetailEntry] = useState<PlaybookEntry | null>(null);

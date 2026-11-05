@@ -15,7 +15,7 @@
 //   새 매장으로 옮기므로, 사장 창 세션(S·S2)만 switch_session_unit 으로 새 매장에 두고 계정 값은 곧바로 되돌린다.
 //   계정 값이 store_001 이 아닌 시간 = 1초 안팎. 다른 하니스의 새 로그인은 계정 값을 따르므로 이 창을 짧게 둔다.
 // ★staff2 는 이미 매장이 있지만 '사장님 승인 대기 중' 카드가 뜬다(10-16 수정: 세션 pendingUnitId = profiles.pending_unit_id 그대로 · K5-a).
-//   K3 은 "승인 뒤 J 가 새로고침 없이 소속을 다시 읽고(my_units) 매장 목록에 새 매장이 뜸"으로 잰다(카드 소멸보다 강한 단언).
+//   K3 은 "승인 뒤 J 가 새로고침 없이 소속을 다시 읽고(my_units|session_bootstrap · M3 부팅 RPC 1개로 바뀜) 매장 목록에 새 매장이 뜸"으로 잰다(카드 소멸보다 강한 단언).
 // 끝나면 하니스가 연 브라우저 세션 3개를 로그아웃한다(auth.sessions · session_active_units 정리).
 //
 // 정리: 하니스 매장(qa_jr_ 접두사)·그 매장이 쓴 슬롯·이번 실행의 staff2 join_attempts 만 지운다. 시작과 끝 둘 다(멱등).
@@ -448,7 +448,8 @@ try {
     const t0 = Date.now();
     const wJ = (async () => {
       while (Date.now() - t0 < 25000) {
-        if (J.page.requests.slice(jIdx).includes('my_units')) return { ok: true, sec: (Date.now() - t0) / 1000 };
+        // 소속 재확인 RPC = my_units(옛 직렬 로드) 또는 session_bootstrap(M3 부팅 RPC 1개) — 어느 쪽이든 "다시 읽었다".
+        if (J.page.requests.slice(jIdx).some((n) => n === 'my_units' || n === 'session_bootstrap')) return { ok: true, sec: (Date.now() - t0) / 1000 };
         await sleep(200);
       }
       return { ok: false, sec: (Date.now() - t0) / 1000 };
@@ -465,7 +466,7 @@ try {
     const [rJ, rS, , , rToastS, rToastS2] = await Promise.all([wJ, wS, wJerr, wS2, wToastS, wToastS2]);
     check(`K3-t 승인한 기기에 '${TOAST_OK}' 토스트(S 또는 S2 · ≤8초) [건]`, rToastS.ok || rToastS2.ok,
       `S=${rToastS.ok ? rToastS.sec.toFixed(1) + '초' : '없음'} · S2=${rToastS2.ok ? rToastS2.sec.toFixed(1) + '초' : '없음'}`);
-    check('K3 J 새로고침 없이 소속을 다시 읽음(my_units · ≤25초) [초]', rJ.ok, `${rJ.sec.toFixed(1)}초`);
+    check('K3 J 새로고침 없이 소속을 다시 읽음(my_units|session_bootstrap · ≤25초) [초]', rJ.ok, `${rJ.sec.toFixed(1)}초`);
     // 다시 읽은 소속이 화면에 쓰이는가 — 앱 안 이동(새로고침 아님)으로 매장 목록을 연다.
     await J.page.click('[aria-label="매장 선택으로"]');
     const rList = await watch(J.page, (t) => t.includes(STORE_NAME), 10000);

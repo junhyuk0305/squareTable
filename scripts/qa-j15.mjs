@@ -79,7 +79,10 @@ console.log('\n[4] 배선(주석 제외 코드)');
   const pm = (store.match(/postMessage: \(date, text[\s\S]*?\n  \},/) || [''])[0];
   check('★① postMessage 실패가 글을 지우지 않고 markSendFailed 로 표시한다', /markSendFailed\(/.test(pm) && !/feed: s\.feed\.filter\(\(f\) => f\.id !== item\.id\)/.test(pm));
   check('① retryMessage · discardFailedMessage 가 있다', /retryMessage: /.test(store) && /discardFailedMessage: /.test(store));
-  check('★D4 hydrate 가 서버 피드에 실패·저장 중 메시지를 다시 얹는다(carryUnsent)', /feed: carryUnsent\(live\.feed, get\(\)\.feed, sendingIds\)/.test(store));
+  // M4(2026-11-04): hydrate 는 축 러너(AXES)를 전부 돈다. carryUnsent 는 done+feed 를 묶은 `board` 축 안이어야 한다.
+  const boardAxis = (store.match(/board: defineAxis\('board', \['done', 'feed'\][\s\S]*?\n  \}\),/) || [''])[0];
+  check('★D4 hydrate 가 서버 피드에 실패·저장 중 메시지를 다시 얹는다(carryUnsent · board 축)',
+    /feed: carryUnsent\(live\.feed, useWorkStore\.getState\(\)\.feed, sendingIds\)/.test(boardAxis) && /const ALL_AXES[^\n]*'board'/.test(store));
   const rm = (store.match(/retryMessage: \(id\) => \{[\s\S]*?\n  \},/) || [''])[0];
   check('★D4 다시 보내기가 지금 시각으로 새로 찍는다(restampForResend)', /restampForResend\(failed, new Date\(\)\.toISOString\(\), todayStr\(\)\)/.test(rm));
   const db = strip(read('src/lib/db.ts'));
@@ -92,6 +95,7 @@ console.log('\n[4] 배선(주석 제외 코드)');
     check(`③ ${p} 가 useForegroundRefresh 를 쓴다`, /useForegroundRefresh\(/.test(strip(read(p))));
   }
   // G2(QA 2026-10-05): 앱 착지 화면(/hub)·매장 목록·통합 알림은 두 _layout 밖이라 다시 열어도 어제 숫자가 남았다.
+  //   M3(2026-11-05): 복귀 소속 읽기는 soft(진행 중이면 합치고 5초 안 성공이면 생략). 인자 없음 = 쓰기 뒤 force 전용.
   for (const [p, needs] of [
     ['src/components/hub/OwnerStatusView.tsx', ['hydrateOwner()', 'hydrateCross()', 'hydratePrefs()', 'hydrateKnowhowStats()']],
     ['src/components/hub/JuniorTodayView.tsx', ['hydrateJunior()', 'hydrateCross()', 'hydratePrefs()']],
@@ -101,7 +105,7 @@ console.log('\n[4] 배선(주석 제외 코드)');
     const s = strip(read(p));
     const call = (s.match(/useForegroundRefresh\([\s\S]*?\n  \}\);/) || [''])[0];
     check(`★G2 ${p} 가 앞으로 돌아오면 소속과 화면 데이터를 다시 읽는다`,
-      /refreshMembership\(\)/.test(call) && needs.every((n) => call.includes(n)), call.slice(0, 120));
+      /refreshMembership\(\{ soft: true, source: 'foreground' \}\)/.test(call) && needs.every((n) => call.includes(n)), call.slice(0, 120));
   }
   {
     const s = strip(read('src/app/stores.tsx'));

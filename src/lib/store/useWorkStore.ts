@@ -25,6 +25,7 @@ import {
   editFeedText as dbEditFeedText,
   broadcastNotice as dbBroadcastNotice,
   subscribeWork,
+  type WorkTable,
   fetchTemplateKnowhow,
   insertTemplateKnowhow,
   deleteTemplateKnowhow,
@@ -58,7 +59,7 @@ import {
 import type { QuizAssignment, TrainingCourse as TrainingCourseRow } from '@/lib/quiz/types';
 import { isBrandHidden } from '@/lib/brand/copy';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
-import { coalesce, subscribeDebounced, settleWithin, HYDRATE_TIMEOUT_MS, pendingNames, reportHydrate } from '@/lib/store/realtimeSync';
+import { coalesce, subscribeDebouncedKeyed, settleWithin, HYDRATE_TIMEOUT_MS, pendingNames, reportHydrate, syncStats } from '@/lib/store/realtimeSync';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import { genId } from '@/lib/utils/id';
 import { useRoomStore } from '@/lib/store/useRoomStore';
@@ -734,7 +735,14 @@ type State = {
   /** 마지막 hydrate 가 실패했는가 — 화면이 "할 일 없음"과 "못 불러옴"을 구분해 재시도 UI를 띄운다.
    *  특히 fetchDone 실패는 **완료 체크가 전부 미완료로 보여** 직원이 이미 끝낸 일을 다시 하게 만든다(#56). */
   loadError: boolean;
+  /** 마지막 **전체** hydrate 의 시작 시각(ms). 0 = 아직 없음(매장 전환 reset 도 0 으로 돌아온다). 축 갱신은 안 건드린다. */
+  fetchedAt: number;
+  /** 전체 재조회 — 모든 축 러너를 돌린 뒤 loaded=true. 마운트·포그라운드 복귀·재시도가 부른다. */
   hydrate: () => Promise<void>;
+  /** fetchedAt 이 maxAgeMs 보다 오래됐을 때만 hydrate(). 화면 포커스마다 전체 재조회가 돌지 않게 한다(M4). */
+  hydrateIfStale: (maxAgeMs: number) => Promise<void>;
+  /** 축 갱신 — 지정한 축만 병렬로 다시 읽는다. loaded·loadError 는 안 건드린다(실패는 데이터 유지 + 계측). */
+  refreshAxes: (keys: Set<WorkAxis>) => Promise<void>;
   /** 윈도 밖 달(YYYY-MM)의 완료 체크를 따로 읽어 done 에 얹는다. 이미 읽은 달은 no-op. 실패는 readFail 보고만 하고 다음 이동에서 다시 시도한다. */
   loadDoneMonth: (ym: string) => Promise<void>;
   /** 재시도 — 실패 화면의 '다시 시도' 버튼이 부르는 경로. */
@@ -794,6 +802,160 @@ type State = {
   applyMock: (demo: boolean) => void;
 };
 
+// ════════════════════════════════════════════════════════════════════════
+// 축 러너(M4 축 무효화 · 2026-11-04) — "바뀌면 전부 다시 읽기"를 "바뀐 표의 축만 다시 읽기"로.
+// ════════════════════════════════════════════════════════════════════════
+// 전체 hydrate 와 realtime 축 갱신이 **같은 러너**를 공유한다 — 경로가 둘이면 늦게 끝난 쪽이 먼저 끝난 쪽의
+// 스냅샷을 덮는 역전이 생긴다. 러너마다 hang 방지 3종(coalesce · settleWithin · epoch)을 그대로 건다.
+// 축 실패 = 그 축의 이전 데이터 유지 + 계측(reportHydrate). loaded 는 전체 hydrate 만 올린다.
+
+/** 축 이름. 표→축은 TABLE_AXES, fetcher→축은 아래 AXES 정의가 정본이다. */
+export type WorkAxis = 'board' | 'templates' | 'knowhowLinks' | 'understanding' | 'quizProgress' | 'assignments' | 'quiz' | 'misc';
+/**
+ * realtime 표 → 다시 읽을 축.
+ *  - work_done·work_feed 는 `board` 한 축이다. overlayPendingDone(done, feed, fetchedAt)·carryUnsent 가 두 표를
+ *    **같은 조회 시작 시각**으로 묶어 낙관 패치를 다시 얹기 때문에 따로 떼면 그 계약이 깨진다.
+ *  - knowhow_understanding·quiz_assignments 는 진행(quizProgress)의 재료라 그 축도 같이 읽는다.
+ *  - 같은 두 표는 `quiz` 축(코스 항목·코스·레거시 항목·문항 수·응시 기록)도 다시 읽는다. quiz_attempts 표는 publication 밖이라
+ *    직원이 풀 때 같이 바뀌는 knowhow_understanding·quiz_assignments 이벤트가 유일한 신호다. 사장 퀴즈 상세(owner/quiz/[id])는
+ *    courseEntries 참조가 바뀔 때 응시 기록을 다시 읽으므로 courseEntries 도 이 축에 있어야 결과 줄이 새로고침 없이 바뀐다
+ *    (2026-11-05 qa:core ⑤-2 가 잡았다 · 축 분리 전엔 전체 hydrate 가 매번 새 참조를 만들어 그 조건이 저절로 성립했다).
+ */
+const TABLE_AXES: Record<WorkTable, readonly WorkAxis[]> = {
+  work_feed: ['board'],
+  work_done: ['board'],
+  work_templates: ['templates'],
+  work_template_knowhow: ['knowhowLinks'],
+  knowhow_understanding: ['understanding', 'quizProgress', 'quiz'],
+  quiz_assignments: ['assignments', 'quizProgress', 'quiz'],
+};
+function axesForTables(tables: Set<WorkTable>): Set<WorkAxis> {
+  const out = new Set<WorkAxis>();
+  for (const t of tables) for (const a of TABLE_AXES[t] ?? []) out.add(a);
+  return out;
+}
+/**
+ * loadError 를 정하는 뼈대 축. 업무보드 본문(할일·완료·피드)과 N08 의 이해 기록·코스 노하우(quiz 축 안)가 실패하면
+ * 화면은 "없음"을 말하면 안 된다. 노하우 링크·발송 원장·진행은 부가 정보라 게이트에 넣지 않는다(이전과 같은 기준).
+ */
+const SKELETON_AXES: readonly WorkAxis[] = ['templates', 'board', 'understanding', 'quiz'];
+const ALL_AXES: readonly WorkAxis[] = ['templates', 'board', 'knowhowLinks', 'understanding', 'misc', 'quiz', 'assignments', 'quizProgress'];
+/** 축별 마지막 결과(true = 뼈대 조회 성공). 전체 hydrate 가 끝난 뒤 loadError 를 여기서 파생한다. */
+const axisOk: Partial<Record<WorkAxis, boolean>> = {};
+
+type Settled<T> = { -readonly [P in keyof T]: Awaited<T[P]> };
+/**
+ * 축 러너 하나를 만든다. finish 는 조회 결과를 스토어 부분 패치로 바꾸고 ok(뼈대 성공 여부)를 돌려준다.
+ * 시간 초과·reject·throw 면 onFail 패치만 적용한다(기본 = 아무것도 안 바꿈 → 이전 데이터 유지).
+ */
+function defineAxis<T extends readonly Promise<unknown>[]>(
+  name: WorkAxis,
+  names: readonly string[],
+  works: () => T,
+  finish: (all: Settled<T>, fetchedAt: number) => { patch: Partial<State>; ok: boolean },
+  onFail: Partial<State> = {},
+): () => Promise<void> {
+  return coalesce(async () => {
+    // epoch 는 첫 await 전에 잡는다 — 그 사이 매장이 바뀌면 이전 매장 행을 쓰지 않는다.
+    const epoch = currentTenantEpoch();
+    const fetchedAt = Date.now();
+    if (__DEV__) syncStats.axisRuns++;
+    let ok = false;
+    try {
+      const ws = works();
+      // 정지(hang) 방지 — 실패·예외는 막았어도 **끝나지 않는 것**은 못 막는다(2026-08-26 실측).
+      const all = await settleWithin(HYDRATE_TIMEOUT_MS, Promise.all(ws), () => null, {
+        store: `work.${name}`,
+        pending: pendingNames(names, ws),
+      });
+      if (isStaleEpoch(epoch)) return;
+      if (all === null) {
+        useWorkStore.setState(onFail);
+      } else {
+        const r = finish(all as Settled<T>, fetchedAt);
+        ok = r.ok;
+        // 뼈대 조회가 error 를 돌려준 축(ok=false)은 빈 스냅샷을 적용하지 않는다 — 이전 데이터 유지(타임아웃·throw 와 같은 취급).
+        //   안 그러면 realtime 축 갱신 1건의 읽기 실패가 윈도 안 완료 체크·피드를 {} 로 덮고, refreshAxes 는 loadError 를 안 올려 재시도 화면도 없다(2026-11-05 verify).
+        useWorkStore.setState(ok ? r.patch : onFail);
+      }
+    } catch (e) {
+      // ★throw 도 "시도가 끝났다"에 포함된다 — 삼키지 않으면 전체 hydrate 의 Promise.all 이 깨져 loaded 가 영영 false 다.
+      console.warn(`[work] ${name} 축 조회가 던졌다:`, e);
+      reportHydrate('threw', `work.${name}`, fetchedAt, {}, e);
+      if (isStaleEpoch(epoch)) return;
+      useWorkStore.setState(onFail);
+    }
+    axisOk[name] = ok;
+  });
+}
+
+const AXES: Record<WorkAxis, () => Promise<void>> = {
+  templates: defineAxis('templates', ['templates'], () => [fetchTemplates()] as const, ([templates]) => ({
+    patch: { templates: templates.data },
+    ok: !templates.error,
+  })),
+  // done+feed 한 축 — 아직 서버에 안 닿은 체크는 스냅샷 위에 다시 얹는다(안 그러면 빠른 연속 체크가 되돌아간다).
+  board: defineAxis('board', ['done', 'feed'], () => [fetchDone(), fetchFeed()] as const, ([done, feed], fetchedAt) => {
+    // 윈도 밖(loadDoneMonth 로 읽은 과거 달)은 이 스냅샷에 없다 → 그 날짜들은 보존하고 윈도 안만 서버 스냅샷으로 바꾼다(M1).
+    //   전체 hydrate 와 realtime 축 갱신이 같은 러너를 타므로 둘 다 이 병합을 거친다 — 여기 없으면 체크 1건의 realtime 재조회가 과거 달을 지운다.
+    const windowStart = doneWindowStart();
+    const merged: State['done'] = { ...done.data };
+    for (const [date, day] of Object.entries(useWorkStore.getState().done)) if (date < windowStart && !(date in merged)) merged[date] = day;
+    const live = overlayPendingDone(merged, feed.data, fetchedAt);
+    return {
+      // 서버에 아직 없는 실패·저장 중 내 메시지는 다시 얹는다(D4 · J15 ① 재전송이 새로고침에 지워지지 않게).
+      patch: { done: live.done, feed: carryUnsent(live.feed, useWorkStore.getState().feed, sendingIds) },
+      ok: !(done.error || feed.error),
+    };
+  }),
+  knowhowLinks: defineAxis('knowhowLinks', ['knowhowLinks'], () => [fetchTemplateKnowhow()] as const, ([knowhowLinks]) => ({
+    patch: { knowhowLinks },
+    ok: true,
+  })),
+  understanding: defineAxis('understanding', ['understanding'], () => [fetchKnowhowUnderstandingResult()] as const, ([understanding]) => ({
+    patch: { understanding: understanding.data },
+    ok: !understanding.error,
+  })),
+  // realtime 표가 없는 나머지(교육 요청) — 전체 hydrate 에서만 돈다.
+  misc: defineAxis(
+    'misc',
+    ['trainingRequests'],
+    () => [fetchTrainingRequests()] as const,
+    ([trainingRequests]) => ({ patch: { trainingRequests }, ok: true }),
+  ),
+  // 퀴즈 재료(코스 항목·레거시 항목·코스·문항 수·응시 기록) — 전체 hydrate + knowhow_understanding·quiz_assignments 이벤트(TABLE_AXES 주석).
+  quiz: defineAxis(
+    'quiz',
+    ['courseEntries', 'training', 'courses', 'quizCounts', 'quizAttempts'],
+    () => [fetchCourseEntriesResult(), fetchTrainingItems(), fetchTrainingCourses(), fetchQuizItemCounts(), fetchQuizAttempts()] as const,
+    ([courseEntries, training, courses, quizCounts, quizAttempts]) => ({
+      patch: {
+        courseEntries: courseEntries.data, training, quizAttempts,
+        // 직원에게 보일 코스만(비활성 제외) 사장 화면과 같은 순서로 — 카드 순서 = 사장이 정한 순서.
+        // 숨긴 본사 퀴즈도 뺀다. 직원은 RLS(0231 tc_select)가 1선이고 이건 2선이다(사장 계정·0231 전 DB).
+        courses: (courses.data ?? []).filter((c) => c.active && !isBrandHidden(c)).sort((a, b) => a.position - b.position),
+        // 읽기 실패(null)면 빈 맵 = 문항 0건 취급이다. 퀴즈가 잠깐 안 뜨는 쪽이 검수 안 된 문제가
+        // 나가는 쪽보다 낫다(fail-closed). 실패 자체는 readFail 이 이미 보고한다.
+        quizCounts: quizCounts.data ?? {},
+      },
+      // N08: 코스 노하우 조회 실패는 "없음"으로 말하지 않는다(옛 퀴즈 판정이 이걸 본다).
+      ok: !courseEntries.error,
+    }),
+  ),
+  assignments: defineAxis('assignments', ['assignments'], () => [fetchQuizAssignments(true)] as const, ([assignments]) => ({
+    patch: { assignments },
+    ok: true,
+  })),
+  // 진행 조회 실패는 quizProgressError 로 따로 든다 — 직원 홈·벨 배지·noteQuizFinished 가 [] 과 "못 읽음"을 구분한다.
+  quizProgress: defineAxis(
+    'quizProgress',
+    ['quizProgress'],
+    () => [fetchQuizAssignmentProgress()] as const,
+    ([quizProgress]) => ({ patch: { quizProgress: quizProgress.data ?? [], quizProgressError: !!quizProgress.error }, ok: true }),
+    { quizProgressError: true, quizProgress: [] },
+  ),
+};
+
 export const useWorkStore = create<State>((set, get) => ({
   templates: HAS_SUPABASE ? [] : seedTemplates,
   done: HAS_SUPABASE ? {} : seedDone,
@@ -813,76 +975,32 @@ export const useWorkStore = create<State>((set, get) => ({
   captureNudge: { skips: 0 },
   loaded: !HAS_SUPABASE,
   loadError: false,
+  fetchedAt: 0,
 
-  // 전체 재조회(templates·done·feed·링크·이해확인·코스항목·레거시항목·코스·요청·문항수·발송원장·응시기록 12쿼리)로
-  // 스토어를 통째로 교체한다.
-  // coalesce: 빠른 연속 체크로 realtime 이벤트가 몰려도 풀리페치가 병렬로 쌓이지 않게 합친다.
+  // 전체 재조회 — 7축 러너(AXES)를 전부 돌린 뒤 loaded=true. 축마다 자기 필드만 set 하므로 안 바뀐 축은
+  // 새 참조가 되지 않는다. 축 러너가 hang 방지 3종을 들고 있어 여기서는 끝나기만 기다린다(러너는 던지지 않는다).
+  // coalesce: 연속 호출이 몰려도 전체 재조회가 병렬로 쌓이지 않게 합친다.
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
-    // ★throw 도 "시도가 끝났다"에 포함된다(2026-08-26 브라우저 실측). 아래 fetch 중 **하나라도**
-    //   예외를 던지면 Promise.all 이 reject 되고 set 이 영영 실행되지 않아 loaded 가 false 로 남는다
-    //   → 게이트가 **영구 스피너**가 된다. 계약을 값 반환 경로에만 걸면 계약이 아니다.
     const epoch = currentTenantEpoch();
-    const fetchedAt = Date.now();
-    let failed: string[] | undefined; // 조회가 끝난 뒤에 throw 했다면 그때 실패한 축(계측용)
-    try {
-    // 정지(hang) 방지 — 실패·예외는 막았어도 **끝나지 않는 것**은 못 막는다(2026-08-26 실측).
-    const works = [
-      fetchTemplates(),
-      fetchDone(),
-      fetchFeed(),
-      fetchTemplateKnowhow(),
-      fetchKnowhowUnderstandingResult(),
-      fetchCourseEntriesResult(),
-      fetchTrainingItems(),
-      fetchTrainingCourses(),
-      fetchTrainingRequests(),
-      fetchQuizItemCounts(),
-      fetchQuizAssignments(true),
-      fetchQuizAttempts(),
-      fetchQuizAssignmentProgress(),
-    ] as const;
-    const all = await settleWithin(HYDRATE_TIMEOUT_MS, Promise.all(works), () => null, {
-      store: 'work',
-      pending: pendingNames(
-        ['templates', 'done', 'feed', 'knowhowLinks', 'understanding', 'courseEntries', 'training', 'courses', 'trainingRequests', 'quizCounts', 'assignments', 'quizAttempts', 'quizProgress'],
-        works,
-      ),
-    });
+    set({ fetchedAt: Date.now() });
+    if (__DEV__) syncStats.hydrates++;
+    await Promise.all(ALL_AXES.map((k) => AXES[k]()));
     if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 업무를 쓰지 않는다
-    if (all === null) { set({ loaded: true, loadError: true, quizProgressError: true, quizProgress: [] }); return; }
-    const [templates, done, feed, knowhowLinks, understanding, courseEntries, training, courses, trainingRequests, quizCounts, assignments, quizAttempts, quizProgress] = all;
-    failed = Object.entries({ templates, done, feed, understanding, courseEntries }).filter(([, r]) => r.error).map(([k]) => k);
-    // 윈도 밖(loadDoneMonth 로 읽은 과거 달)은 이 스냅샷에 없다 → 그 날짜들은 보존하고 윈도 안만 서버 스냅샷으로 바꾼다.
-    const windowStart = doneWindowStart();
-    const merged: State['done'] = { ...done.data };
-    for (const [date, day] of Object.entries(get().done)) if (date < windowStart && !(date in merged)) merged[date] = day;
-    // 아직 서버에 안 닿은 체크는 스냅샷 위에 다시 얹는다 — 안 그러면 빠른 연속 체크가 되돌아간다.
-    const live = overlayPendingDone(merged, feed.data, fetchedAt);
-    set({
-      // 서버에 아직 없는 실패·저장 중 내 메시지는 다시 얹는다(D4 · J15 ① 재전송이 새로고침에 지워지지 않게).
-      templates: templates.data, done: live.done, feed: carryUnsent(live.feed, get().feed, sendingIds),
-      knowhowLinks, understanding: understanding.data, courseEntries: courseEntries.data, training, trainingRequests, assignments, quizAttempts,
-      quizProgress: quizProgress.data ?? [], quizProgressError: !!quizProgress.error,
-      // 직원에게 보일 코스만(비활성 제외) 사장 화면과 같은 순서로 — 카드 순서 = 사장이 정한 순서.
-      // 숨긴 본사 퀴즈도 뺀다. 직원은 RLS(0231 tc_select)가 1선이고 이건 2선이다(사장 계정·0231 전 DB).
-      courses: (courses.data ?? []).filter((c) => c.active && !isBrandHidden(c)).sort((a, b) => a.position - b.position),
-      // 읽기 실패(null)면 빈 맵 = 문항 0건 취급이다. 퀴즈가 잠깐 안 뜨는 쪽이 검수 안 된 문제가
-      // 나가는 쪽보다 낫다(fail-closed). 실패 자체는 readFail 이 이미 보고한다.
-      quizCounts: quizCounts.data ?? {},
-      loaded: true,
-      // ★업무보드의 뼈대 3축(할일·완료·피드) 중 하나라도 실패하면 화면은 "없음"을 말하면 안 된다.
-      //   나머지 축(노하우 링크·훈련 등)은 이 화면의 본문이 아니라 부가 정보라 게이트에 넣지 않는다.
-      // N08: 이해 기록·코스 노하우 조회 실패도 "없음"으로 말하지 않는다(퀴즈 카드·옛 퀴즈 판정이 이 둘을 본다).
-      loadError: templates.error || done.error || feed.error || understanding.error || courseEntries.error,
-    });
-    } catch (e) {
-      console.warn('[work] hydrate threw:', e);
-      reportHydrate('threw', 'work', fetchedAt, { failed }, e);
-      if (isStaleEpoch(epoch)) return;
-      set({ loaded: true, loadError: true, quizProgressError: true, quizProgress: [] });
-    }
+    // ★뼈대 축(할일·완료·피드·이해 기록·코스 노하우) 중 하나라도 실패하면 화면은 "없음"을 말하면 안 된다.
+    //   나머지 축(노하우 링크·발송 원장·진행)은 이 화면의 본문이 아니라 부가 정보라 게이트에 넣지 않는다.
+    //   (M1 이 게이트에 넣은 templates·done·feed·understanding·courseEntries 는 각각 templates·board·understanding·quiz 축 안이다.)
+    set({ loaded: true, loadError: SKELETON_AXES.some((k) => axisOk[k] === false) });
   }),
+  hydrateIfStale: (maxAgeMs) => {
+    const { fetchedAt } = get();
+    if (fetchedAt !== 0 && Date.now() - fetchedAt <= maxAgeMs) return Promise.resolve();
+    return get().hydrate();
+  },
+  refreshAxes: async (keys) => {
+    if (!HAS_SUPABASE) return;
+    await Promise.all([...keys].map((k) => AXES[k]()));
+  },
 
   loadDoneMonth: async (ym) => {
     if (!HAS_SUPABASE || get().loadedMonths.has(ym) || loadingMonths.has(ym)) return;
@@ -905,9 +1023,10 @@ export const useWorkStore = create<State>((set, get) => ({
   retry: async () => {
     await get().hydrate();
   },
-  // realtime 변경마다 즉시 풀리페치하면 체크 한 번(work_done+work_feed 2쓰기)이 매번 3쿼리+전체
-  // 리렌더가 된다 → 트레일링 디바운스로 이벤트 버스트를 1회 재조회에 합친다.
-  subscribe: () => subscribeDebounced(subscribeWork, () => get().hydrate()),
+  // realtime 이벤트마다 전체 재조회를 하면 채팅 1건(work_feed INSERT 1건)이 HTTP 15회+ 가 된다
+  // → 디바운스 창 동안 바뀐 표를 모아 그 표의 축만 다시 읽는다(M4 축 무효화 · 채팅 1건 = board 축 2쿼리).
+  subscribe: () =>
+    subscribeDebouncedKeyed<WorkTable>(subscribeWork, (tables) => { void get().refreshAxes(axesForTables(tables)); }, 300, 'work'),
 
   addTask: async (input, retryId) => {
     const epoch = currentTenantEpoch();

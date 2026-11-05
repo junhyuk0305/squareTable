@@ -88,7 +88,7 @@ export const useSuggestionStore = create<State>((set, get) => ({
   retry: async () => {
     await get().hydrate();
   },
-  subscribe: () => subscribeDebounced(subscribeSuggestions, () => get().hydrate()),
+  subscribe: () => subscribeDebounced(subscribeSuggestions, () => get().hydrate(), 300, 'suggestion'),
 
   submit: (input) => {
     const s = useSessionStore.getState();

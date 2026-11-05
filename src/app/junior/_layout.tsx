@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useForegroundRefresh } from '@/lib/app/useForegroundRefresh';
+import { useMembershipSync } from '@/lib/app/useMembershipSync';
 import { Stack, Redirect, usePathname, type Href } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { needsProfileSetup } from '@/lib/store/profileSetup';
@@ -14,7 +15,6 @@ import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { subscribeMyMembership, subscribeMyProfile } from '@/lib/db';
 import { StoreClosedScreen } from '@/components/StoreClosedScreen';
 
 /** 사장이 `/junior/*` 로 오면 착지시킬 사장 경로 — 대응이 분명한 것만. 없으면 사장 홈. */
@@ -39,7 +39,7 @@ function hydrateJuniorStores() {
   // 내 제안 검토 결과(반영/반려)가 벨 배지·알림에 잡히도록 레이아웃에서 하이드레이트+구독(사장 레이아웃과 동형).
   useSuggestionStore.getState().hydrate();
   // 매장 미답질문·업무방 — 매장이 바뀌면 tenantReset 이 비운다. 물어보기·업무 탭이 열려 있는 채로 바뀌어도
-  // 로딩 게이트가 풀리게 여기서 다시 채운다(구독은 각 탭이 맡는다).
+  // 로딩 게이트가 풀리게 여기서 다시 채운다(구독도 아래 effect 가 맡는다 · M4).
   void useUnknownQueueStore.getState().hydrate();
   void useRoomStore.getState().hydrate();
 }
@@ -60,10 +60,12 @@ export default function JuniorLayout() {
   //    이 effect가 재실행되어 새 소속 기준으로 재하이드레이트/재구독한다(남용 #2·#5).
   // J15 ③: 30초 넘게 뒤에 있다 돌아오면 소속을 다시 맞추고 같은 목록을 다시 읽는다.
   useForegroundRefresh(status === 'signed_in' && !!unitId, () => {
-    void useSessionStore.getState().refreshMembership();
+    void useSessionStore.getState().refreshMembership({ soft: true, source: 'foreground' });
     hydrateJuniorStores();
   });
 
+  // ★구독 책임 = 레이아웃 한 곳(M4 · 2026-11-04). 화면은 subscribe 를 부르지 않고 필요하면 `hydrateIfStale` 만 부른다.
+  //   같은 스토어를 화면이 또 구독하면 채널이 둘이 되고 이벤트마다 hydrate 가 두 번 돈다(__DEV__ 에서 activeSubs 경고).
   useEffect(() => {
     if (status !== 'signed_in' || !unitId) return;
     hydrateJuniorStores();
@@ -73,6 +75,8 @@ export default function JuniorLayout() {
     const offS = useScheduleStore.getState().subscribe();
     const offSg = useSuggestionStore.getState().subscribe();
     const offSt = useStaffStore.getState().subscribe(); // 내 profiles 행이 바뀌면(합류 승인·반려) 명부와 합류 결과(joinNotices)를 다시 읽는다
+    const offQ = useUnknownQueueStore.getState().subscribe(); // 매장 미답질문('내 공간' 배지) — 예전엔 junior/chat 이 구독했다
+    const offR = useRoomStore.getState().subscribe(); // 업무방 — 예전엔 WorkBoard 가 구독했다
     return () => {
       offP();
       offW();
@@ -80,24 +84,14 @@ export default function JuniorLayout() {
       offS();
       offSg();
       offSt();
+      offQ();
+      offR();
     };
   }, [status, unitId]);
 
-  // 소속 상태 동기화 — 내 profiles 행 realtime(승인·내보내기 즉시) + 20초 폴링(realtime 유실 대비 안전망).
-  //  - 승인 대기 중이면 사장 승인이 반영돼 자동으로 홈으로 진입(#2). 예전엔 폴링만이라 최대 20초 늦었다(2026-09-03 실기기).
-  //  - 근무 중 사장이 내보내면(unit_id=null) 즉시 감지해 접근을 끊는다(#5).
-  useEffect(() => {
-    if (status !== 'signed_in') return;
-    const refresh = () => void useSessionStore.getState().refreshMembership();
-    const off = userId ? subscribeMyProfile(userId, refresh) : () => {};
-    const offRole = userId ? subscribeMyMembership(userId, refresh) : () => {}; // 매니저 지정·해제 즉시(0315)
-    const id = setInterval(refresh, 20000);
-    return () => {
-      off();
-      offRole();
-      clearInterval(id);
-    };
-  }, [status, userId]);
+  // 소속 동기화(realtime + 폴링) — 근거·간격은 useMembershipSync 머리 주석(M3).
+  //  - 승인 대기 중이면 사장 승인(profiles UPDATE)이 즉시 반영돼 홈으로 진입(#2). 근무 중 내보내면(unit_id=null) 즉시 접근을 끊는다(#5).
+  useMembershipSync({ enabled: status === 'signed_in', userId, role: 'junior' });
 
   if (HAS_SUPABASE && status === 'loading') return null;
   if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;

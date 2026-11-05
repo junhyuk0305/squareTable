@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 
@@ -33,12 +33,7 @@ export default function JuniorChatScreen() {
   const queue = useUnknownQueueStore((s) => s.queue);
   const history = useChatStore((s) => s.history);
 
-  // '내 공간' 배지·리스트가 항상 최신이도록 미답질문 큐를 컨테이너에서 hydrate·subscribe(D4).
-  useEffect(() => {
-    const uq = useUnknownQueueStore.getState();
-    void uq.hydrate();
-    return uq.subscribe();
-  }, []);
+  // '내 공간' 배지·리스트의 미답질문 큐는 직원 레이아웃이 hydrate·subscribe 한다(D4 → M4 · 화면은 구독하지 않는다).
 
   // 둘러보기에 노출할 발행 노하우. status 없는 시드도 안전하게 통과(published 우선, 미정이면 노출).
   const publishedEntries = useMemo(

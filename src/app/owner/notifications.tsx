@@ -71,11 +71,11 @@ export default function OwnerNotificationsScreen() {
   const ready =
     queueLoaded && suggestionLoaded && scheduleLoaded && staffLoaded && workLoaded && claimLoaded && alertLoaded && prefsLoaded;
 
-  // 화면에 들어올 때마다 명부·합류신청을 다시 당겨온다. profiles 실시간이 없어도(또는 앱을 켜둔 채로
-  // 신청이 들어와도) 사장이 이 화면을 열면 최신 합류 신청이 반드시 보이게 하는 안전장치.
+  // 화면에 들어올 때 명부·합류 신청을 다시 당겨온다. 합류 신청(pending) 표는 realtime publication 밖이라
+  // 포커스가 최신화 시점이다(10초 안에 읽은 게 있으면 생략 · M4 · 구독은 레이아웃).
   //   입금 신고(0083)도 같이 — realtime 미구독 축이라 화면 진입이 최신화 시점이다.
   useFocusEffect(useCallback(() => {
-    useStaffStore.getState().hydrate();
+    void useStaffStore.getState().hydrateIfStale(10_000);
     void usePaymentClaimStore.getState().hydrate();
     void useOwnerAlertStore.getState().hydrate();
   }, []));

@@ -70,7 +70,7 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
   }),
 
   // 알바 폰에서 질문이 들어오면 사장님 인박스가 실시간으로 갱신된다(학습순환의 핵심).
-  subscribe: () => subscribeDebounced(subscribeUnknownQueue, () => get().hydrate()),
+  subscribe: () => subscribeDebounced(subscribeUnknownQueue, () => get().hydrate(), 300, 'unknownQueue'),
 
   // 같은 질문이 이미 대기 중이면 새로 쌓지 않고 유사 질문 수만 올린다(중복 방지).
   enqueue: async (uq) => {

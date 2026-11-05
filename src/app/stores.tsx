@@ -99,7 +99,7 @@ export default function StoresHub() {
   // 아래 네 읽기(설정·알림·지표·잠김)를 다시 돌린다(fgTick 이 바뀌면 effect 가 다시 돈다).
   const [fgTick, setFgTick] = useState(0);
   useForegroundRefresh(true, () => {
-    void useSessionStore.getState().refreshMembership();
+    void useSessionStore.getState().refreshMembership({ soft: true, source: 'foreground' });
     setFgTick((t) => t + 1);
   });
   // 매장을 고른 순간부터 그 매장 화면이 그릴 준비가 될 때까지 — 이 값이 있으면 화면 전체를 커버가 덮는다.

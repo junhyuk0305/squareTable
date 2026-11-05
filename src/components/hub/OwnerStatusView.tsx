@@ -78,7 +78,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
   }, [hydrateOwner, hydrateCross, hydratePrefs, hydrateKnowhowStats]);
   // G2: 허브는 owner·junior _layout 밖이라 거기 붙은 복귀 새로고침이 없다. 30초 넘게 뒤에 있다 돌아오면 다시 읽는다.
   useForegroundRefresh(true, () => {
-    void useSessionStore.getState().refreshMembership();
+    void useSessionStore.getState().refreshMembership({ soft: true, source: 'foreground' });
     void hydrateOwner();
     void hydrateCross();
     void hydratePrefs();

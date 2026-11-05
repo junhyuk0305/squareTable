@@ -87,9 +87,9 @@ export default function OwnerStaffScreen() {
   const [managerTarget, setManagerTarget] = useState<{ id: string; name: string } | null>(null);
   const [rotating, setRotating] = useState(false);
 
-  // 화면 진입/복귀 시마다 명부·합류신청을 다시 당겨온다. owner 레이아웃 hydrate는 로그인 시 1회뿐이라,
-  // 앱을 켜둔 채로 새 합류 신청이 들어와도(profiles 실시간 미구독) 이 화면을 열면 반드시 최신으로 보인다.
-  useFocusEffect(useCallback(() => { useStaffStore.getState().hydrate(); }, []));
+  // 화면 진입/복귀 때 명부·합류 신청을 다시 당겨온다. 합류 신청(pending) 표는 realtime publication 밖이라
+  // 포커스가 최신화 시점이다. 10초 안에 읽은 게 있으면 생략한다(M4 · 구독은 레이아웃).
+  useFocusEffect(useCallback(() => { void useStaffStore.getState().hydrateIfStale(10_000); }, []));
 
   // 근무 중 직원의 누적시간을 30초마다 갱신(구 근무·급여 화면에서 흡수).
   const [, setTick] = useState(0);

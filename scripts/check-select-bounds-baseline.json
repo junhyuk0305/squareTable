@@ -1,9 +1,9 @@
 {
-  "total": 131,
+  "total": 132,
   "files": {
     "src/lib/analytics/track.ts": 1,
     "src/lib/brand/brandDb.ts": 3,
-    "src/lib/db.ts": 122,
+    "src/lib/db.ts": 123,
     "src/lib/push/nativepush.ts": 2,
     "src/lib/push/webpush.ts": 1,
     "src/lib/store/useSessionStore.ts": 2
