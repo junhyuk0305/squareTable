@@ -34,7 +34,7 @@ export default function HubNotificationsScreen() {
   }, [hydrateCross]);
   // G2: 매장 _layout 밖이라 복귀 새로고침이 없다. 30초 넘게 뒤에 있다 돌아오면 다시 읽는다.
   useForegroundRefresh(status === 'signed_in', () => {
-    void useSessionStore.getState().refreshMembership();
+    void useSessionStore.getState().refreshMembership({ soft: true, source: 'foreground' });
     void hydrateCross();
   });
   // '모두 읽기' = 내 매장 전부 ack(결정 3 · 훅이 매장 벨과 같은 ackNotifs 를 매장마다 부른다).

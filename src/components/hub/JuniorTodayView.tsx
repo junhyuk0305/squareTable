@@ -67,7 +67,7 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
   // G2: 허브는 owner·junior _layout 밖이라 거기 붙은 복귀 새로고침이 없다. 30초 넘게 뒤에 있다 돌아오면 다시 읽는다.
   // 다시 그려지면서 아래 today 도 오늘 날짜로 다시 잡힌다.
   useForegroundRefresh(true, () => {
-    void useSessionStore.getState().refreshMembership();
+    void useSessionStore.getState().refreshMembership({ soft: true, source: 'foreground' });
     void hydrateJunior();
     void hydrateCross();
     void hydratePrefs();

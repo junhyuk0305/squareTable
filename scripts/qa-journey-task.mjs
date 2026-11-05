@@ -767,7 +767,8 @@ try {
   // 10초 창을 끝까지 채운 뒤 센다 — 반영이 빨라도 뒤따르는 재조회(디바운스 뒤 fetch)가 창 안에 들어온다.
   const remain = tSent + 10000 - Date.now();
   if (remain > 0) await sleep(remain);
-  const win = S.page.restSince(tSent).filter((r) => r.at <= tSent + 10000);
+  // 예산은 앱이 보낸 읽기 요청만 센다 — CORS 사전요청(OPTIONS · 로컬 kong 은 캐시 안 함)과 타이머 계측 flush(log_app_events)는 채팅 1건과 무관하다(2026-11-05 로컬 실측).
+  const win = S.page.restSince(tSent).filter((r) => r.at <= tSent + 10000 && r.method !== 'OPTIONS' && !r.url.includes('/rpc/log_app_events'));
   const urlShort = (u) => { try { const x = new URL(u); return `${x.pathname.replace('/rest/v1', '')}${x.search ? '?' + x.search.slice(1, 40) : ''}`; } catch { return u.slice(-60); } };
   const winSummary = win.map((r) => `${r.method} ${urlShort(r.url)}`).join(' | ').slice(0, 400);
   check(`K8-① 직원 채팅 1건(${chatVia.split('(')[0]}) → 사장 업무 탭에 새로고침 없이 10초 안 표시 [문자열]`, shown, `${shown ? `${shownSecs}초` : '10초 동안 안 보임'} · 경로=${chatVia}`);
@@ -780,10 +781,13 @@ try {
   //   구독 책임이 레이아웃 한 곳이면 업무 탭의 채널 수가 이 수를 넘지 않는다. 화면(WorkBoard 등)이 따로 구독하면 초과 → RED.
   //   채널 수 = WebSocket phx_join 토픽 수 − phx_leave(cdp.mjs channelCount · 앱이 supabase 클라이언트를 전역에 안 내놓는다).
   section('6-c. K8-③ 업무 탭 Realtime 채널 수 ≤ 레이아웃 구독 수 · K8-④ 스토어별 활성 구독 ≤1');
+  // M3(2026-11-05): 소속·프로필 구독은 useMembershipSync 훅으로 나갔다(사장 my-membership 1 · 직원 +my-profile 2). 레이아웃이 훅을 쓰면 그 수를 더한다.
+  const hookSubs = (file) => (file === 'junior' ? 2 : 1);
   const layoutSubs = (file) => {
     const src = readFileSync(join(ROOT, 'src/app', file, '_layout.tsx'), 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '').split('\n').map((l) => l.replace(/\/\/.*$/, '')).join('\n');
-    return (src.match(/(?:\.subscribe|\bsubscribe[A-Z]\w*)\(/g) ?? []).length;
+    const n = (src.match(/(?:\.subscribe|\bsubscribe[A-Z]\w*)\(/g) ?? []).length;
+    return n + (/useMembershipSync\(/.test(src) ? hookSubs(file) : 0);
   };
   const cap = { S: layoutSubs('owner'), J: layoutSubs('junior') };
   for (const [tag, w, role] of [['S', S, 'owner'], ['J', J, 'junior']]) {

@@ -2,14 +2,7 @@ import { create } from 'zustand';
 import { supabase, HAS_SUPABASE } from '@/lib/supabase';
 import {
   setUnitId,
-  fetchSessionProfile,
-  fetchUnitInfo,
-  fetchUnitSubscription,
-  fetchMySeatLocked,
-  fetchMyUnitLocked,
-  fetchBillingFreeMode,
-  fetchIapEnabled,
-  fetchDowngradeNeed,
+  fetchSessionBootstrap,
   checkPhoneInUse,
   rpcCreateStore,
   rpcCompleteProfile,
@@ -23,16 +16,14 @@ import {
   rpcRenameStore,
   updateProfileFields,
   updateUnitIndustry,
-  fetchMyUnits,
-  fetchMyBrand,
   switchActiveUnit,
-  fetchSessionUnit,
   type MyUnitRow,
 } from '@/lib/db';
 import { friendlyError, isMissingRpc } from '@/lib/utils/userError';
 import { sessionReadFailAction } from './sessionReadFail';
 import { sessionBootFault } from './sessionBootFault';
 import { deriveStoreRole } from './sessionRole';
+import { authEventAction, shouldStartLoad, type SessionLoadSource } from './sessionLoadPolicy';
 import { joinRejectAction, type JoinMarker } from './joinRejectDetect';
 import { setAnalyticsContext, track, reportError, flushAnalyticsBeforeSignOut } from '@/lib/analytics/track';
 import { effectivePlanOf, type SubStatusRaw } from '@/lib/utils/subscription';
@@ -167,7 +158,9 @@ type SessionState = {
   // '합류 신청 미승인' 안내 닫기 — 기기 마커까지 지워 재시작 후에도 다시 뜨지 않는다.
   dismissRejectedJoin: () => void;
   // 현재 로그인 사용자의 소속을 서버에서 재확인(승인 반영·강제 소속해제 감지). 대기화면 폴링/직원홈 가드에 사용.
-  refreshMembership: () => Promise<void>;
+  // 인자 없음 = force(쓰기 뒤 호출 호환 · 방금 쓴 것을 생략하지 않는다). 폴링·포그라운드는 { soft: true } 로
+  // 부른다 — 진행 중 로드에 합쳐지고 직전 성공 5초 안이면 생략한다(sessionLoadPolicy.ts · M3).
+  refreshMembership: (opts?: { soft?: boolean; source?: SessionLoadSource }) => Promise<void>;
   sendMagicLink: (email: string) => Promise<{ error: string | null }>;
   // 이메일 인증 메일 발송(회원가입 화면의 '인증' 버튼). 데모는 발송 생략.
   verifyEmail: (email: string) => Promise<{ status: 'demo' | 'sent' | 'rate' | 'error'; message?: string }>;
@@ -329,6 +322,13 @@ let _appliedSeq = 0;
 // 전환 중 일반 프로필 폴링이 이전 매장을 다시 확정하지 않도록 한다.
 let _switchingUserId: string | null = null;
 
+// M3(2026-11-05): 같은 사용자의 로드 합치기. soft 로드(탭 복귀 SIGNED_IN 재발화·폴링·포그라운드)는 진행 중인
+// 로드가 있으면 그 Promise 를 같이 기다리고, 직전 성공이 LOAD_FRESH_MS 안이면 생략한다. 판정은 sessionLoadPolicy.ts.
+// force(쓰기 뒤 호출·새 로그인·매장 전환)는 늘 새로 돈다 — 결과 순서는 _loadSeq/_appliedSeq 가 지킨다.
+const _inflight = new Map<string, Promise<boolean | undefined>>();
+// 직전 성공 시각은 사용자별이다 — 계정이 바뀐 직후 이전 계정의 성공을 "방금 읽음"으로 치지 않는다.
+let _lastOk: { uid: string; at: number } | null = null;
+
 // 로그아웃 상태 — 신원·매장·역할·과금 값을 전부 비운다. 로그아웃으로 떨어지는 길(로그아웃·auth 이벤트·탈퇴·
 // 로드 실패)이 여럿이라 한 곳에 둔다. 빠진 값이 있으면 다음 계정 로그인 전까지 이전 계정 값이 남는다.
 // 매장 데이터 스토어는 tenantReset.ts 가 userId 변화를 보고 비운다.
@@ -339,6 +339,52 @@ const SIGNED_OUT: Partial<SessionState> = {
   plan: 'free', seatLocked: false, unitLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '',
 };
 
+// M3: 호출부가 쓰는 입구. "지금 돌릴 것인가"(sessionLoadPolicy)와 합치기·측정만 하고, 읽기·판정은 loadProfile 이 한다.
+//   opts.soft = 탭 복귀·폴링·포그라운드처럼 '혹시 바뀌었나' 확인 — 진행 중이면 합치고(join) 방금 성공했으면 생략(skip).
+//   opts 없음 = force — 새 로그인·쓰기 뒤 호출. 매장 전환(expectedUnitId)도 늘 force.
+//   join/skip 은 상태를 건드리지 않으므로 G1/C3 세대·순번 가드는 loadProfile 안 그대로다.
+function loadSession(
+  set: (p: Partial<SessionState>) => void,
+  userId: string,
+  email: string,
+  meta?: PendingOwnerMeta,
+  expectedUnitId?: string,
+  opts?: { soft?: boolean; source?: SessionLoadSource },
+): Promise<boolean | undefined> {
+  const soft = opts?.soft === true;
+  const source: SessionLoadSource = opts?.source ?? 'write';
+  const startedAt = Date.now();
+  const decision = shouldStartLoad({
+    inflight: _inflight.has(userId),
+    lastOkAt: _lastOk && _lastOk.uid === userId ? _lastOk.at : null,
+    now: startedAt,
+    soft,
+    expectedUnitId,
+  });
+  if (decision === 'skip') return Promise.resolve(true); // 기록하지 않는다(양) — coalesced 만 남긴다
+  if (decision === 'join') {
+    const joined = _inflight.get(userId)!;
+    return joined.then((ok) => {
+      track('session_load', { ms: Date.now() - startedAt, source, coalesced: true, ok: ok === true });
+      return ok;
+    });
+  }
+  const run = loadProfile(set, userId, email, meta, expectedUnitId);
+  _inflight.set(userId, run);
+  return run.then(
+    (ok) => {
+      if (ok === true) _lastOk = { uid: userId, at: Date.now() };
+      track('session_load', { ms: Date.now() - startedAt, source, coalesced: false, ok: ok === true });
+      return ok;
+    },
+  ).finally(() => {
+    if (_inflight.get(userId) === run) _inflight.delete(userId);
+  });
+}
+
+// 부팅 RPC(session_bootstrap · M3) 한 번으로 세션 값을 전부 읽고 판정한다. 직렬 9회 조회는 2026-11-05 이걸로 접었다.
+// ★RPC 실패 = 전체 실패(부분 성공 없음). 서버에 함수가 없어도(PGRST202) 옛 직렬 조회로 돌아가지 않는다 —
+//   배포 순서(마이그레이션 → 웹·앱)로 보장한다(사용자 결정 · 계획 §5-1 B).
 async function loadProfile(
   set: (p: Partial<SessionState>) => void,
   userId: string,
@@ -350,25 +396,15 @@ async function loadProfile(
   const gen = _signOutGen;
   const seq = ++_loadSeq;
   try {
-    // ★0285(C3): 매장은 이 로그인 세션(기기)의 서버 값(session_unit)이다. 계정 값(active_unit_id)은 다른 기기 매장일 수 있다.
-    //   함수가 아직 없는 서버(PGRST202)에서만 계정 값을 쓴다. 그 밖의 읽기 실패는 프로필 읽기 실패와 같이 다룬다.
-    const [{ data: profile, error: profileReadErr }, { data: sessionUnit, error: suErr }] = await Promise.all([
-      fetchSessionProfile(userId),
-      fetchSessionUnit(),
-    ]);
-    const profileErr = profileReadErr ?? (suErr && !isMissingRpc(suErr) ? suErr : null);
-    if (gen !== _signOutGen || seq < _appliedSeq) return false;
-    // 전환 뒤에는 예전 매장을 보존할 수 없다. 호출자가 재시도 가능한 연결 실패 상태로 닫는다.
-    if (expectedUnitId !== undefined && profileErr) return false;
-
     // 읽기 실패 위장 금지(§4.8) — supabase-js 는 쿼리 에러를 throw 하지 않고 {error} 로 준다.
     // 이 error 를 무시하면 profile=null 로 흘러 role='junior'·unit_id='' 인 "빈 신원"이 signed_in
     // 으로 세팅된다 → 일시적 401(토큰만료)/5xx/429 에 ① 사장이 직원으로 강등돼 '가게 만들기'로
-    // 튕기고(§4.10), ② 승인 대기 직원은 20초 폴링 중 1회 실패에 pendingUnitId 가 사라져 대기화면이
+    // 튕기고(§4.10), ② 승인 대기 직원은 폴링 중 1회 실패에 pendingUnitId 가 사라져 대기화면이
     // join 화면으로 되돌아간다. → 읽기 실패는 절대 "빈 상태=정상"으로 위장하지 않는다.
     // ('no row'(정상 신규/트리거 레이스)는 error 없이 profile=null 로 아래 경로가 그대로 처리.)
-    if (profileErr) {
-      reportError('session.loadProfile.read', profileErr);
+    // 매장 자동 복원(쓰기) 뒤 다시 읽을 때도 같은 처리라 한 곳에 둔다.
+    const readFailed = (err: { message: string; code?: string }) => {
+      reportError('session.loadProfile.read', err);
       // 이미 확립된 같은 사용자 세션이면(폴링/새로고침 중 일시 실패) 기존 상태를 보존한다 —
       // 다음 폴링/재시도에서 자연 복구. 무음 강등보다 '변화 없음'이 안전하다.
       const prior = useSessionStore.getState();
@@ -380,14 +416,27 @@ async function loadProfile(
       setUnitId(null);
       setAnalyticsContext({ userId: null, unitId: null, role: null });
       // Q26: 연결 실패면 기기 세션은 그대로 두고 index 가 연결 안내를 보여 준다.
-      const offline = sessionBootFault({ error: profileErr, hasSession: true }) === 'offline';
+      const offline = sessionBootFault({ error: err, hasSession: true }) === 'offline';
       set(offline ? { ...SIGNED_OUT, sessionCheck: 'offline' } : SIGNED_OUT);
+    };
+
+    // ★0285(C3): 매장은 이 로그인 세션(기기)의 서버 값(session_unit)이다. 계정 값(active_unit_id)은 다른 기기 매장일 수 있다.
+    //   bootstrap 이 session_unit() 을 맨 먼저 불러 그 매장 기준으로 나머지를 읽는다(계획 §3).
+    const first = await fetchSessionBootstrap();
+    let boot = first.data;
+    const bootErr = first.error;
+    if (gen !== _signOutGen || seq < _appliedSeq) return false;
+    // 전환 뒤에는 예전 매장을 보존할 수 없다. 호출자가 재시도 가능한 연결 실패 상태로 닫는다.
+    if (expectedUnitId !== undefined && (bootErr || !boot)) return false;
+    if (bootErr || !boot) {
+      readFailed(bootErr ?? { message: 'session_bootstrap: empty' });
       return;
     }
 
     // 소프트삭제(탈퇴) 계정은 재로그인 차단(남용 #29) — 유예 기간 동안 데이터는 서버에 남아있되
     // 사용자는 로그인 불가. 세션 토큰도 정리한다(fire-and-forget: signOut→onAuthStateChange는 재귀 안 함).
-    if (profile?.deleted_at) {
+    // 서버는 deleted_at 이면 {deleted:true} 만 돌려준다(다른 값은 읽지 않는다).
+    if (boot.deleted) {
       _lastLoadFault = 'deleted'; // 로그인 직후라면 signInWithPassword 가 '탈퇴 처리된 계정' 문구로 노출(#16)
       setUnitId(null);
       setAnalyticsContext({ userId: null, unitId: null, role: null });
@@ -397,8 +446,8 @@ async function loadProfile(
     }
 
     // 다점포(0055 · 0285): 서버 auth_unit_id() 와 같은 값(이 세션의 매장)으로 클라 컨텍스트를 맞춰
-    // split-brain(화면 매장과 RLS 매장이 다름) 을 막는다. 함수가 없는 서버면 active → 주매장(unit_id) 폴백.
-    let unitId = suErr ? profile?.active_unit_id || profile?.unit_id || '' : sessionUnit ?? '';
+    // split-brain(화면 매장과 RLS 매장이 다름) 을 막는다.
+    let unitId = boot.unit_id ?? '';
     if (expectedUnitId !== undefined && unitId !== expectedUnitId) return false;
     // 이번 로드에서 막 만든 매장 — 역할 판정이 매장 목록을 못 읽었을 때의 근거(deriveStoreRole).
     let createdUnitId = '';
@@ -421,6 +470,16 @@ async function loadProfile(
         if (!createErr) {
           unitId = row?.unit_id ?? unitId;
           createdUnitId = unitId;
+          // 쓰기 뒤 다시 읽는다 — 매장 이름·초대코드·구독·목록은 방금 만든 매장 기준이어야 한다(계획 §2 단계 4).
+          const again = await fetchSessionBootstrap();
+          if (gen !== _signOutGen || seq < _appliedSeq) return false;
+          // 방금 매장을 만든 계정이 deleted 로 올 수는 없다 — 그래도 읽기 실패와 같이 닫는다(위장 금지).
+          if (again.error || !again.data || again.data.deleted) {
+            readFailed(again.error ?? { message: 'session_bootstrap: empty' });
+            return;
+          }
+          boot = again.data;
+          unitId = boot.unit_id || unitId;
         } else {
           // biz_no 제거 후에도 실패 → 여기서 그치지 않고 관측(무음 트랩 방지). owner/_layout 가드가 유도.
           console.warn('[session] 매장 자동 복원 실패:', createErr.message);
@@ -431,6 +490,10 @@ async function loadProfile(
       }
     }
 
+    // ── 여기부터는 bootstrap 한 행을 세션 값으로 옮긴다. 옛 직렬 조회 시절의 "필드별 읽기 실패 → 이전 값 유지"
+    //    분기는 없어졌다: RPC 가 통째로 성공하거나(아래) 통째로 실패한다(위 readFailed · 부분 성공 없음).
+    const profile = boot.profile;
+    const unit = unitId ? boot.unit : null;
     let storeName = '';
     let inviteCode = '';
     let inviteExpiresAt = '';
@@ -442,96 +505,41 @@ async function loadProfile(
     let seatLocked = false;
     let unitLocked = false;
     if (unitId) {
-      const { data: unit, error: unitErr } = await fetchUnitInfo(unitId);
-      if (expectedUnitId !== undefined && (unitErr || !unit)) return false;
-      // G3: 읽기 실패를 빈칸으로 덮지 않는다. 같은 사용자·같은 매장이면 이전에 알던 값을 지킨다(구독 읽기와 같은 패턴).
-      //   빈 초대코드로 초대 문구가 나가면 직원이 합류할 수 없다.
-      if (unitErr) reportError('session.fetchUnitInfo', unitErr);
-      const prevUnit = useSessionStore.getState();
-      if (unitErr && prevUnit.userId === userId && prevUnit.unitId === unitId) {
-        storeName = prevUnit.storeName;
-        inviteCode = prevUnit.inviteCode;
-        inviteExpiresAt = prevUnit.inviteExpiresAt;
-        industry = prevUnit.industry;
-      } else {
-        storeName = unit?.store_name ?? '';
-        inviteCode = unit?.invite_code ?? '';
-        inviteExpiresAt = unit?.invite_expires_at ?? '';
-        industry = unit?.industry ?? '';
-      }
+      if (expectedUnitId !== undefined && !unit) return false;
+      storeName = unit?.store_name ?? '';
+      inviteCode = unit?.invite_code ?? '';
+      inviteExpiresAt = unit?.invite_expires_at ?? '';
+      industry = unit?.industry ?? '';
 
-      // 구독상태(별도 테이블, 읽기 전용). '행 없음'은 fail-open('none', 유예) — 의도된 동작.
-      // 단 읽기 '오류'는 fail-open 금지: 만료 매장이 일시적 읽기 실패로 재활성화되면 안 되고(수익 누수),
-      //   결제 매장이 잘못 잠기지도 않아야 한다 → 오류 시 이전에 알던 구독값을 그대로 유지(양방향 오분류 방지) + 관측.
-      //   (profile 읽기의 "실패 위장 금지" 철학과 동일하게 error 를 삼키지 않는다.)
-      const { data: sub, error: subErr } = await fetchUnitSubscription(unitId);
-      if (subErr) {
-        reportError('session.fetchUnitSubscription', subErr);
-        // 이전 구독값 유지는 '같은 사용자'일 때만 — 로그아웃 직후 다른 계정 로그인 중 일시 오류면
-        // 이전 계정의 plan/구독이 새 계정으로 승계돼 entitlement 가 샌다(크로스 계정 누수 방지 가드).
-        const prev = useSessionStore.getState();
-        if (prev.userId === userId) {
-          subStatus = prev.subStatus;
-          trialEndsAt = prev.trialEndsAt;
-          paidUntil = prev.paidUntil;
-          plan = prev.plan;
-        }
-        // 다른 사용자면 기본값(''·'free') 유지 → fail-open('none')으로 잠기지 않고, 권한도 안 샌다.
-      } else {
-        subStatus = (sub?.status as SubStatusRaw) ?? '';
-        trialEndsAt = sub?.trial_ends_at ?? '';
-        paidUntil = sub?.paid_until ?? '';
-        // ★0115: 세션의 plan 은 원시 컬럼이 아니라 **유효 플랜**(만료 반영)이다.
-        //   유료 기간이 끝나면 여기서 'free' 가 되고, 그 결과 캡·다점포 노출·페이월이 전부
-        //   자동으로 무료 기준을 따른다(판정을 화면마다 복제하지 않는다).
-        //   서버 카운터파트 = public.effective_plan(unit).
-        plan = effectivePlanOf({ plan: normalizePlan(sub?.plan), subStatus, paidUntil, trialEndsAt });
-      }
+      // 구독상태(unit_subscriptions, 읽기 전용). '행 없음'은 fail-open('none', 유예) — 의도된 동작.
+      const sub = boot.subscription;
+      subStatus = (sub?.status as SubStatusRaw) ?? '';
+      trialEndsAt = sub?.trial_ends_at ?? '';
+      paidUntil = sub?.paid_until ?? '';
+      // ★0115: 세션의 plan 은 원시 컬럼이 아니라 **유효 플랜**(만료 반영)이다.
+      //   유료 기간이 끝나면 여기서 'free' 가 되고, 그 결과 캡·다점포 노출·페이월이 전부
+      //   자동으로 무료 기준을 따른다(판정을 화면마다 복제하지 않는다).
+      //   서버 카운터파트 = public.effective_plan(unit).
+      plan = effectivePlanOf({ plan: normalizePlan(sub?.plan), subStatus, paidUntil, trialEndsAt });
     }
     // 전면 무료 모드(0062) — 매장이 아니라 서비스 전체 스위치라 unitId 유무와 무관하게 읽는다.
-    // 읽기 실패는 이전에 알던 값을 유지한다(무료 기간 중 일시 오류로 게이팅이 갑자기 닫히지 않게).
-    let freeMode = useSessionStore.getState().freeMode;
-    {
-      const { data: fm, error: fmErr } = await fetchBillingFreeMode();
-      if (fmErr) reportError('session.fetchBillingFreeMode', fmErr);
-      else freeMode = fm === true;
-    }
-    // 인앱결제 판매 스위치(0187) — 스토어 표면이 애초에 닫힌 빌드(SHOW_IAP=false)면 읽지 않는다
-    // (웹·1차 스토어 빌드에서 매 세션 왕복이 하나 늘 이유가 없다).
-    // 읽기 실패는 이전 값을 유지한다 — 일시 오류로 결제 화면이 깜빡이며 사라지지 않게.
-    let iapEnabled = useSessionStore.getState().iapEnabled;
-    if (SHOW_IAP) {
-      const { data: ie, error: ieErr } = await fetchIapEnabled();
-      if (ieErr) reportError('session.fetchIapEnabled', ieErr);
-      else iapEnabled = ie === true;
-    }
+    const freeMode = boot.free_mode === true;
+    // 인앱결제 판매 스위치(0187) — 스토어 표면이 애초에 닫힌 빌드(SHOW_IAP=false)면 반영하지 않는다(fail-closed 유지).
+    const iapEnabled = SHOW_IAP ? boot.iap_enabled === true : useSessionStore.getState().iapEnabled;
     // 다운그레이드 선택 대기(0142) — 체험이 끝나 무료 한도를 넘긴 것이 있는가.
     // 판정은 서버가 전부 갖는다(사장이 아니면 항상 false 라 역할로 분기하지 않는다).
-    // 읽기 실패는 '선택 필요'로 위장하지 않는다(fail-open) — 조회 오류로 앱을 가로막지 않는다.
-    let needsDowngradeChoice = false;
-    if (unitId) {
-      const { data: dg, error: dgErr } = await fetchDowngradeNeed();
-      if (dgErr) reportError('session.fetchDowngradeNeed', dgErr);
-      else needsDowngradeChoice = dg?.need_store === true || dg?.need_seats === true;
-    }
+    const needsDowngradeChoice = unitId ? boot.needs_downgrade_choice === true : false;
     // 다점포(0055): 내가 속한 매장 목록 — '내 매장' 허브/헤더 토글용. 오너(소유)·직원(알바 소속) 모두 로드한다
     // (Phase 0: 직원 다매장). my_units 는 auth.uid() 소속만 반환하므로 크로스테넌트 노출 없음.
+    // 옛 코드처럼 unitId 가 있을 때만 쓴다(없으면 빈 목록). 벨 배지·매장 전환 UI·잠긴 매장 판정이 전부 이 배열에서 파생한다.
     let stores: MyUnitRow[] = [];
-    let storesReadFailed = false; // 거절 감지의 오판 방지 — 목록 읽기 실패를 "소속 없음"으로 위장하지 않는다
+    const storesReadFailed = false; // 거절 감지 입력 — RPC 가 통째로 성공했으므로 목록도 읽었다
     let freshStores: MyUnitRow[] | null = []; // 이번에 읽은 목록 — 역할 판정 입력(null = 읽기 실패)
     if (unitId) {
-      const { data: us, error: usErr } = await fetchMyUnits();
-      if (expectedUnitId !== undefined && (usErr || !us?.some((u) => u.unit_id === unitId))) return false;
-      storesReadFailed = !!usErr;
-      freshStores = usErr ? null : (us ?? []);
-      // ★읽기 실패를 빈 목록으로 덮지 않는다(2026-08-25 감사 #7). 이 배열이 비면
-      //   벨 배지가 0, /notifications 가 "새 알림이 없어요", 상단 매장 전환 UI 자체가 사라져
-      //   **다점포 사장이 나머지 매장으로 갈 길이 없어진다.** 잠긴 매장 판정(#12)·크로스 알림(#13·#14)도
-      //   전부 이 배열에서 파생하므로, 여기 한 번의 실패가 하위 기능 전체를 연쇄로 오작동시킨다.
-      //   바로 위 fetchUnitSubscription 이 쓰는 것과 같은 보존 패턴 — 단 '같은 사용자'일 때만
-      //   유지한다(계정이 바뀌었는데 이전 계정 매장 목록이 승계되면 크로스 계정 누수다).
-      const prevSession = useSessionStore.getState();
-      stores = us ?? (usErr && prevSession.userId === userId ? prevSession.stores : []);
+      const us = boot.my_units ?? [];
+      if (expectedUnitId !== undefined && !us.some((u) => u.unit_id === unitId)) return false;
+      freshStores = us;
+      stores = us;
     }
     // 매장별 역할(0093·0233): 정본 = 활성 매장의 unit_members.role(my_units 로 로드). profiles.role 은 안 본다.
     // 판정 규칙(행 없음·읽기 실패·방금 만든 매장)은 deriveStoreRole 한 곳 — qa:session 이 진리표를 고정한다.
@@ -546,17 +554,12 @@ async function loadProfile(
     // 계정 층(허브·매장 목록·계정 설정)만 쓰는 '사장 계정' 표식. 매장 권한에는 쓰지 않는다.
     const isOwnerAccount = profile?.role === 'owner' || stores.some((s) => s.role === 'owner');
     // 좌석 잠금(0115) — 무료 강등으로 직원 수가 한도를 넘으면 늦게 합류한 순서로 잠긴다.
-    // 판정은 서버(my_seat_locked)가 SSOT. 이 매장 사장은 대상이 아니라 조회하지 않는다(서버도 false).
-    // ★역할이 정해진 뒤에 부른다 — 계정 역할로 거르면 다른 매장 사장인 직원의 잠금을 못 본다.
+    // 판정은 서버(my_seat_locked)가 SSOT. 이 매장 사장은 대상이 아니다(서버도 false) — 옛 조건을 그대로 둔다.
+    // ★역할이 정해진 뒤에 본다 — 계정 역할로 거르면 다른 매장 사장인 직원의 잠금을 못 본다.
     if (unitId && role !== 'owner') {
-      const { data: locked, error: lockErr } = await fetchMySeatLocked();
-      // 읽기 실패는 '잠김'으로 위장하지 않는다(fail-open) — 과금 조회 오류로 직원을 막지 않는다.
-      if (lockErr) reportError('session.fetchMySeatLocked', lockErr);
-      else seatLocked = locked === true;
-      // 0284(C2): 사장이 닫은 매장이면 직원·매니저도 막는다. 읽기 실패는 잠김으로 위장하지 않는다(fail-open).
-      const { data: closed, error: closedErr } = await fetchMyUnitLocked();
-      if (closedErr) reportError('session.fetchMyUnitLocked', closedErr);
-      else unitLocked = closed === true;
+      seatLocked = boot.my_seat_locked === true;
+      // 0284(C2): 사장이 닫은 매장이면 직원·매니저도 막는다.
+      unitLocked = boot.my_unit_locked === true;
     }
     // 합류 거절 감지(#미아 방지): 신청 시점의 기기 마커와 현재 서버 상태를 대조한다.
     // 판정은 joinRejectDetect.ts 순수함수(SSOT — qa:session 진리표로 회귀 고정), 여기선 저장·반영만.
@@ -575,21 +578,8 @@ async function loadProfile(
     // 이름을 모르는 마커(콜드 로드 생성 등)도 안내는 떠야 한다 — 빈값이면 대기 카드와 같은 폴백.
     if (jr.kind === 'show' || jr.kind === 'reject') rejectedJoinStoreName = jr.storeName || '신청한 매장';
     // 본사(브랜드) 담당자 파생(0208) — 매니저 승격과 **같은 방식**이다. `profiles.role` 은 안 건드린다.
-    // 여기가 유일한 승격 지점이고, 화면은 세션의 brandId 만 본다.
-    // ⚠️fail-closed: 읽기 실패는 '본사 아님'으로 둔다. 잘못 열리는 쪽이 되돌리기 어렵다.
-    //   단 **같은 사용자**의 일시 실패는 이전 값을 유지한다 — 새로고침 한 번에 담당자가 매장 화면으로
-    //   떨어지면 그게 더 큰 사고다(구독·매장목록이 쓰는 보존 패턴과 같다).
-    let brandId: string | null = null;
-    {
-      const { data: brand, error: brandErr } = await fetchMyBrand();
-      if (brandErr) {
-        reportError('session.fetchMyBrand', brandErr);
-        const prev = useSessionStore.getState();
-        if (prev.userId === userId) brandId = prev.brandId;
-      } else {
-        brandId = brand?.brand_id ?? null;
-      }
-    }
+    // 여기가 유일한 승격 지점이고, 화면은 세션의 brandId 만 본다. 0행이면 본사 아님(fail-closed).
+    const brandId: string | null = boot.my_brand?.brand_id ?? null;
     // 이 로드가 도는 사이 로그아웃됐으면 버린다 — 옛 userId 로 signed_in 을 되살리지 않는다(G1).
     if (gen !== _signOutGen) return;
     // 더 늦게 시작한 로드가 이미 반영됐으면 버린다(C3 · 원본 #65).
@@ -672,21 +662,33 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
     const { data, error } = await supabase.auth.getSession();
     const user = data.session?.user;
-    if (user) await loadProfile(set, user.id, user.email ?? '', pendingOwnerMeta(user));
+    if (user) await loadSession(set, user.id, user.email ?? '', pendingOwnerMeta(user), undefined, { source: 'init' });
     // Q26: 토큰이 만료된 채 오프라인이면 갱신이 실패해 session 이 null 로 온다. 세션 없음과 가른다.
     else if (sessionBootFault({ error, hasSession: false }) === 'offline') set({ ...SIGNED_OUT, sessionCheck: 'offline' });
     else set({ status: 'signed_out', sessionCheck: 'ok' });
 
     if (!_authSubscribed) {
       _authSubscribed = true;
-      supabase.auth.onAuthStateChange((_evt, session) => {
-        const u = session?.user;
-        if (u) loadProfile(set, u.id, u.email ?? '', pendingOwnerMeta(u));
-        // 첫 INITIAL_SESSION(null)은 바로 위 init 이 이미 판정했다. auth-js 는 getSession 오류에도 null 로
-        // 보내므로 받아들이면 오프라인 안내가 로그인 화면으로 덮인다(Q26).
-        else if (_evt === 'INITIAL_SESSION') return;
-        else {
+      // 이벤트 → 할 일 판정은 sessionLoadPolicy.authEventAction 한 곳(진리표는 그 머리 주석 · qa:session 이 고정).
+      //   INITIAL_SESSION 은 세션이 있어도 무시한다 — 바로 위 init 이 이미 로드했다(auth-js 는 등록 시 다시 쏜다).
+      //   INITIAL_SESSION(null)도 init 이 판정했다. auth-js 는 getSession 오류에도 null 로 보내므로 받아들이면
+      //   오프라인 안내가 로그인 화면으로 덮인다(Q26 · qa:boot-fault).
+      //   SIGNED_IN 은 웹 탭 복귀마다 재발화한다 → 같은 사용자·signed_in 이면 soft(합치기·5초 생략).
+      supabase.auth.onAuthStateChange((evt, session) => {
+        const u = session?.user ?? null;
+        const { status, userId } = get();
+        const act = authEventAction(evt, u, { status, userId });
+        if (act === 'ignore') return;
+        if (act === 'load' && u) {
+          void loadSession(set, u.id, u.email ?? '', pendingOwnerMeta(u), undefined, { source: 'auth' });
+        } else if (act === 'soft' && u) {
+          void loadSession(set, u.id, u.email ?? '', pendingOwnerMeta(u), undefined, { soft: true, source: 'auth' });
+        } else if (act === 'email' && u) {
+          // USER_UPDATED — auth 사용자 행만 바뀌었다(이메일 변경 확인 등). 소속·매장은 그대로라 다시 읽지 않는다.
+          set({ email: u.email ?? get().email });
+        } else if (act === 'signout') {
           // 다른 탭의 로그아웃·토큰 만료 — 쓰기 태깅용 매장 id 도 비운다(다음 계정에 이전 매장이 붙지 않게).
+          // (탈퇴 경로의 signOut 은 loadProfile 이 이미 SIGNED_OUT 을 썼다 — 여기서 다시 써도 재귀는 없다.)
           _signOutGen += 1;
           setUnitId(null);
           setAnalyticsContext({ userId: null, unitId: null, role: null });
@@ -705,7 +707,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         role: get().role,
       };
     // 이메일 인증으로 가입 시 가게 생성이 지연된 사장은 여기서 metadata 기반으로 매장이 자동 복원된다.
-    await loadProfile(set, data.user.id, data.user.email ?? '', pendingOwnerMeta(data.user)); // 결정적: role 확정 후 반환
+    await loadSession(set, data.user.id, data.user.email ?? '', pendingOwnerMeta(data.user)); // 결정적: role 확정 후 반환
     // ★ 인증(signInWithPassword)은 성공했어도 loadProfile 이 세션을 떨궜으면(탈퇴/로드실패) '성공'으로 라우팅하면
     //   안 된다 — 예전엔 여기서 {error:null}을 돌려줘 로그인 화면이 홈으로 보냈고, 가드가 다시 랜딩으로 튕겨
     //   "아무 일도 안 일어난" 무음 실패가 됐다(#16·#17·#18). 이제 정확한 사유를 로그인 화면에 돌려준다.
@@ -745,7 +747,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         return { error: friendlyError(r.error ?? undefined, '구글 로그인을 끝내지 못했어요. 잠시 후 다시 시도해 주세요.') };
       }
       // 이메일 로그인과 같은 성공 경로: 프로필을 읽고, 세션이 떨어졌으면 사유를 돌려준다.
-      await loadProfile(set, r.userId, r.email);
+      await loadSession(set, r.userId, r.email);
       if (get().status !== 'signed_in') {
         return {
           error: _lastLoadFault === 'deleted' ? DELETED_LOGIN_TEXT : '계정 정보를 불러오지 못했어요. 네트워크를 확인하고 잠시 후 다시 시도해 주세요.',
@@ -801,7 +803,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
     // phone/birth_date 가 채워졌으니 세션 상태를 갱신한다(needsProfileSetup 해제 → 게이트 통과).
     const uid = get().userId;
-    if (uid) await loadProfile(set, uid, get().email);
+    if (uid) await loadSession(set, uid, get().email);
     return { error: null };
   },
 
@@ -839,7 +841,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         access_token: data.session.access_token,
         refresh_token: data.session.refresh_token,
       });
-      await loadProfile(set, data.session.user.id, data.session.user.email ?? '');
+      await loadSession(set, data.session.user.id, data.session.user.email ?? '');
     }
     // 가입 퍼널 계측 — account_created 대비 이후 store_created/join_requested 전환율로 이탈지점을 본다.
     if (needsConfirm) track('verify_email_sent', { flow: 'signup', role: (meta as any)?.role ?? null });
@@ -874,7 +876,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       if (isOnboarding) {
         const uidW = get().userId;
         if (uidW) {
-          await loadProfile(set, uidW, get().email);
+          await loadSession(set, uidW, get().email);
           if (get().unitId) return { error: null, inviteCode: get().inviteCode || null };
         }
       }
@@ -887,7 +889,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         // (1) already_in_store: 언제나 데드엔드 대신 해당 매장으로 진입(이전 시도 성공·중복 제출).
         if (/already_in_store/.test(error.message)) {
           const uid0 = get().userId;
-          if (uid0) await loadProfile(set, uid0, get().email);
+          if (uid0) await loadSession(set, uid0, get().email);
           // 온보딩 레이스로 자동복원이 먼저 만든 매장에 진입한 경우도 성공으로 계측(퍼널 정확도 — 브랜치2와 대칭).
           // '스위처 매장 추가'의 중복제출 already_in_store 는 새 생성이 아니므로 계측하지 않는다.
           if (isOnboarding && get().unitId) track('store_created', { has_biz: !!bizNo, recovered: true });
@@ -898,7 +900,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         //     '스위처 매장 추가'(isOnboarding=false)는 이 복구를 타지 않아 진짜 요금제 거절이 그대로 노출된다.
         if (isOnboarding) {
           const uid0 = get().userId;
-          if (uid0) await loadProfile(set, uid0, get().email);
+          if (uid0) await loadSession(set, uid0, get().email);
           if (get().unitId) {
             // 레이스로 자동복원 경로가 실제 매장을 만든 것 → 성공으로 계측(recovered)해 퍼널 정확도 유지
             // (이 경로가 없으면 성공 가입이 store_created 없이 store_created_failed 로만 찍혀 퍼널이 깨진다).
@@ -944,7 +946,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       }
       // 프로필 unit_id가 바뀌었으니 세션 상태 갱신
       const uid = get().userId;
-      if (uid) await loadProfile(set, uid, get().email);
+      if (uid) await loadSession(set, uid, get().email);
       track('store_created', { has_biz: !!bizNo });
       return { error: null, inviteCode: row?.invite_code ?? null };
     } finally {
@@ -958,14 +960,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       // 이미 어느 매장에 소속됨(중복 제출/이전 합류 성공) → 데드엔드 대신 그대로 진입.
       if (/already_in_store/.test(error.message)) {
         const uid0 = get().userId;
-        if (uid0) await loadProfile(set, uid0, get().email);
+        if (uid0) await loadSession(set, uid0, get().email);
         track('join_requested', { result: 'already_in_store' });
         return { error: null, storeName: get().storeName || null };
       }
       // 이미 신청해 승인 대기 중(0032) → 대기 상태로 안내.
       if (/already_pending/.test(error.message)) {
         const uid0 = get().userId;
-        if (uid0) await loadProfile(set, uid0, get().email);
+        if (uid0) await loadSession(set, uid0, get().email);
         track('join_requested', { result: 'already_pending' });
         return { error: null, storeName: get().pendingStoreName || null, pending: true };
       }
@@ -1033,7 +1035,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       // 합류는 끝났다. 전환만 못 했으면 프로필을 다시 읽어 매장 목록에 보이게 한다.
       reportError('session.joinByInvite.switch', sw.error);
       const uid = get().userId;
-      if (uid) await loadProfile(set, uid, get().email);
+      if (uid) await loadSession(set, uid, get().email);
     }
     return { error: null, storeName: row.store_name ?? null };
   },
@@ -1048,7 +1050,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set({ pendingUnitId: '', pendingStoreName: '' });
     const uid = get().userId;
     if (uid) clearJoinMarker(uid); // 본인 철회 — 거절로 오판하지 않도록 마커 제거
-    if (uid) await loadProfile(set, uid, get().email);
+    if (uid) await loadSession(set, uid, get().email);
     return { error: null };
   },
 
@@ -1058,10 +1060,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set({ rejectedJoinStoreName: '' });
   },
 
-  refreshMembership: async () => {
+  refreshMembership: async (opts) => {
     if (!HAS_SUPABASE) return;
     const uid = get().userId;
-    if (uid) await loadProfile(set, uid, get().email);
+    // 인자 없음 = force('write') — 쓰기 뒤 호출처(createStore·join·billing·downgrade…)가 방금 쓴 것을 바로 본다.
+    if (uid) await loadSession(set, uid, get().email, undefined, undefined, { soft: opts?.soft === true, source: opts?.source ?? 'write' });
   },
 
   sendMagicLink: async (email) => {
@@ -1204,7 +1207,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const { error } = await rpcLeaveStore();
     if (error) return { error: friendlyError(error.message, '매장에서 나가지 못했어요. 잠시 후 다시 시도해 주세요.') };
     const uid = get().userId;
-    if (uid) await loadProfile(set, uid, get().email);
+    if (uid) await loadSession(set, uid, get().email);
     return { error: null };
   },
 
@@ -1317,7 +1320,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         : friendlyError(error.message, '매장을 전환하지 못했어요. 잠시 후 다시 시도해 주세요.');
       return { error: msg };
     }
-    const loaded = await loadProfile(set, uid, email, undefined, targetUnitId);
+    const loaded = await loadSession(set, uid, email, undefined, targetUnitId);
     if (!current()) return { error: '계정이 바뀌었어요. 현재 계정에서 매장을 다시 선택해 주세요.' };
     if (!loaded || get().unitId !== targetUnitId) return failClosed();
     return { error: null };
@@ -1350,7 +1353,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
     // 활성/주매장 재지정·매장 목록 갱신 반영
     const uid = get().userId;
-    if (uid) await loadProfile(set, uid, get().email);
+    if (uid) await loadSession(set, uid, get().email);
     return { error: null, result: data };
   },
 

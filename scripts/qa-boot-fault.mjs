@@ -117,19 +117,27 @@ const store = read('src/lib/store/useSessionStore.ts');
 const between = (s, a, b) => { const i = s.indexOf(a); if (i < 0) return ''; const j = s.indexOf(b, i + a.length); return j < 0 ? s.slice(i) : s.slice(i, j); };
 const signedOut = between(store, 'const SIGNED_OUT', '};');
 const loadProfileSrc = between(store, 'async function loadProfile(', '\n}\n');
-const readFailBlock = between(loadProfileSrc, 'if (profileErr) {', '\n    }\n');
+// M3(2026-11-05): 첫 읽기 + 매장 자동 복원 뒤 재읽기의 실패 처리가 `readFailed` 클로저 한 곳이다. 그 본문을 본다.
+const readFailBlock = between(loadProfileSrc, 'const readFailed = (err', '\n    };\n');
 const catchBlock = between(loadProfileSrc, '} catch (e) {', '\n  }\n');
 const initSrc = between(store, 'init: async () => {', 'signInWithPassword: async');
 
 check('스토어가 sessionBootFault 를 쓴다', /import \{ sessionBootFault \} from '\.\/sessionBootFault'/.test(store));
 check('SIGNED_OUT 은 sessionCheck 를 ok 로 되돌린다(로그아웃하면 안내가 사라진다)', /sessionCheck:\s*'ok'/.test(signedOut));
 check('SIGNED_OUT 은 여전히 신원·매장을 비운다(격리)', /userId:\s*''/.test(signedOut) && /unitId:\s*''/.test(signedOut) && /role:\s*'junior'/.test(signedOut));
-check('프로필 읽기 실패(리셋 경로)가 오프라인을 가른다', /sessionBootFault\(\{\s*error:\s*profileErr/.test(readFailBlock) && /sessionCheck:\s*'offline'/.test(readFailBlock));
+check('프로필 읽기 실패(리셋 경로)가 오프라인을 가른다', /sessionBootFault\(\{\s*error:\s*err\b/.test(readFailBlock) && /sessionCheck:\s*'offline'/.test(readFailBlock));
+check('프로필 읽기 실패: 두 읽기(첫 bootstrap · 매장 복원 뒤 재읽기)가 모두 readFailed 를 탄다', (loadProfileSrc.match(/\n\s*readFailed\(/g) || []).length === 2);
 check('프로필 읽기 실패: 같은 사용자 보존(keep) 판정이 먼저다', readFailBlock.indexOf("=== 'keep'") > -1 && readFailBlock.indexOf("=== 'keep'") < readFailBlock.indexOf('sessionBootFault('));
 check('프로필 읽기가 던질 때(catch)도 오프라인을 가른다', /sessionBootFault\(\{\s*error:\s*e\b/.test(catchBlock) && /sessionCheck:\s*'offline'/.test(catchBlock));
 check('오프라인 경로는 기기 세션을 지우지 않는다(signOut 없음)', !/auth\.signOut/.test(readFailBlock) && !/auth\.signOut/.test(catchBlock));
 check('init 이 getSession 오류를 버리지 않는다', /const \{ data(?:: \w+)?, error(?:: \w+)? \} = await supabase\.auth\.getSession\(\)/.test(initSrc) && /sessionBootFault\(/.test(initSrc));
-check('첫 INITIAL_SESSION(null)이 init 판정을 덮지 않는다', /'INITIAL_SESSION'/.test(initSrc));
+// M3: INITIAL_SESSION 분기는 sessionLoadPolicy.authEventAction(SSOT)으로 갔다. 실제로 불러 'ignore' 를 확인하고,
+//   init 의 리스너가 그 판정을 그대로 따르는지(ignore → return) 소스로 본다.
+check('스토어가 authEventAction 을 쓴다', /import \{ authEventAction, [^}]*\} from '\.\/sessionLoadPolicy'/.test(store));
+check('리스너가 authEventAction 판정을 따른다(ignore → return)', /const act = authEventAction\(evt, u, \{ status, userId \}\);\s*if \(act === 'ignore'\) return;/.test(initSrc));
+const policy = await import('../src/lib/store/sessionLoadPolicy.ts');
+check('첫 INITIAL_SESSION(null)이 init 판정을 덮지 않는다(authEventAction → ignore)', policy.authEventAction('INITIAL_SESSION', null, { status: 'signed_out', userId: '' }) === 'ignore');
+check('INITIAL_SESSION(세션 있음)도 init 로드와 겹치지 않는다(→ ignore)', policy.authEventAction('INITIAL_SESSION', { id: 'u1' }, { status: 'loading', userId: '' }) === 'ignore');
 check('상태 타입에 sessionCheck 가 있다', /sessionCheck:\s*'ok'\s*\|\s*'offline'/.test(store));
 
 const index = read('src/app/index.tsx');
@@ -145,4 +153,5 @@ check('앱이 다시 켜지면(AppState active) 다시 시도한다', /AppState\
 check('자동 재시도 간격 5초 → 30초', /5000/.test(index) && /30000/.test(index));
 
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+// process.exit() 이 아니라 exitCode — Node 24.13(Windows)은 .ts 동적 import 뒤 exit() 에서 libuv 단언으로 죽는다(2026-11-05 실측).
+process.exitCode = fail ? 1 : 0;

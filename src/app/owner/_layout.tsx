@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useForegroundRefresh } from '@/lib/app/useForegroundRefresh';
+import { useMembershipSync } from '@/lib/app/useMembershipSync';
 import { Stack, Redirect, usePathname, useRouter } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { needsProfileSetup } from '@/lib/store/profileSetup';
@@ -18,7 +19,6 @@ import { retryPendingEmbeddings } from '@/lib/ai/embedBacklog';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { canManage, managerMayOpen } from '@/lib/utils/roles';
 import { StoreClosedScreen } from '@/components/StoreClosedScreen';
-import { subscribeMyMembership } from '@/lib/db';
 
 /** 레이아웃이 처음 열 때와 앱이 다시 앞으로 왔을 때(J15 ③) 같은 목록을 다시 읽는다. 목록을 두 벌로 두지 않는다. */
 function hydrateOwnerStores() {
@@ -66,7 +66,7 @@ export default function OwnerLayout() {
   // 로그인되면 DB에서 당겨오고 실시간 구독(인박스·업무보드·출퇴근이 다른 기기 변경에 즉시 반응).
   // J15 ③: 30초 넘게 뒤에 있다 돌아오면 소속을 다시 맞추고 같은 목록을 다시 읽는다.
   useForegroundRefresh(status === 'signed_in', () => {
-    void useSessionStore.getState().refreshMembership();
+    void useSessionStore.getState().refreshMembership({ soft: true, source: 'foreground' });
     hydrateOwnerStores();
   });
 
@@ -96,20 +96,8 @@ export default function OwnerLayout() {
     // unitId 의존: 다점포 전환(switchUnit) 시 활성 매장이 바뀌면 전 스토어를 새 매장으로 재hydrate·재subscribe.
   }, [status, unitId]);
 
-  // 구독/소속 상태를 주기적으로 서버와 재동기화(subscriptions·profiles.unit_id는 owner realtime 미구독).
-  //  - 계좌이체 수동과금이 반영되면(subscriptions.status=active) 페이월(/billing)이 앱 재시작 없이 자동 해제.
-  //  - 매장 연결 해제 등 소속 변화도 감지. (junior/_layout 과 동일 패턴.)
-  useEffect(() => {
-    if (status !== 'signed_in') return;
-    const refresh = () => void useSessionStore.getState().refreshMembership();
-    // 매니저 지정·해제 즉시(0315) — 해제된 매니저는 역할이 junior 로 바뀌어 아래 역할 가드가 바로 내보낸다.
-    const off = userId ? subscribeMyMembership(userId, refresh) : () => {};
-    const id = setInterval(refresh, 30000);
-    return () => {
-      off();
-      clearInterval(id);
-    };
-  }, [status, userId]);
+  // 소속 동기화(realtime + 폴링) — 근거·간격은 useMembershipSync 머리 주석(M3). 해제된 매니저는 역할이 junior 로 바뀌어 아래 역할 가드가 바로 내보낸다.
+  useMembershipSync({ enabled: status === 'signed_in', userId, role: 'owner' });
 
   // 매니저는 직원 세트를 쓰고, 사장 화면은 허용 목록(MANAGER_OWNER_ROUTES)만 연다 — 나머지는 직원 홈으로.
   // ★render-time <Redirect> 로 하면 안 된다 — 웹 콜드 로드에서 이 스택은 목표 경로 전에 첫 라우트(`/owner/ask`)를
