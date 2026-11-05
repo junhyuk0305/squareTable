@@ -14,7 +14,7 @@
 //   (k) 그 퀴즈를 끝낸 사람의 join 행은 후보가 아니다(남아 있던 행이어도).
 //   (l) 합류는 퀴즈를 자동 배정하지 않는다 · 재합류 뒤 사장이 보내면 이전 회차를 이어받지 않는다(0/4 · 실제 remove_staff → join_by_invite).
 //   (o) 다 푼 사람에게 다시 알리기 = completed · 행 0 · 후보 0.  (e) 다 푼 사람의 재확인 행도 후보가 아니다(11-04 사용자 결정).
-//   (p) 나간 직원: 나간 발송은 남는다 · 새 앱 다시 알리기는 not_member 로 그 사람만 빠진다 · 옛 앱 upsert 42501 은 재현만 찍는다.
+//   (p) 나간 직원: 나간 발송은 남는다 · 새 앱 다시 알리기는 not_member 로 그 사람만 빠진다 · 옛 앱 upsert 는 나간 직원 행만 빠지고 남은 직원 행은 들어간다(0352).
 //   (n) 마감(due_date)이 지난 대기 행은 후보가 아니다 · 다시 알리기는 지난 마감을 비우고 보낸다(due_on 이 과거로 안 찍힘).
 //   (m) 무료 인원 한도로 좌석이 잠긴 직원(seat_locked_for)은 후보가 아니고 다시 알리기 결과는 locked 다. 매장을 무료로 바꾸므로 맨 끝.
 //   + 쿨다운 상수 서버 = 앱(schedule.ts) · 앱 상수가 없으면 skip 으로 찍는다.
@@ -410,14 +410,20 @@ async function main() {
     await admin.from('quiz_assignments').insert(asg(pw, P.p.id, dayOff(0)));
     const pc = (await due()).filter((x) => x.out_assignment_id === pw);
     check('(p) 나간 직원의 대기 행은 발송 후보가 아니다(quiz_recipient_is_member)', pc.length === 0, `후보 ${pc.length}건`);
-    // 옛 앱 다시 알리기 = 사장 세션 upsert(insertQuizAssignments). 나간 직원이 섞이면 어떻게 되나(문서 42501 의심 재현).
-    const { error: oe } = await owner.from('quiz_assignments').upsert(
-      [P.p.id, P.p2.id].map((uid) => ({ unit_id: UNIT, course_id: QUIZ, user_id: uid, scheduled_on: dayOff(3), due_date: null })),
-      { onConflict: 'course_id,user_id,scheduled_on', ignoreDuplicates: true }).select('id');
-    console.log(`  · (p) 옛 앱 경로 재현: 나간 직원 + 남은 직원 upsert → ${oe ? `${oe.code} ${oe.message}` : '성공'}`);
     const { data, error } = await resend(['p', 'p2']);
     check('(p) 새 앱: 나간 직원 not_member · 남은 직원 sent(한 사람 때문에 전체가 죽지 않는다)',
       !error && resultOf(data, 'p') === 'not_member' && resultOf(data, 'p2') === 'sent', error?.message ?? JSON.stringify(data));
+    // 옛 앱 다시 알리기 = 사장 세션 upsert(출시본 insertQuizAssignments 모양 그대로). 나간 직원이 섞여도 남은 직원 행은 들어간다(0352).
+    //   0352 전에는 RLS(qz_insert 멤버 조건) 42501 로 전체가 실패해 남은 직원도 못 받았다(오류 탐지 11-03 1번).
+    const on = dayOff(3);
+    const { data: od, error: oe } = await owner.from('quiz_assignments').upsert(
+      [P.p.id, P.p2.id].map((uid) => ({ unit_id: UNIT, course_id: QUIZ, user_id: uid, scheduled_on: on, due_date: null })),
+      { onConflict: 'course_id,user_id,scheduled_on', ignoreDuplicates: true }).select('id');
+    const { data: orows } = await admin.from('quiz_assignments').select('user_id').eq('unit_id', UNIT).eq('course_id', QUIZ).eq('scheduled_on', on);
+    const ous = (orows ?? []).map((r) => r.user_id);
+    check('(p) 옛 앱: 나간 직원이 섞인 upsert 가 실패하지 않고 남은 직원 행만 들어간다',
+      !oe && (od ?? []).length === 1 && ous.includes(P.p2.id) && !ous.includes(P.p.id),
+      oe ? `${oe.code} ${oe.message}` : `반환 ${(od ?? []).length}행 · 남은 직원 ${ous.includes(P.p2.id)} · 나간 직원 ${ous.includes(P.p.id)}`);
     void p2;
   }
 

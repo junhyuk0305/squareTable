@@ -240,8 +240,12 @@ async function main() {
   // 거부 이유까지 본다: RLS 위반(42501). 다른 이유(예: quiz_no_items)로 막히면 이 검사는 아무것도 증명하지 않는다.
   const { error: xcErr } = await owner.from('quiz_assignments').insert(asg(`qz_xc_${s}`, ownerId, DAY, UNIT2, QUIZ));
   check('남의 매장 코스 참조 거부(RLS)', xcErr?.code === '42501', xcErr ? `${xcErr.code} ${xcErr.message}` : '거부 안 됨');
+  // ★0352: 그 매장 멤버가 아닌 수신자 행은 오류 없이 만들지 않는다(옛 앱 다시 알리기에 나간 직원이 섞여도 남은 직원은 받게).
+  //   증명할 것은 "행이 안 생긴다"다. RLS(qz_insert)는 2선으로 그대로 있다. 다른 오류로 막히면 이 검사는 아무것도 증명하지 않는다.
   const { error: xmErr } = await owner.from('quiz_assignments').insert(asg(`qz_xm_${s}`, aId, DAY, UNIT2, QUIZ2));
-  check('그 매장 멤버가 아닌 수신자 거부(RLS)', xmErr?.code === '42501', xmErr ? `${xmErr.code} ${xmErr.message}` : '거부 안 됨');
+  const { count: xmRows } = await admin.from('quiz_assignments').select('id', { count: 'exact', head: true }).eq('id', `qz_xm_${s}`);
+  check('그 매장 멤버가 아닌 수신자 행은 만들어지지 않는다(0352 · 오류 없이 건너뜀)', !xmErr && xmRows === 0,
+    xmErr ? `${xmErr.code} ${xmErr.message}` : `행 ${xmRows}`);
   await owner.rpc('switch_active_unit', { p_unit_id: UNIT });
 
   // ── ③ 근무일 판정 ───────────────────────────────────────────────────────
