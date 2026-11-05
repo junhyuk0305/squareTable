@@ -419,7 +419,7 @@ function OptionRow({ title, price, body, onPress }: { title: string; price: stri
   );
 }
 
-// 고르기 행 — 선택 상태를 색만으로 말하지 않는다(체크 아이콘 + '선택함' 라벨 병기).
+// 고르기 행 — 선택 상태를 색만으로 말하지 않는다(체크 아이콘 + '선택' 라벨 병기).
 function PickRow({
   icon, title, meta, selected, onPress,
 }: {
@@ -443,7 +443,7 @@ function PickRow({
         <Text style={styles.pickTitle} numberOfLines={1}>{title}</Text>
         {!!meta && <Text style={styles.pickMeta} numberOfLines={1}>{meta}</Text>}
       </View>
-      {selected && <Text style={styles.pickBadge}>선택함</Text>}
+      {selected && <Text style={styles.pickBadge}>선택</Text>}
     </Pressable>
   );
 }

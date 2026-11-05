@@ -66,7 +66,7 @@ export function InboxSubtabs({ queue, renderRow, aiRows, initial = 'pending' }: 
   const autoCount = aiRows ? aiRows.length : buckets.auto.length;
   const items: SegmentItem[] = [
     { key: 'pending', label: '답할 질문', count: buckets.pending.length },
-    { key: 'auto', label: 'AI가 답함', count: autoCount },
+    { key: 'auto', label: 'AI 답변', count: autoCount },
   ];
 
   const rows = buckets[active];

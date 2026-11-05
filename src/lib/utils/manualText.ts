@@ -15,7 +15,7 @@ export function manualToText(
 ): string {
   const total = groups.reduce((n, g) => n + g.items.length, 0);
   const head = [
-    `${meta.storeName?.trim() || '우리 매장'} 운영 매뉴얼`,
+    `${meta.storeName?.trim() || '우리 매장'} 운영 노하우`,
     [meta.date, `노하우 ${total}개`].filter(Boolean).join(' · '),
   ].join('\n');
 

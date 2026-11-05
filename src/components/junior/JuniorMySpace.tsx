@@ -30,9 +30,9 @@ import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery } from '@/types';
  * '다들 틀림'(빨강)은 여기 없다. 없는 축은 범례에도 안 나온다(Heatmap 이 셀을 보고 정한다).
  */
 const MY_HEAT_LEGEND: HeatLegend = {
-  empty: '아직 안 풀었다',
-  scale: ['내가 아는 노하우', '앎'],
-  stale: '통과 뒤 바뀜',
+  empty: '미응시',
+  scale: ['내가 아는 노하우', '통과'],
+  stale: '노하우 변경됨',
   miss: '',
 };
 
@@ -125,7 +125,7 @@ export function JuniorMySpace({ me }: { me: string }) {
         id: e.id,
         title: e.title,
         level: passedAt ? 4 : 0,
-        status: passedAt ? (changed ? '통과한 뒤 내용이 바뀌었어요' : '퀴즈로 확인함') : '아직 안 풀었어요',
+        status: passedAt ? (changed ? '노하우 변경됨' : '퀴즈 통과') : '미응시',
         stale: changed,
       });
       by.set(name, cells);
@@ -342,7 +342,7 @@ export function JuniorMySpace({ me }: { me: string }) {
                     <View style={[s.groupRow, i > 0 && s.rowDivider]}>
                       <Ionicons name="help-circle-outline" size={16} color={InkColors.ink3} />
                       <Text style={s.rowText} numberOfLines={1}>{q.query_text}</Text>
-                      {answered ? <Text style={s.doneMeta}>답 받음</Text> : <Text style={s.waitTag}>답 기다리는 중</Text>}
+                      {answered ? <Text style={s.doneMeta}>답변 완료</Text> : <Text style={s.waitTag}>미응답</Text>}
                     </View>
                   </Appear>
                 );

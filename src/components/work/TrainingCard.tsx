@@ -48,7 +48,7 @@ export type TrainingCardCourse = {
  */
 function deadlineLabel(dueOn: string | null | undefined, todayYmd: string): { text: string; tone: 'plain' | 'soon' | 'past' } | null {
   if (!dueOn) return null;
-  if (dueOn < todayYmd) return { text: '기한이 지났어요', tone: 'past' };
+  if (dueOn < todayYmd) return { text: '기한 초과', tone: 'past' };
   if (dueOn === todayYmd) return { text: '오늘까지', tone: 'soon' };
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dueOn);
   return { text: m ? `${Number(m[2])}월 ${Number(m[3])}일까지` : `${dueOn}까지`, tone: 'plain' };
@@ -65,8 +65,8 @@ function deadlineLabel(dueOn: string | null | undefined, todayYmd: string): { te
 const ITEM_GROUPS: { label: string; states: TrainingCardItem['state'][] }[] = [
   // 사람이 기다리는 것이 맨 위 — 카드 위쪽의 '다음 한 개' 우선순위와 같은 순서다.
   { label: '사장님 요청', states: ['asked'] },
-  { label: '새로 배정됨', states: ['next', 'todo'] },
-  { label: '다시 확인할 노하우', states: ['due'] },
+  { label: '새 배정', states: ['next', 'todo'] },
+  { label: '다시 풀 노하우', states: ['due'] },
   { label: '통과', states: ['passed'] },
 ];
 
@@ -136,7 +136,7 @@ export function TrainingCard({
       </View>
 
       <Text style={st.next} numberOfLines={2}>
-        {firstLearn ? '다음 퀴즈' : next.state === 'asked' ? '사장님이 요청했어요' : '다시 확인할 노하우'} · {next.text}
+        {firstLearn ? '다음 퀴즈' : next.state === 'asked' ? '사장님이 요청했어요' : '다시 풀 노하우'} · {next.text}
       </Text>
 
       {/* 마감 — 사장이 정한 "언제까지"를 직원도 안다. 없으면 줄 자체가 없다(마감 없는 퀴즈가 기본). */}

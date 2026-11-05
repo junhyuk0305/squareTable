@@ -235,7 +235,7 @@ function ConversationalEdit({ entry, sugId }: { entry: PlaybookEntry; sugId?: st
       {catOpen && (
         <BottomSheet visible onClose={() => setCatOpen(false)} sheetStyle={styles.catSheet}>
           <Text style={styles.catSheetTitle}>카테고리 변경</Text>
-          <Text style={styles.catSheetHint}>매뉴얼에서 묶이는 단위예요</Text>
+          <Text style={styles.catSheetHint}>노하우가 묶이는 단위예요</Text>
           <View style={styles.catChips}>
             {catOptions.map((name) => {
               const m = getSectionMeta(name);

@@ -210,7 +210,7 @@ export function OwnerKnowhowImport() {
 
             {/* 제목 + 칩 = 한 섹션(제목 ↔ 칩 8 · 섹션 사이 20 · 2026-11-02). */}
             <View style={styles.block}>
-            <SectionLabel icon="arrow-up-circle-outline" title="어느 매장에서 보낼까요?" />
+            <SectionLabel icon="arrow-up-circle-outline" title="보내는 매장" />
             <View style={styles.sourceWrap}>
               {owned.map((s) => {
                 const on = fromId === s.unit_id;
@@ -232,7 +232,7 @@ export function OwnerKnowhowImport() {
             </View>
 
             <View style={styles.block}>
-            <SectionLabel icon="arrow-down-circle-outline" title="어느 매장이 받을까요?" />
+            <SectionLabel icon="arrow-down-circle-outline" title="받는 매장" />
             <View style={styles.sourceWrap}>
               {owned
                 // 보내는 매장은 받는 후보에서 뺀다 — 고를 수 있게 두면 눌러 보고 나서 거절당한다.

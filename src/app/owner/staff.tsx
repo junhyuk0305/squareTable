@@ -400,7 +400,7 @@ function StatusChip({ status }: { status: 'out' | 'working' | 'done' | 'forgot' 
     working: { label: '근무 중', color: BrandColors.goodText, bg: BrandColors.goodSoft },
     done: { label: '퇴근', color: TextColor.secondary, bg: InkColors.bgSoft },
     out: { label: '미출근', color: TextColor.secondary, bg: InkColors.bgSoft },
-    forgot: { label: '퇴근 안 찍음', color: BrandColors.warnText, bg: BrandColors.warnSoft },
+    forgot: { label: '퇴근 미기록', color: BrandColors.warnText, bg: BrandColors.warnSoft },
   } as const;
   const m = map[status];
   return (

@@ -241,7 +241,7 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
 
             {recent.length > 0 && (
               <Appear delay={stagger(1)} style={styles.block}>
-                <SectionLabel icon="time-outline" title="최근 추가됨" />
+                <SectionLabel icon="time-outline" title="최근 추가" />
                 <KnowhowCarousel entries={recent} onSelect={setDetailEntry} showCategory={false} />
               </Appear>
             )}

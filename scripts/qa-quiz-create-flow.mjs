@@ -116,7 +116,7 @@ async function main() {
     console.log('\n[1] 1단계 기본 설정');
     await page.goto(`${ORIGIN}/owner/quiz-new`, { waitUntil: 'commit' });
     // ★dev 번들 파싱이 100초 넘는다 — 표식을 보기 전에는 아무것도 재지 않는다(스플래시를 재는 사고 방지).
-    check('앱이 떴다(1단계 표식)', await wait('누가 풀 건가요?', 240000), '스플래시에서 멈춤');
+    check('앱이 떴다(1단계 표식)', await wait('응시 대상', 240000), '스플래시에서 멈춤');
     await at('1단계', '01-step1');
 
     const qname = `QA완주 ${String(Date.now()).slice(-6)}`;

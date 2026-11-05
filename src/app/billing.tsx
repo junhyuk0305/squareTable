@@ -939,7 +939,7 @@ function BillingBody() {
                 {/* 세금계산서 — 필요한 사장만 편다. 기본 접힘(무료·개인 사장에게 불필요한 입력을 강요하지 않는다). */}
                 {!bizOpen ? (
                   <Pressable onPress={() => setBizOpen(true)} style={({ pressed }) => [styles.promoToggle, pressed && { opacity: 0.6 }]}>
-                    <Text style={styles.promoToggleText}>세금계산서가 필요하신가요?</Text>
+                    <Text style={styles.promoToggleText}>세금계산서 신청</Text>
                   </Pressable>
                 ) : (
                   // 펼침의 정본은 Collapse 다 — Appear(등장)로 펼치면 아래 내용이 순간이동한다.
@@ -1031,7 +1031,7 @@ function BillingBody() {
             {/* 무료 이용 코드(0092) — 캠페인으로 받은 코드. 기본 접힘, 펼침은 아래로(레이아웃 규칙). */}
             {!promoOpen ? (
               <Pressable onPress={() => setPromoOpen(true)} style={({ pressed }) => [styles.promoToggle, pressed && { opacity: 0.6 }]}>
-                <Text style={styles.promoToggleText}>무료 이용 코드가 있으신가요?</Text>
+                <Text style={styles.promoToggleText}>무료 이용 코드 입력</Text>
               </Pressable>
             ) : (
               <Section title="무료 이용 코드">

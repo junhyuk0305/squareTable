@@ -321,7 +321,7 @@ async function main() {
     console.log('\n[2] 퀴즈 만들기 /owner/quiz-new');
     if (await see('아직 안 물어본 노하우로 만들기')) await tapLabel('아직 안 물어본 노하우로 만들기');
     else await tapLabel('퀴즈 만들기');
-    const onNew = await wait('누가 풀 건가요', 60000);
+    const onNew = await wait('응시 대상', 60000);
     check('만들기 진입', onNew);
     if (onNew) {
       await scan('만들기 1단계(기본 설정)', '03-new-step1');
@@ -372,7 +372,7 @@ async function main() {
       const onSettings = await wait('배포', 15000);
       check('설정 탭 열림', onSettings);
       if (onSettings) await scan('설정 탭', '08a-settings');
-      if (await wait('누구에게 낼 퀴즈예요?', 4000)) await tapLabel('외부 사람');
+      if (await wait('응시 대상', 4000)) await tapLabel('외부 사람');
       const onDeploy = await wait('링크를 받은 사람은', 15000);
       check('설정 탭 · 링크 패널 열림', onDeploy);
       if (onDeploy) {

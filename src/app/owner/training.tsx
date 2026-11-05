@@ -42,7 +42,7 @@ import { SheetHead, PrimaryButton, GhostButton } from '@/components/owner/quiz/k
 import { useGuideOnce } from '@/lib/store/useGuideStore';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Layout, Space, HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
+import { Layout, Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
 import { EmptyStyles } from '@/lib/theme/empty';
@@ -234,13 +234,17 @@ export default function OwnerTrainingScreen() {
     // 탭 루트(2026-09-13) — 하단 인셋은 RoleTabBar 가, 상단은 ScreenTitleHeader 가 소유한다.
     // 바탕·헤더·탭바 = Screen. 목록이 자기 스크롤·떠 있는 + 버튼을 가져서 scroll={false}.
     // 탭 루트라 뒤로가기가 없다(노하우 탭과 같다).
-    <Screen header={<ScreenTitleHeader variant="tab" title="퀴즈" />} tabBar="owner" scroll={false}>
-      <Stack.Screen
-        options={{
-          title: '퀴즈',
-          // 보관한 퀴즈가 없으면 진입로도 두지 않는다 — 열어도 빈 목록이다(죽은 컨트롤 금지).
-          // ★만들기는 헤더에서 내려왔다 — B안에서는 히어로 아래 Primary 가 그 자리다.
-          headerRight: () =>
+    // ★보관함 입구는 ScreenTitleHeader 의 right 칸이다(2026-11-05). 그전에는 `Stack.Screen` 의 headerRight 에
+    //   있었는데, 사장 스택은 `owner/_layout.tsx` 에서 `headerShown:false` 라 **한 번도 그려지지 않았다**
+    //   (quiz/[id] 의 더보기가 09-11 에 같은 이유로 옮겨 갔다).
+    // 보관한 퀴즈가 없으면 진입로도 두지 않는다 — 열어도 빈 목록이다(죽은 컨트롤 금지).
+    // ★만들기는 헤더에서 내려왔다 — B안에서는 히어로 아래 Primary 가 그 자리다.
+    <Screen
+      header={
+        <ScreenTitleHeader
+          variant="tab"
+          title="퀴즈"
+          right={
             archived.length > 0 ? (
               <Pressable
                 onPress={() => setBoxOpen(true)}
@@ -250,9 +254,14 @@ export default function OwnerTrainingScreen() {
               >
                 <Text style={st.headerActionText}>보관함</Text>
               </Pressable>
-            ) : null,
-        }}
-      />
+            ) : undefined
+          }
+        />
+      }
+      tabBar="owner"
+      scroll={false}
+    >
+      <Stack.Screen options={{ title: '퀴즈' }} />
       {/* ★탭은 스크롤 **밖** 맨 위다(2026-09-11, 노하우 탭과 같은 구조) — 스크롤을 내려도
           지금 어느 칸을 보고 있는지가 사라지지 않는다.
           ★퀴즈가 0개여도 그린다(2026-09-13) — 처음 온 사장도 "이 화면은 응시 중/응시 완료 두 칸"이라는
@@ -304,7 +313,7 @@ export default function OwnerTrainingScreen() {
             <>
               <Appear>
                 <View style={st.introCard}>
-                  <Text style={st.introLabel}>퀴즈가 뭐예요</Text>
+                  <Text style={st.introLabel}>퀴즈 안내</Text>
                   <View style={st.introFlow}>
                     <Text style={st.introChip}>노하우</Text>
                     <Ionicons name="arrow-forward" size={13} color={InkColors.ink3} />
@@ -865,7 +874,7 @@ function GuestRowView({
     row.partName ? `${row.partName} 파트` : '',
     takenDayLabel(row.takenAt),
     row.attemptCount > 1 ? `총 ${row.attemptCount}번` : '',
-    row.reviewedAt ? '확인함' : '',
+    row.reviewedAt ? '결과 열람' : '',
   ]
     .filter(Boolean)
     .join(' · ');
@@ -899,9 +908,10 @@ const st = StyleSheet.create({
 
   // ★hitSlop 은 RN-web 에서 안 먹는다 — 실측 높이가 곧 누를 수 있는 크기다(2026-08-26 실측 29·31dp).
   //   48dp 하한(복잡도 §4)은 상자 크기로 지켜야 한다.
+  // ScreenTitleHeader 의 바가 이미 좌우 거터를 갖는다 — 오른쪽 거터를 또 주면 두 겹이 된다.
   headerAction: {
     minHeight: 48, justifyContent: 'center',
-    paddingLeft: Space.sm, paddingRight: HEADER_EDGE_GUTTER,
+    paddingLeft: Space.sm,
   },
   headerActionText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
 

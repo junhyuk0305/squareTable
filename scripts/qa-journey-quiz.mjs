@@ -270,7 +270,7 @@ try {
     await net(S, 'S 퀴즈 목록');
     runBeforeOf[name] = await runCount();
     await S.click('[aria-label="퀴즈 만들기"]');
-    if (!(await S.waitFor(bodyHas(/누가 풀 건가요/), 60000))) throw new Error('만들기 1단계가 안 떴다');
+    if (!(await S.waitFor(bodyHas(/응시 대상/), 60000))) throw new Error('만들기 1단계가 안 떴다');
     if (await S.visible('[aria-label="우리 직원"]')) await S.click('[aria-label="우리 직원"]');
     await S.click('input[aria-label="퀴즈 이름"]');
     await S.eval(`document.querySelector('input[aria-label="퀴즈 이름"]').select()`);
@@ -557,12 +557,12 @@ try {
   section('11. 마감 변경 → 직원 카드가 새로고침 없이 바뀌나(⑤)');
   const newDue = kstYmd(5);
   await S.goto(`/owner/quiz/${X}?tab=settings`);
-  await S.waitFor(bodyHas(/언제까지 풀까요/), 60000);
+  await S.waitFor(bodyHas(/마감일/), 60000);
   await settle(S); await dismissOverlays(S);
   if (await S.visible('[aria-label="마감일 정하기"]')) await S.click('[aria-label="마감일 정하기"]');
   for (let i = 0; i < 2 && !(await S.visible(`[aria-label="${newDue}"]`)); i++) { await S.click('[aria-label="다음 달"]'); await sleep(300); }
   await S.click(`[aria-label="${newDue}"]`);
-  const cardBefore = ((await J.eval(`(()=>{const m=document.body.innerText.match(/\\d+월 \\d+일까지|오늘까지|기한이 지났어요/);return m?m[0]:null})()`)) ?? '없음');
+  const cardBefore = ((await J.eval(`(()=>{const m=document.body.innerText.match(/\\d+월 \\d+일까지|오늘까지|기한 초과/);return m?m[0]:null})()`)) ?? '없음');
   await S.click('[aria-label="저장"]');
   const saved = await S.waitFor(bodyHas(/저장했어요|못 ?했어요/), 10000);
   const saveMsg = (await bodyMatch(S, /[^\n]*(저장했어요|못 ?했어요)[^\n]*/))?.[0];
@@ -570,7 +570,7 @@ try {
   const { data: dueRows } = await admin.from('quiz_assignments').select('due_on,due_date,sent_at').eq('course_id', X).eq('user_id', jUid);
   note('DB 마감(직원 행)', J_(dueRows));
   const flipped = await J.waitFor(`document.body.innerText.includes(${J_(mdLabel(newDue))})`, 20000);
-  const cardAfter = ((await J.eval(`(()=>{const m=document.body.innerText.match(/\\d+월 \\d+일까지|오늘까지|기한이 지났어요/);return m?m[0]:null})()`)) ?? '없음');
+  const cardAfter = ((await J.eval(`(()=>{const m=document.body.innerText.match(/\\d+월 \\d+일까지|오늘까지|기한 초과/);return m?m[0]:null})()`)) ?? '없음');
   check('6-0 사장 마감 저장 성공', saved && /저장했어요/.test(saveMsg ?? ''), `"${saveMsg}"`);
   check(`⑤-1 직원 카드 마감이 새로고침 없이 "${mdLabel(newDue)}"로 바뀐다(20초)`, flipped, `${flipped ? ((Date.now() - tSave) / 1000).toFixed(1) + 's' : '20s 안 바뀜'} · 카드 ${cardBefore}→${cardAfter} · DB due_on=${dueRows?.map((r) => r.due_on).join(',')}`);
   if (!flipped) {

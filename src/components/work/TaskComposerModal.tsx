@@ -385,7 +385,7 @@ function TaskComposerBody({
             {/* ★추가되는 칸은 이것 하나다 — 배정과 공개를 가르는 축. 큰 카드 버튼을 만들지 않는다.
                 루틴은 매장 공통 일이라 이 선택 자체가 없다. */}
             {!routineMode && (
-              <Field label="어떤 할일인가요?">
+              <Field label="업무 이름">
                 <Seg
                   options={[{ k: 'shared', l: '매장 전체' }, { k: 'private', l: '개인 할일' }]}
                   value={taskScope}
@@ -421,7 +421,7 @@ function TaskComposerBody({
               />
               {when === 'date' && (
                 <View style={s.reveal}>
-                  <Text style={s.revealLabel}>예정 날짜 — 달력에서 고르세요</Text>
+                  <Text style={s.revealLabel}>예정 날짜</Text>
                   <MiniCalendar value={pickedDate} today={today} onChange={(d) => { setPickedDate(d); revealScroll(); }} />
                   <Text style={s.dateText}>{fmtDate(pickedDate)}</Text>
                 </View>
@@ -468,7 +468,7 @@ function TaskComposerBody({
               />
               {remindOn && (
                 <View style={s.reveal}>
-                  <Text style={s.revealLabel}>이 시간에 알림이 가요</Text>
+                  <Text style={s.revealLabel}>알림 시각</Text>
                   <TextInput
                     value={remindAt}
                     onChangeText={(t) => setRemindAt(maskHHMM(t))}

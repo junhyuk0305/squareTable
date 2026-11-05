@@ -358,7 +358,7 @@ export function TodoScreen({
           <StackBar
             parts={[
               { n: dayTasks.filter((t) => dayDone[t.id]).length, label: '완료', color: BrandColors.good },
-              { n: dayTasks.filter((t) => !dayDone[t.id]).length, label: '남음', color: BrandColors.warnSoft },
+              { n: dayTasks.filter((t) => !dayDone[t.id]).length, label: '미완료', color: BrandColors.warnSoft },
             ]}
           />
           <SectionLabel title={selected === today ? '오늘 업무 배정' : '업무 배정'} />

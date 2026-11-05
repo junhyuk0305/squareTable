@@ -238,7 +238,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       label: '오늘 근무',
       value: scheduledTotal,
       unit: '명 예정',
-      sub: `${workingTotal > 0 ? `지금 ${workingTotal}명 근무중` : '지금은 출근 전이에요'}${forgotTotal > 0 ? ` · 퇴근 안 찍음 ${forgotTotal}명` : ''}`,
+      sub: `${workingTotal > 0 ? `지금 ${workingTotal}명 근무중` : '지금은 출근 전이에요'}${forgotTotal > 0 ? ` · 퇴근 미기록 ${forgotTotal}명` : ''}`,
       onPress: () => {
         if (multi) setPicker({ title: '근무표', path: '/owner/schedule', units: overview.map((r) => ({ uid: r.unit_id, count: 0 })) });
         else if (overview[0]) void goStore(overview[0].unit_id, '/owner/schedule');
@@ -327,7 +327,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
                 <View style={[styles.dot, { backgroundColor: colorOf(r.unit_id) }]} />
                 <Text style={styles.rowTitle} numberOfLines={1}>{labelOf(r.unit_id)}</Text>
                 <Text style={[styles.rowSub, (t?.working_now ?? 0) > 0 && styles.onair]}>
-                  {`${(t?.working_now ?? 0) > 0 ? `${t!.working_now}명 근무중` : '출근 전'} · 예정 ${t?.scheduled ?? 0}${(t?.forgot_now ?? 0) > 0 ? ` · 퇴근 안 찍음 ${t!.forgot_now}` : ''}`}
+                  {`${(t?.working_now ?? 0) > 0 ? `${t!.working_now}명 근무중` : '출근 전'} · 예정 ${t?.scheduled ?? 0}${(t?.forgot_now ?? 0) > 0 ? ` · 퇴근 미기록 ${t!.forgot_now}` : ''}`}
                 </Text>
                 <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
               </Pressable>

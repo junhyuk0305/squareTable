@@ -106,7 +106,7 @@ const isOldOnly = (e: PlaybookEntry) => !needsVerify(e) && isOld(e);
  *  카테고리 순서 = 손볼 것(점선+테두리) 비율 높은 순.
  * ★판정은 전부 이 파일의 기존 규칙(needsVerify·isUnused·query_hits_30d)이다 — 새 판정 없음.
  */
-const KNOWHOW_LEGEND: HeatLegend = { empty: '안 물어봄', scale: ['물어본 횟수', '많음'], stale: '점검 필요', miss: '오래 손 안 댐' };
+const KNOWHOW_LEGEND: HeatLegend = { empty: '질문 없음', scale: ['물어본 횟수', '많음'], stale: '점검 필요', miss: '오래된 노하우' };
 const hitLevel = (n: number): HeatLevel => (n <= 0 ? 0 : n === 1 ? 1 : n <= 3 ? 2 : n <= 7 ? 3 : 4);
 function buildKnowhowHeatmap(list: PlaybookEntry[]): HeatGroup[] {
   const by = new Map<string, HeatCell[]>();
@@ -114,7 +114,7 @@ function buildKnowhowHeatmap(list: PlaybookEntry[]): HeatGroup[] {
     const hits = e.stats?.query_hits_30d ?? 0;
     const stale = needsVerify(e);
     const miss = !stale && isOld(e);
-    const status = `${hits > 0 ? `한 달간 ${hits}번 물어봄` : '한 달간 안 물어봄'}${stale ? ' · 점검 필요' : miss ? ' · 오래 손 안 댐' : ''}`;
+    const status = `${hits > 0 ? `한 달간 ${hits}번 물어봄` : '한 달간 안 물어봄'}${stale ? ' · 점검 필요' : miss ? ' · 오래된 노하우' : ''}`;
     const name = getSectionMeta(e.section).label;
     const cells = by.get(name) ?? [];
     cells.push({ id: e.id, title: e.title, level: hitLevel(hits), status, stale, miss });
@@ -318,7 +318,7 @@ export function OwnerKnowhowBrowse({
   const listTabItems: SegmentItem[] = useMemo(() => [
     { key: 'all', label: '전체', count: visible.length },
     { key: 'review', label: '점검 필요', count: visible.filter(needsVerify).length },
-    { key: 'old', label: '오래됨', count: visible.filter(isOldOnly).length },
+    { key: 'old', label: '오래된 노하우', count: visible.filter(isOldOnly).length },
   ], [visible]);
 
   // 검색 실패 로그(O8, 슬라이스 D) — "찾다 못 찾은 주제"가 노하우 공백 신호다.
@@ -457,10 +457,10 @@ export function OwnerKnowhowBrowse({
     const seen = new Set([...hot, ...cold].map((e) => e.id));
     const rest = listFiltered.filter((e) => !seen.has(e.id));
     return [
-      { key: 'hot', title: '많이 쓰임', items: hot },
+      { key: 'hot', title: '자주 쓰는 노하우', items: hot },
       // ★라벨은 판정(isUnused = 만든 지 30일 경과 + 그동안 인용 0회)을 그대로 말한다. 다른 기간을
       //   쓰면 화면이 사실과 다른 말을 한다 — 기간은 라벨이 아니라 UNUSED_WINDOW_DAYS 를 바꾼다.
-      { key: 'cold', title: '한 달간 아무도 안 물어봤어요', items: cold },
+      { key: 'cold', title: '한 달간 질문 없음', items: cold },
       { key: 'rest', title: '그 밖', items: rest },
     ].filter((g) => g.items.length > 0);
   }, [listFiltered]);
@@ -710,7 +710,7 @@ export function OwnerKnowhowBrowse({
 
       {reviewList.length > 0 && groupBlock('review', '점검할 노하우', reviewList)}
       {/* 라벨=판정(isUnused = 만든 지 30일 경과 + 인용 0회) 그대로. 위 usageGroups 의 'cold' 와 같은 말이어야 한다. */}
-      {unusedList.length > 0 && groupBlock('unused', '한 달간 아무도 안 물어봤어요', unusedList)}
+      {unusedList.length > 0 && groupBlock('unused', '한 달간 질문 없음', unusedList)}
 
       {/* 오답이 몰린 노하우는 여기서 세지 않는다 — 퀴즈 결과가 이 화면에 없다.
           수를 지어내는 대신 그 수를 아는 화면으로 보내는 링크 한 줄만 둔다. */}

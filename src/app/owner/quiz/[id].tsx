@@ -595,7 +595,7 @@ export default function QuizDetailScreen() {
                 const e = eid ? entryById.get(eid) : null;
                 return (
                   <View key={q.id} style={st.feedback}>
-                    <Text style={st.feedbackLabel}>자꾸 틀리는 문항이 있어요</Text>
+                    <Text style={st.feedbackLabel}>높은 오답률 문항</Text>
                     <Text style={st.feedbackBody}>
                       직원이 못 외운 게 아니라 <Text style={st.bold}>노하우 글이 헷갈릴 수 있어요.</Text>
                       {e ? ` "${e.title}"을 다시 보세요.` : ''}
@@ -782,7 +782,7 @@ function factsOf(
   return [
     ['문항', `${itemCount}개`],
     ['응시 기한', fixed ? `${Number(fixed[1])}월 ${Number(fixed[2])}일까지` : answerDays ? `받은 날부터 ${answerDays}일` : '제한 없음'],
-    ['다시 확인', cycleLabel(dueDays) ?? '자동'],
+    ['다시 풀기 주기', cycleLabel(dueDays) ?? '자동'],
   ];
 }
 

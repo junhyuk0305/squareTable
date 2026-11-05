@@ -45,7 +45,7 @@ const STATUS_META: Record<
   accepted: { label: '사장님 승인 대기', color: BrandColors.warnText, bg: BrandColors.warnSoft },
   approved: { label: '확정', color: BrandColors.goodText, bg: BrandColors.goodSoft },
   rejected: { label: '사장님 반려', color: BrandColors.badText, bg: BrandColors.accentSoft },
-  cancelled: { label: '취소됨', color: TextColor.secondary, bg: InkColors.bgSoft },
+  cancelled: { label: '취소', color: TextColor.secondary, bg: InkColors.bgSoft },
 };
 
 export default function JuniorScheduleScreen() {

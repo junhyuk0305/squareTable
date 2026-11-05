@@ -215,7 +215,7 @@ export function ShiftQuickSheet({
       >
         {!isEdit && (
           <>
-            <Text style={s.label}>누구의 근무인가요</Text>
+            <Text style={s.label}>근무자</Text>
             <View style={s.chips}>
               {staff.map((st) => {
                 const on = st.id === staffId;

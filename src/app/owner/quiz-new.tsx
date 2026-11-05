@@ -603,12 +603,9 @@ export default function QuizNewScreen() {
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
-      <Stack.Screen
-        options={{
-          title: '퀴즈 만들기',
-          headerRight: () => (done ? null : <Text style={st.stepBadge}>{step}/{TOTAL}</Text>),
-        }}
-      />
+      {/* ★단계 표시 n/m 은 본문 맨 위 StepProgress 가 그린다(2026-11-05). headerRight 에 따로 두던 배지는
+          사장 스택이 `headerShown:false` 라 한 번도 그려지지 않았다. 헤더에 또 두면 n/m 이 두 번 보인다. */}
+      <Stack.Screen options={{ title: '퀴즈 만들기' }} />
       <ScreenTitleHeader title="퀴즈 만들기" backFallback />
       <KeyboardShift>
       <ScrollView
@@ -631,7 +628,7 @@ export default function QuizNewScreen() {
             <Appear>
               <View style={st.stepBody}>
                 {/* 받는 쪽 — 여기서 갈려야 뒤 단계가 헛돌지 않는다. 외부는 보낼 계정이 없어 링크로 나간다. */}
-                <Text style={st.label}>누가 풀 건가요?</Text>
+                <Text style={st.label}>응시 대상</Text>
                 <View style={st.chips}>
                   <Chip label="우리 직원" on={audience === 'staff'} onPress={() => setAudience('staff')} />
                   <Chip label="외부 사람" on={audience === 'guest'} onPress={() => setAudience('guest')} />
@@ -830,7 +827,7 @@ export default function QuizNewScreen() {
                       </Text>
                       {/* 끝난 줄만 부제가 바뀐다 — 그때 Appear 로 한 번 올라오게 해서 "방금 됐다"가 보이게 한다. */}
                       {m.state === 'wait' ? (
-                        <Text style={st.rowSub} numberOfLines={1}>{running ? '만드는 중' : '기다리는 중'}</Text>
+                        <Text style={st.rowSub} numberOfLines={1}>{running ? '만드는 중' : '대기'}</Text>
                       ) : (
                         <Appear key={m.state} offsetY={6}>
                           <Text style={st.rowSub} numberOfLines={1}>
@@ -983,7 +980,7 @@ export default function QuizNewScreen() {
 
             {audience === 'guest' ? (
               <>
-                <Text style={st.label}>링크를 언제까지 열어 둘까요</Text>
+                <Text style={st.label}>링크 기간</Text>
                 <Text style={st.hint}>이 날까지 들어와서 풀 수 있어요. 지나면 링크가 안 열려요.</Text>
                 <MiniCalendar
                   value={linkUntil}
@@ -1001,7 +998,7 @@ export default function QuizNewScreen() {
               </>
             ) : (
               <>
-                <Text style={st.label}>언제 보낼까요</Text>
+                <Text style={st.label}>보내는 시점</Text>
                 <View style={st.chips}>
                   <Chip label="지금 바로" on={sendNow} onPress={() => setSendNow(true)} />
                   <Chip label="예약해서 보내기" on={!sendNow} onPress={() => setSendNow(false)} />
@@ -1022,7 +1019,7 @@ export default function QuizNewScreen() {
                   </Collapse>
                 )}
 
-                <Text style={st.label}>언제까지 풀까요</Text>
+                <Text style={st.label}>마감일</Text>
                 {dueAt ? (
                   <>
                     <MiniCalendar
@@ -1266,7 +1263,6 @@ const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Surface.screen },
   // 첫 여백 16 · 좌우 20 = 화면 틀 값. 간격은 12 그대로 — 4단계 문항 카드가 스크롤 바로 아래 줄줄이 서서(같은 종류 사이).
   scroll: { ...screenScrollStyle, gap: Space.md },
-  stepBadge: { fontSize: 13, fontWeight: '800', color: InkColors.ink3, marginRight: Space.gutter },
 
   lead: { fontSize: 17, fontWeight: '900', color: InkColors.ink, lineHeight: 24 },
   // 제목 아래 부제 = 설명(Type.desc 13/19 secondary · 2026-11-02).

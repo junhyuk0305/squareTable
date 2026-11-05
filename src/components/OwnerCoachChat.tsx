@@ -912,8 +912,8 @@ export function OwnerCoachChat({
             {!square && (
               <CoachMenuItem
                 icon="cloud-upload-outline"
-                label="매뉴얼 올리기"
-                sub="인수인계서·매뉴얼을 노하우로 쪼개 드려요"
+                label="문서로 노하우 추가"
+                sub="인수인계서·운영 문서를 노하우로 쪼개 드려요"
                 onPress={() => { setMenu(false); router.push('/owner/handover' as never); }}
                 accent
               />

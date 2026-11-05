@@ -178,8 +178,8 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
                 faces: [
                   <View key="legend">
                     {[
-                      { color: BrandColors.good, text: '퀴즈로 확인함', value: knownCount },
-                      { color: InkColors.bgSoft, border: true, text: '아직 안 본 노하우', value: Math.max(0, totals.entriesTotal - knownCount) },
+                      { color: BrandColors.good, text: '퀴즈 통과', value: knownCount },
+                      { color: InkColors.bgSoft, border: true, text: '미응시 노하우', value: Math.max(0, totals.entriesTotal - knownCount) },
                     ].map((r, i) => (
                       <View key={r.text} style={[styles.lgRow, i > 0 && styles.lgDivider]}>
                         <View style={[styles.lgDot, { backgroundColor: r.color }, r.border && styles.lgDotBorder]} />
@@ -243,7 +243,7 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
               info:
                 totals.knowhow > 0 && totals.hits === 0
                   ? {
-                      title: '참조가 0이에요',
+                      title: '참조 0회',
                       body: '아직 참조 전이에요 — 누가 같은 걸 물으면 숫자가 올라요.',
                     }
                   : undefined,

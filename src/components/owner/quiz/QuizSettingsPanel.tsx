@@ -41,7 +41,7 @@ import type { QuizAssignment, TrainingCourse } from '@/lib/quiz/types';
 
 /** 사장이 직접 정한 고정 주기 — 만들기(B5)·상세와 같은 값이어야 화면끼리 어긋나지 않는다. */
 const CYCLES: { label: string; days: number | null }[] = [
-  { label: '맡길래요', days: null },
+  { label: '자동', days: null },
   { label: '한 달마다', days: 30 },
   { label: '3개월마다', days: 90 },
   { label: '6개월마다', days: 180 },
@@ -195,7 +195,7 @@ export function QuizSettingsPanel({
 
       {/* ── 다시 확인 주기 ───────────────────────────────────────────────── */}
       <View style={s.card}>
-        <Text style={qst.fieldLabel}>다시 확인</Text>
+        <Text style={qst.fieldLabel}>다시 풀기 주기</Text>
         <Text style={qst.fieldHint}>이미 통과한 사람은 그대로예요. 다음 확인부터 바뀐 주기로 돌아가요.</Text>
         <View style={qst.chipWrap}>
           {CYCLES.map((c) => {
@@ -221,12 +221,12 @@ export function QuizSettingsPanel({
       {/* N23: 링크 퀴즈는 마감이 없다. 손님은 링크가 열린 동안 푼다. 기간은 아래 배포 칸의 링크에 있다. */}
       {audience === 'guest' ? (
         <View style={s.card}>
-          <Text style={qst.fieldLabel}>언제까지 풀까요</Text>
+          <Text style={qst.fieldLabel}>마감일</Text>
           <Text style={qst.fieldHint}>링크로 내는 퀴즈는 링크가 열린 날까지 풀 수 있어요. 기간은 아래 링크에서 바꿔요.</Text>
         </View>
       ) : (
       <View style={s.card}>
-        <Text style={qst.fieldLabel}>언제까지 풀까요</Text>
+        <Text style={qst.fieldLabel}>마감일</Text>
         <Text style={qst.fieldHint}>저장하면 이미 받은 사람의 마감도 이 날짜로 바뀌어요.</Text>
         {dueDate ? (
           <>
@@ -264,7 +264,7 @@ export function QuizSettingsPanel({
       <SectionLabel icon="send-outline" title="배포" />
       {audience == null ? (
         <View style={s.card}>
-          <Text style={qst.fieldLabel}>누구에게 낼 퀴즈예요?</Text>
+          <Text style={qst.fieldLabel}>응시 대상</Text>
           <Text style={qst.fieldHint}>고르면 그 방식만 보여줘요. 우리 직원은 앱으로, 외부 사람은 링크로 받아요.</Text>
           <View style={qst.chipWrap}>
             <Pressable

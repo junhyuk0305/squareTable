@@ -146,7 +146,7 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
     const entryTitle = first.matched_entry_ids.map(entryTitleOf).find(Boolean);
     rollupRows.push({
       key: 'bad',
-      title: '답이 틀렸대요',
+      title: '틀린 답 신고',
       count: badAnswers.length,
       unit: '건',
       target: entryTitle ? `${first.junior_name} · ${entryTitle}` : first.junior_name,
@@ -205,7 +205,7 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
           300건 매장에서도 "50건"이라고 했다 — 그건 거짓이고, 51번째부터는 앱 어디에도 없다. */}
       {badOpen && badAnswers.length > 0 && (
         <View style={styles.group}>
-          <SectionLabel title="답이 틀렸대요" hint={`${badAnswers.length}건`} />
+          <SectionLabel title="틀린 답 신고" hint={`${badAnswers.length}건`} />
           <Text style={styles.groupHint}>노하우를 눌러 고치면 다음부터 제대로 답해요.</Text>
           <PagedList
             items={badAnswers}

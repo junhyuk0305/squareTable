@@ -211,7 +211,7 @@ try {
     await tapText('매뉴얼 전체 복사');
     await page.waitForTimeout(1200);
     const clip = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''));
-    chk('T8b', clip.includes('운영 매뉴얼') && clip.includes('■'), '클립보드에 매뉴얼 평문이 들어감',
+    chk('T8b', clip.includes('운영 노하우') && clip.includes('■'), '클립보드에 매뉴얼 평문이 들어감',
       `클립보드 앞부분: ${JSON.stringify(clip.slice(0, 80))}`);
     // section 반영의 확정 증거 — 방금 «마감»으로 저장한 노하우가 그 챕터 아래 실려야 한다.
     const secIdx = clip.indexOf('■ 마감');

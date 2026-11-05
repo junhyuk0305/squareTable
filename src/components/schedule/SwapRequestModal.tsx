@@ -120,7 +120,7 @@ export function SwapRequestModal({
           </View>
 
           <ScrollView keyboardShouldPersistTaps="handled" style={s.scroll} contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
-            <Field label="어떻게 바꿀까요?">
+            <Field label="요청 종류">
               <View style={s.seg}>
                 {([
                   { k: 'cover', l: '대타 (넘기기)' },
@@ -145,7 +145,7 @@ export function SwapRequestModal({
 
             {/* 대타를 특정 동료들에게만 — 비우면 지금까지처럼 누구나. 여러 명이면 선착순이다. */}
             {kind === 'cover' && peers.length > 0 && (
-              <Field label="누구에게 보낼까요? (안 고르면 모두에게)">
+              <Field label="받는 사람(선택)">
                 <View style={s.chips}>
                   {peers.map((p) => {
                     const on = targets.includes(p.id);
@@ -167,7 +167,7 @@ export function SwapRequestModal({
 
             {/* 근무의 일부만 넘기기 — 기본은 꺼짐(근무 전체). 맞교환에는 붙이지 않는다. */}
             {kind === 'cover' && (
-              <Field label="얼마나 넘길까요?">
+              <Field label="넘길 시간">
                 <Pressable
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: partial }}
@@ -225,7 +225,7 @@ export function SwapRequestModal({
 
             {kind === 'swap' && (
               <>
-                <Field label="누구와 바꿀까요?">
+                <Field label="바꿀 상대">
                   {peers.length === 0 ? (
                     <Text style={s.empty}>맞교환할 동료가 아직 없어요. 대타로 올려보세요.</Text>
                   ) : (

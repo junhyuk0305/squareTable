@@ -586,7 +586,7 @@ async function main() {
     await pj.getByText('둘러보기', { exact: false }).first().dispatchEvent('click');
     await pj.waitForTimeout(2000);
     check('B8-1 렌즈 섹션(인기 노하우) 안 뜸', !(await see(pj, '인기 노하우')));
-    check('B8-2 렌즈 섹션(최근 추가됨) 안 뜸', !(await see(pj, '최근 추가됨')));
+    check('B8-2 렌즈 섹션(최근 추가) 안 뜸', !(await see(pj, '최근 추가')));
     check('B8-3 렌즈 섹션(잘 통하는 노하우) 안 뜸', !(await see(pj, '잘 통하는 노하우')));
     check('B8-4 죽은 대시보드/목록 토글도 숨겼다', !(await see(pj, '대시보드')));
     check('B8-5 목록으로 노하우는 보인다', await see(pj, '원두 채우기'));

@@ -42,8 +42,8 @@ export default function OwnerHandoverScreen() {
   if (BULK_IMPORT_PIPELINE) {
     return (
       <>
-        <Stack.Screen options={{ title: '매뉴얼 올리기' }} />
-        <ScreenTitleHeader title="매뉴얼 올리기" backFallback />
+        <Stack.Screen options={{ title: '문서로 노하우 추가' }} />
+        <ScreenTitleHeader title="문서로 노하우 추가" backFallback />
         <HandoverImport />
       </>
     );
@@ -184,8 +184,8 @@ function LegacyHandover() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen options={{ title: '매뉴얼 올리기' }} />
-      <ScreenTitleHeader title="매뉴얼 올리기" backFallback />
+      <Stack.Screen options={{ title: '문서로 노하우 추가' }} />
+      <ScreenTitleHeader title="문서로 노하우 추가" backFallback />
       <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {phase === 'review' ? (
@@ -201,7 +201,7 @@ function LegacyHandover() {
           <Appear delay={0}>
             <View style={styles.uploadZone}>
               <Ionicons name="document-text-outline" size={28} color={InkColors.ink2} />
-              <Text style={styles.uploadTitle}>인수인계서·매뉴얼을 올리세요</Text>
+              <Text style={styles.uploadTitle}>인수인계서·운영 문서를 올리세요</Text>
               <Text style={styles.uploadSub}>
                 오픈·마감 순서, 레시피, 매장 규칙이 적힌 메모를 붙여넣으면 AI가 노하우 항목으로 정리해요.
               </Text>

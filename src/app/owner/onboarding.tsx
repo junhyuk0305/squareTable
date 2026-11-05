@@ -330,14 +330,14 @@ export default function OwnerOnboardingScreen() {
             onPress={() => router.push('/owner/handover')}
             style={({ pressed }) => [styles.manualCard, pressed && { opacity: 0.9 }]}
             accessibilityRole="button"
-            accessibilityLabel="매뉴얼 올리기 — 붙여넣으면 AI가 노하우로 정리해요"
+            accessibilityLabel="문서로 노하우 추가 — 붙여넣으면 AI가 노하우로 정리해요"
           >
             <View style={styles.manualIcon}>
               <Ionicons name="document-text-outline" size={16} color={InkColors.ink} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.manualTitle}>매뉴얼 올리기</Text>
-              <Text style={styles.manualSub}>인수인계서·매뉴얼을 붙여넣으면 AI가 노하우로 정리해요</Text>
+              <Text style={styles.manualTitle}>문서로 노하우 추가</Text>
+              <Text style={styles.manualSub}>인수인계서·운영 문서를 붙여넣으면 AI가 노하우로 정리해요</Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
           </Pressable>
