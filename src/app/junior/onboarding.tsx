@@ -62,7 +62,7 @@ export default function JuniorOnboarding() {
             onChangeText={(v) => setCode(normalizeInviteCode(v))}
             placeholder="예: 482913"
             placeholderTextColor={InkColors.ink3}
-            keyboardType="default"
+            keyboardType="ascii-capable"
             autoCapitalize="characters"
             autoCorrect={false}
             style={styles.input}

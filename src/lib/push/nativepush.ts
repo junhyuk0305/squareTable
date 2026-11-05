@@ -182,6 +182,9 @@ function mapStatus(status: string): PushPermission {
 export async function nativePermissionState(): Promise<PushPermission> {
   if (!pushSupported()) return 'unsupported';
   const perm = await Notifications.getPermissionsAsync();
+  // ★Android 13+ 는 아직 묻지 않았어도 알림이 꺼져 있으면 'denied' 를 준다(expo-notifications API33 분기).
+  //   다시 물을 수 있으면 아직 안 물은 것으로 본다. iOS·Android 12 이하는 denied 면 canAskAgain=false 라 영향 없다(2026-11-05).
+  if (perm.status === 'denied' && perm.canAskAgain) return 'default';
   return mapStatus(perm.status);
 }
 

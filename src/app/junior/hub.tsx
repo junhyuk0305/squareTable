@@ -129,7 +129,7 @@ export default function JuniorHub() {
           ref={inputRef}
           value={code}
           onChangeText={onChange}
-          keyboardType="default"
+          keyboardType="ascii-capable"
           autoCapitalize="characters"
           autoCorrect={false}
           maxLength={CODE_LEN}

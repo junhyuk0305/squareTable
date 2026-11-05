@@ -137,12 +137,12 @@ export function NotificationPermissionSheet({ firstRun = false }: { firstRun?: b
 
   // 로그인 전에는 사장인지 직원인지 모른다 — 둘 다 맞는 말로 쓴다.
   const lines = !userId
-    ? ['합류 신청과 승인 결과', '나에게 배정된 할 일', '내 질문에 달린 답']
+    ? ['새 퀴즈와 퀴즈 결과', '나에게 배정된 할 일', '내 질문에 달린 답']
     : canManage(role)
     ? // 입금 확인은 웹 결제 채널에만 있다 — 앱에서 말하지 않는다(store-policy SHOW_BILLING).
-      ['직원이 모르는 걸 물어보면 바로', '새 제안·합류 신청이 오면 바로', SHOW_BILLING ? '교대 요청·입금 확인 결과' : '교대 요청이 오면 바로']
+      ['직원이 모르는 걸 물어보면 바로', '새 제안·합류 소식이 오면 바로', SHOW_BILLING ? '교대 요청·입금 확인 결과' : '교대 요청이 오면 바로']
     : // 공지는 알림이 아니다(2026-10-16 사용자 결정 · registry.ts) — 예전 '새 공지' 줄은 사실과 달랐다.
-      ['합류 승인 결과', '나에게 배정된 할 일', '내 질문에 달린 답'];
+      ['새 퀴즈가 오면 바로', '나에게 배정된 할 일', '내 질문에 달린 답'];
 
   return (
     <BottomSheet visible={open} onClose={close}>
@@ -170,11 +170,14 @@ export function NotificationPermissionSheet({ firstRun = false }: { firstRun?: b
           accessibilityRole="button"
           style={({ pressed }) => [s.primary, (busy || pressed) && { opacity: 0.85 }]}
         >
-          <Text style={s.primaryText}>{busy ? '켜는 중…' : '알림 켜기'}</Text>
+          <Text style={s.primaryText}>{busy ? '켜는 중…' : firstRun ? '계속' : '알림 켜기'}</Text>
         </Pressable>
-        <Pressable onPress={close} accessibilityRole="button" style={({ pressed }) => [s.ghost, pressed && { opacity: 0.6 }]}>
-          <Text style={s.ghostText}>나중에 할게요</Text>
-        </Pressable>
+        {/* 첫 실행은 미루기 버튼을 두지 않는다. 버튼은 OS 팝업으로만 가고 거절은 OS 팝업에서 한다. 바깥 탭·뒤로가기로 닫는 길은 남긴다(애플 5.1.1(iv) · 2026-11-05 사용자 결정). */}
+        {!firstRun && (
+          <Pressable onPress={close} accessibilityRole="button" style={({ pressed }) => [s.ghost, pressed && { opacity: 0.6 }]}>
+            <Text style={s.ghostText}>나중에 할게요</Text>
+          </Pressable>
+        )}
       </View>
     </BottomSheet>
   );
