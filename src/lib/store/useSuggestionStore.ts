@@ -5,7 +5,8 @@ import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import type { PlaybookSuggestion } from '@/types';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchSuggestions, insertSuggestion, reviewSuggestion, subscribeSuggestions } from '@/lib/db';
+import { editSuggestion, fetchSuggestions, insertSuggestion, reviewSuggestion, subscribeSuggestions, withdrawSuggestion } from '@/lib/db';
+import type { DbErr } from '@/lib/db';
 import { optimisticAdd, optimisticPatch } from '@/lib/store/crudHelpers';
 import { genId } from '@/lib/utils/id';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -67,6 +68,10 @@ type State = {
    *  노하우는 이미 저장돼 있어, 사장이 다시 승인하면 **같은 노하우가 2건**이 된다. */
   approve: (id: string, resultingEntryId?: string) => Promise<boolean>;
   reject: (id: string, note?: string) => Promise<boolean>;
+  /** 내 대기 제안 취소. null = 성공(목록에서 뺀다). 오류는 suggestionErrorMessage 로 문구를 고른다. */
+  withdraw: (id: string) => Promise<DbErr>;
+  /** 내 대기 제안 본문 고치기. null = 성공(목록의 본문을 바꾼다). */
+  edit: (id: string, text: string) => Promise<DbErr>;
   getPending: () => PlaybookSuggestion[];
   mineFor: (userId: string) => PlaybookSuggestion[];
   applyMock: (demo: boolean) => void;
@@ -142,6 +147,30 @@ export const useSuggestionStore = create<State>((set, get) => ({
     // 반려 사유는 알림 본문에 싣지 않는다. 직원은 '내가 보낸 제안'에서 사유를 본다(D12).
     void result.then((ok) => { if (ok && before) notifyUserSuggestionResult(before.proposer_id, false, before.text); });
     return result;
+  },
+
+  // 낙관적으로 바꾸지 않는다. 서버가 not_pending 으로 막으면 사장이 이미 처리한 것이라 되돌릴 값이 없다.
+  //   실패하면 다시 읽어 지금 상태를 보여 준다. 취소는 서버가 행을 보관 테이블로 옮기고 지운다(0355).
+  //   다른 기기·사장 화면은 realtime(subscribeSuggestions 가 '*' 라 DELETE 도 받는다)이 다시 읽어 빠진다.
+  withdraw: async (id) => {
+    const err = await withdrawSuggestion(id);
+    if (err) {
+      void get().hydrate();
+      return err;
+    }
+    set((s) => ({ suggestions: s.suggestions.filter((x) => x.id !== id) }));
+    return null;
+  },
+
+  edit: async (id, text) => {
+    const next = text.trim();
+    const err = await editSuggestion(id, { text: next });
+    if (err) {
+      void get().hydrate();
+      return err;
+    }
+    set((s) => ({ suggestions: s.suggestions.map((x) => (x.id === id ? { ...x, text: next } : x)) }));
+    return null;
   },
 
   getPending: () => get().suggestions.filter((x) => x.status === 'pending'),

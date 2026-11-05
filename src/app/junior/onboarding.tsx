@@ -13,6 +13,7 @@ import { CardStyles } from '@/lib/theme/card';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { screenScrollStyle } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
+import { normalizeInviteCode } from '@/lib/utils/validation';
 
 // 가입했지만 아직 매장에 합류하지 않은 알바를 위한 화면.
 // (매직링크 로그인·초대 전 가입·매장 종료로 unit_id가 비는 경우) — 빈 챗으로 떨어뜨리지 않고 여기로 유도.
@@ -58,10 +59,12 @@ export default function JuniorOnboarding() {
           <Text style={styles.label}>매장 초대코드</Text>
           <TextInput
             value={code}
-            onChangeText={(v) => setCode(v.replace(/[^0-9]/g, '').slice(0, 6))}
+            onChangeText={(v) => setCode(normalizeInviteCode(v))}
             placeholder="예: 482913"
             placeholderTextColor={InkColors.ink3}
-            keyboardType="number-pad"
+            keyboardType="default"
+            autoCapitalize="characters"
+            autoCorrect={false}
             style={styles.input}
             onSubmitEditing={join}
           />

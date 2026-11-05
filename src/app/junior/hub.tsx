@@ -15,8 +15,9 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { Wordmark } from '@/components/Wordmark';
 import { Appear, stagger } from '@/components/Appear';
 import { PhoneVerifyBlock } from '@/components/PhoneVerifyBlock';
+import { INVITE_CODE_LEN, normalizeInviteCode } from '@/lib/utils/validation';
 
-const CODE_LEN = 6;
+const CODE_LEN = INVITE_CODE_LEN;
 
 // 직원 개인 허브 홈 — 회원가입 직후(매장 미연결) 착지점.
 // 마이페이지 + 후킹 배너 + 가게 코드 입력 + 내 가게 목록을 한 화면에 모은다.
@@ -39,7 +40,7 @@ export default function JuniorHub() {
   // 채우기만 하고 **자동 제출은 하지 않는다** — 합류는 직원이 누르는 것이다.
   const params = useLocalSearchParams<{ code?: string }>();
   const inputRef = useRef<TextInput>(null);
-  const [code, setCode] = useState(typeof params.code === 'string' ? params.code.replace(/[^0-9]/g, '').slice(0, CODE_LEN) : '');
+  const [code, setCode] = useState(typeof params.code === 'string' ? normalizeInviteCode(params.code) : '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   // ★서버가 PHONE_NOT_VERIFIED 로 막았을 때만 연다(#2). 예전엔 이 코드가 화이트리스트에 없어
@@ -62,7 +63,7 @@ export default function JuniorHub() {
 
   const onChange = (v: string) => {
     setErr(null);
-    setCode(v.replace(/[^0-9]/g, '').slice(0, CODE_LEN));
+    setCode(normalizeInviteCode(v));
   };
 
   const focusCode = () => inputRef.current?.focus();
@@ -128,7 +129,9 @@ export default function JuniorHub() {
           ref={inputRef}
           value={code}
           onChangeText={onChange}
-          keyboardType="number-pad"
+          keyboardType="default"
+          autoCapitalize="characters"
+          autoCorrect={false}
           maxLength={CODE_LEN}
           style={styles.hiddenInput}
           caretHidden

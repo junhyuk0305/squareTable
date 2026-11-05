@@ -12,7 +12,7 @@ import { PasswordInput } from '@/components/PasswordInput';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { Appear } from '@/components/Appear';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
-import { isValidEmail, isValidPhone, normalizePhone, formatPhone, passwordError, formatBirthDate8, birthDateISO, isUnder14 } from '@/lib/utils/validation';
+import { isValidEmail, isValidPhone, normalizePhone, formatPhone, passwordError, formatBirthDate8, birthDateISO, isUnder14, normalizeInviteCode } from '@/lib/utils/validation';
 import { usePhoneOtp } from '@/lib/otp';
 import { ConsentChecklist } from '@/components/ConsentChecklist';
 import { allConsented, consentPayload, UNDER_14_TEXT, type ConsentChecked } from '@/lib/config/consent';
@@ -39,7 +39,7 @@ export default function SignupScreen() {
   //   가입이 끝나면 hub 로 그대로 넘겨 6칸을 채운다 — 코드칸을 두 화면에 두면 '두 번 입력' 혼선이 난다.
   const params = useLocalSearchParams<{ role?: string; phone?: string; code?: string }>();
   const fromLink = params.role === 'junior';
-  const inviteFromLink = typeof params.code === 'string' ? params.code.replace(/[^0-9]/g, '').slice(0, 6) : '';
+  const inviteFromLink = typeof params.code === 'string' ? normalizeInviteCode(params.code) : '';
 
   const [role, setRole] = useState<Role>(fromLink ? 'junior' : 'owner');
   const [name, setName] = useState('');

@@ -1598,6 +1598,18 @@ export async function reviewSuggestion(
   return writeStrict('reviewSuggestion', supabase.from('playbook_suggestions').update(patch).eq('id', id).select('id'));
 }
 
+/** 내 대기 제안 취소(0355). null = 성공. not_found·not_pending·forbidden → suggestionErrorMessage. */
+export async function withdrawSuggestion(id: string): Promise<DbErr> {
+  if (!HAS_SUPABASE) return null;
+  return writeErr('withdrawSuggestion', supabase.rpc('suggestion_withdraw', { p_id: id }), false);
+}
+
+/** 내 대기 제안 고치기(0355). 고칠 수 있는 열은 본문(text)뿐이다. 나머지는 서버가 받지 않는다. */
+export async function editSuggestion(id: string, patch: Pick<PlaybookSuggestion, 'text'>): Promise<DbErr> {
+  if (!HAS_SUPABASE) return null;
+  return writeErr('editSuggestion', supabase.rpc('suggestion_edit', { p_id: id, p_patch: patch }), false);
+}
+
 export function subscribeSuggestions(onChange: () => void): () => void {
   if (!HAS_SUPABASE) return () => {};
   const ch = supabase

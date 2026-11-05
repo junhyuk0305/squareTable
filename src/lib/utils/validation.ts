@@ -92,3 +92,14 @@ export function passwordError(pw: string): string | null {
   if (!/[a-zA-Z]/.test(pw) || !/\d/.test(pw)) return '영문과 숫자를 모두 포함해 주세요.';
   return null;
 }
+
+/** 초대코드 길이(결정 54 · 영문·숫자 6자). */
+export const INVITE_CODE_LEN = 6;
+
+/**
+ * 초대코드 입력 정규화 — 대문자 영문·숫자만 남기고 6자로 자른다. 소문자는 대문자로 바꾼다.
+ * 0·O·1·I·L 제외는 발급 쪽 규칙이라 여기 넣지 않는다. 옛 숫자 코드(0·1 포함)가 그대로 들어가야 한다.
+ */
+export function normalizeInviteCode(input: string): string {
+  return input.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, INVITE_CODE_LEN);
+}

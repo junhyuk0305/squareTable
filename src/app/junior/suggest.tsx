@@ -21,7 +21,12 @@ import { Screen, Section } from '@/components/Screen';
 import { SegmentTabs } from '@/components/SegmentTabs';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { confirmAction } from '@/lib/utils/confirm';
+import { suggestionErrorMessage } from '@/lib/suggestion/errors';
 import type { PlaybookSuggestion } from '@/types';
+
+/** 제안 본문 최소 글자 — 보낼 때와 고칠 때 같은 기준. */
+const MIN_TEXT = 5;
 
 /** 제안 상태 칩 — 면(bg)과 글자(fg)를 한 쌍으로 묶는다. 떨어져 있으면 '반영됨'에 빨간 틴트가 깔린다. */
 const STATUS_CHIP: Record<PlaybookSuggestion['status'], { bg: string; fg: string }> = {
@@ -42,6 +47,8 @@ export default function JuniorSuggestScreen() {
   const presetImprove = typeof entryId === 'string' && entryId.length > 0;
 
   const submit = useSuggestionStore((s) => s.submit);
+  const withdraw = useSuggestionStore((s) => s.withdraw);
+  const edit = useSuggestionStore((s) => s.edit);
   const hydrate = useSuggestionStore((s) => s.hydrate);
   const subscribe = useSuggestionStore((s) => s.subscribe);
   const mineFor = useSuggestionStore((s) => s.mineFor);
@@ -82,9 +89,13 @@ export default function JuniorSuggestScreen() {
 
   // 개선 모드인데 대상이 아직 안 정해졌으면 본문 입력 전에 노하우부터 골라야 한다.
   const needsPick = kind === 'improve' && !targetEntryId;
-  const canSubmit = text.trim().length >= 5 && !needsPick;
+  const canSubmit = text.trim().length >= MIN_TEXT && !needsPick;
 
   const [sending, setSending] = useState(false);
+  // 내가 보낸 대기 제안 고치기 — 그 줄에서 입력칸을 연다. 한 번에 한 줄만.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
 
   // ★제안 목록(내가 보낸 제안)과 노하우(개선 대상 목록)가 **둘 다** 와야 그린다.
   //   먼저 그리면 '내가 보낸 제안' 블록이 나중에 툭 나타나고, 개선 모드 목록이 "노하우가 없어요"로 먼저 뜬다.
@@ -107,6 +118,42 @@ export default function JuniorSuggestScreen() {
     showToast('제안을 보냈어요 · 사장님이 확인할게요', 'good');
     setText('');
     if (router.canGoBack()) router.back();
+  }
+
+  function startEdit(s: PlaybookSuggestion) {
+    setEditingId(s.id);
+    setEditText(s.text);
+  }
+
+  async function saveEdit(id: string) {
+    if (editText.trim().length < MIN_TEXT || rowBusy) return;
+    setRowBusy(id);
+    const err = await edit(id, editText);
+    setRowBusy(null);
+    if (err) {
+      showToast(suggestionErrorMessage(err), 'warn');
+      return;
+    }
+    setEditingId(null);
+    showToast('제안을 고쳤어요', 'good');
+  }
+
+  async function withdrawOne(id: string) {
+    if (rowBusy) return;
+    const ok = await confirmAction('제안을 취소할까요?', '사장님 제안함에서 빠져요.', '제안 취소', {
+      destructive: true,
+      cancelLabel: '그대로 두기',
+    });
+    if (!ok) return;
+    setRowBusy(id);
+    const err = await withdraw(id);
+    setRowBusy(null);
+    if (err) {
+      showToast(suggestionErrorMessage(err), 'warn');
+      return;
+    }
+    if (editingId === id) setEditingId(null);
+    showToast('제안을 취소했어요', 'good');
   }
 
   return (
@@ -246,13 +293,51 @@ export default function JuniorSuggestScreen() {
             <Section title="내가 보낸 제안">
               <View style={styles.mineCard}>
               {mine.slice(0, 10).map((s, i) => (
-                <View key={s.id} style={[styles.mineRow, i > 0 && styles.mineRowLine]}>
+                <View key={s.id} style={i > 0 && styles.mineRowLine}>
+                <View style={styles.mineRow}>
                   <View style={[styles.mineChip, { backgroundColor: STATUS_CHIP[s.status].bg }]}>
                     <Text style={[styles.mineChipText, { color: STATUS_CHIP[s.status].fg }]}>
                       {s.status === 'approved' ? '반영됨' : s.status === 'rejected' ? '반려' : '검토 중'}
                     </Text>
                   </View>
                   <Text style={styles.mineText} numberOfLines={1}>{s.text}</Text>
+                </View>
+                {/* 검토 중인 제안만 고치거나 취소할 수 있다. 사장님이 처리한 뒤엔 서버가 not_pending 으로 막는다. */}
+                {s.status === 'pending' && editingId === s.id && (
+                  <View style={styles.editWrap}>
+                    <TextInput
+                      value={editText}
+                      onChangeText={setEditText}
+                      placeholderTextColor={InkColors.ink3}
+                      style={styles.input}
+                      multiline
+                      textAlignVertical="top"
+                      autoFocus
+                    />
+                    <View style={styles.editBtns}>
+                      <Pressable onPress={() => setEditingId(null)} disabled={rowBusy === s.id} style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.7 }]}>
+                        <Text style={styles.ghostText}>닫기</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => void saveEdit(s.id)}
+                        disabled={editText.trim().length < MIN_TEXT || rowBusy === s.id}
+                        style={({ pressed }) => [styles.saveBtn, (editText.trim().length < MIN_TEXT || rowBusy === s.id) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}
+                      >
+                        <Text style={styles.saveText}>{rowBusy === s.id ? '저장하는 중…' : '저장'}</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
+                {s.status === 'pending' && editingId !== s.id && (
+                  <View style={styles.mineActions}>
+                    <Pressable onPress={() => startEdit(s)} disabled={rowBusy === s.id} style={({ pressed }) => [ButtonStyles.inlineHit, pressed && { opacity: 0.6 }]}>
+                      <Text style={styles.mineActionText}>수정</Text>
+                    </Pressable>
+                    <Pressable onPress={() => void withdrawOne(s.id)} disabled={rowBusy === s.id} style={({ pressed }) => [ButtonStyles.inlineHit, pressed && { opacity: 0.6 }]}>
+                      <Text style={[styles.mineActionText, styles.mineActionDanger]}>제안 취소</Text>
+                    </Pressable>
+                  </View>
+                )}
                 </View>
               ))}
               </View>
@@ -304,4 +389,14 @@ const styles = StyleSheet.create({
   mineChip: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: Radius.pill },
   mineChipText: { ...Type.tag, fontWeight: '800' },
   mineText: { flex: 1, fontSize: 13, color: TextColor.secondary, fontWeight: '500' },
+  // 대기 제안 줄의 글자 버튼(수정·제안 취소) — 누르는 높이 44는 ButtonStyles.inlineHit 가 든다.
+  mineActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: Space.lg },
+  mineActionText: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
+  mineActionDanger: { color: BrandColors.badText },
+  editWrap: { gap: Space.sm, paddingBottom: Space.md },
+  editBtns: { flexDirection: 'row', justifyContent: 'flex-end', gap: Space.sm },
+  ghostBtn: { ...ButtonStyles.small, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
+  ghostText: { ...ButtonTextStyles.small, color: InkColors.ink },
+  saveBtn: { ...ButtonStyles.small, backgroundColor: InkColors.ink },
+  saveText: { ...ButtonTextStyles.small, color: InkColors.bubbleText },
 });
