@@ -8,7 +8,8 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { StoredImage } from '@/components/StoredImage';
 import { StackBar } from '@/components/blocks/StackBar';
 import { WeekStrip, type WeekDay } from '@/components/blocks/WeekStrip';
-import { useDayparts, isRoutineTaskId, occursOn, taskVisibleTo, assigneesOf, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
+import { useWorkStore, useDayparts, isRoutineTaskId, occursOn, taskVisibleTo, assigneesOf, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
+import { monthOutsideDoneWindow } from '@/lib/db';
 import { InkColors, BrandColors, CategoryColors, TextColor } from '@/lib/theme/colors';
 import { CardStyles } from '@/lib/theme/card';
 import { Elevation, Radius } from '@/lib/theme/elevation';
@@ -101,6 +102,11 @@ export function TodoScreen({
   const [folded, setFolded] = useState(true);
   const [cursor, setCursor] = useState(() => new Date(`${today}T00:00:00`)); // 보고 있는 월
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // 완료 체크는 최근 윈도만 내려와 있다(db.ts fetchDone). 윈도 밖 달로 가면 그 달을 따로 읽는다 — 경계 판정은 db.ts 가 한다.
+  useEffect(() => {
+    const ym = ymd(cursor).slice(0, 7);
+    if (monthOutsideDoneWindow(ym)) void useWorkStore.getState().loadDoneMonth(ym);
+  }, [cursor]);
 
   // 내가 볼 수 있는 할일 — taskVisibleTo SSOT(0017 RLS 정합).
   const visible = useMemo(() => templates.filter((t) => taskVisibleTo(t, me)), [templates, me]);

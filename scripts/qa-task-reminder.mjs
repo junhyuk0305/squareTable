@@ -11,11 +11,13 @@
 //      근무표를 쓰는 매장(근무표에 한 사람이라도 있다) → 보내지 않는다(0건).
 //   ⑤ 이미 완료(work_done)한 할일은 대상에서 빠진다.
 //   ⑥ 크론이 부르는 엣지 엔드포인트를 그대로 쳐서 선점(중복 발송 방지)까지 실증한다.
+//   M2(2026-11-05): T1 선점 행에 발송 결과(delivered)가 남는다 · T2 크론 응답은 200 이고 갈래별 *Error 키가 전부 있다
+//      (한 갈래 throw 가 502 가 되지 않는다 · 값 null = 정상). 둘 다 엣지 경유 — 엣지가 안 떠 있으면 skip 으로 찍는다.
 //
 // ⚠️ ⑥ 은 **전역 스윕**이라 다른 매장의 "이미 도달한" 리마인더도 같이 발송된다(크론이 5분 안에
 //    어차피 보낼 것을 앞당기는 것뿐이라 무해하지만, 조용한 부작용이 아니라 의도된 동작임을 밝혀 둔다).
 //
-// 사용: node scripts/qa-task-reminder.mjs   (.env + .env.seed 자동 로드)
+// 사용: node scripts/qa-task-reminder.mjs   (.env + .env.seed 자동 로드) · --local(키 = npx -y supabase@2 status · .env 를 읽지 않는다)
 // 정리: 종료 시 만든 행을 지우고, 계정/매장은 cleanup-orphan-stores.mjs 가 @example.com 규칙으로 수거.
 //
 // ⚠️ 크론(task-reminders) 자체의 등록 여부는 여기서 못 본다(cron 스키마는 PostgREST 밖).
@@ -25,10 +27,11 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
+import { IS_LOCAL, localEnv } from './qa-local-target.mjs';
 
 const here = (r) => fileURLToPath(new URL(r, import.meta.url));
 function pe(f){const o={};try{for(const l of readFileSync(f,'utf8').split(/\r?\n/)){const m=l.match(/^([A-Z_]+)=(.*)$/);if(m)o[m[1]]=m[2].trim();}}catch{}return o;}
-const env = { ...pe(here('../.env')), ...pe(here('../.env.seed')) };
+const env = IS_LOCAL ? localEnv() : { ...pe(here('../.env')), ...pe(here('../.env.seed')) };
 const URL_ = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const SRV = env.SUPABASE_SERVICE_ROLE_KEY;
@@ -38,8 +41,10 @@ const mk = () => createClient(URL_, ANON, { auth: { persistSession: false, autoR
 const admin = createClient(URL_, SRV, { auth: { persistSession: false, autoRefreshToken: false } });
 const s = String(Date.now()).slice(-9);
 const PW = 'Test1234!qa';
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, skip = 0;
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  ✓', n, extra)) : (fail++, console.log('  ✗', n, extra)); };
+// 돌릴 수 없는 검사는 통과로 세지 않는다 — 최종 줄에 skip n 으로 남긴다.
+const skipCase = (n, why) => { skip++; console.log('  – skip', n, `(${why})`); };
 
 async function signUpSession(client, email, meta) {
   const { data, error } = await client.auth.signUp({ email, password: PW, options: { data: { birth_date: '1994-03-03', ...meta } } });
@@ -233,13 +238,16 @@ async function main() {
 
   // ── ⑥ 엣지 스윕 E2E — 크론이 부르는 그 엔드포인트를 그대로 친다 ──────────
   console.log('— ⑥ 엣지 스윕(크론이 부르는 경로) —');
+  // 엣지가 안 떠 있으면(로컬 functions serve 없음) status 0 — 예외로 끊지 않고 아래 검사가 red/skip 을 찍는다.
   const sweep = async (key) => {
-    const res = await fetch(`${URL_}/functions/v1/push`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ mode: 'task_reminders' }),
-    });
-    return { status: res.status, body: await res.json().catch(() => ({})) };
+    try {
+      const res = await fetch(`${URL_}/functions/v1/push`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${key}` },
+        body: JSON.stringify({ mode: 'task_reminders' }),
+      });
+      return { status: res.status, body: await res.json().catch(() => ({})) };
+    } catch (e) { return { status: 0, body: { fetch_error: e?.message } }; }
   };
   const denied = await sweep(ANON);
   check('anon 키로는 스윕 거부(403)', denied.status === 403, `status=${denied.status}`);
@@ -255,6 +263,20 @@ async function main() {
 
   rows = await mine();
   check('선점된 할일은 다음 스윕 대상에서 빠짐(중복 발송 방지)', rows.length === 0, `남은 ${rows.length}건`);
+
+  // ── T1·T2 M2(2026-11-05): 선점 행에 결과가 남고, 크론 응답은 갈래마다 *Error 키를 항상 싣는다(값 null = 정상) ──
+  if (first.status === 200) {
+    const { data: sentRow, error: sentErr } = await admin.from('task_reminder_sent').select('delivered').eq('template_id', tPrivate).eq('remind_date', DAY).maybeSingle();
+    check('T1 ★선점 행에 발송 결과가 남는다(delivered is not null)', !sentErr && sentRow?.delivered !== null && sentRow?.delivered !== undefined,
+      sentErr?.message ?? JSON.stringify(sentRow));
+    const ERR_KEYS = ['quizError', 'alertError', 'closureError', 'noticeError', 'photoError'];
+    const missing = ERR_KEYS.filter((k) => !(k in (first.body ?? {})));
+    check('T2 ★응답 200 · 갈래별 *Error 키가 전부 있다(한 갈래 throw 가 502 가 되지 않는다)', missing.length === 0,
+      `missing=${missing.join(',') || '-'} body=${JSON.stringify(first.body)}`);
+  } else {
+    skipCase('T1 선점 행 delivered is not null', `엣지가 안 떠 있다 status=${first.status}`);
+    skipCase('T2 응답 200 · *Error 키 전부', `엣지가 안 떠 있다 status=${first.status}`);
+  }
 
   // ── 정리 ────────────────────────────────────────────────────────────────
   for (const id of made.sent) await admin.from('task_reminder_sent').delete().eq('template_id', id).eq('remind_date', DAY);
@@ -272,5 +294,5 @@ try {
 } finally {
   await cleanupSeededPhones(URL_, SRV, qaPhones).catch(() => {});
 }
-console.log(`\n${fail === 0 ? 'GREEN' : 'RED'} — pass ${pass} / fail ${fail}`);
+console.log(`\n${fail === 0 ? 'GREEN' : 'RED'} — pass ${pass} fail ${fail} skip ${skip}`);
 process.exitCode = fail === 0 ? 0 : 1;

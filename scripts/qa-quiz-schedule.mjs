@@ -19,6 +19,11 @@
 //      ★문항 스냅샷(0114 source_updated_at)이 낡은 동안은 안 나간다 — 옛 정답을 다시 묻지 않는다.
 //      ★폭주 방지: 3건을 한 번에 고쳐도 1건 · 대기 중이면 더 안 만듦 · (매장,직원)당 7일 1건 ·
 //        통과 기록 없는 직원과 사장 본인은 제외. 만들어진 뒤는 0139 의 발송 상한을 그대로 탄다.
+//   ⑫ M2 발송 결과(2026-11-05 · delivered·suppressed 열 + quiz_send_notified + claim_quiz_push_retry):
+//      Q1 스윕 뒤 delivered 가 남는다(엣지 경유 · 엣지가 안 떠 있으면 skip) · Q2 delivered=0 두 건은 자동정지에 안 세고 1이면 센다 ·
+//      Q3 suppressed=1·delivered=0(음소거·방해금지)은 알린 것으로 센다 · Q4 delivered null(옛 엣지 행)도 알린 것으로 센다 ·
+//      Q5 sent_at 10분~1시간 전·delivered null·안 연 행만 claim_quiz_push_retry 가 1회 재배달로 돌려주고 delivered=0 을 찍는다 ·
+//      Q6 delivered=0 행도 하루 1회 상한에는 센다(상한 축 = sent_at 발급).
 //
 // ★ ④ 의 기대값은 schedule.ts 를 읽어서 만든다 — 상수를 한쪽만 고치면 이 게이트가 red 가 된다.
 //   (schedule.ts 머리말: "서버가 같은 판정을 해야 할 때는 상수를 마이그레이션에 옮겨 적고 양쪽을 같이 고친다")
@@ -43,7 +48,7 @@ function pe(f){const o={};try{for(const l of readFileSync(f,'utf8').split(/\r?\n
 const LOCAL = process.argv.includes('--local');
 let URL_, ANON, SRV;
 if (LOCAL) {
-  const st = Object.fromEntries(execFileSync('npx', ['supabase', 'status', '-o', 'env'], { encoding: 'utf8', shell: true, stdio: ['ignore', 'pipe', 'ignore'] })
+  const st = Object.fromEntries(execFileSync('npx', ['-y', 'supabase@2', 'status', '-o', 'env'], { encoding: 'utf8', shell: true, stdio: ['ignore', 'pipe', 'ignore'] })
     .split('\n').map((l) => l.match(/^([A-Z_]+)="?(.*?)"?$/)).filter(Boolean).map((m) => [m[1], m[2]]));
   URL_ = st.API_URL; ANON = st.ANON_KEY; SRV = st.SERVICE_ROLE_KEY;
   if (!URL_ || !/^http:\/\/127\.0\.0\.1:/.test(URL_)) { console.error('중단: 로컬 도커 주소가 아니다 —', URL_); process.exit(2); }
@@ -61,8 +66,10 @@ const mk = () => createClient(URL_, ANON, { auth: { persistSession: false, autoR
 const admin = createClient(URL_, SRV, { auth: { persistSession: false, autoRefreshToken: false } });
 const s = String(Date.now()).slice(-9);
 const PW = 'Test1234!qa';
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, skip = 0;
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  ✓', n, extra)) : (fail++, console.log('  ✗', n, extra)); };
+// 돌릴 수 없는 검사는 통과로 세지 않는다 — 최종 줄에 skip n 으로 남긴다(AGENTS "건너뛴 것을 통과로 세지 않는다").
+const skipCase = (n, why) => { skip++; console.log('  – skip', n, `(${why})`); };
 
 // ── schedule.ts 상수 읽기 (SQL 사본과 대조할 기대값의 출처) ──────────────
 const SCHED = readFileSync(here('../src/lib/quiz/schedule.ts'), 'utf8');
@@ -240,8 +247,12 @@ async function main() {
   // 거부 이유까지 본다: RLS 위반(42501). 다른 이유(예: quiz_no_items)로 막히면 이 검사는 아무것도 증명하지 않는다.
   const { error: xcErr } = await owner.from('quiz_assignments').insert(asg(`qz_xc_${s}`, ownerId, DAY, UNIT2, QUIZ));
   check('남의 매장 코스 참조 거부(RLS)', xcErr?.code === '42501', xcErr ? `${xcErr.code} ${xcErr.message}` : '거부 안 됨');
+  // ★0352: 그 매장 멤버가 아닌 수신자 행은 오류 없이 만들지 않는다(옛 앱 다시 알리기에 나간 직원이 섞여도 남은 직원은 받게).
+  //   증명할 것은 "행이 안 생긴다"다. RLS(qz_insert)는 2선으로 그대로 있다. 다른 오류로 막히면 이 검사는 아무것도 증명하지 않는다.
   const { error: xmErr } = await owner.from('quiz_assignments').insert(asg(`qz_xm_${s}`, aId, DAY, UNIT2, QUIZ2));
-  check('그 매장 멤버가 아닌 수신자 거부(RLS)', xmErr?.code === '42501', xmErr ? `${xmErr.code} ${xmErr.message}` : '거부 안 됨');
+  const { count: xmRows } = await admin.from('quiz_assignments').select('id', { count: 'exact', head: true }).eq('id', `qz_xm_${s}`);
+  check('그 매장 멤버가 아닌 수신자 행은 만들어지지 않는다(0352 · 오류 없이 건너뜀)', !xmErr && xmRows === 0,
+    xmErr ? `${xmErr.code} ${xmErr.message}` : `행 ${xmRows}`);
   await owner.rpc('switch_active_unit', { p_unit_id: UNIT });
 
   // ── ③ 근무일 판정 ───────────────────────────────────────────────────────
@@ -324,13 +335,16 @@ async function main() {
 
   // ── ⑦ 엣지 스윕 E2E ────────────────────────────────────────────────────
   console.log('— ⑦ 엣지 스윕(크론이 부르는 경로) —');
+  // 엣지가 안 떠 있으면(로컬 functions serve 없음) status 0 — 예외로 하니스를 끊지 않고 아래 검사가 그대로 red/skip 을 찍는다.
   const sweep = async (key) => {
-    const res = await fetch(`${URL_}/functions/v1/push`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ mode: 'task_reminders' }),
-    });
-    return { status: res.status, body: await res.json().catch(() => ({})) };
+    try {
+      const res = await fetch(`${URL_}/functions/v1/push`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${key}` },
+        body: JSON.stringify({ mode: 'task_reminders' }),
+      });
+      return { status: res.status, body: await res.json().catch(() => ({})) };
+    } catch (e) { return { status: 0, body: { fetch_error: e?.message } }; }
   };
   const denied = await sweep(ANON);
   check('anon 키로는 스윕 거부(403)', denied.status === 403, `status=${denied.status}`);
@@ -342,6 +356,14 @@ async function main() {
   const { data: cRow } = await admin.from('quiz_assignments').select('sent_at').eq('id', C1).maybeSingle();
   check('스윕이 선점까지 마쳤다', before === 1 && !!cRow?.sent_at, `before=${before} sent_at=${cRow?.sent_at}`);
   check('선점된 건은 다음 스윕 대상에서 빠짐', (await dueFor(cId)).length === 0);
+  // Q1 (M2): 선점 뒤 발송 결과가 행에 남는다. 열이 없으면 select 가 오류 → red.
+  if (first.status === 200) {
+    const { data: cDel, error: cDelErr } = await admin.from('quiz_assignments').select('delivered, suppressed').eq('id', C1).maybeSingle();
+    check('Q1 ★스윕 뒤 발송 결과가 남는다(delivered is not null)', !cDelErr && cDel?.delivered !== null && cDel?.delivered !== undefined,
+      cDelErr?.message ?? JSON.stringify(cDel));
+  } else {
+    skipCase('Q1 스윕 뒤 delivered is not null', `엣지가 안 떠 있다 status=${first.status}`);
+  }
 
   // ── ⑧ 열었다/다 풀었다 기록(0140) ───────────────────────────────────────
   // ★이 경로가 없으면 시스템이 "아무도 안 푼다"고 판단해 연속 2회 뒤 영영 안 보낸다(④의 자동 정지).
@@ -534,6 +556,67 @@ async function main() {
   await admin.from('quiz_assignments').update({ sent_at: daysAgo(9) }).eq('id', A3);
   const aDue2 = await dueFor(aId);
   check('하루 상한이 풀리면 재확인이 후보가 된다', aDue2.length === 1, `n=${aDue2.length}`);
+
+  // ══════════════════════════════════════════════════════════════════════
+  // ⑫ M2 발송 결과 · 재배달 (2026-11-05)
+  // ══════════════════════════════════════════════════════════════════════
+  // 자동정지 ④ 는 "알린 것"(quiz_send_notified = coalesce(delivered,1)>0 or coalesce(suppressed,0)>0)만 센다.
+  // 하루 1회·주 2회는 sent_at(발급) 그대로다. 대상은 B — 지금 근무 중(⑤에서 근무 구간을 지금으로 옮겼다) · 대기 행 B1 1건.
+  // 열·함수가 없으면(마이그레이션 전) insert/update/rpc 가 오류 → 그 검사는 red 다(없어서 skip 으로 숨기지 않는다).
+  console.log('— ⑫ M2 발송 결과 · 재배달 —');
+  const agoDay = (n) => ymd(new Date(kst.getFullYear(), kst.getMonth(), kst.getDate() - n));
+  const minsAgo = (m) => new Date(Date.now() - m * 60_000).toISOString();
+  const bRow = (id, extra) => ({ id, unit_id: UNIT, course_id: QUIZ, user_id: bId, due_on: null, ...extra });
+  // ⑦ 의 전역 스윕이 B1 을 이미 발급했다(오늘 1건 → 하루 상한). B 의 행을 전부 미발급으로 되돌려 깨끗한 출발점을 만든다.
+  await admin.from('quiz_assignments').update({ sent_at: null, due_on: null, opened_at: null, completed_at: null }).eq('unit_id', UNIT).eq('user_id', bId);
+  check('⑫ 셋업: B 는 지금 대상 1건', (await dueFor(bId)).length === 1, `n=${(await dueFor(bId)).length}`);
+
+  // Q2 — 10·12일 전에 보냈지만 푸시가 0건(delivered=0)인 두 건: 무시가 아니다 → 정지 안 됨. delivered=1 로 바꾸면 정지.
+  const M1 = `qz_m2a_${s}`, M2 = `qz_m2b_${s}`;
+  const { error: m2Ins } = await admin.from('quiz_assignments').insert([
+    bRow(M1, { scheduled_on: agoDay(10), sent_at: daysAgo(10), delivered: 0, suppressed: 0 }),
+    bRow(M2, { scheduled_on: agoDay(12), sent_at: daysAgo(12), delivered: 0, suppressed: 0 }),
+  ]);
+  check('Q2a ★delivered=0 두 건은 무시로 안 센다(자동정지 안 됨)', !m2Ins && (await dueFor(bId)).length === 1, m2Ins?.message ?? `n=${(await dueFor(bId)).length}`);
+  const { error: m2Up1 } = await admin.from('quiz_assignments').update({ delivered: 1 }).in('id', [M1, M2]);
+  check('Q2b delivered=1 이면 두 번 무시 → 자동정지', !m2Up1 && (await dueFor(bId)).length === 0, m2Up1?.message ?? `n=${(await dueFor(bId)).length}`);
+
+  // Q3 — 음소거·방해금지로 억제된 발송(suppressed=1 · delivered=0)은 알린 것으로 센다(인앱 알림함은 남는다는 약속과 같은 축).
+  const { error: m2Up2 } = await admin.from('quiz_assignments').update({ delivered: 0, suppressed: 1 }).in('id', [M1, M2]);
+  check('Q3 ★suppressed=1·delivered=0 은 알린 것으로 센다(자동정지)', !m2Up2 && (await dueFor(bId)).length === 0, m2Up2?.message ?? `n=${(await dueFor(bId)).length}`);
+
+  // Q4 — 옛 엣지가 기록을 안 남긴 행(delivered null)은 알린 것으로 센다(모름=알림 · 옛 동작 그대로).
+  const { error: m2Up3 } = await admin.from('quiz_assignments').update({ delivered: null, suppressed: null }).in('id', [M1, M2]);
+  check('Q4 ★delivered null(옛 행)은 알린 것으로 센다(자동정지)', !m2Up3 && (await dueFor(bId)).length === 0, m2Up3?.message ?? `n=${(await dueFor(bId)).length}`);
+  await admin.from('quiz_assignments').update({ opened_at: daysAgo(9) }).in('id', [M1, M2]);
+  check('⑫ 셋업: 열면 다시 대상', (await dueFor(bId)).length === 1, `n=${(await dueFor(bId)).length}`);
+
+  // Q6 — 오늘 발급됐지만 푸시가 0건인 행도 하루 1회에는 센다(상한을 delivered 기준으로 바꾸면 같은 날 두 번째 퀴즈가 인앱에 쌓인다 · D1).
+  const M3 = `qz_m2c_${s}`;
+  const { error: m2Ins3 } = await admin.from('quiz_assignments').insert(bRow(M3, { scheduled_on: agoDay(1), sent_at: new Date().toISOString(), delivered: 0, suppressed: 0 }));
+  check('Q6 ★delivered=0 행도 하루 1회에 센다', !m2Ins3 && (await dueFor(bId)).length === 0, m2Ins3?.message ?? `n=${(await dueFor(bId)).length}`);
+
+  // Q5 — 재배달 선점: sent_at 10분~1시간 전 · delivered null · 안 열었고 안 끝낸 행만. 같은 update 로 delivered=0 → 두 번째는 0건.
+  // R90 = 1시간 밖(묵은 행)은 재배달하지 않는다(배포 직후 옛 엣지가 보낸 delivered null 행이 몰려 나가지 않게 · 검토 지적 2026-11-05).
+  const R15 = `qz_m2r15_${s}`, R2 = `qz_m2r2_${s}`, R15O = `qz_m2r15o_${s}`, R90 = `qz_m2r90_${s}`;
+  const { error: m2Ins5 } = await admin.from('quiz_assignments').insert([
+    bRow(R15, { scheduled_on: agoDay(2), sent_at: minsAgo(15) }),
+    bRow(R2, { scheduled_on: agoDay(3), sent_at: minsAgo(2) }),
+    bRow(R15O, { scheduled_on: agoDay(4), sent_at: minsAgo(15), opened_at: minsAgo(10) }),
+    bRow(R90, { scheduled_on: agoDay(5), sent_at: minsAgo(90) }),
+  ]);
+  const mineRetry = (rows) => (rows ?? []).filter((r) => [R15, R2, R15O, R90].includes(r.out_assignment_id));
+  const rt1 = await admin.rpc('claim_quiz_push_retry');
+  const got1 = mineRetry(rt1.data);
+  check('Q5a ★-15분·delivered null 행만 1건 돌려준다(-2분 · 열어 본 행 · -90분 행은 0건)', !m2Ins5 && !rt1.error && got1.length === 1 && got1[0].out_assignment_id === R15,
+    m2Ins5?.message ?? rt1.error?.message ?? JSON.stringify(got1.map((r) => r.out_assignment_id)));
+  check('Q5b 반환 모양 = due_quiz_sends 와 같다(unit · user · course_name)', got1[0]?.out_unit_id === UNIT && got1[0]?.out_user_id === bId && !!got1[0]?.out_course_name,
+    JSON.stringify(got1[0] ?? {}));
+  const { data: rtRows, error: rtRowsErr } = await admin.from('quiz_assignments').select('id, delivered').in('id', [R15, R2, R15O, R90]);
+  const dlv = Object.fromEntries((rtRows ?? []).map((r) => [r.id, r.delivered]));
+  check('Q5c 선점한 행만 delivered=0 · 나머지(-2분 · 열어 본 행 · -90분)는 null 그대로', !rtRowsErr && dlv[R15] === 0 && dlv[R2] === null && dlv[R15O] === null && dlv[R90] === null, rtRowsErr?.message ?? JSON.stringify(dlv));
+  const rt2 = await admin.rpc('claim_quiz_push_retry');
+  check('Q5d 다시 부르면 0건(재배달은 1회)', !rt2.error && mineRetry(rt2.data).length === 0, rt2.error?.message ?? `n=${mineRetry(rt2.data).length}`);
 }
 
 async function cleanup() {
@@ -566,5 +649,5 @@ try {
   await cleanup().catch((e) => console.error('  ! 정리 실패:', e?.message ?? e));
   await cleanupSeededPhones(URL_, SRV, qaPhones).catch(() => {});
 }
-console.log(`\n${fail === 0 ? 'GREEN' : 'RED'} — pass ${pass} / fail ${fail}`);
+console.log(`\n${fail === 0 ? 'GREEN' : 'RED'} — pass ${pass} fail ${fail} skip ${skip}`);
 process.exitCode = fail === 0 ? 0 : 1;

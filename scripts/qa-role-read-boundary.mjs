@@ -8,14 +8,18 @@
 //  ① wages      : 직원=본인 행만 / 매니저·사장=전량
 //  ② attendance : 직원=본인 기록만 / 매니저·사장=전량
 //  ③ 방 격리    : 비공개 방 — **비멤버는 매니저도 0건**(0126 으로 매니저 특권 제거) / 멤버면 목록·메시지 둘 다 보임
+//  ④ 이해 확인  : knowhow_understanding(0353) — 직원=본인 행만(동료 행 0) / 매니저·사장=전량 / 좌석 잠긴 매니저=본인 행만
+//                 (0111 의 ku_select 는 같은 매장 전원 읽기라 직원이 동료 통과 기록을 받았다 → 되돌리면 RED)
 //
-// 실행: node scripts/qa-role-read-boundary.mjs (.env + .env.seed 필요). 전제 = 0122 + **0126** push.
+// 실행: node scripts/qa-role-read-boundary.mjs --local (로컬 도커 · 키는 supabase status 에서)
+//       node scripts/qa-role-read-boundary.mjs --allow-remote (.env + .env.seed 필요). 전제 = 0122 + **0126** + 0353 push.
 import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
+import { IS_LOCAL, localEnv, assertLocalUrl } from './qa-local-target.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -31,15 +35,19 @@ function loadEnv() {
   return env;
 }
 const env = loadEnv();
+if (IS_LOCAL) Object.assign(env, localEnv());
 const URL = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL, ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+if (IS_LOCAL) assertLocalUrl(URL);
 const SRV = env.SUPABASE_SERVICE_ROLE_KEY;
-if (!URL || !ANON || !SRV) { console.error('FAIL: URL/ANON/SERVICE_ROLE 필요(.env + .env.seed)'); process.exit(2); }
+if (!URL || !ANON || !SRV) { console.error('FAIL: URL/ANON/SERVICE_ROLE 필요(.env + .env.seed 또는 --local)'); process.exit(2); }
 
 const mk = () => createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
+const admin = createClient(URL, SRV, { auth: { persistSession: false, autoRefreshToken: false } });
 const s = String(Date.now()).slice(-9);
 const pw = 'Test1234!qa';
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, skip = 0;
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  PASS', n, extra)) : (fail++, console.log('  FAIL', n, extra)); };
+const skipped = (n, why) => { skip++; console.log('  SKIP', n, why); };
 
 async function signUpSession(client, email, meta) {
   const { data, error } = await client.auth.signUp({ email, password: pw, options: { data: { birth_date: '1990-01-15', ...meta } } });
@@ -48,10 +56,11 @@ async function signUpSession(client, email, meta) {
   return data.user.id;
 }
 
-const qaPhones = ['0111', '0112', '0113'].map((p) => `${p}${s.slice(0, 7)}`);
+const qaPhones = ['0111', '0112', '0113', '0114'].map((p) => `${p}${s.slice(0, 7)}`);
 await seedVerifiedPhones(URL, SRV, qaPhones);
 
 const cleanup = [];
+const entryId = `qa_rrb_entry_${s}`;
 try {
   // ── 셋업: 사장 O · 매니저 M · 직원 J ─────────────────────────────────────
   const O = mk();
@@ -66,12 +75,18 @@ try {
   const J = mk();
   const jId = await signUpSession(J, `qa_rrb_j_${s}@example.com`, { name: 'QA직원', role: 'junior', phone: qaPhones[2] });
   cleanup.push(J);
+  // 직원 2 — ④ "동료 행 0건" 을 재기 위한 상대. ①②는 기존대로 J 한 명 기준이라 K 는 ①②의 행을 만들지 않는다.
+  const K = mk();
+  const kId = await signUpSession(K, `qa_rrb_k_${s}@example.com`, { name: 'QA직원2', role: 'junior', phone: qaPhones[3] });
+  cleanup.push(K);
   await M.rpc('join_by_invite', { p_code: code1 });
   await J.rpc('join_by_invite', { p_code: code1 });
+  await K.rpc('join_by_invite', { p_code: code1 });
   await O.rpc('approve_member', { p_uid: mId });
   await O.rpc('approve_member', { p_uid: jId });
+  const { error: ke } = await O.rpc('approve_member', { p_uid: kId });
   const { error: pe } = await O.rpc('set_member_role', { p_uid: mId, p_role: 'manager' });
-  check('setup: 사장/매니저/직원 구성', !!S1 && !pe, `S1=${S1} ${pe?.message ?? ''}`);
+  check('setup: 사장/매니저/직원 구성', !!S1 && !pe && !ke, `S1=${S1} ${pe?.message ?? ''} ${ke?.message ?? ''}`);
 
   // 시급 3인분 · 출퇴근 3인분(사장이 심는다 — 쓰기 권한은 qa-roles 담당).
   const { error: we } = await O.from('wages').upsert([
@@ -148,12 +163,45 @@ try {
   check('매니저: 멤버로 넣으면 그 방이 보인다', (mRooms2.data?.length ?? 0) === 1, `rows=${mRooms2.data?.length}`);
   const mFeed2 = await M.from('work_feed').select('id').eq('id', feedId);
   check('★매니저: 멤버인 방은 메시지도 읽힌다(빈 방 회귀 방지)', (mFeed2.data?.length ?? 0) === 1, `rows=${mFeed2.data?.length}`);
+
+  // ── ④ 이해 확인 기록 읽기 경계(0353 ku_select) ──────────────────────────
+  // 노하우 1개(service role 로 심는다 — 사장 쓰기 경로는 다른 하니스 몫) 에 직원 J·K·매니저 M 의 통과 행 3개.
+  // 직원은 본인 행만(동료 행 0) · 매니저·사장은 전량. 0111 정책(같은 매장 전원)으로 되돌리면 직원이 3행을 받아 RED.
+  const { error: ee } = await admin.from('playbook_entries').insert({ id: entryId, unit_id: S1, category: 'QA', title: 'QA 이해 확인 노하우', status: 'published' });
+  const { error: kue } = await admin.from('knowhow_understanding').insert([
+    { unit_id: S1, entry_id: entryId, staff_id: jId, staff_name: 'QA직원' },
+    { unit_id: S1, entry_id: entryId, staff_id: kId, staff_name: 'QA직원2' },
+    { unit_id: S1, entry_id: entryId, staff_id: mId, staff_name: 'QA매니저' },
+  ]);
+  check('setup: 노하우 1개 + 이해 확인 3인분 심기', !ee && !kue, ee?.message ?? kue?.message ?? '');
+
+  const jU = await J.from('knowhow_understanding').select('staff_id').eq('entry_id', entryId);
+  const jUids = (jU.data ?? []).map((r) => r.staff_id);
+  check('★직원: 이해 확인 기록은 본인 행만', jUids.length === 1 && jUids[0] === jId, `rows=${jUids.length}`);
+  check('★직원: 동료 통과 기록 0건', !jUids.includes(kId) && !jUids.includes(mId), `ids=${jUids.length}`);
+  const kU = await K.from('knowhow_understanding').select('staff_id').eq('entry_id', entryId);
+  const kUids = (kU.data ?? []).map((r) => r.staff_id);
+  check('★직원2: 이해 확인 기록은 본인 행만(대칭)', kUids.length === 1 && kUids[0] === kId, `rows=${kUids.length}`);
+  const mU = await M.from('knowhow_understanding').select('staff_id').eq('entry_id', entryId);
+  check('매니저: 이해 확인 기록 전량 열람(히트맵)', (mU.data?.length ?? 0) === 3, `rows=${mU.data?.length}`);
+  const oU = await O.from('knowhow_understanding').select('staff_id').eq('entry_id', entryId);
+  check('회귀: 사장 이해 확인 기록 전량 열람', (oU.data?.length ?? 0) === 3, `rows=${oU.data?.length}`);
+  // 좌석 잠긴 매니저 = 본인 행만(auth_can_manage 0315 가 false). 잠금 판정(seat_locked_for 0264)은
+  // billing_free_mode() 가 true 면 무조건 false 다. 로컬은 app_config 행이 없어 true(fail-open)이고,
+  // 그 전역 설정을 하니스가 뒤집으면 같은 DB 를 쓰는 다른 하니스가 흔들린다 → 재현하지 않고 skip 으로 찍는다.
+  const { data: freeMode } = await O.rpc('billing_free_mode');
+  if (freeMode === false) {
+    skipped('좌석 잠긴 매니저: 본인 행만', '무료 모드 off — 잠금 재현(직원 3명 초과 + 명단 밖)은 이 하니스에 아직 없다');
+  } else {
+    skipped('좌석 잠긴 매니저: 본인 행만', 'billing_free_mode()=true 라 seat_locked_for 가 항상 false(잠금 재현 불가)');
+  }
 } catch (e) {
   fail++; console.log('  FAIL exception:', e.message);
 } finally {
+  try { await admin.from('playbook_entries').delete().eq('id', entryId); } catch { /* best-effort · 매장 삭제 cascade 가 2선 */ }
   for (const c of cleanup) { try { await c.rpc('delete_my_account'); } catch { /* best-effort */ } }
   await cleanupSeededPhones(URL, SRV, qaPhones);
 }
 
-console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
+console.log(`\nRESULT: pass ${pass} fail ${fail} skip ${skip}`);
 process.exit(fail ? 1 : 0);

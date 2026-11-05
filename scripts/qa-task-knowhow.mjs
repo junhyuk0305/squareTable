@@ -1,4 +1,4 @@
-// S1 업무↔노하우 루프 QA — ①업무↔노하우 링크 ②완료 1턴 캡처 ③직원 질문 라우팅(D4) ④이해 확인 퀴즈.
+// S1 업무↔노하우 루프 QA — ①업무↔노하우 링크 ②완료 1턴 캡처 ③직원 질문 라우팅(D4) ④이해 확인 퀴즈 ⑤완료 표 서버 상한(M1).
 // 실 백엔드 대상·자가정리. 격리 임시 매장(@example.com owner)에 사장1+알바2 세션으로 해피패스를 재현하고 DB로 검증한다.
 // 사용: node --env-file=... 아님 — .env(ANON) + .env.seed(SERVICE_ROLE) 자동 로드. 그냥 `node scripts/qa-task-knowhow.mjs`.
 // 정리: 종료 시 생성 계정/매장은 cleanup-orphan-stores.mjs가 @example.com 규칙으로 수거(QA 도메인).
@@ -129,6 +129,7 @@ async function main() {
   await flow5(ctx3); // #1 copy_knowhow_to
   await flow6(ctx3); // #2 owner_overview 커버리지
   await flow7(ctx3); // #3 broadcast_notice + read_status
+  await flowDoneWindow(ctx); // ⑤ 완료 표 1000행 상한(M1)
 
   await cleanupSeededPhones(URL_, SRV, qaPhones);
   console.log(`\n${fail === 0 ? '✅ PASS' : '❌ FAIL'} — S1+S3 업무↔노하우 QA · 통과 ${pass} / 실패 ${fail} / skip ${skip}${skip ? ' ' + AI_SKIP_WHY : ''} · AI 호출 ${aiCalls}회`);
@@ -388,6 +389,57 @@ async function flow7({ owner, ownerId, jA, jAId, UNIT, UNIT_B }) {
   // ★크로스테넌트: 비소유 매장 포함 발송 거부.
   const { error: xErr } = await owner.rpc('broadcast_notice', { p_units: [UNIT, 'store_not_mine_xxx'], p_text: 'x', p_important: false });
   check('S3#3-6 비소유 매장 포함 발송 거부(not_owner)', !!xErr && /not_owner/.test(xErr.message), xErr?.message ?? '(안 막힘!)');
+}
+
+// ───────────────────── ⑤ 완료 표(work_done) 서버 상한 — 윈도 + 복합 커서 페이징 (M1 · 2026-11-05) ─────────────────────
+// PostgREST max_rows(로컬 config.toml 1000 · 라이브 대시보드 값)를 넘는 매장은 "전부 select" 가 조용히 잘린다.
+// 어느 행이 잘리는지는 order 가 없어 정해지지 않는다 — 오늘 체크가 사라지면 직원이 끝낸 일을 다시 한다.
+// 여기서는 쿼리 모양을 직접 써서 ⓐ옛 모양(fetchDone 2026-11-04 이전)이 실제로 잘리고 ⓑ새 모양(db.ts fetchDoneRange 와 같은
+// 순서·커서·페이지 500)이 전부 가져오는지 잰다. 앱 코드를 import 하지 않으므로 db.ts 가 바뀌어도 이 검사 자체는 돈다.
+// 되돌리면 RED: 종료 조건을 "빈 페이지" 로 바꾸면 요청 4회 · 페이지 1000 이면 2회 · 윈도·커서 없이 select 면 ⓐ 와 같다.
+const DONE_PAGE = 500;
+const DONE_WINDOW_DAYS = 90; // db.ts DONE_WINDOW_DAYS(=FEED_WINDOW_DAYS) 와 같은 값. 바뀌면 여기도 맞춘다.
+const isoDaysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
+async function flowDoneWindow({ jA, jAId, UNIT }) {
+  console.log('\n━━ ⑤ 완료 표 서버 상한(윈도 + 복합 커서 페이징) ━━');
+  const today = isoDaysAgo(0);
+  const TPLS = Array.from({ length: 12 }, (_, k) => `tw_${s}_${String(k).padStart(2, '0')}`);
+  const DAYS = 84; // 12 × 84 = 1008 > 1000
+  const rows = [];
+  for (let d = 0; d < DAYS; d++) for (const t of TPLS) rows.push({ unit_id: UNIT, work_date: isoDaysAgo(d), template_id: t, room_id: null, data: { by: jAId, byName: 'QA알바A', at: new Date().toISOString() } });
+  const { error: se } = await admin.from('work_done').insert(rows);
+  check('⑤-0 셋업: work_done 1008행 심기(12 템플릿 × 84일 · 전부 90일 윈도 안)', !se, se?.message ?? '');
+  const { count: total } = await admin.from('work_done').select('template_id', { count: 'exact', head: true }).eq('unit_id', UNIT);
+  const { count: todayN } = await admin.from('work_done').select('template_id', { count: 'exact', head: true }).eq('unit_id', UNIT).eq('work_date', today);
+  const key = (r) => `${r.work_date}|${r.template_id}`;
+  // ⓐ 옛 모양 — 필터·order·limit 없는 select. 서버 상한에 걸려 잘린다(어느 행인지는 정해지지 않는다).
+  const { data: oldRows, error: oe } = await jA.from('work_done').select('work_date, template_id, data');
+  const oldN = oldRows?.length ?? 0;
+  const oldToday = (oldRows ?? []).filter((r) => r.work_date === today).length;
+  check('⑤-1 옛 모양(전부 select)은 서버 상한에서 잘린다(전체보다 적다)', !oe && total > 1000 && oldN < total, oe?.message ?? `받음 ${oldN} / 전체 ${total} · 누락 ${total - oldN}행 · 오늘 ${oldToday}/${todayN}`);
+  // ⓑ 새 모양 — 윈도 gte + order(work_date desc, template_id) + 복합 커서 + 500 페이지 · `< 500` 이면 끝.
+  const from = isoDaysAgo(DONE_WINDOW_DAYS);
+  const got = [];
+  let last = null;
+  let reqs = 0;
+  let be = null;
+  for (;;) {
+    let q = jA.from('work_done').select('work_date, template_id, data').eq('unit_id', UNIT).gte('work_date', from)
+      .order('work_date', { ascending: false }).order('template_id').limit(DONE_PAGE);
+    if (last) q = q.or(`work_date.lt.${last.work_date},and(work_date.eq.${last.work_date},template_id.gt.${last.template_id})`);
+    reqs++;
+    const { data, error } = await q;
+    if (error) { be = error; break; }
+    got.push(...(data ?? []));
+    if (!data || data.length < DONE_PAGE) break;
+    last = data[data.length - 1];
+  }
+  const uniq = new Set(got.map(key)).size;
+  check('⑤-2 새 모양(윈도 + 복합 커서 500 페이징)은 전부 가져온다(중복 없음)', !be && uniq === total && got.length === total, be?.message ?? `받음 ${got.length}(고유 ${uniq}) / 전체 ${total}`);
+  check('⑤-3 요청 수 = ceil(전체/500) (1008행 → 3회 · "<500 이면 끝")', reqs === Math.ceil(total / DONE_PAGE), `요청 ${reqs}회 · 기대 ${Math.ceil(total / DONE_PAGE)}회`);
+  check('⑤-4 오늘 행이 전부 있다', got.filter((r) => r.work_date === today).length === todayN, `오늘 ${got.filter((r) => r.work_date === today).length}/${todayN}`);
+  const { error: de } = await admin.from('work_done').delete().eq('unit_id', UNIT).like('template_id', `tw_${s}_%`);
+  check('⑤-5 정리: 심은 1008행 삭제', !de, de?.message ?? '');
 }
 
 main().catch((e) => { console.error('HARNESS ERROR:', e); process.exit(2); });

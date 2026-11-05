@@ -10,6 +10,8 @@ import {
   updateTemplate,
   deleteTemplate,
   fetchDone,
+  fetchDoneRange,
+  doneWindowStart,
   setDone,
   clearDone,
   fetchFeed,
@@ -199,6 +201,8 @@ function applyDonePatch(done: State['done'], feed: FeedItem[], p: DonePatch): { 
 const pendingDone = new Map<string, { patch: DonePatch; settledAt?: number }>();
 /** 저장 중인 내 메시지 id(D4). hydrate 가 서버 스냅샷으로 바꿀 때 이 메시지를 지우지 않게 한다. */
 const sendingIds = new Set<string>();
+/** loadDoneMonth 가 읽는 중인 달 — 달력을 빠르게 넘겨도 같은 달을 두 번 읽지 않는다. */
+const loadingMonths = new Set<string>();
 /** 서버 스냅샷(fetchedAt 에 조회 시작) 위에 아직 반영이 보장되지 않은 토글을 다시 얹는다.
  *  ★쓰기가 끝난 뒤에도 바로 지우지 않는다(2026-09-03 실기기): A·B 연속 체크 → A 의 재조회가 **B 쓰기 완료 직전**에
  *    시작되면 스냅샷엔 B 가 없는데 B 는 이미 pending 에서 빠져 있어 B 체크가 잠깐 풀렸다가 다음 재조회에서 돌아왔다.
@@ -699,7 +703,10 @@ export type NewTask = {
 
 type State = {
   templates: TaskTemplate[];
+  /** 완료 체크 — hydrate 는 최근 윈도(db.ts DONE_WINDOW_DAYS)만 새로 채우고, 윈도 밖은 loadDoneMonth 가 읽은 달을 보존한다. */
   done: Record<string, Record<string, DoneMark>>;
+  /** loadDoneMonth 로 읽어 둔 달(YYYY-MM). 매장 전환 리셋이 비운다. 바꿀 땐 새 Set 을 만든다(초기 상태 객체를 공유한다). */
+  loadedMonths: Set<string>;
   feed: FeedItem[];
   /** 업무↔노하우 링크(0069) — 평평한 배열. 정/역방향은 knowhowIdsForTask/taskIdsForKnowhow 로 파생. */
   knowhowLinks: KnowhowLink[];
@@ -736,6 +743,8 @@ type State = {
   hydrateIfStale: (maxAgeMs: number) => Promise<void>;
   /** 축 갱신 — 지정한 축만 병렬로 다시 읽는다. loaded·loadError 는 안 건드린다(실패는 데이터 유지 + 계측). */
   refreshAxes: (keys: Set<WorkAxis>) => Promise<void>;
+  /** 윈도 밖 달(YYYY-MM)의 완료 체크를 따로 읽어 done 에 얹는다. 이미 읽은 달은 no-op. 실패는 readFail 보고만 하고 다음 이동에서 다시 시도한다. */
+  loadDoneMonth: (ym: string) => Promise<void>;
   /** 재시도 — 실패 화면의 '다시 시도' 버튼이 부르는 경로. */
   retry: () => Promise<void>;
   subscribe: () => () => void;
@@ -865,7 +874,9 @@ function defineAxis<T extends readonly Promise<unknown>[]>(
       } else {
         const r = finish(all as Settled<T>, fetchedAt);
         ok = r.ok;
-        useWorkStore.setState(r.patch);
+        // 뼈대 조회가 error 를 돌려준 축(ok=false)은 빈 스냅샷을 적용하지 않는다 — 이전 데이터 유지(타임아웃·throw 와 같은 취급).
+        //   안 그러면 realtime 축 갱신 1건의 읽기 실패가 윈도 안 완료 체크·피드를 {} 로 덮고, refreshAxes 는 loadError 를 안 올려 재시도 화면도 없다(2026-11-05 verify).
+        useWorkStore.setState(ok ? r.patch : onFail);
       }
     } catch (e) {
       // ★throw 도 "시도가 끝났다"에 포함된다 — 삼키지 않으면 전체 hydrate 의 Promise.all 이 깨져 loaded 가 영영 false 다.
@@ -885,7 +896,12 @@ const AXES: Record<WorkAxis, () => Promise<void>> = {
   })),
   // done+feed 한 축 — 아직 서버에 안 닿은 체크는 스냅샷 위에 다시 얹는다(안 그러면 빠른 연속 체크가 되돌아간다).
   board: defineAxis('board', ['done', 'feed'], () => [fetchDone(), fetchFeed()] as const, ([done, feed], fetchedAt) => {
-    const live = overlayPendingDone(done.data, feed.data, fetchedAt);
+    // 윈도 밖(loadDoneMonth 로 읽은 과거 달)은 이 스냅샷에 없다 → 그 날짜들은 보존하고 윈도 안만 서버 스냅샷으로 바꾼다(M1).
+    //   전체 hydrate 와 realtime 축 갱신이 같은 러너를 타므로 둘 다 이 병합을 거친다 — 여기 없으면 체크 1건의 realtime 재조회가 과거 달을 지운다.
+    const windowStart = doneWindowStart();
+    const merged: State['done'] = { ...done.data };
+    for (const [date, day] of Object.entries(useWorkStore.getState().done)) if (date < windowStart && !(date in merged)) merged[date] = day;
+    const live = overlayPendingDone(merged, feed.data, fetchedAt);
     return {
       // 서버에 아직 없는 실패·저장 중 내 메시지는 다시 얹는다(D4 · J15 ① 재전송이 새로고침에 지워지지 않게).
       patch: { done: live.done, feed: carryUnsent(live.feed, useWorkStore.getState().feed, sendingIds) },
@@ -943,6 +959,7 @@ const AXES: Record<WorkAxis, () => Promise<void>> = {
 export const useWorkStore = create<State>((set, get) => ({
   templates: HAS_SUPABASE ? [] : seedTemplates,
   done: HAS_SUPABASE ? {} : seedDone,
+  loadedMonths: new Set<string>(),
   feed: HAS_SUPABASE ? [] : seedFeed,
   knowhowLinks: [],
   understanding: [],
@@ -972,6 +989,7 @@ export const useWorkStore = create<State>((set, get) => ({
     if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 업무를 쓰지 않는다
     // ★뼈대 축(할일·완료·피드·이해 기록·코스 노하우) 중 하나라도 실패하면 화면은 "없음"을 말하면 안 된다.
     //   나머지 축(노하우 링크·발송 원장·진행)은 이 화면의 본문이 아니라 부가 정보라 게이트에 넣지 않는다.
+    //   (M1 이 게이트에 넣은 templates·done·feed·understanding·courseEntries 는 각각 templates·board·understanding·quiz 축 안이다.)
     set({ loaded: true, loadError: SKELETON_AXES.some((k) => axisOk[k] === false) });
   }),
   hydrateIfStale: (maxAgeMs) => {
@@ -984,6 +1002,24 @@ export const useWorkStore = create<State>((set, get) => ({
     await Promise.all([...keys].map((k) => AXES[k]()));
   },
 
+  loadDoneMonth: async (ym) => {
+    if (!HAS_SUPABASE || get().loadedMonths.has(ym) || loadingMonths.has(ym)) return;
+    loadingMonths.add(ym);
+    const epoch = currentTenantEpoch();
+    try {
+      // 그 달 전체(1일~말일). `-31` 은 짧은 달에서도 상한으로만 쓰여 안전하다(fetchAttendanceMonth 와 같은 꼴).
+      const { data, error } = await fetchDoneRange(`${ym}-01`, `${ym}-31`);
+      if (isStaleEpoch(epoch) || error) return;
+      set((s) => {
+        // 그 달 날짜는 서버 행으로 바꾼다(지운 체크도 사라지게). 다른 달은 그대로.
+        const next: State['done'] = {};
+        for (const [date, day] of Object.entries(s.done)) if (!date.startsWith(ym)) next[date] = day;
+        return { done: { ...next, ...data }, loadedMonths: new Set(s.loadedMonths).add(ym) };
+      });
+    } finally {
+      loadingMonths.delete(ym);
+    }
+  },
   retry: async () => {
     await get().hydrate();
   },
@@ -1707,7 +1743,7 @@ export const useWorkStore = create<State>((set, get) => ({
   applyMock: (demo) =>
     set(
       demo
-        ? { templates: seedTemplates, done: seedDone, feed: seedFeed, knowhowLinks: [], understanding: [], loaded: true, loadError: false }
-        : { templates: [], done: {}, feed: [], knowhowLinks: [], understanding: [], loaded: true, loadError: false },
+        ? { templates: seedTemplates, done: seedDone, loadedMonths: new Set<string>(), feed: seedFeed, knowhowLinks: [], understanding: [], loaded: true, loadError: false }
+        : { templates: [], done: {}, loadedMonths: new Set<string>(), feed: [], knowhowLinks: [], understanding: [], loaded: true, loadError: false },
     ),
 }));

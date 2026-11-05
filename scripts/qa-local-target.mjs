@@ -1,5 +1,6 @@
 // --local 대상 가드 (qa-quiz-contract.mjs --local 과 같은 방식).
-// 키는 `npx supabase status` 에서만 읽는다. .env/.env.seed 값은 덮어쓴다.
+// 키는 `npx -y supabase@2 status` 에서만 읽는다. .env/.env.seed 값은 덮어쓴다.
+// ⚠️맨 `npx supabase` 는 CLI 3.0 이 받아져 config.toml [inbucket] 에서 죽는다(AGENTS 2026-11-03) — 2 를 못 박는다.
 // 주소가 http://127.0.0.1: 이 아니면 즉시 멈춘다(exit 2).
 import { execFileSync } from 'node:child_process';
 
@@ -15,8 +16,8 @@ export function assertLocalUrl(url) {
 export function localEnv() {
   let out = '';
   try {
-    out = execFileSync('npx', ['supabase', 'status', '-o', 'env'], { encoding: 'utf8', shell: true, stdio: ['ignore', 'pipe', 'ignore'] });
-  } catch { console.error('중단: npx supabase status 실패(로컬 도커 꺼짐?)'); process.exit(2); }
+    out = execFileSync('npx', ['-y', 'supabase@2', 'status', '-o', 'env'], { encoding: 'utf8', shell: true, stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch { console.error('중단: npx -y supabase@2 status 실패(로컬 도커 꺼짐?)'); process.exit(2); }
   const st = Object.fromEntries(out.split('\n').map((l) => l.match(/^([A-Z_]+)="?(.*?)"?$/)).filter(Boolean).map((m) => [m[1], m[2]]));
   assertLocalUrl(st.API_URL);
   console.log('TARGET local', st.API_URL);

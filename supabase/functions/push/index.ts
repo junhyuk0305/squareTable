@@ -96,6 +96,12 @@ function kstNowHHMM(): string {
   // en-GB + hour12:false → "HH:MM:SS". 앞 5글자가 "HH:MM".
   return new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour12: false }).slice(0, 5);
 }
+// 설정 조회 1회 재시도 — 일시 오류(연결 끊김·타임아웃)만 살린다. 두 번째도 실패하면 그 결과를 그대로 돌려준다.
+async function readOnceRetry<T extends { error: unknown }>(run: () => PromiseLike<T>): Promise<T> {
+  const first = await run();
+  if (!first.error) return first;
+  return await run();
+}
 // now 가 [start, end) 방해금지 구간 안인가. start>end 면 자정 넘김(예: 22:00~08:00).
 function inQuietWindow(now: string, start?: string | null, end?: string | null): boolean {
   const s = String(start ?? '').slice(0, 5);
@@ -104,7 +110,9 @@ function inQuietWindow(now: string, start?: string | null, end?: string | null):
   return s < e ? (now >= s && now < e) : (now >= s || now < e);
 }
 
-type Admin = ReturnType<typeof createClient>;
+// esm.sh 의 supabase-js 최신 타입은 인자 없는 ReturnType 이 Database=unknown(열·인자 전부 never)으로 풀려 deno check 가 깨진다.
+//   createClient(url, key) 호출이 추론하는 것과 같은 <any> 로 맞춘다(런타임 무관 · M2 deno check 에서 드러남).
+type Admin = ReturnType<typeof createClient<any>>;
 
 // ── 앱 기기(Expo)용 사장 알림 문구 — 웹 카드 결제 알림(0230) 3종만 바꾼다 ──────────────────
 // 카드 알림 원문에는 금액·카드사 사유(토스 원문)·'결제 수단'·'자동결제 해지'가 들어 있다. 이걸 iOS·안드
@@ -191,9 +199,10 @@ async function deliverExpoPush(
   admin: Admin,
   tokens: { id: string; token: string; title?: string }[],
   notifIn: { title: string; body: string; url: string; route?: string; unitId: string; tag?: string },
-): Promise<{ sent: number; pruned: number }> {
-  if (tokens.length === 0) return { sent: 0, pruned: 0 };
+): Promise<{ sent: number; pruned: number; failed: number }> {
+  if (tokens.length === 0) return { sent: 0, pruned: 0, failed: 0 };
   let sent = 0;
+  let failed = 0; // 죽은 토큰이 아닌 전송 오류(청크 실패·타임아웃·개별 오류) 수. M2: 재배달 판정 재료.
   const dead: string[] = [];
 
   for (let i = 0; i < tokens.length; i += EXPO_PUSH_CHUNK) {
@@ -215,9 +224,12 @@ async function deliverExpoPush(
           ...(EXPO_ACCESS_TOKEN ? { Authorization: `Bearer ${EXPO_ACCESS_TOKEN}` } : {}),
         },
         body: JSON.stringify(messages),
+        // M2(D4): 응답이 안 오면 10초에 끊는다. 크론 틱(pg_net 60초)과 선점 lease(10분) 안에 끝나야 재배달이 잡힌다.
+        signal: AbortSignal.timeout(10_000),
       });
       if (!res.ok) {
         console.error('push(expo): batch failed:', res.status);
+        failed += chunk.length;
         continue; // 이 청크만 실패 — 무음 드롭 대신 로그로 관측 가능하게.
       }
       const json = (await res.json()) as { data?: { status: string; details?: { error?: string } }[] };
@@ -229,10 +241,12 @@ async function deliverExpoPush(
         } else if (r.details?.error === 'DeviceNotRegistered') {
           dead.push(row.id);
         } else {
+          failed += 1;
           console.error('push(expo): send failed:', r.details?.error ?? 'unknown');
         }
       });
     } catch (e) {
+      failed += chunk.length;
       console.error('push(expo): request threw:', (e as Error)?.message ?? String(e));
     }
   }
@@ -240,7 +254,7 @@ async function deliverExpoPush(
   if (dead.length > 0) {
     await admin.from('push_device_tokens').delete().in('id', dead);
   }
-  return { sent, pruned: dead.length };
+  return { sent, pruned: dead.length, failed };
 }
 
 /**
@@ -255,37 +269,55 @@ async function deliverExpoPush(
  *   방해금지·음소거는 매장별 unit_member_prefs(user × unit) 로 판정 — 전역 quiet 는 여기서 더 안 본다
  *   (기존 유저의 전역 방해금지값 무시 = 의도된 동작 변화. 매장별 설정 화면이 새 SSOT).
  * 행이 없는 수신자는 기본값(켜짐·음소거/방해금지 꺼짐)으로 발송 대상 유지(신규 사용자 무음화 방지).
- * 선호 조회 실패 = fail-open(전원 발송) — 과알림이 무음 드롭보다 안전. 단 조용히 넘기지 않고
- * 로그를 남긴다(스키마 드리프트가 나도 엣지 로그로 감지 가능 — 2026-07-24 리뷰 반영).
+ * 선호 조회 실패 = 발송 안 함(fail-closed · 2026-11-04 사용자 결정 · 그 전엔 fail-open 이었다).
+ *   방해금지·음소거를 켠 사람에게 한 번 울리는 것이 약속 위반이고, 인앱 알림함은 어차피 남는다.
+ *   로그는 남긴다(스키마 드리프트가 나도 엣지 로그로 감지 가능 — 2026-07-24 리뷰 반영).
  *
  * nativeIn = 앱 기기(Expo)에만 다르게 보낼 제목·본문. 없으면 웹과 같은 문구가 간다. 'skip' 이면 앱 기기에는
  *   보내지 않는다(사장 카드 알림만 쓴다 — nativeOwnerAlertText).
  * route = 새 빌드가 열 화면(없으면 url). 앱 기기 data 의 unitId 는 언제나 scopeUnit 이다(Q24).
+ *
+ * failed(M2 · 2026-11-04) = **인프라 실패**만 true: 설정 조회 실패 2종 · 대상 조회 실패 · 토큰이 있었는데 전부 전송 오류.
+ *   호출부가 이걸로 재배달(사용자 경로 = 선점 풀고 503 · 크론 = 결과 열 null 유지)을 정한다.
+ *   "수신자 0(억제·본인뿐)"·"살아있는 토큰 0" 은 정상 종료라 false — 다시 보내도 결과가 같다.
+ *   설정 조회 실패는 suppressed 에 세지 않는다(억제한 게 아니라 못 보낸 것 · 자동정지 판정이 suppressed 를 알림으로 센다).
  */
+type DeliverResult = { sent: number; recipients: number; suppressed: number; pruned: number; failed: boolean };
 async function deliver(
   admin: Admin,
   scopeUnit: string,
   targets: string[],
   notifIn: { title: string; body: string; url: string; route?: string; tag?: string },
   nativeIn?: { title: string; body: string } | 'skip',
-): Promise<{ sent: number; recipients: number; suppressed: number; pruned: number }> {
-  if (targets.length === 0) return { sent: 0, recipients: 0, suppressed: 0, pruned: 0 };
+): Promise<DeliverResult> {
+  if (targets.length === 0) return { sent: 0, recipients: 0, suppressed: 0, pruned: 0, failed: false };
 
-  const { data: prefRows, error: prefErr } = await admin
+  // ★설정 조회는 1회 재시도하고, 그래도 못 읽으면 보내지 않는다(2026-11-04 사용자 결정 · fail-closed).
+  //   알림 끔·음소거·방해금지를 켠 사람에게 한 번 울리는 것보다 이번 발송을 거르는 쪽이 낫다 —
+  //   인앱 알림함은 도메인 행에서 파생하므로 그대로 남는다(qa:push T13c). 아래 기기 토큰 조회 실패와 같은 방향이다.
+  //   비용: 크론 스윕(할일·퀴즈·사장 알림·닫힘·구성원 알림)은 선점 → deliver 순서라, 여기서 거르면 그 푸시는
+  //   다시 안 나간다. 재시도 1회가 그 비용을 줄이려는 것이다(일시 오류가 두 번 연속 나야 유실).
+  const { data: prefRows, error: prefErr } = await readOnceRetry(() => admin
     .from('notification_prefs')
     .select('user_id, push_enabled')
-    .in('user_id', targets);
-  if (prefErr) console.error('[push] notification_prefs read failed (fail-open):', prefErr.message);
+    .in('user_id', targets));
+  if (prefErr) {
+    console.error('[push] notification_prefs read failed (발송 안 함):', prefErr.message);
+    return { sent: 0, recipients: 0, suppressed: 0, pruned: 0, failed: true };
+  }
   const prefByUser = new Map(
     (prefRows ?? []).map((p: { user_id: string; push_enabled: boolean }) => [p.user_id, p]),
   );
   // 매장별 개인 설정 — 발송 범위 매장(scopeUnit) 기준. join_owners 도 수신자(사장)는 scopeUnit 소속이라 동일 축.
-  const { data: unitPrefRows, error: unitPrefErr } = await admin
+  const { data: unitPrefRows, error: unitPrefErr } = await readOnceRetry(() => admin
     .from('unit_member_prefs')
     .select('user_id, muted, quiet_enabled, quiet_start, quiet_end, nickname')
     .eq('unit_id', scopeUnit)
-    .in('user_id', targets);
-  if (unitPrefErr) console.error('[push] unit_member_prefs read failed (fail-open):', unitPrefErr.message);
+    .in('user_id', targets));
+  if (unitPrefErr) {
+    console.error('[push] unit_member_prefs read failed (발송 안 함):', unitPrefErr.message);
+    return { sent: 0, recipients: 0, suppressed: 0, pruned: 0, failed: true };
+  }
   const unitPrefByUser = new Map(
     (unitPrefRows ?? []).map((p: { user_id: string; muted: boolean; quiet_enabled: boolean; quiet_start: string; quiet_end: string; nickname?: string | null }) => [p.user_id, p]),
   );
@@ -300,7 +332,7 @@ async function deliver(
     if (up.quiet_enabled && inQuietWindow(nowKst, up.quiet_start, up.quiet_end)) { suppressed.push(id); return false; } // 이 매장 방해금지 시간 → 이번 발송만 스킵
     return true;
   });
-  if (recipientIds.length === 0) return { sent: 0, recipients: 0, suppressed: suppressed.length, pruned: 0 };
+  if (recipientIds.length === 0) return { sent: 0, recipients: 0, suppressed: suppressed.length, pruned: 0, failed: false };
 
   // 받을 기기는 DB 가 정한다(0236): 탈퇴 계정 제외 · 토큰을 저장한 로그인 세션이 살아 있어야 함 ·
   //   세션 정보가 없는 옛 행은 유예 7일 동안 등록 전 세션이 살아 있을 때만. user_id 로 표를 직접 읽지 않는다.
@@ -312,7 +344,7 @@ async function deliver(
   if (webRes.error || deviceRes.error) {
     console.error('[push] target read failed (발송 안 함):',
       webRes.error?.message ?? '-', '/', deviceRes.error?.message ?? '-');
-    return { sent: 0, recipients: recipientIds.length, suppressed: suppressed.length, pruned: 0 };
+    return { sent: 0, recipients: recipientIds.length, suppressed: suppressed.length, pruned: 0, failed: true };
   }
   const deviceTokens = (deviceRes.data ?? []) as { id: string; token: string; user_id: string }[];
 
@@ -320,6 +352,7 @@ async function deliver(
   const notif = JSON.stringify({ title: notifIn.title, body: notifIn.body, url: notifIn.url || '/', tag: notifIn.tag });
 
   let sent = 0;
+  let webFailed = 0; // 죽은 구독(404/410)이 아닌 전송 오류 수
   const dead: string[] = [];
   await Promise.all(
     list.map(async (s: { id: string; endpoint: string; p256dh: string; auth: string }) => {
@@ -329,6 +362,7 @@ async function deliver(
           notif,
           {
             TTL: 60 * 60 * 24, // 24h — 오래된 알림은 무의미(기기 오프라인이어도 재접속 시 배달)
+            timeout: 10_000, // M2(D4): 푸시 서비스가 응답을 안 주면 10초에 끊는다(web-push 3.6.7 옵션 · ms)
             // Urgency:high → 푸시서비스가 '지금 즉시' 배달(APNs priority 10). 기본 'normal'은 배터리
             //   절약을 위해 묶어서 지연 배달될 수 있어, 업무 알림엔 즉시성이 중요하므로 high 로 지정.
             //   (앱이 닫혀 SW가 잠든 경우의 iOS 지연은 OS 소관이라 이걸로도 완전 제거는 불가.)
@@ -340,8 +374,11 @@ async function deliver(
         const code = (e as { statusCode?: number })?.statusCode;
         // 404/410 = 구독 만료(브라우저가 폐기) → 원장에서 제거
         if (code === 404 || code === 410) dead.push(s.id);
-        // 그 외(400/413/429/5xx)는 무음으로 삼키면 "특정 사용자만 푸시 안 옴"의 흔적이 안 남는다.
-        else console.error('push: send failed:', code ?? 'no-status', (e as Error)?.message ?? String(e));
+        // 그 외(400/413/429/5xx·타임아웃)는 무음으로 삼키면 "특정 사용자만 푸시 안 옴"의 흔적이 안 남는다.
+        else {
+          webFailed += 1;
+          console.error('push: send failed:', code ?? 'no-status', (e as Error)?.message ?? String(e));
+        }
       }
     }),
   );
@@ -350,7 +387,7 @@ async function deliver(
     await admin.from('push_subscriptions').delete().in('id', dead);
   }
 
-  let expo = { sent: 0, pruned: 0 };
+  let expo = { sent: 0, pruned: 0, failed: 0 };
   if (nativeIn !== 'skip' && deviceTokens.length > 0) {
     const native = nativeIn ? { ...notifIn, ...nativeIn } : notifIn;
     // Q24: 2곳 이상 소속인 사람에게는 제목 앞에 매장 이름을 붙인다. 그 사람이 이 매장에 붙인 별명을 먼저 쓴다.
@@ -371,12 +408,32 @@ async function deliver(
     expo = await deliverExpoPush(admin, titled, { ...native, unitId: scopeUnit });
   }
 
+  // 살아있는 토큰이 하나도 없으면(죽은 것만 있었거나 처음부터 0) 실패가 아니다 — 다시 보내도 받을 기기가 없다.
+  //   보낼 토큰이 있었는데 하나도 못 보내고 전부 전송 오류였을 때만 인프라 실패로 본다.
+  const totalSent = sent + expo.sent;
+  const totalFailed = webFailed + expo.failed;
   return {
-    sent: sent + expo.sent,
+    sent: totalSent,
     recipients: recipientIds.length,
     suppressed: suppressed.length,
     pruned: dead.length + expo.pruned,
+    failed: totalSent === 0 && totalFailed > 0,
   };
+}
+
+// RPC 가 DB 에 없다(옛 DB · 마이그레이션 전). PostgREST 는 PGRST202("Could not find the function … in the schema cache"),
+//   SQL 경유면 42883("function … does not exist") 로 온다. 둘 다 "없음"이다 — 0317 seat_locked_for 와 같은 방향(옛 DB 면 옛 길).
+function isMissingRpc(err: { code?: string; message?: string } | null | undefined): boolean {
+  if (!err) return false;
+  if (err.code === 'PGRST202' || err.code === '42883') return true;
+  return /does not exist|could not find the function|schema cache/i.test(err.message ?? '');
+}
+
+// 발송 결과 열이 없는 옛 DB(마이그레이션 전)의 update 오류. 로그만 남기고 틱을 멈추지 않는다.
+function isMissingColumn(err: { code?: string; message?: string } | null | undefined): boolean {
+  if (!err) return false;
+  if (err.code === 'PGRST204' || err.code === '42703') return true;
+  return /column .* does not exist|could not find the .* column/i.test(err.message ?? '');
 }
 
 /**
@@ -403,34 +460,41 @@ async function sweepTaskReminders(token: string): Promise<{ swept: number; sent:
   let sent = 0;
   let zeroSent = 0; // 선점은 했는데 실제 발송이 0건이었던 건수(#32 관측 축)
   for (const r of rows) {
-    const { error: claimErr } = await admin.from('task_reminder_sent').insert({
-      template_id: r.out_template_id,
-      remind_date: r.out_date,
-      unit_id: r.out_unit_id,
-      recipients: r.out_recipients.length,
-    });
-    if (claimErr) continue; // 이미 다른 실행이 가져감(중복 키) → 건너뛴다.
-    const res = await deliver(admin, r.out_unit_id, r.out_recipients, {
-      title: '할일 시간이에요',
-      body: r.out_text,
-      url: '/junior/work',
-      tag: `task-${r.out_template_id}`,
-    });
-    sent += res.sent;
-    // ★0건 발송을 조용히 넘기지 않는다(2026-08-25 감사 #32). 선점(insert)이 발송보다 **먼저**
-    //   확정되고 PK 가 (template_id, remind_date) 라, 여기서 0건이면 **그날 그 할일은 영영
-    //   재시도되지 않는다.** 구독 행이 하나도 없거나 발송이 전부 실패한 경우가 여기다.
-    //   선점을 되돌리면 크론이 매 틱마다 같은 실패를 반복하므로(구독이 없는 매장은 영구 반복),
-    //   되돌리는 대신 **관측 가능하게** 만든다 — 원장에 실제 발송 수를 남기고 로그로 올린다.
-    if (res.sent === 0) {
-      console.error(`[push] task reminder delivered 0 — unit=${r.out_unit_id} template=${r.out_template_id} date=${r.out_date} recipients=${r.out_recipients.length}`);
-      zeroSent += 1;
+    // M2(D3): 한 행이 던져도 나머지 행·다른 갈래는 돈다. 할일 리마인더는 재배달이 없다(0174 · 문구·수신자를 보존하지 않고
+    //   시간 민감) — 기록만 남긴다.
+    try {
+      const { error: claimErr } = await admin.from('task_reminder_sent').insert({
+        template_id: r.out_template_id,
+        remind_date: r.out_date,
+        unit_id: r.out_unit_id,
+        recipients: r.out_recipients.length,
+      });
+      if (claimErr) continue; // 이미 다른 실행이 가져감(중복 키) → 건너뛴다.
+      const res = await deliver(admin, r.out_unit_id, r.out_recipients, {
+        title: '할일 시간이에요',
+        body: r.out_text,
+        url: '/junior/work',
+        tag: `task-${r.out_template_id}`,
+      });
+      sent += res.sent;
+      // ★0건 발송을 조용히 넘기지 않는다(2026-08-25 감사 #32). 선점(insert)이 발송보다 **먼저**
+      //   확정되고 PK 가 (template_id, remind_date) 라, 여기서 0건이면 **그날 그 할일은 영영
+      //   재시도되지 않는다.** 구독 행이 하나도 없거나 발송이 전부 실패한 경우가 여기다.
+      //   선점을 되돌리면 크론이 매 틱마다 같은 실패를 반복하므로(구독이 없는 매장은 영구 반복),
+      //   되돌리는 대신 **관측 가능하게** 만든다 — 원장에 실제 발송 수를 남기고 로그로 올린다.
+      if (res.sent === 0) {
+        console.error(`[push] task reminder delivered 0 — unit=${r.out_unit_id} template=${r.out_template_id} date=${r.out_date} recipients=${r.out_recipients.length} failed=${res.failed}`);
+        zeroSent += 1;
+      }
+      // 원장에 실제 발송 수를 기록 — "보냈다고 표시됐는데 아무도 못 받았다"를 사후에 구별할 수 있게.
+      const { error: recErr } = await admin.from('task_reminder_sent')
+        .update({ delivered: res.sent })
+        .eq('template_id', r.out_template_id)
+        .eq('remind_date', r.out_date);
+      if (recErr) console.error('[push] task_reminder_sent record failed:', recErr.message);
+    } catch (e) {
+      console.error(`[push] task reminder row threw — template=${r.out_template_id} date=${r.out_date}:`, (e as Error)?.message ?? String(e));
     }
-    // 원장에 실제 발송 수를 기록 — "보냈다고 표시됐는데 아무도 못 받았다"를 사후에 구별할 수 있게.
-    await admin.from('task_reminder_sent')
-      .update({ delivered: res.sent })
-      .eq('template_id', r.out_template_id)
-      .eq('remind_date', r.out_date);
   }
   return { swept: rows.length, sent, zeroSent };
 }
@@ -442,38 +506,85 @@ async function sweepTaskReminders(token: string): Promise<{ swept: number; sent:
  * 0118 은 별도 원장(task_reminder_sent)에 insert 해 선점하지만, 여기는 **원장이 곧 대상 행**이라
  * 조건부 UPDATE 가 선점이다(claim_quiz_send: `sent_at is null` 술어). false = 다른 실행이 가져감.
  * 누구에게·무엇을 보낼지는 전부 due_quiz_sends() 가 정한다(수신자 규칙 SSOT = DB).
+ *
+ * M2(D1 · 2026-11-04): 발송 뒤 결과를 quiz_assignments.delivered·suppressed 에 남긴다(Expo 접수 기준 · 모름=null).
+ *   sent_at 은 "발급"이라 그대로 두고(인앱 노출·하루1회 상한의 축), 못 간 발송은 claim_quiz_push_retry() 가
+ *   sent_at 10분~1시간 전·delivered null·안 연 행을 delivered=0 으로 찍어 돌려준다 = 재배달 1회. 둘 다 같은 발송 코드다.
+ *   옛 DB(열·함수 없음)에서는 기록 오류·함수 없음을 로그만 남기고 지금처럼 끝낸다.
  */
-async function sweepQuizSends(token: string): Promise<{ swept: number; sent: number; error?: string }> {
+type QuizSendRow = { out_assignment_id: string; out_unit_id: string; out_user_id: string; out_course_name: string };
+async function deliverQuizSend(admin: Admin, r: QuizSendRow): Promise<DeliverResult> {
+  const res = await deliver(admin, r.out_unit_id, [r.out_user_id], {
+    title: '퀴즈가 왔어요',
+    // 퀴즈 이름은 사장이 지은 문구다(데모 B4). 문항 형태 이름은 절대 노출하지 않는다.
+    body: r.out_course_name,
+    // 누르면 업무 채팅이 아니라 **퀴즈가 바로 열린다**(2026-10-15 QA #5) — `quiz=` 는 WorkBoard 가 카드의
+    //   다음 노하우로 응시 시트를 연다. 옛 앱은 모르는 파라미터를 무시하고 업무 탭을 연다(전과 같다).
+    url: `/junior/work?quiz=${r.out_assignment_id}`,
+    tag: `quiz-${r.out_assignment_id}`,
+  });
+  // 결과 기록. 인프라 실패(failed)면 null 로 둔다 — 그래야 재배달 패스가 집어 간다. 재배달 행은 이미 delivered=0 이라
+  //   실패해도 0 그대로(=1회로 끝). 옛 DB 는 열이 없어 오류 → 로그만.
+  if (!res.failed) {
+    const { error: recErr } = await admin.from('quiz_assignments')
+      .update({ delivered: res.sent, suppressed: res.suppressed })
+      .eq('id', r.out_assignment_id);
+    if (recErr) {
+      if (isMissingColumn(recErr)) console.error('[push] quiz_assignments delivered/suppressed 열 없음(옛 DB) → 기록 건너뜀');
+      else console.error('[push] quiz_assignments record failed:', recErr.message);
+    }
+  } else {
+    console.error(`[push] quiz send infra failure — assignment=${r.out_assignment_id} (delivered null 유지 → 재배달 대상)`);
+  }
+  return res;
+}
+
+async function sweepQuizSends(token: string): Promise<{ swept: number; sent: number; retried: number; retriedSent: number; error?: string }> {
   const admin = createClient(SUPABASE_URL, token);
   const { data, error } = await admin.rpc('due_quiz_sends');
   if (error) {
     console.error('[push] due_quiz_sends failed:', error.message);
     const denied = /permission denied|not exist/i.test(error.message);
-    return { swept: 0, sent: 0, error: denied ? 'forbidden' : 'rpc_failed' };
+    return { swept: 0, sent: 0, retried: 0, retriedSent: 0, error: denied ? 'forbidden' : 'rpc_failed' };
   }
-  const rows = (data ?? []) as {
-    out_assignment_id: string; out_unit_id: string; out_user_id: string; out_course_name: string;
-  }[];
+  const rows = (data ?? []) as QuizSendRow[];
   let sent = 0;
   for (const r of rows) {
-    const { data: claimed, error: claimErr } = await admin.rpc('claim_quiz_send', { p_id: r.out_assignment_id });
-    if (claimErr) {
-      console.error('[push] claim_quiz_send failed:', claimErr.message);
-      continue;
+    try {
+      const { data: claimed, error: claimErr } = await admin.rpc('claim_quiz_send', { p_id: r.out_assignment_id });
+      if (claimErr) {
+        console.error('[push] claim_quiz_send failed:', claimErr.message);
+        continue;
+      }
+      if (claimed !== true) continue; // 이미 다른 실행이 가져갔다.
+      const res = await deliverQuizSend(admin, r);
+      sent += res.sent;
+    } catch (e) {
+      console.error(`[push] quiz send row threw — assignment=${r.out_assignment_id}:`, (e as Error)?.message ?? String(e));
     }
-    if (claimed !== true) continue; // 이미 다른 실행이 가져갔다.
-    const res = await deliver(admin, r.out_unit_id, [r.out_user_id], {
-      title: '퀴즈가 왔어요',
-      // 퀴즈 이름은 사장이 지은 문구다(데모 B4). 문항 형태 이름은 절대 노출하지 않는다.
-      body: r.out_course_name,
-      // 누르면 업무 채팅이 아니라 **퀴즈가 바로 열린다**(2026-10-15 QA #5) — `quiz=` 는 WorkBoard 가 카드의
-      //   다음 노하우로 응시 시트를 연다. 옛 앱은 모르는 파라미터를 무시하고 업무 탭을 연다(전과 같다).
-      url: `/junior/work?quiz=${r.out_assignment_id}`,
-      tag: `quiz-${r.out_assignment_id}`,
-    });
-    sent += res.sent;
   }
-  return { swept: rows.length, sent };
+
+  // 재배달 패스 — 함수가 선점(delivered=0)까지 끝내고 돌려준다. 함수 없음(옛 DB) 이면 건너뛴다.
+  let retried = 0;
+  let retriedSent = 0;
+  const { data: retryData, error: retryErr } = await admin.rpc('claim_quiz_push_retry');
+  if (retryErr) {
+    if (isMissingRpc(retryErr)) console.log('[push] claim_quiz_push_retry 없음(옛 DB) → 재배달 건너뜀');
+    else console.error('[push] claim_quiz_push_retry failed:', retryErr.message);
+  } else {
+    const retryRows = (retryData ?? []) as QuizSendRow[];
+    retried = retryRows.length;
+    console.log(`[push] quiz push retry: ${retried}건`);
+    for (const r of retryRows) {
+      try {
+        const res = await deliverQuizSend(admin, r);
+        retriedSent += res.sent;
+      } catch (e) {
+        console.error(`[push] quiz retry row threw — assignment=${r.out_assignment_id}:`, (e as Error)?.message ?? String(e));
+      }
+    }
+  }
+  return { swept: rows.length, sent, retried, retriedSent };
 }
 
 /**
@@ -510,19 +621,27 @@ async function sweepOwnerAlerts(token: string): Promise<{ swept: number; sent: n
   );
   let sent = 0;
   for (const r of rows) {
-    const m = metaById.get(r.out_id);
-    const res = await deliver(admin, r.out_unit_id, r.out_recipients, {
-      title: r.out_title,
-      body: r.out_body,
-      url: '/billing',
-      route: ownerAlertRouteEdge(m?.kind),
-      tag: `owner-alert-${r.out_id}`,
-    }, metaErr ? 'skip' : (nativeOwnerAlertText(m?.kind, m?.step) ?? undefined));
-    sent += res.sent;
-    // 선점이 발송보다 먼저라 재시도는 없다(0118 과 같은 이유) → 실제 수를 남겨 사후에 구별한다.
-    await admin.from('owner_alerts')
-      .update({ recipients: r.out_recipients.length, delivered: res.sent })
-      .eq('id', r.out_id);
+    // M2(D3): 행 단위 try/catch — 한 행이 던져도 틱이 죽지 않는다. 재선점은 DB(sweep_owner_alerts 의 lease 10분~1시간 ·
+    //   delivered null)가 한다. 인프라 실패면 delivered 를 안 쓰고 null 로 둬 다음 틱의 재선점에 맡긴다(1회).
+    try {
+      const m = metaById.get(r.out_id);
+      const res = await deliver(admin, r.out_unit_id, r.out_recipients, {
+        title: r.out_title,
+        body: r.out_body,
+        url: '/billing',
+        route: ownerAlertRouteEdge(m?.kind),
+        tag: `owner-alert-${r.out_id}`,
+      }, metaErr ? 'skip' : (nativeOwnerAlertText(m?.kind, m?.step) ?? undefined));
+      sent += res.sent;
+      if (res.failed) { console.error(`[push] owner alert infra failure — id=${r.out_id} (delivered null 유지)`); continue; }
+      // 실제 수를 남겨 사후에 구별한다. delivered 가 null 이 아니면 재선점되지 않는다.
+      const { error: recErr } = await admin.from('owner_alerts')
+        .update({ recipients: r.out_recipients.length, delivered: res.sent })
+        .eq('id', r.out_id);
+      if (recErr) console.error('[push] owner_alerts record failed:', recErr.message);
+    } catch (e) {
+      console.error(`[push] owner alert row threw — id=${r.out_id}:`, (e as Error)?.message ?? String(e));
+    }
   }
   return { swept: rows.length, sent };
 }
@@ -545,16 +664,23 @@ async function sweepUnitClosures(token: string): Promise<{ swept: number; sent: 
   }[];
   let sent = 0;
   for (const r of rows) {
-    const res = await deliver(admin, r.out_unit_id, r.out_recipients, {
-      title: r.out_title,
-      body: r.out_body,
-      url: '/stores',
-      tag: `unit-closure-${r.out_id}`,
-    });
-    sent += res.sent;
-    await admin.from('unit_closure_alerts')
-      .update({ recipients: r.out_recipients.length, delivered: res.sent })
-      .eq('id', r.out_id);
+    // M2(D3): 행 단위 try/catch. 인프라 실패면 delivered null 유지 → DB 재선점(1회).
+    try {
+      const res = await deliver(admin, r.out_unit_id, r.out_recipients, {
+        title: r.out_title,
+        body: r.out_body,
+        url: '/stores',
+        tag: `unit-closure-${r.out_id}`,
+      });
+      sent += res.sent;
+      if (res.failed) { console.error(`[push] unit closure infra failure — id=${r.out_id} (delivered null 유지)`); continue; }
+      const { error: recErr } = await admin.from('unit_closure_alerts')
+        .update({ recipients: r.out_recipients.length, delivered: res.sent })
+        .eq('id', r.out_id);
+      if (recErr) console.error('[push] unit_closure_alerts record failed:', recErr.message);
+    } catch (e) {
+      console.error(`[push] unit closure row threw — id=${r.out_id}:`, (e as Error)?.message ?? String(e));
+    }
   }
   return { swept: rows.length, sent };
 }
@@ -564,7 +690,7 @@ async function sweepUnitClosures(token: string): Promise<{ swept: number; sent: 
  * 승인·반려·내보냄은 그 사람에게, 나감·탈퇴는 그 매장 사장에게 간다. 행은 DB(approve_member · reject_member ·
  * close_member_tenure)가 member_notices 에 넣고, 선점·하루 지난 알림 버리기는 sweep_member_notices() 가 한다.
  * 여기는 deliver() 로 배달하고 결과만 남긴다(정책 L7: 세션 · 음소거 · 방해금지 판정이 그대로 적용된다).
- * 선점이 발송보다 먼저라 엣지가 실패하면 그 알림은 다시 보내지 않는다(0118 · 0196 과 같은 선택).
+ * 선점이 발송보다 먼저다. M2(D3)부터 인프라 실패(delivered null)는 sweep_member_notices 가 10분~1시간 뒤 1회 재선점한다.
  */
 async function sweepMemberNotices(token: string): Promise<{ swept: number; sent: number; error?: string }> {
   const admin = createClient(SUPABASE_URL, token);
@@ -580,16 +706,23 @@ async function sweepMemberNotices(token: string): Promise<{ swept: number; sent:
   }[];
   let sent = 0;
   for (const r of rows) {
-    const res = await deliver(admin, r.out_unit_id, [r.out_user_id], {
-      title: r.out_title,
-      body: r.out_body,
-      url: r.out_url || '/',
-      tag: `member-notice-${r.out_id}`,
-    });
-    sent += res.sent;
-    await admin.from('member_notices')
-      .update({ delivered: res.sent })
-      .eq('id', r.out_id);
+    // M2(D3): 행 단위 try/catch. 인프라 실패면 delivered null 유지 → DB 재선점(1회).
+    try {
+      const res = await deliver(admin, r.out_unit_id, [r.out_user_id], {
+        title: r.out_title,
+        body: r.out_body,
+        url: r.out_url || '/',
+        tag: `member-notice-${r.out_id}`,
+      });
+      sent += res.sent;
+      if (res.failed) { console.error(`[push] member notice infra failure — id=${r.out_id} (delivered null 유지)`); continue; }
+      const { error: recErr } = await admin.from('member_notices')
+        .update({ delivered: res.sent })
+        .eq('id', r.out_id);
+      if (recErr) console.error('[push] member_notices record failed:', recErr.message);
+    } catch (e) {
+      console.error(`[push] member notice row threw — id=${r.out_id}:`, (e as Error)?.message ?? String(e));
+    }
   }
   return { swept: rows.length, sent };
 }
@@ -669,28 +802,38 @@ Deno.serve(async (req) => {
   //   바꾸면 크론을 다시 등록할 때까지 **알림이 통째로 멈춘다**. 갈래를 늘리되 입구는 하나로 유지한다.
   if (payload.mode) {
     if (payload.mode !== 'task_reminders') return json(400, { error: 'unknown_mode' });
-    const swept = await sweepTaskReminders(token);
+    // M2(D3): 갈래마다 safe() — 한 갈래가 throw 해도(RPC 예외·네트워크) 다른 갈래는 돌고 응답은 200 이다.
+    //   예전엔 throw 가 그대로 올라가 틱 전체가 502 였다(크론 502×3 관측의 유력 원인). 응답 JSON 에는 갈래별
+    //   `*Error` 키가 **항상** 있다(정상이면 null · qa:task-reminder T2 가 읽는다). 기존 키 이름은 그대로다.
+    const safe = async <T extends { error?: string }>(name: string, run: () => Promise<T>, empty: T): Promise<T> => {
+      try {
+        const r = await run();
+        if (r.error) console.error(`[push] ${name} sweep failed:`, r.error);
+        return r;
+      } catch (e) {
+        console.error(`[push] ${name} sweep threw:`, (e as Error)?.message ?? String(e));
+        return { ...empty, error: 'threw' };
+      }
+    };
+    const swept = await safe('task reminder', () => sweepTaskReminders(token), { swept: 0, sent: 0, zeroSent: 0 });
     if (swept.error === 'forbidden') return json(403, swept);
     // 퀴즈 갈래가 실패해도 할일 리마인더 결과는 그대로 돌려준다(한쪽 장애가 다른 쪽을 삼키지 않는다).
-    const quiz = await sweepQuizSends(token);
-    if (quiz.error) console.error('[push] quiz sweep failed:', quiz.error);
+    const quiz = await safe('quiz', () => sweepQuizSends(token), { swept: 0, sent: 0, retried: 0, retriedSent: 0 });
     // 사장 알림(0191)도 같은 원칙 — 실패해도 앞 두 갈래 결과는 그대로 돌려준다.
-    const alerts = await sweepOwnerAlerts(token);
-    if (alerts.error) console.error('[push] owner alert sweep failed:', alerts.error);
+    const alerts = await safe('owner alert', () => sweepOwnerAlerts(token), { swept: 0, sent: 0 });
     // 닫힌 매장 직원 알림(0196) — 같은 원칙.
-    const closures = await sweepUnitClosures(token);
-    if (closures.error) console.error('[push] unit closure sweep failed:', closures.error);
+    const closures = await safe('unit closure', () => sweepUnitClosures(token), { swept: 0, sent: 0 });
     // 구성원 알림(0247) — 같은 원칙.
-    const notices = await sweepMemberNotices(token);
-    if (notices.error) console.error('[push] member notice sweep failed:', notices.error);
+    const notices = await safe('member notice', () => sweepMemberNotices(token), { swept: 0, sent: 0 });
     // 파기한 매장 사진 지우기(0278) — 같은 원칙.
-    const photos = await sweepPhotoPurge(token);
+    const photos = await safe('photo purge', () => sweepPhotoPurge(token), { removed: 0 });
     return json(200, {
-      ...swept, quizSwept: quiz.swept, quizSent: quiz.sent, quizError: quiz.error,
-      alertSwept: alerts.swept, alertSent: alerts.sent, alertError: alerts.error,
-      closureSwept: closures.swept, closureSent: closures.sent, closureError: closures.error,
-      noticeSwept: notices.swept, noticeSent: notices.sent, noticeError: notices.error,
-      photoRemoved: photos.removed, photoError: photos.error,
+      ...swept, error: swept.error ?? null,
+      quizSwept: quiz.swept, quizSent: quiz.sent, quizRetried: quiz.retried, quizRetriedSent: quiz.retriedSent, quizError: quiz.error ?? null,
+      alertSwept: alerts.swept, alertSent: alerts.sent, alertError: alerts.error ?? null,
+      closureSwept: closures.swept, closureSent: closures.sent, closureError: closures.error ?? null,
+      noticeSwept: notices.swept, noticeSent: notices.sent, noticeError: notices.error ?? null,
+      photoRemoved: photos.removed, photoError: photos.error ?? null,
     });
   }
 
@@ -747,19 +890,30 @@ Deno.serve(async (req) => {
   // ★0324: 이 요청에 맞는 사건이 DB 에 정말 있는가. 없으면(위조·중복·잠김·폐지된 공지) 아무에게도 보내지 않는다.
   //   옛 앱은 결과를 보지 않으므로 200 으로 조용히 끝낸다(지시서 §3-1).
   const eventTarget = audience === 'user' ? clip(payload.userId, 80) : '';
-  const { data: ev, error: evErr } = await admin.rpc('push_client_event', {
+  const eventArgs = {
     p_caller: caller.id, p_unit: callerUnit, p_pending_unit: pendingUnit, p_audience: audience,
     p_tag: tag ?? null, p_item_id: clip(payload.itemId, 80) || null,
     p_target: /^[0-9a-f-]{36}$/i.test(eventTarget) ? eventTarget : null,
-  });
+  };
+  // M2(D2): v2 는 선점한 키(key)를 돌려준다. 발송이 인프라 실패면 그 키를 풀고 503 → 앱(notify.ts)의 5xx 재시도가
+  //   새 선점으로 다시 보낸다. 옛 DB(v2 없음)는 v1 로 — key 가 없어 풀 수 없고 지금과 같다(200).
+  let ev: unknown;
+  let evErr: { code?: string; message: string } | null;
+  ({ data: ev, error: evErr } = await admin.rpc('push_client_event_v2', eventArgs));
+  if (evErr && isMissingRpc(evErr)) {
+    console.log('[push] push_client_event_v2 없음(옛 DB) → push_client_event 로');
+    ({ data: ev, error: evErr } = await admin.rpc('push_client_event', eventArgs));
+  }
   if (evErr) {
     console.error('[push] push_client_event failed:', evErr.message);
     return json(500, { error: 'verify_failed' });
   }
-  const event = Array.isArray(ev) ? ev[0] : ev;
+  const event = (Array.isArray(ev) ? ev[0] : ev) as
+    { ok?: boolean; reason?: string; title?: string; body?: string; item_id?: string | null; key?: string | null } | null;
   if (!event?.ok) return json(200, { sent: 0, recipients: 0, ignored: event?.reason ?? 'unverified' });
   const title = String(event.title ?? '');
   const body = String(event.body ?? '');
+  const eventKey = typeof event.key === 'string' && event.key ? event.key : null;
 
   // ── 대상 사용자 해석 (항상 호출자가 속한/신청한 매장으로 제한) ──
   let recipientIds: string[] = [];
@@ -818,5 +972,13 @@ Deno.serve(async (req) => {
   // 탭 화면과 매장은 서버가 정한다. 클라이언트가 보낸 url · route · unitId 는 버린다(보안 M8 · Q24).
   const route = clientPushRoute(audience, tag, event.item_id ?? undefined);
   const r = await deliver(admin, scopeUnit, recipientIds, { title, body, url: route, route, tag });
+  // M2(D2): 인프라 실패 + 선점 키가 있으면 선점을 풀고 503. 풀기에 실패하면(이미 10분 지남·assign 키) 선점이 남아
+  //   재시도가 중복으로 막힌다 — 그래도 503 을 돌려 앱이 재시도하게 둔다(막히면 ignored 로 200 · 중복 발송은 없다).
+  if (r.failed && eventKey) {
+    const { data: released, error: relErr } = await admin.rpc('push_client_event_release', { p_key: eventKey });
+    if (relErr) console.error('[push] push_client_event_release failed:', relErr.message);
+    else if (released !== true) console.error('[push] push_client_event_release: 풀 행 없음 key=', eventKey);
+    return json(503, { error: 'delivery_failed', sent: 0, recipients: r.recipients, suppressed: r.suppressed, released: released === true });
+  }
   return json(200, { sent: r.sent, recipients: r.recipients, pruned: r.pruned, suppressed: r.suppressed });
 });

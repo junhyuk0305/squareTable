@@ -14,9 +14,12 @@
 //   ⑧ 야간 보류 없음(0290 · D10) — 개인 방해금지를 안 켠 매장도 새벽에 바로 선점 · 재실행해도 1행
 //   ⑨ 사장이 방해금지를 직접 켠 매장도 새벽에 바로 선점(거르는 일은 엣지 deliver() 의 개인 설정)
 //   ⑩ 닫힌 매장 직원 알림(0196) — 잠기면 직원 전원에게 1회 · 재실행 멱등 · 재닫힘은 새 행
+//   M2(2026-11-05) 스윕 재선점 — 선점 뒤 10분~1시간 안에 결과(delivered)가 안 남은 행은 엣지가 죽은 것으로 보고 한 번 더 준다
+//     (같은 update 로 delivered=0 → 최대 1회). O1 -15분·null 재선점+delivered=0 · O2 delivered=0 제외 · O3 -5분 제외 ·
+//     C1~C3 sweep_unit_closures 동일. RPC 를 직접 친다(엣지 불필요 · 별도 매장).
 //
 // ⚠️ 스윕은 **전역**이다 — 다른 매장의 미발송 알림도 같이 나간다(크론이 5분 안에 보낼 것을 앞당길 뿐).
-// 실행: node scripts/qa-owner-alerts.mjs   (.env + .env.seed)
+// 실행: node scripts/qa-owner-alerts.mjs   (.env + .env.seed) · 로컬: --local(키 = npx -y supabase@2 status)
 // 자가정리: delete_my_account + app_config 원복(finally).
 import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
@@ -24,6 +27,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
+import { IS_LOCAL, localEnv } from './qa-local-target.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -38,7 +42,7 @@ function loadEnv() {
   }
   return env;
 }
-const env = loadEnv();
+const env = IS_LOCAL ? { ...process.env, ...localEnv() } : loadEnv();
 const URL = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY;
@@ -50,6 +54,7 @@ const SH = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type'
 const s = String(Date.now()).slice(-9);
 const pw = 'Test1234!qa';
 let pass = 0, fail = 0;
+const skip = 0; // 이 하니스에 건너뛰는 검사는 없다. 최종 줄 규약(pass n fail n skip n)만 맞춘다.
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  PASS', n, extra)) : (fail++, console.log('  FAIL', n, extra)); };
 
 const kstMonth = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit' })
@@ -135,8 +140,9 @@ function kstToday(hh, mm) {
 }
 // 크론 입구(엣지)를 거치지 않고 RPC 를 직접 부른다 — p_now 는 엣지가 실어 나르지 않는 테스트 전용 파라미터.
 async function sweepAt(iso) {
-  const { error } = await admin.rpc('sweep_owner_alerts', { p_now: iso });
+  const { data, error } = await admin.rpc('sweep_owner_alerts', { p_now: iso });
   if (error) throw new Error(`sweep_owner_alerts(p_now) 실패: ${error.message}`);
+  return data ?? [];
 }
 
 let origFree = null, origTrial = null;
@@ -153,6 +159,52 @@ async function main() {
   await setConfig('billing_free_mode', 'false');
 
   try {
+    // ── M2 ★크론 스윕 재선점(O1~O3 · C1~C3) — RPC 를 직접 친다. 별도 매장(직원 0 → 좌석 잠김 없음 · 아래 ①~⑪ 과 안 섞인다).
+    //    ①보다 먼저 돈다: sweep_owner_alerts 는 전역이라 뒤에 만들 QA 매장의 1회차를 여기서 선점해 버리면 ① 의 recipients 가 비게 된다.
+    console.log('  [M2] 스윕 재선점 — sweep_owner_alerts · sweep_unit_closures');
+    {
+      const R = await signUp('owner', 'QA재선점사장');
+      const { data: csR, error: ceR } = await R.c.rpc('create_store', { p_store_name: 'QA 재선점점', p_industry: '카페·디저트', p_biz_no: null });
+      if (ceR) throw new Error(`create_store(재선점) 실패: ${ceR.message}`);
+      const unitR = csR[0].unit_id;
+      const minsAgo = (m) => new Date(Date.now() - m * 60_000).toISOString();
+      const nowIso = new Date().toISOString();
+      const ins = async (table, row) => {
+        const r = await admin.from(table).insert(row).select('id').single();
+        if (r.error) throw new Error(`${table} 시드 실패: ${r.error.message}`);
+        return r.data.id;
+      };
+      const oa = (period, extra) => ({ unit_id: unitR, kind: 'seat_lock', period, step: 1, title: 'QA 재선점', body: 'b', ...extra });
+      const o1 = await ins('owner_alerts', oa(`qa-o1-${s}`, { claimed_at: minsAgo(15), delivered: null }));
+      const o2 = await ins('owner_alerts', oa(`qa-o2-${s}`, { claimed_at: minsAgo(15), delivered: 0 }));
+      const o3 = await ins('owner_alerts', oa(`qa-o3-${s}`, { claimed_at: minsAgo(5), delivered: null }));
+      const swO = (await sweepAt(nowIso)).filter((r) => r.out_unit_id === unitR).map((r) => r.out_id);
+      const { data: oaAfter } = await admin.from('owner_alerts').select('id, claimed_at, delivered').in('id', [o1, o2, o3]);
+      const oaBy = Object.fromEntries((oaAfter ?? []).map((r) => [r.id, r]));
+      check('O1 ★claimed_at=-15분·delivered null 행은 재선점 · delivered=0 · claimed_at 갱신',
+        swO.includes(o1) && oaBy[o1]?.delivered === 0 && new Date(oaBy[o1]?.claimed_at) >= new Date(nowIso), JSON.stringify({ swept: swO, row: oaBy[o1] }));
+      check('O2 delivered=0(이미 한 번 다시 준) 행은 안 나온다', !swO.includes(o2) && oaBy[o2]?.delivered === 0, JSON.stringify(oaBy[o2]));
+      check('O3 -5분 행은 안 나온다(엣지가 아직 보내는 중일 수 있다)', !swO.includes(o3) && oaBy[o3]?.delivered === null, JSON.stringify(oaBy[o3]));
+
+      // C1~C3 — sweep_unit_closures 동일. closed_key 는 (unit, closed_key) 유일이라 서로 다른 값을 준다.
+      const ck = (d) => new Date(Date.now() - d * 864e5).toISOString();
+      const uc = (closedKey, extra) => ({ unit_id: unitR, closed_key: closedKey, title: 'QA 재선점 닫힘', body: 'b', ...extra });
+      const c1 = await ins('unit_closure_alerts', uc(ck(1), { claimed_at: minsAgo(15), delivered: null }));
+      const c2 = await ins('unit_closure_alerts', uc(ck(2), { claimed_at: minsAgo(15), delivered: 0 }));
+      const c3 = await ins('unit_closure_alerts', uc(ck(3), { claimed_at: minsAgo(5), delivered: null }));
+      const { data: swCData, error: swCErr } = await admin.rpc('sweep_unit_closures', { p_now: nowIso });
+      if (swCErr) throw new Error(`sweep_unit_closures(p_now) 실패: ${swCErr.message}`);
+      const swC = (swCData ?? []).filter((r) => r.out_unit_id === unitR).map((r) => r.out_id);
+      const { data: ucAfter } = await admin.from('unit_closure_alerts').select('id, claimed_at, delivered').in('id', [c1, c2, c3]);
+      const ucBy = Object.fromEntries((ucAfter ?? []).map((r) => [r.id, r]));
+      check('C1 ★닫힘 알림도 -15분·delivered null 행은 재선점 · delivered=0 · claimed_at 갱신',
+        swC.includes(c1) && ucBy[c1]?.delivered === 0 && new Date(ucBy[c1]?.claimed_at) >= new Date(nowIso), JSON.stringify({ swept: swC, row: ucBy[c1] }));
+      check('C2 delivered=0 행은 안 나온다', !swC.includes(c2) && ucBy[c2]?.delivered === 0, JSON.stringify(ucBy[c2]));
+      check('C3 -5분 행은 안 나온다', !swC.includes(c3) && ucBy[c3]?.delivered === null, JSON.stringify(ucBy[c3]));
+      await admin.from('owner_alerts').delete().in('id', [o1, o2, o3]);
+      await admin.from('unit_closure_alerts').delete().in('id', [c1, c2, c3]);
+    }
+
     // ── 준비: 사장 + 직원 4명(유료로 열어 승인 → 만료 = 1명 잠김) ──
     const O = await signUp('owner', 'QA알림사장');
     const { data: cs, error: ce } = await O.c.rpc('create_store', { p_store_name: 'QA 알림점', p_industry: '카페·디저트', p_biz_no: null });
@@ -384,8 +436,6 @@ async function main() {
     await restore();
     console.log('  … app_config 원복');
   }
-
-  console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 }
 
 main()
@@ -393,5 +443,7 @@ main()
   .finally(async () => {
     for (const c of cleanup) { try { await c.rpc('delete_my_account'); } catch { /* best-effort */ } }
     await cleanupSeededPhones(URL, SERVICE, seededPhones);
+    // 최종 줄은 FATAL 로 끊겨도 찍는다(예외로 죽은 실행이 "결과 없음"으로 남지 않게).
+    console.log(`\nRESULT: pass ${pass} fail ${fail} skip ${skip}`);
     process.exit(fail === 0 ? 0 : 1);
   });
