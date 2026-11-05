@@ -93,7 +93,7 @@ __out = function (sends: any[], c: any) {
   const fixedDue = ${findVar(idSf, 'fixedDue').initializer.getText(idSf)};
   const currentDue = ${findVar(idSf, 'currentDue').initializer.getText(idSf)};
   return { rowId: latestSend?.id ?? null, fixedDue, currentDue, deadline: factsOf(0, c.answer_days, c.due_days, fixedDue)[1][1] };
-};`, { cycleLabel: QS.cycleLabel });
+};`, { cycleLabel: QS.cycleLabel, currentSend: P.currentSend });
 
 // useQuizBoard.ts: buildQuizzes 안 sent · cycle · 'sending' 분기 블록(lastRow·fixed·caption)
 const qbSf = sourceOf('src/lib/quiz/useQuizBoard.ts');
@@ -187,13 +187,12 @@ s2('S2-11 sentAt null 이 맨 뒤 scheduledOn·due 동일', [X1, qa({ id: 'x2', 
 
 // ══ S3 매니저 본인 퀴즈: 매니저 알림 목록 · 매니저 벨 배지 · 매니저 홈(/junior/home = useJuniorHomeData) ══
 // 인자는 각 호출부가 넘기는 키 그대로 옮긴다(판정은 src 함수가 한다):
-//   목록 = app/owner/notifications.tsx:123 ownerArgs(courses 포함 · quizProgress 없음)
-//   배지 = components/NotificationBell.tsx:122 · lib/push/appBadge.ts:127 (courses 없음)
+//   목록·벨·앱 배지 = 셋 다 hooks/useManageNotifArgs 하나(courses · received.quizProgress · received.legacyQuizIds 포함 · B 묶음 11-05)
 const MGR = 'MGR';
 const ownerArgsM = (assignments, cs) => ({ queue: [], suggestions: [], swaps: [], pending: [], nameOf, feed: [], userId: MGR, ackAt: null, claims: [], alerts: [], assignments, ...(cs ? { courses: cs } : {}), timeRequests: [] });
-const receivedM = { feed: [], taskTemplates: [], done: {}, today: TODAY, suggestions: [], userId: MGR, nameOf, ackAt: null, scheduleNotices: [] };
-const listQuiz = (assignments, cs) => N.buildManagerNotifications(ownerArgsM(assignments, cs), receivedM).filter((r) => r.kind === 'training' && r.unread).length;
-const badgeCount = (assignments) => N.manageUnreadCount('manager', ownerArgsM(assignments, undefined), receivedM);
+const receivedM = (progress, err, legacy) => ({ feed: [], taskTemplates: [], done: {}, today: TODAY, suggestions: [], userId: MGR, nameOf, ackAt: null, scheduleNotices: [], quizProgress: err ? undefined : progress, legacyQuizIds: legacy });
+const listQuiz = (assignments, cs, progress, err, legacy) => N.buildManagerNotifications(ownerArgsM(assignments, cs), receivedM(progress, err, legacy)).filter((r) => r.kind === 'training' && r.unread).length;
+const badgeCount = (assignments, cs, progress, err, legacy) => N.manageUnreadCount('manager', ownerArgsM(assignments, cs), receivedM(progress, err, legacy));
 const ma = (over) => ({ id: 'm1', courseId: 'C', userId: MGR, scheduledOn: TODAY, sentAt: `${TODAY}T00:00:00+00:00`, completedAt: null, dueOn: null, dueDate: null, ...over });
 const prow = (assignmentId, state, total = 2, answered = 0) => ({ assignmentId, pendingEntryIds: ['e'], totalItems: total, answeredItems: answered, state });
 const courses = [{ id: 'C', name: '퀴즈', due_days: null, audience: 'staff', created_at: '2026-10-01T00:00:00+00:00' }];
@@ -209,8 +208,8 @@ const S3 = [
   ['S3-9 완료함', { assignments: [ma({ completedAt: `${TODAY}T02:00:00+00:00` })], progress: [prow('m1', 'done', 2, 2)] }],
 ];
 for (const [name, { assignments, progress, err = false, cs = courses, legacy = [] }] of S3) {
-  compare('S3-목록vs홈', name, () => ({ a: listQuiz(assignments, cs), b: homeCount(assignments, progress, err, cs, MGR, { ids: legacy }) }));
-  compare('S3-배지vs목록', name, () => ({ a: badgeCount(assignments), b: N.buildManagerNotifications(ownerArgsM(assignments, cs), receivedM).filter((r) => r.unread).length }));
+  compare('S3-목록vs홈', name, () => ({ a: listQuiz(assignments, cs, progress, err, legacy), b: homeCount(assignments, progress, err, cs, MGR, { ids: legacy }) }));
+  compare('S3-배지vs목록', name, () => ({ a: badgeCount(assignments, cs, progress, err, legacy), b: N.buildManagerNotifications(ownerArgsM(assignments, cs), receivedM(progress, err, legacy)).filter((r) => r.unread).length }));
 }
 
 // ══ S4 승인 대기 교대: isSwapAwaitingApproval(벨) vs swapApprovable(홈·근무표·서버 approve_swap 35일) ══
