@@ -91,6 +91,8 @@
     "qa:quiz-schedule:local": "node scripts/qa-quiz-schedule.mjs --local",
     "qa:quiz-resend": "node scripts/qa-quiz-resend.mjs --allow-remote",
     "qa:quiz-resend:local": "node scripts/qa-quiz-resend.mjs --local",
+    "qa:suggestion-edit": "node scripts/qa-suggestion-edit.mjs --allow-remote",
+    "qa:suggestion-edit:local": "node scripts/qa-suggestion-edit.mjs --local",
     "qa:brand-deploy:local": "node scripts/qa-brand-deploy.mjs --local",
     "qa:brand-boundary:local": "node scripts/qa-brand-boundary.mjs --local",
     "qa:knowhow-archive:local": "node scripts/qa-knowhow-archive.mjs --local",
