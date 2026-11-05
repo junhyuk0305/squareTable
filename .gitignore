@@ -100,3 +100,6 @@ credentials.json
 # Firebase 서비스 계정 키(FCM 푸시 발송 권한). google-services.json 은 공개 정보라 커밋하지만
 # 이 키는 절대 커밋 금지 — EAS 에만 업로드해 쓴다.
 *-firebase-adminsdk-*.json
+
+# qa:crawl·layout-stress 하니스 산출물(스크린샷·결과 JSON·임시 쿼리). 크롤 래칫은 scripts/qa-crawl-baseline.json 에 따로 있다.
+tmp/
