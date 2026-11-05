@@ -4,8 +4,7 @@
 //
 // ★고정 계정만 쓴다(2026-10-03 사용자 결정 "하니스를 수정해. 고정계정만 쓰도록" · scripts/lib/qa-fixed-accounts.mjs).
 //   사장 owner@pilot · 매니저 staff@pilot · 직원 staff2@pilot, 매장 store_001. 계정·매장을 만들지 않는다.
-//   만드는 것은 `pb_qadraft_` 접두사 노하우 3행뿐이고, 사장 권한으로 지운다(시작 전 잔재도 같이).
-//   service_role 이 필요 없다(.env 만).
+//   만드는 것은 `pb_qadraft_` 접두사 노하우 3행뿐이다. 정리와 남은 행 세기는 service_role(.env.seed)로 한다(시작 전 잔재도 같이).
 //
 // 검증 항목:
 //  [0063] section/order_index/source_id 컬럼으로 draft insert가 실제로 성공하는가(PGRST204 드리프트 감지)
@@ -17,6 +16,7 @@ import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 �
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { createClient } from '@supabase/supabase-js';
 import { FIXED, UNIT, login, stateLine, rolePrecondition, ensureActive, restoreActive } from './lib/qa-fixed-accounts.mjs';
 
 function loadEnv() {
@@ -56,11 +56,15 @@ const SQUARE = {
   extract: { do: '', dont: '' },
 };
 
-// 하니스가 만든 행만 지운다(사장 RLS — playbook_entries_write). 남은 행 수를 돌려준다.
-async function cleanup(O) {
-  await O.from('playbook_entries').delete().eq('unit_id', UNIT).like('id', `${PREFIX}%`);
-  const { data } = await O.from('playbook_entries').select('id').eq('unit_id', UNIT).like('id', `${PREFIX}%`);
-  return (data ?? []).length;
+// 하니스가 만든 행만 지운다. 남은 행 수를 돌려준다. service_role 키가 없으면 null(셀 수 없음 = 정리 FAIL).
+// ★사장 세션으로 지우고 세지 않는다. 0248 트리거가 사장의 발행본 delete 를 보관으로 바꿔 행이 남고, 그 세션으로 세면 0이 나온다(오류 탐지 11-03).
+const SRV = env.SUPABASE_SERVICE_ROLE_KEY;
+const admin = SRV ? createClient(URL, SRV, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+async function cleanup() {
+  if (!admin) return null;
+  await admin.from('playbook_entries').delete().eq('unit_id', UNIT).like('id', `${PREFIX}%`);
+  const { data, error } = await admin.from('playbook_entries').select('id').eq('unit_id', UNIT).like('id', `${PREFIX}%`);
+  return error ? -1 : (data ?? []).length;
 }
 
 let O, M, J, before = null, prevActive = {}, setupFailed = false;
@@ -73,7 +77,7 @@ try {
   if (why) { setupFailed = true; throw new Error(`고정 계정 상태가 시드와 다르다 — ${why}`); }
   before = await stateLine({ owner: O, manager: M, junior: J });
   for (const [k, c] of Object.entries({ owner: O, manager: M, junior: J })) prevActive[k] = await ensureActive(c);
-  await cleanup(O); // 지난 실행이 남긴 잔재
+  await cleanup(); // 지난 실행이 남긴 잔재
 
   const draftId = `${PREFIX}draft_${rid}`;
   const pubId = `${PREFIX}pub_${rid}`;
@@ -154,8 +158,8 @@ try {
   // ── 자가정리 + 고정 계정 원복 확인 ──
   if (O && !setupFailed) {
     try {
-      const left = await cleanup(O);
-      ok(left === 0, `정리: ${PREFIX} 행 0`, `left=${left}`);
+      const left = await cleanup();
+      ok(left === 0, `정리: ${PREFIX} 행 0(service_role 로 셈)`, left === null ? 'service_role 키 없음 — 남은 행을 셀 수 없다' : `left=${left}`);
     } catch (e) { fail++; console.log('  FAIL 정리 예외:', e.message); }
     for (const [k, c] of Object.entries({ owner: O, manager: M, junior: J })) { if (c) await restoreActive(c, prevActive[k]); }
     if (before) {

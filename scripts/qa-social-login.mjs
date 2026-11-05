@@ -120,7 +120,7 @@ console.log('\n■ 끊긴 구글 복귀 — 소개 페이지 대신 로그인 �
 
   const idx = strip(read('src/app/index.tsx'));
   check('index: 첫 주소는 모듈 로드 때 잡는다(교환 뒤 주소가 지워져도 판정 유지)', /let bootOAuthLost =[\s\S]*?isLostOAuthReturn\(window\.location\.search, window\.location\.hash\)/.test(idx));
-  check('★index: 로그인되면 지운다(정상 로그인 → 로그아웃 뒤 잘못된 안내 금지)', /status === 'signed_in'\) \{\s*bootOAuthLost = false;/.test(idx));
+  check('★index: 로그인되면 지운다(정상 로그인 → 로그아웃 뒤 잘못된 안내 금지)', /status === 'signed_in'\)\s*\{?\s*bootOAuthLost = false;/.test(idx));
   check('index: 웹 미로그인 분기가 끊긴 복귀면 로그인 화면으로', /window\.location\.replace\(bootOAuthLost \? OAUTH_LOST_HREF : '\/welcome\.html'\)/.test(idx));
   const lg = strip(read('src/app/login.tsx'));
   check('login: ?oauth=lost 면 안내 문구로 시작한다', /\.oauth === 'lost'/.test(lg) && /useState<string \| null>\(oauthLost \? OAUTH_LOST_TEXT : null\)/.test(lg));

@@ -8,12 +8,13 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
-import { useStaffStore, memberNameOf } from '@/lib/store/useStaffStore';
+import { useStaffStore } from '@/lib/store/useStaffStore';
 import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
 import { useOwnerAlertStore } from '@/lib/store/useOwnerAlertStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
+import { useManageNotifArgs } from '@/lib/hooks/useManageNotifArgs';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { Appear, stagger } from '@/components/Appear';
@@ -24,7 +25,6 @@ import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { SegmentTabs } from '@/components/SegmentTabs';
 import { buildManagerNotifications, buildOwnerNotifications } from '@/lib/utils/notifications';
 import { honorific } from '@/lib/utils/roles';
-import { todayStr } from '@/lib/utils/attendance';
 import { InkColors, Surface } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { screenScrollStyle } from '@/lib/theme/layout';
@@ -49,30 +49,11 @@ export default function OwnerNotificationsScreen() {
   // 세션 유효 역할(매장별, 0093) — 호칭·알림 축을 여기서 갈린다. 화면 세트('사장 화면')와 역할은 다르다.
   const role = useSessionStore((s) => s.role);
   const storeName = useSessionStore((s) => s.storeName) || '우리 매장';
-  const queue = useUnknownQueueStore((s) => s.queue);
-  const suggestions = useSuggestionStore((s) => s.suggestions);
-  const swaps = useScheduleStore((s) => s.swaps);
-  // 근무 시간 수정 요청(0243 · 대기만) — 근무표 승인 칸과 같은 원장.
-  const timeRequests = useScheduleStore((s) => s.timeRequests);
-  const scheduleNotices = useScheduleStore((s) => s.notices); // 매니저 근무 알림·역할 변경 행(0315)
-  const shiftTemplates = useScheduleStore((s) => s.templates); // 매니저가 받은 교대 요청 본문의 시각
-  const staff = useStaffStore((s) => s.staff);
-  const owner = useStaffStore((s) => s.owner);
-  const pending = useStaffStore((s) => s.pending);
-  // 처리한 합류 신청(0345) — 목록에만 내역으로 남는다. 벨 숫자는 세지 않는다(NotificationBell 인자에 없다).
-  const joinDone = useStaffStore((s) => s.joinDone);
-  const feed = useWorkStore((s) => s.feed);
-  // 퀴즈 응시 완료(0275 completed_at) — 결과 탭과 같은 발송 원장.
-  const assignments = useWorkStore((s) => s.assignments);
-  const courses = useWorkStore((s) => s.courses);
-  const claims = usePaymentClaimStore((s) => s.claims);
-  const alerts = useOwnerAlertStore((s) => s.alerts);
   const markNoticeRead = useWorkStore((s) => s.markNoticeRead);
   const markAllRead = useWorkStore((s) => s.markAllRead);
   // '모두 읽기' 기준 시각(0078) — 처리형 항목(합류·질문·제안·교대)의 배지·강조 해제 축.
   const unitId = useSessionStore((s) => s.unitId);
   const ackNotifs = useMemberPrefsStore((s) => s.ackNotifs);
-  const ackAt = useMemberPrefsStore((s) => (unitId ? (s.ackByUnit[unitId] ?? null) : null));
 
   // ★'전체 매장' 탭에만 crossLoaded 게이트가 있고 '이 매장' 탭은 게이트가 없었다 — 그래서
   //   "지금 처리할 알림이 없어요"가 먼저 떴다. 이 목록은 7개 축을 합성해 만든다(rows) — 하나라도
@@ -113,19 +94,14 @@ export default function OwnerNotificationsScreen() {
 
   const initial = (userName ?? '나').trim().slice(0, 1) || '나';
 
-  // 매니저는 사장 축 + 개인 수신 축을 함께 받는다(공지·배정·내 제안 결과). 사장은 사장 축 그대로.
-  const templates = useWorkStore((s) => s.templates);
-  const done = useWorkStore((s) => s.done);
-  const today = todayStr();
+  // 매니저는 사장 축 + 개인 수신 축을 함께 받는다(공지·배정·내 제안 결과·본인 퀴즈). 사장은 사장 축 그대로.
+  //   입력은 벨·앱 배지와 같은 훅 하나(useManageNotifArgs) — 배지 숫자 = 이 목록의 안 읽음.
+  const { ownerArgs, received } = useManageNotifArgs();
   const rows = useMemo(() => {
-    // 매니저에게 배정한 사람은 사장이다 — 명부 SSOT(memberNameOf · 사장 포함). '직원'은 명부에 없을 때만.
-    const nameOf = (id: string) => memberNameOf({ owner, staff }, id) ?? '직원';
-    const ownerArgs = { queue, suggestions, swaps, pending, nameOf, feed, userId: me, ackAt, claims, alerts, assignments, courses, timeRequests, joinDone };
-    const received = { feed, taskTemplates: templates, done, today, suggestions, userId: me, nameOf, ackAt, scheduleNotices, shiftTemplates };
     // 사장도 나에게 온 배정을 받는다(D11 · 폰에 푸시가 오는 것과 같은 축).
     if (role !== 'manager') return buildOwnerNotifications(ownerArgs, received);
     return buildManagerNotifications(ownerArgs, received);
-  }, [queue, suggestions, swaps, pending, owner, staff, feed, me, ackAt, claims, alerts, role, templates, done, today, assignments, courses, timeRequests, scheduleNotices, shiftTemplates, joinDone]);
+  }, [role, ownerArgs, received]);
 
   // '모두 읽기' = ① 멘션은 read_by 기록(기존 경로) + ② 처리형(합류·질문·제안·교대)은 ack 시각(0078)으로
   // 배지·강조 해제. 항목은 목록에 남아 계속 처리할 수 있고, 새 항목은 ack 이후라 다시 배지에 잡힌다.

@@ -3,7 +3,7 @@
 //
 // ★고정 계정만 쓴다(2026-10-03 사용자 결정 "하니스를 수정해. 고정계정만 쓰도록" · scripts/lib/qa-fixed-accounts.mjs).
 //   사장 owner@pilot · 매니저 staff@pilot · 직원 staff2@pilot (store_001) · 타 테넌트 owner-solo@pilot.
-//   계정·매장을 만들지 않는다. service_role 없이 돈다(.env 만) — 정리는 사장 권한으로 한다.
+//   계정·매장을 만들지 않는다. 단언은 고정 계정 세션으로 잰다. 정리와 남은 행 세기만 service_role(.env.seed)로 한다.
 //   만드는 행 = 접두사 `qaroles_` 가 붙은 제안·노하우·출퇴근뿐. 바꾸는 상태 = 직원의 역할(잠깐 매니저 → 직원).
 //   시급·급여설정·매장 이름은 시작 때 값을 적어 두고, 끝에 다르면 그 값으로 되돌린다.
 //   끝에 my_units(매장·역할·활성)가 시작 때와 같은지 단정한다.
@@ -26,6 +26,7 @@ import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 �
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { createClient } from '@supabase/supabase-js';
 import { FIXED, UNIT, login, stateLine, rolePrecondition, ensureActive, restoreActive } from './lib/qa-fixed-accounts.mjs';
 
 function loadEnv() {
@@ -46,22 +47,25 @@ const URL = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL, ANON = env.EXPO_PU
 if (!URL || !ANON) { console.error('FAIL: URL/ANON 필요(.env)'); process.exit(2); }
 
 const s = String(Date.now()).slice(-9);
-let pass = 0, fail = 0, skip = 0;
+let pass = 0, fail = 0, notRun = 0;
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  PASS', n, extra)) : (fail++, console.log('  FAIL', n, extra)); };
-const skipped = (n, why) => { skip++; console.log('  SKIP', n, '—', why); };
+// 고정 계정으로는 잴 수 없는 항목(머리말 SKIP 절). 통과로 세지 않고 최종 줄에 수만 찍는다. 실패로도 세지 않는다(11-05 사용자 결정).
+const notMeasured = (n, why) => { notRun++; console.log('  안 잼', n, '—', why); };
 
 const P = 'qaroles_';
 const SUG = `sug_${P}`, PE = `pe_${P}`, ATT = `att_${P}`;
 
-// 하니스가 만든 행만 지운다(사장 RLS: ps_delete·playbook_entries_write·attendance_delete). 남은 행 수를 돌려준다.
-async function cleanupRows(O) {
-  await O.from('playbook_suggestions').delete().eq('unit_id', UNIT).like('id', `${SUG}%`);
-  await O.from('playbook_entries').delete().eq('unit_id', UNIT).like('id', `${PE}%`);
-  await O.from('attendance').delete().eq('unit_id', UNIT).like('id', `${ATT}%`);
+// 하니스가 만든 행만 지운다. 남은 행 수를 돌려준다. service_role 키가 없으면 null(셀 수 없음 = 정리 FAIL).
+// ★사장 세션으로 지우고 세지 않는다. 0248 트리거가 사장의 노하우 delete 를 보관으로 바꿔 행이 남고, 그 세션으로 세면 0이 나온다(오류 탐지 11-03).
+const SRV = env.SUPABASE_SERVICE_ROLE_KEY;
+const admin = SRV ? createClient(URL, SRV, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+async function cleanupRows() {
+  if (!admin) return null;
   let left = 0;
   for (const [t, pre] of [['playbook_suggestions', SUG], ['playbook_entries', PE], ['attendance', ATT]]) {
-    const { data } = await O.from(t).select('id').eq('unit_id', UNIT).like('id', `${pre}%`);
-    left += (data ?? []).length;
+    await admin.from(t).delete().eq('unit_id', UNIT).like('id', `${pre}%`);
+    const { data, error } = await admin.from(t).select('id').eq('unit_id', UNIT).like('id', `${pre}%`);
+    left += error ? 1 : (data ?? []).length;
   }
   return left;
 }
@@ -84,7 +88,7 @@ try {
     if (w.error || u.error || !u.data) { setupFailed = true; throw new Error(`원복용 값 읽기 실패: ${w.error?.message ?? u.error?.message ?? 'units 0행'}`); }
     snap = { wages: w.data ?? [], storeName: u.data.store_name, payroll: u.data.payroll_settings };
   }
-  await cleanupRows(O); // 지난 실행이 남긴 잔재
+  await cleanupRows(); // 지난 실행이 남긴 잔재
   console.log(`  · 시작 상태 ${before}`);
 
   // 제안 1건(J 작성) — 승인 권한 시험대.
@@ -136,8 +140,8 @@ try {
   check('★0316: 매니저 시간 수정 결정 관문 통과(없는 요청=not_found)', /not_found/.test(dtM.error?.message ?? ''), dtM.error?.message ?? '(성공?)');
   const dtJ = await J.rpc('decide_shift_time', { p_id: `scr_${P}none_${s}`, p_approve: false });
   check('★0316: 직원 시간 수정 결정 거부(owner_only)', /owner_only/.test(dtJ.error?.message ?? ''), dtJ.error?.message ?? '(차단 안 됨!)');
-  skipped('★0316: 매니저 자기 요청 결정 거부(cannot_decide_self)', '고정 매니저의 근무에 시간 수정 요청을 심어야 한다');
-  skipped('★0315: 좌석 잠긴 매니저의 관리 권한 거부(auth_can_manage=false)', '고정 매장 store_001 을 무료로 내리고 직원 4명 이상이어야 잴 수 있다');
+  notMeasured('★0316: 매니저 자기 요청 결정 거부(cannot_decide_self)', '고정 매니저의 근무에 시간 수정 요청을 심어야 한다');
+  notMeasured('★0315: 좌석 잠긴 매니저의 관리 권한 거부(auth_can_manage=false)', '고정 매장 store_001 을 무료로 내리고 직원 4명 이상이어야 잴 수 있다');
 
   // ── ③ 매니저 허용 도메인 ─────────────────────────────────────────────────
   // ★2026-09-14(0201): 시급·급여 설정·합류 승인은 매니저에게서 **거뒀다**. 0093(07-30)이 열어 뒀지만
@@ -163,8 +167,8 @@ try {
   // 사장은 역할 관문을 통과해 '신청 없음'(not_pending)에서 멈춘다 = 상태 변화 없이 사장 승인 경로가 열려 있음을 잰다.
   const { error: ka } = await O.rpc('approve_member', { p_uid: xId });
   check('회귀: 사장은 합류 승인 관문 통과(신청 없음=not_pending)', /not_pending/.test(ka?.message ?? ''), ka?.message ?? '(신청이 없는데 성공?)');
-  skipped('★좌석캡: 매니저 포함 2좌석 초과 승인 거부(staff_limit)', '고정 매장 store_001 을 체험 종료로 내려야 잴 수 있다');
-  skipped('회귀: 사장 합류 승인 성공', '신청(pending) 상태의 새 계정이 필요하다');
+  notMeasured('★좌석캡: 매니저 포함 2좌석 초과 승인 거부(staff_limit)', '고정 매장 store_001 을 체험 종료로 내려야 잴 수 있다');
+  notMeasured('회귀: 사장 합류 승인 성공', '신청(pending) 상태의 새 계정이 필요하다');
 
   // ── ④ 매니저 잠금 3영역(사장 전용) ───────────────────────────────────────
   const rn = await M.rpc('rename_store', { p_name: 'ROL 탈취' });
@@ -182,8 +186,8 @@ try {
   check('★타 테넌트: store_001 멤버십 열람 불가', !xSee.error && (xSee.data?.length ?? 0) === 0, `rows=${xSee.data?.length}`);
 
   // ── ⑥ ★보안: 매니저 내보내기·나가기 후 멤버십 잔존 0 ────────────────────
-  skipped('★매니저 내보내기(remove_staff) 후 멤버십·재전환 차단', '고정 직원의 근무표·교대요청을 지운다(0132). 되살릴 길이 qa:seed 뿐이다');
-  skipped('★매니저 나가기(leave_store) 후 멤버십 잔존 0', '고정 직원의 store_001 멤버십을 지운다');
+  notMeasured('★매니저 내보내기(remove_staff) 후 멤버십·재전환 차단', '고정 직원의 근무표·교대요청을 지운다(0132). 되살릴 길이 qa:seed 뿐이다');
+  notMeasured('★매니저 나가기(leave_store) 후 멤버십 잔존 0', '고정 직원의 store_001 멤버십을 지운다');
 
   // ── ⑦ 회귀: 사장 권한 무변 ───────────────────────────────────────────────
   // 지금 시급을 그대로 다시 쓴다(시드에 행이 없으면 새로 생긴 행은 정리에서 지운다).
@@ -196,8 +200,8 @@ try {
   // ── 정리 + 고정 계정 원복 ────────────────────────────────────────────────
   if (O && !setupFailed && snap) {
     try {
-      const left = await cleanupRows(O);
-      check(`정리: ${P} 행 0`, left === 0, `left=${left}`);
+      const left = await cleanupRows();
+      check(`정리: ${P} 행 0(service_role 로 셈)`, left === 0, left === null ? 'service_role 키 없음 — 남은 행을 셀 수 없다' : `left=${left}`);
       // 역할 — 시드대로(J=junior, M=manager). 뚫린 경우에도 여기서 되돌아온다.
       for (const [uid, role, c] of [[J.uid, 'junior', J], [M.uid, 'manager', M]]) {
         const row = ((await c.rpc('my_units')).data ?? []).find((r) => r.unit_id === UNIT);
@@ -242,5 +246,6 @@ try {
   for (const c of [O, M, J, X]) { try { await c?.auth.signOut(); } catch { /* best-effort */ } }
 }
 
-console.log(`\nRESULT: ${pass} passed, ${fail} failed, ${skip} skipped`);
+// 안 잰 항목은 통과로 세지 않고 수를 최종 줄에 찍는다(AGENTS '게이트가 거짓말하는 3가지').
+console.log(`\nRESULT: ${pass} passed, ${fail} failed, 고정 계정으로 안 잼 ${notRun}`);
 process.exit(setupFailed ? 2 : fail ? 1 : 0);

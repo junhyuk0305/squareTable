@@ -19,6 +19,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { deflateSync, crc32 } from 'node:zlib';
 import { launch, sleep, storageKeyFor } from './lib/cdp.mjs';
+import { guardMainOrigin } from './lib/require-main-origin.mjs';
 import { FIXED, PW, UNIT, login, ensureActive, restoreActive, rolePrecondition } from './lib/qa-fixed-accounts.mjs';
 
 const T0 = Date.now();
@@ -36,6 +37,7 @@ const SB = env.EXPO_PUBLIC_SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const SRV = env.SUPABASE_SERVICE_ROLE_KEY;
 const ORIGIN = env.QA_ORIGIN ?? 'http://localhost:8081';
+guardMainOrigin(ORIGIN); // --allow-remote 면 화면 서버도 main 체크아웃이어야 한다
 if (!SB || !ANON || !SRV) { console.error('FAIL: EXPO_PUBLIC_SUPABASE_URL / ANON_KEY(.env) · SUPABASE_SERVICE_ROLE_KEY(.env.seed) 필요'); process.exit(2); }
 try { await fetch(ORIGIN); } catch { console.error(`FAIL: 개발 서버(${ORIGIN})가 안 떠 있어요 — npm run web`); process.exit(2); }
 

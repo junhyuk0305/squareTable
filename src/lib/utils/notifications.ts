@@ -4,6 +4,8 @@
 import type { FeedItem, TaskTemplate, DoneMark } from '@/lib/store/useWorkStore';
 import { occursOn, assigneesOf } from '@/lib/store/useWorkStore';
 import type { SwapRequest, ShiftTemplate, ScheduleNotice, ShiftTimeRequest } from '@/lib/store/useScheduleStore';
+// 교대 수락 대상 판정 SSOT(서버 accept_swap 0179 와 같은 규칙) — 벨이 근무표와 같은 답을 내게 그대로 쓴다.
+import { canAcceptSwap, swapTargets } from '@/lib/store/useScheduleStore';
 import type { PendingMember, JoinNotice, JoinDone } from '@/lib/store/useStaffStore';
 import type { UnknownQuery, PlaybookSuggestion, PaymentClaim, OwnerAlert } from '@/types';
 // D4 '도와줄 수 있는 질문' 판정 SSOT — 벨 배지·알림 목록이 '내 공간' 리스트와 같은 축을 보게 재사용한다.
@@ -118,12 +120,9 @@ export const isPendingAssignment = (
 export const isMySuggestionResult = (s: PlaybookSuggestion, me: string): boolean =>
   s.proposer_id === me && s.status !== 'pending' && !!s.reviewed_at;
 
-/** 내가 대응할 수 있는 열린 교대 요청(대타 전체 + 나에게 온 맞교환). 지난 날짜 제외. */
-export const isIncomingSwap = (r: SwapRequest, me: string, today: string): boolean =>
-  r.status === 'open' &&
-  r.requester_id !== me &&
-  r.date >= today &&
-  (r.kind === 'cover' || r.target_staff_id === me);
+/** 내가 대응할 수 있는 열린 교대 요청 = 근무표가 수락 버튼을 주는 것(canAcceptSwap). 지정 대타는 지정된 사람에게만 뜬다.
+ *  ★예전엔 대타를 지정 여부와 관계없이 모두에게 띄워, 지정 안 된 직원이 눌러 수락하면 서버가 거부했다(오류 탐지 11-03 #9). */
+export const isIncomingSwap = (r: SwapRequest, me: string, today: string): boolean => canAcceptSwap(r, me, today);
 
 /** 내가 물은 질문에 남이 답했다(P1 역 ④ · 푸시 q-answered 의 인앱 짝). 내가 내 질문에 답한 건 제외.
  *  ★답한 시각 컬럼이 없어(unknown_queries) 정렬·ack 비교는 asked_at 으로 한다 — 묻고 나서 '모두 읽기'를 한 뒤
@@ -829,6 +828,10 @@ export type ManagerReceivedArgs = {
   scheduleNotices?: ScheduleNotice[];
   /** 받은 교대 요청 본문의 근무 시각용(없으면 날짜만 · 허브와 같다). */
   shiftTemplates?: ShiftTemplate[];
+  /** 매니저 본인 퀴즈의 발송 진행(0332 state). 없으면 완료 여부만 본다(허브). 직원 벨과 같은 값을 넘긴다. */
+  quizProgress?: QuizProgressRow[];
+  /** 매니저 본인의 열린 옛 퀴즈 id(useLegacyQuizOpen). 없으면(허브) 발송 퀴즈만 센다. */
+  legacyQuizIds?: readonly string[];
 };
 
 /** ② 나에게 온 것 — 매니저가 열 수 있는 경로로. 카운트와 목록이 같은 배열을 보게 이 함수 하나만 쓴다. */
@@ -898,9 +901,12 @@ function managerPersonalRows(ownerArgs: Parameters<typeof ownerRows>[0], receive
     feed: [], swaps: ownerArgs.swaps, templates: received.shiftTemplates ?? [], nameOf: received.nameOf, userId: received.userId,
     today: received.today, ackAt: received.ackAt, queue: ownerArgs.queue, scheduleNotices: received.scheduleNotices,
     assignments: ownerArgs.assignments, courses: ownerArgs.courses,
+    // 직원 벨과 같은 퀴즈 입력 — 멈춘 퀴즈(void) 제외 · 옛 퀴즈 포함(오류 탐지 11-03 #11).
+    quizProgress: received.quizProgress, legacyQuizIds: received.legacyQuizIds,
   });
   // 받은 교대 요청은 나를 지목한 것만 — 대타(cover) 공개 요청 푸시는 직원(staff)에게만 간다(푸시 = 목록).
-  const targetedToMe = new Set(ownerArgs.swaps.filter((s) => s.target_staff_id === received.userId).map((s) => `swap_${s.id}`));
+  //   지목 = swapTargets(대상 목록이 정본 · 없으면 단수 컬럼). 단수만 보면 목록으로 지정된 매니저 벨에 안 떴다(#8).
+  const targetedToMe = new Set(ownerArgs.swaps.filter((s) => swapTargets(s)?.includes(received.userId) ?? false).map((s) => `swap_${s.id}`));
   return rows
     .filter((r) => MANAGER_PERSONAL.has(r.kind) && (r.kind !== 'swap' || targetedToMe.has(r.id)))
     .map((r) => ({ ...r, kind: r.kind as ManagerNotifKind, route: routeForRole(r.route, 'manager') }));

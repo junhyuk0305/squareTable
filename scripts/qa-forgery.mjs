@@ -14,7 +14,7 @@ import { createHash } from 'node:crypto';
 import { joinAsStaff, seedPending } from './lib/qa-staff.mjs';
 
 const st = Object.fromEntries(
-  execFileSync('npx', ['supabase', 'status', '-o', 'env'], { encoding: 'utf8', shell: true, stdio: ['ignore', 'pipe', 'ignore'] })
+  execFileSync('npx', ['-y', 'supabase@2.122.1', 'status', '-o', 'env'], { encoding: 'utf8', shell: true, stdio: ['ignore', 'pipe', 'ignore'] })
     .split('\n').map((l) => l.match(/^([A-Z_]+)="?(.*?)"?$/)).filter(Boolean).map((m) => [m[1], m[2]]),
 );
 const URL = st.API_URL, ANON = st.ANON_KEY, SRV = st.SERVICE_ROLE_KEY;
