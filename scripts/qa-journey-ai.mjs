@@ -22,6 +22,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { launch, sleep, storageKeyFor } from './lib/cdp.mjs';
+import { guardMainOrigin } from './lib/require-main-origin.mjs';
 import { FIXED, UNIT, login, rolePrecondition, ensureActive, restoreActive } from './lib/qa-fixed-accounts.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -38,6 +39,7 @@ const SB = env.EXPO_PUBLIC_SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const SRV = env.SUPABASE_SERVICE_ROLE_KEY;
 const ORIGIN = env.QA_ORIGIN ?? 'http://localhost:8081';
+guardMainOrigin(ORIGIN); // --allow-remote 면 화면 서버도 main 체크아웃이어야 한다
 if (!SB || !ANON || !SRV) { console.error('FAIL: .env(URL·ANON) + .env.seed(SUPABASE_SERVICE_ROLE_KEY) 필요'); process.exit(2); }
 try { await fetch(ORIGIN); } catch { console.error(`FAIL: 개발 서버(${ORIGIN})가 안 떠 있어요 — npm run web`); process.exit(2); }
 

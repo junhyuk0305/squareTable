@@ -43,7 +43,7 @@ function pe(f){const o={};try{for(const l of readFileSync(f,'utf8').split(/\r?\n
 const LOCAL = process.argv.includes('--local');
 let URL_, ANON, SRV;
 if (LOCAL) {
-  const st = Object.fromEntries(execFileSync('npx', ['supabase', 'status', '-o', 'env'], { encoding: 'utf8', shell: true, stdio: ['ignore', 'pipe', 'ignore'] })
+  const st = Object.fromEntries(execFileSync('npx', ['-y', 'supabase@2.122.1', 'status', '-o', 'env'], { encoding: 'utf8', shell: true, stdio: ['ignore', 'pipe', 'ignore'] })
     .split('\n').map((l) => l.match(/^([A-Z_]+)="?(.*?)"?$/)).filter(Boolean).map((m) => [m[1], m[2]]));
   URL_ = st.API_URL; ANON = st.ANON_KEY; SRV = st.SERVICE_ROLE_KEY;
   if (!URL_ || !/^http:\/\/127\.0\.0\.1:/.test(URL_)) { console.error('중단: 로컬 도커 주소가 아니다 —', URL_); process.exit(2); }

@@ -5,7 +5,8 @@
 //   ① 좌석 잠김: 유료 때 3명이 들어온 뒤 만료로 무료가 된 매장(seat_locked_for = true 인 3번째 직원)에게
 //      due_quiz_sends · due_task_reminders 가 내보내는가.
 //   ② 완료 뒤 대기 행(결함 ②): 다 푼 뒤에도 그 전에 만든 다시 알리기(manual) 대기 행이 후보인가. 대조군 = 같은 모양의 join 행.
-//   ③ 재확인 대기 행이 다시 확인(verified_at 갱신) 뒤에도 후보인가. 재확인 행은 enqueue_knowhow_rechecks 로 실제로 만든다.
+//   ③ 재확인 대기 행이 다시 확인(verified_at 갱신) 뒤에도 후보로 남는가. 재확인 행은 enqueue_knowhow_rechecks 로 실제로 만든다.
+//      11-05 사용자 결정 = 남아야 한다(재확인을 끝내기 전이면 보낸다). 빠지면 ✗.
 //   ④ 마감 날짜가 어제인 행이 후보인가 · 선점하면 due_on 이 어제로 찍히는가.
 // ⚠️ due_quiz_sends 는 전역 함수이고 맨 앞에서 enqueue_knowhow_rechecks 를 전역으로 돈다. 이 매장 행만 선점한다(④ 한 건).
 // 사용: node scripts/qa-scheduler-recheck.mjs --local
@@ -102,7 +103,8 @@ async function multiStore() {
     await ok(admin.from('knowhow_understanding').update({ verified_at: new Date().toISOString() }).eq('unit_id', w.unit).eq('staff_id', sRe.id).eq('entry_id', C.entry), 'reverify');
     ids = await dueIds(w.unit);
     if (!before) skipped('③', '다시 확인 전에도 재확인 행이 후보가 아니다(대조군 실패)');
-    else check('③: 다시 확인을 마친 직원의 재확인 대기 행이 후보다', ids.includes(re[0].id), `재확인 행 ${ids.includes(re[0].id) ? '후보' : '빠짐'}`);
+    // 11-05 사용자 결정: 재확인을 끝내기 전이면 다른 퀴즈로 같은 노하우를 다시 확인했어도 보낸다. 빠지면 결함이다.
+    else check('③: 다른 경로로 다시 확인한 직원의 재확인 대기 행이 후보에서 빠진다', !ids.includes(re[0].id), `재확인 행 ${ids.includes(re[0].id) ? '후보' : '빠짐'}`);
   }
 
   console.log('— ④ 마감 지난 행 —');

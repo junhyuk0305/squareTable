@@ -15,8 +15,8 @@ export function assertLocalUrl(url) {
 export function localEnv() {
   let out = '';
   try {
-    out = execFileSync('npx', ['supabase', 'status', '-o', 'env'], { encoding: 'utf8', shell: true, stdio: ['ignore', 'pipe', 'ignore'] });
-  } catch { console.error('중단: npx supabase status 실패(로컬 도커 꺼짐?)'); process.exit(2); }
+    out = execFileSync('npx', ['-y', 'supabase@2.122.1', 'status', '-o', 'env'], { encoding: 'utf8', shell: true, stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch { console.error('중단: npx -y supabase@2.122.1 status 실패(로컬 도커 꺼짐?)'); process.exit(2); }
   const st = Object.fromEntries(out.split('\n').map((l) => l.match(/^([A-Z_]+)="?(.*?)"?$/)).filter(Boolean).map((m) => [m[1], m[2]]));
   assertLocalUrl(st.API_URL);
   console.log('TARGET local', st.API_URL);
