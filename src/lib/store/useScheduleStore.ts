@@ -6,7 +6,7 @@
 // HAS_SUPABASE=false면 데모 시드(store_001)로 폴백해 프론트가 끊기지 않는다.
 import { create } from 'zustand';
 import { type Daypart } from '@/lib/store/daypartLabels';
-import { coalesce, subscribeDebounced, settleWithin, HYDRATE_TIMEOUT_MS } from '@/lib/store/realtimeSync';
+import { coalesce, subscribeDebounced, settleWithin, HYDRATE_TIMEOUT_MS, reportHydrate } from '@/lib/store/realtimeSync';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import {
@@ -327,6 +327,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     //   예외를 던지면 Promise.all 이 reject 되고 set 이 영영 실행되지 않아 loaded 가 false 로 남는다
     //   → 게이트가 **영구 스피너**가 된다. 계약을 값 반환 경로에만 걸면 계약이 아니다.
     const epoch = currentTenantEpoch();
+    const t0 = Date.now();
     try {
     // 정지(hang) 방지 — 위 try/catch 는 예외만 잡는다. 끝나지 않는 fetch 는 여기서 끊는다.
     const all = await settleWithin(
@@ -355,6 +356,8 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     }));
     } catch (e) {
       console.warn('[schedule] hydrate threw:', e);
+      // 방·업무와 같은 원격 기록(64497e8 이 근무표만 빠뜨렸다 · 오류 탐지 11-03).
+      reportHydrate('threw', 'schedule', t0, {}, e);
       if (isStaleEpoch(epoch)) return;
       set({ loaded: true, loadError: true, configLoadError: true });
     }
