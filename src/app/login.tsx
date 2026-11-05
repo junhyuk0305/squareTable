@@ -105,7 +105,7 @@ export default function LoginScreen() {
         <Appear delay={0}>
           <View style={styles.header}>
             <Wordmark size="lg" />
-            <Text style={styles.tagline}>우리 매장 운영의 기준 · 현장 운영 AI</Text>
+            <Text style={styles.tagline}>우리 매장 운영의 기준 · 알바·직원 교육 AI</Text>
           </View>
         </Appear>
 

@@ -723,14 +723,15 @@ const s = StyleSheet.create({
   // 말풍선+시간 한 줄. 시간은 말풍선 하단 baseline에 붙는다(flex-end). 말풍선이 길면 flexShrink로 양보.
   bubbleLine: { flexDirection: 'row', alignItems: 'flex-end', gap: 5 },
   bubbleLineMine: { justifyContent: 'flex-end' },
-  bubble: { flexShrink: 1, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, borderTopLeftRadius: Radius.tail, paddingHorizontal: 12, paddingVertical: 7, ...Elevation.e1 },
+  bubble: { flexShrink: 1, minWidth: 0, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, borderTopLeftRadius: Radius.tail, paddingHorizontal: 12, paddingVertical: 7, ...Elevation.e1 },
   bubbleMine: { backgroundColor: InkColors.ink, borderColor: InkColors.ink, borderTopLeftRadius: Radius.md, borderTopRightRadius: Radius.tail, alignSelf: 'flex-end' },
   bubblePhoto: { padding: 4, overflow: 'hidden' },
   msgImage: { width: 200, height: 200, borderRadius: Radius.sm },
   msgImageWithText: { marginBottom: 6 },
   msgCaption: { paddingHorizontal: 8, paddingBottom: 5, paddingTop: 1 },
   // 스트림 전역 user-select:none 위에서, 말풍선 본문 텍스트만 선택/복사 가능하게 복원(웹).
-  msgText: { ...Type.body, lineHeight: 21, ...(Platform.OS === 'web' ? ({ userSelect: 'text' } as object) : null) },
+  // 웹: 띄어쓰기 없는 긴 문자열(ㄹㄹㄹ…·URL)이 말풍선을 밀어 프레임 밖으로 넘치지 않게 글자 단위로 꺾는다. 네이티브는 기본 동작이다.
+  msgText: { ...Type.body, lineHeight: 21, ...(Platform.OS === 'web' ? ({ userSelect: 'text', overflowWrap: 'anywhere', wordBreak: 'break-word' } as object) : null) },
   mention: { color: BrandColors.mentionText, fontWeight: '800' },
   mentionMine: { color: BrandColors.yellow },
   // 인라인 시간: 말풍선 옆에 붙어 하단 baseline에 앉는다. 줄바꿈 방지로 flexShrink 0.
