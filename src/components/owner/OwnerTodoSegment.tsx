@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, type ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { Appear, stagger } from '@/components/Appear';
@@ -18,6 +18,7 @@ import { sortByUrgency } from '@/lib/utils/unknownQuery';
 import { formatAsked } from '@/lib/utils/time';
 import { AI_ANSWER_LIMIT, fetchPeerAnswers, type AiAnswerRow as AiAnswer, type PeerAnswerRow } from '@/lib/db';
 
+import { CardStyles } from '@/lib/theme/card';
 import { InkColors } from '@/lib/theme/colors';
 import { Layout, Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
@@ -223,10 +224,11 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
               히어로 1건을 뺀 '남은' 수로 말한다. */}
           <SectionLabel title="답할 질문" hint={`남은 ${Math.max(0, (pendingTotal ?? pending.length) - 1)}건`} />
           <PagedList
+            style={styles.listCard}
             items={restPending}
-            render={(uq, i) => (
+            render={(uq, i, last) => (
               <Appear key={uq.id} delay={stagger(i)}>
-                <SimilarGroupRow uq={uq} onPress={goAnswer} />
+                <SimilarGroupRow uq={uq} onPress={goAnswer} last={last} />
               </Appear>
             )}
           />
@@ -262,10 +264,11 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
         <View style={styles.group}>
           <SectionLabel title="동료가 답한 질문" hint={`최근 30일 ${peerAnswers.length}건`} />
           <PagedList
+            style={styles.listCard}
             items={peerAnswers}
-            render={(r, i) => (
+            render={(r, i, last) => (
               <Appear key={`${r.uq_id}_${i}`} delay={stagger(i)}>
-                <Pressable onPress={() => goEntry(r.entry_id)} style={styles.peerRow} accessibilityRole="button">
+                <Pressable onPress={() => goEntry(r.entry_id)} style={[styles.peerRow, last && styles.rowLast]} accessibilityRole="button">
                   <Text style={styles.peerQ} numberOfLines={2}>{r.query_text ?? ''}</Text>
                   <Text style={styles.peerMeta} numberOfLines={1}>
                     {`${r.answerer_name ?? '동료'}님이 '${entryTitleOf(r.entry_id) ?? '노하우'}'로 답했어요 · ${formatAsked(r.answered_at, '방금 전')}`}
@@ -291,18 +294,24 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
  *   고칠 때는 상한 도달 시 마지막 '더 보기' 자리에 "여기까지 1,000건" 한 줄을 붙인다.
  *   (대기 1,000건이 쌓인 매장은 현실에 없어 우선순위를 뒤로 뒀다.)
  */
-function PagedList<T>({ items, render }: { items: T[]; render: (it: T, i: number) => ReactNode }) {
+function PagedList<T>({ items, render, style }: {
+  items: T[];
+  /** last = 카드(style) 안에서 그 줄이 맨 아래일 때 true — 줄이 자기 구분선을 끈다. */
+  render: (it: T, i: number, last: boolean) => ReactNode;
+  style?: ViewStyle;
+}) {
   const [shown, setShown] = useState(PAGE);
   const rest = items.length - shown;
+  const visible = items.slice(0, shown);
   return (
-    <View>
-      {items.slice(0, shown).map(render)}
+    <View style={style}>
+      {visible.map((it, i) => render(it, i, !!style && rest <= 0 && i === visible.length - 1))}
       {rest > 0 && (
         <Pressable
           onPress={() => setShown((n) => n + PAGE)}
           accessibilityRole="button"
           accessibilityLabel={`${Math.min(rest, PAGE)}건 더 보기`}
-          style={({ pressed }) => [styles.moreRow, pressed && { opacity: 0.6 }]}
+          style={({ pressed }) => [styles.moreRow, !!style && styles.rowLast, pressed && { opacity: 0.6 }]}
         >
           <Text style={styles.moreText}>{Math.min(rest, PAGE)}건 더 보기 · 남은 {rest}건</Text>
         </Pressable>
@@ -325,6 +334,11 @@ const styles = StyleSheet.create({
   root: { gap: Layout.sectionGap },
   group: { gap: Space.sm },
   groupHint: { ...Type.desc, marginTop: -4 },
+  // 맨바닥 줄 목록('답할 질문'·'동료가 답한 질문')을 카드 한 장에 담는다 — 'AI가 답한 질문' 줄(AiAnswerRow)은
+  // 이미 줄마다 카드라 같은 화면에서 이 둘만 바탕에 떠 있었다(2026-11-05). 행이 좌우 16을 스스로 갖고 있어
+  // 카드의 좌우 안쪽은 0. overflow hidden 은 쓰지 않는다 — iOS 에서 카드 자기 그림자까지 잘린다.
+  listCard: { ...CardStyles.rows, paddingHorizontal: 0 },
+  rowLast: { borderBottomWidth: 0 },
 
   // '더 보기' — 행들과 같은 좌우 인셋. 누를 수 있는 행이라 최소 터치 타깃 48.
   moreRow: {

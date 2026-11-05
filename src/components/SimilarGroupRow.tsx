@@ -14,6 +14,8 @@ export type SimilarGroupRowProps = {
   onPress: (uq: UnknownQuery) => void;
   /** 답변하기(인라인 버튼) — 사장이 직접 답변을 입력하는 화면으로. 미지정 시 버튼 숨김. */
   onAnswer?: (uq: UnknownQuery) => void;
+  /** 카드 안 마지막 줄 — 구분선을 끈다(카드 테두리와 겹쳐 두 줄로 보이지 않게). */
+  last?: boolean;
 };
 
 /**
@@ -23,7 +25,7 @@ export type SimilarGroupRowProps = {
  * - onAnswer가 오면 작은 인라인 '답변하기' 버튼을 보여준다(사장 직접 입력 — AI 대리응답 없음).
  * 모두 프레임 내부 일반 흐름 — 별도 캡 불필요.
  */
-export function SimilarGroupRow({ uq, onPress, onAnswer }: SimilarGroupRowProps) {
+export function SimilarGroupRow({ uq, onPress, onAnswer, last }: SimilarGroupRowProps) {
   const n = uq.similar_queries_count;
   // 표기는 전 화면 '{총 인원}명이 물었어요'로 통일 (n = 본인 외 인원).
   const groupLabel = n > 0 ? `${n + 1}명이 물었어요` : null;
@@ -36,7 +38,7 @@ export function SimilarGroupRow({ uq, onPress, onAnswer }: SimilarGroupRowProps)
   ].filter(Boolean);
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, last && styles.wrapLast]}>
       <Pressable
         onPress={() => onPress(uq)}
         accessibilityRole="button"
@@ -89,6 +91,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: InkColors.line,
   },
+  wrapLast: { borderBottomWidth: 0 },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
