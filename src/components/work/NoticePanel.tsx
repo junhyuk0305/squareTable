@@ -66,7 +66,8 @@ export function NoticePanel({
   // 전 매장 동시 공지(S3 #3) — 매장 2개 이상 소유 시에만 전달. 대상 매장 선택 시 broadcast, 아니면 기존 단일 발송.
   currentStore?: { unit_id: string; store_name: string };
   targetStores?: { unit_id: string; store_name: string }[];
-  onBroadcast?: (text: string, unitIds: string[]) => void;
+  /** 성공하면 true. 실패하면 입력을 비우지 않는다. */
+  onBroadcast?: (text: string, unitIds: string[]) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState('');
   const [targets, setTargets] = useState<Set<string>>(new Set()); // 현재 매장 외 추가 대상(unit_id)
@@ -89,11 +90,17 @@ export function NoticePanel({
   }
   useEffect(() => () => { if (focusTimer.current) clearTimeout(focusTimer.current); }, []);
 
-  function post() {
+  // 여러 매장 공지는 결과를 기다린 뒤 성공했을 때만 입력을 비운다(실패하면 쓴 글이 그대로 남아 다시 보낼 수 있다).
+  //   기다리는 동안 입력이 남아 있으니 두 번 눌러 두 번 나가지 않게 막는다.
+  const broadcasting = useRef(false);
+  async function post() {
     const v = draft.trim();
     if (!v) return;
     if (canBroadcast && targets.size > 0 && currentStore && onBroadcast) {
-      onBroadcast(v, [currentStore.unit_id, ...targets]);
+      if (broadcasting.current) return;
+      broadcasting.current = true;
+      const ok = await onBroadcast(v, [currentStore.unit_id, ...targets]).finally(() => { broadcasting.current = false; });
+      if (!ok) return;
     } else {
       onPost(v);
     }

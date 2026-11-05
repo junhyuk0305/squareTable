@@ -185,5 +185,27 @@ check('⑥ 사장: 직원 제안 2건 모두 검토함에(자기 것 아님)', o
     && juniorUnreadCount([], [], JR, TODAY, [], {}, null, [], [], [], [], joinNotices, accountAckAt(ackByUnit)) === 1);
 }
 
+// ⑫ 오류 탐지 11-03 B 묶음(2026-11-05) — 벨이 근무표 수락 판정(canAcceptSwap)·직원 벨 퀴즈 입력과 같은 답을 내는가.
+//   #9 지정 대타는 지정된 사람 벨에만 · #8 대상 목록으로 지정된 매니저 벨에 뜬다 · #11 매니저 본인 멈춘 퀴즈는 안 세고 옛 퀴즈는 센다.
+{
+  const { isIncomingSwap, juniorUnreadCount, manageUnreadCount } = await import(pathToFileURL(join(ROOT, 'src/lib/utils/notifications.ts')).href);
+  const D = '2026-08-20';
+  const named = { id: 'sw_named', unit_id: 'u1', kind: 'cover', requester_id: 'u_junior', status: 'open', date: D, target_staff_id: null, target_staff_ids: ['u_b'], created_at: iso(4), updated_at: iso(4) };
+  check('⑫ #9 지정 대타: 지정 안 된 직원 = 안 뜸 · 지정된 직원 = 뜸', !isIncomingSwap(named, 'u_d', TODAY) && isIncomingSwap(named, 'u_b', TODAY));
+  check('⑫ #9 지정 안 된 직원 벨 숫자 0', juniorUnreadCount([], [named], 'u_d', TODAY) === 0);
+  const toMgr = { ...named, id: 'sw_mgr', target_staff_ids: [ME] };
+  const mgrSwap = buildManagerNotifications({ ...ownerArgs, swaps: [toMgr], suggestions: [], feed: [] }, { ...received, suggestions: [], feed: [], taskTemplates: [] });
+  check('⑫ #8 대상 목록으로 지정된 매니저 벨에 뜬다', mgrSwap.some((r) => r.id === 'swap_sw_mgr' && r.kind === 'swap'), mgrSwap.map((r) => r.id).join(','));
+
+  const courses = [{ id: 'c_void', name: '멈춘 퀴즈', due_days: null, audience: 'staff', created_at: iso(1) }, { id: 'c_old', name: '옛 퀴즈', due_days: null, audience: 'staff', created_at: iso(2) }];
+  const assignments = [{ id: 'qa_void', courseId: 'c_void', userId: ME, scheduledOn: TODAY, sentAt: iso(3), completedAt: null, dueOn: null, dueDate: null }];
+  const quizProgress = [{ assignmentId: 'qa_void', pendingEntryIds: [], totalItems: 0, answeredItems: 0, state: 'void' }];
+  const oA = { ...ownerArgs, swaps: [], suggestions: [], feed: [], assignments, courses };
+  const rA = { ...received, suggestions: [], feed: [], taskTemplates: [], quizProgress, legacyQuizIds: ['c_old'] };
+  const quizRows = buildManagerNotifications(oA, rA).filter((r) => r.kind === 'training');
+  check('⑫ #11 매니저 본인: 멈춘 퀴즈 안 뜸 · 옛 퀴즈 뜸', quizRows.length === 1 && quizRows[0].id === 'quiz_legacy_c_old', quizRows.map((r) => r.id).join(','));
+  check('⑫ #7 매니저 배지 == 목록 안읽음(같은 입력)', manageUnreadCount('manager', oA, rA) === buildManagerNotifications(oA, rA).filter((r) => r.unread).length);
+}
+
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

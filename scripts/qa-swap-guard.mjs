@@ -82,6 +82,11 @@ try {
   const jSelf = await J.from('swap_requests').update({ status: 'accepted', accepted_by: jId }).eq('id', swap2).select('id, status, accepted_by');
   console.log(`  [본인 수락 시도] rows=${jSelf.data?.length ?? 0} ${JSON.stringify(jSelf.data ?? jSelf.error?.message)}`);
   check('★0128·0295: 본인 요청 셀프 수락 거부', (jSelf.data?.length ?? 0) === 0 && /swap_no_self_accept|swap_update_not_allowed/.test(jSelf.error?.message ?? ''), jSelf.error?.code ?? '-');
+  // 0128 제약 단독: 위 단언은 0295 트리거가 먼저 막아 제약을 지워도 통과했다(오류 탐지 11-03 M4a).
+  // service_role(정의자 함수와 같은 경로)은 트리거를 안 타므로 여기서는 제약만 남는다. 23514 가 나야 한다.
+  const svcSelf = await svc.from('swap_requests').update({ accepted_by: jId }).eq('id', swap2).select('id');
+  if ((svcSelf.data?.length ?? 0) > 0) await svc.from('swap_requests').update({ accepted_by: null }).eq('id', swap2); // 뚫렸으면 다음 단언 전에 되돌린다
+  check('★0128 제약 단독: service_role 셀프 accepted_by 도 23514', svcSelf.error?.code === '23514', svcSelf.error?.code ?? `rows=${svcSelf.data?.length}`);
 
   // ★과잉 차단 확인 — 진짜 경로(동료가 수락)는 그대로 통과해야 한다. 0128 이 정상 흐름을 막으면 기능이 죽는다.
   const K = mk();

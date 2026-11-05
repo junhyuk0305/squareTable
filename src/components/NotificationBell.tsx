@@ -10,13 +10,12 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
-import { useStaffStore, memberNameOf } from '@/lib/store/useStaffStore';
-import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
-import { useOwnerAlertStore } from '@/lib/store/useOwnerAlertStore';
+import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { todayStr } from '@/lib/utils/attendance';
 import { accountAckAt, juniorUnreadCount, manageUnreadCount } from '@/lib/utils/notifications';
 import { useLegacyQuizOpen } from '@/lib/hooks/useLegacyQuizOpen';
+import { useManageNotifArgs } from '@/lib/hooks/useManageNotifArgs';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
@@ -92,35 +91,11 @@ export function NotificationBell({ edge = true }: { edge?: boolean } = {}) {
  *  배지와 목록(owner/notifications.tsx)이 **같은 축**을 봐야 하므로 역할 분기를 여기서도 그대로 한다. */
 export function OwnerNotificationBell({ edge = true }: { edge?: boolean } = {}) {
   const router = useRouter();
-  const userId = useSessionStore((s) => s.userId);
   const role = useSessionStore((s) => s.role);
-  const queue = useUnknownQueueStore((s) => s.queue);
-  const suggestions = useSuggestionStore((s) => s.suggestions);
-  const swaps = useScheduleStore((s) => s.swaps);
-  const pending = useStaffStore((s) => s.pending);
-  const staff = useStaffStore((s) => s.staff);
-  const owner = useStaffStore((s) => s.owner);
-  const feed = useWorkStore((s) => s.feed);
-  const templates = useWorkStore((s) => s.templates);
-  const done = useWorkStore((s) => s.done);
-  // 응시 완료 퀴즈(0275) · 근무 시간 수정 요청(0243) — 목록(owner/notifications.tsx)과 같은 원장.
-  const assignments = useWorkStore((s) => s.assignments);
-  const timeRequests = useScheduleStore((s) => s.timeRequests);
-  const scheduleNotices = useScheduleStore((s) => s.notices); // 매니저 역할 변경 행(0315)
-  const claims = usePaymentClaimStore((s) => s.claims);
-  const alerts = useOwnerAlertStore((s) => s.alerts);
-  const unitId = useSessionStore((s) => s.unitId);
-  const ackAt = useMemberPrefsStore((s) => (unitId ? (s.ackByUnit[unitId] ?? null) : null));
-  const today = todayStr();
-
-  const count = useMemo(() => {
-    // 세는 데 이름은 안 쓴다 — 목록(owner/notifications.tsx)과 같은 명부 SSOT(memberNameOf)로 둔다(역 ③).
-    const nameOf = (id: string) => memberNameOf({ owner, staff }, id) ?? '직원';
-    const received = { feed, taskTemplates: templates, done, today, suggestions, userId, nameOf, ackAt, scheduleNotices };
-    // 사장 배지도 목록처럼 나에게 온 배정을 센다(D11). 매니저 배지는 목록(buildManagerNotifications)과 같은 인자·같은 배열(F-2).
-    //   역할 분기는 manageUnreadCount 하나 — 앱 아이콘 배지(appBadge)가 같은 함수를 쓴다.
-    return manageUnreadCount(role, { queue, suggestions, swaps, pending, nameOf, feed, userId, ackAt, claims, alerts, assignments, timeRequests }, received);
-  }, [queue, suggestions, swaps, pending, feed, userId, ackAt, claims, alerts, role, templates, done, today, staff, owner, assignments, timeRequests, scheduleNotices]);
+  // 입력은 목록(owner/notifications.tsx)·앱 배지와 같은 훅 하나(useManageNotifArgs) — 매니저 배지 = 목록의 안 읽음(F-2).
+  const { ownerArgs, received } = useManageNotifArgs();
+  //   역할 분기는 manageUnreadCount 하나 — 앱 아이콘 배지(appBadge)가 같은 함수를 쓴다.
+  const count = useMemo(() => manageUnreadCount(role, ownerArgs, received), [role, ownerArgs, received]);
 
   return <BellButton count={count} onPress={() => router.push('/owner/notifications')} edge={edge} />;
 }
