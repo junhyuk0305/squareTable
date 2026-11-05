@@ -25,6 +25,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSy
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { launch, sleep, storageKeyFor } from './lib/cdp.mjs';
+import { guardMainOrigin } from './lib/require-main-origin.mjs';
 import { FIXED, PW, UNIT, login, ensureActive, restoreActive, rolePrecondition } from './lib/qa-fixed-accounts.mjs';
 import { RULES, RULE_TITLES, PROBE, FRAME_PROBE, SETTLED, firstRunSeedJs, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12 } from './lib/qa-oracles.mjs';
 
@@ -41,6 +42,7 @@ for (const f of ['.env']) {
 const SB = env.EXPO_PUBLIC_SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const ORIGIN = env.QA_ORIGIN ?? 'http://localhost:8081';
+guardMainOrigin(ORIGIN); // --allow-remote 면 화면 서버도 main 체크아웃이어야 한다
 if (!SB || !ANON) { console.error('FAIL: EXPO_PUBLIC_SUPABASE_URL / ANON_KEY 필요(.env)'); process.exit(2); }
 try { await fetch(ORIGIN); } catch { console.error(`FAIL: 개발 서버(${ORIGIN})가 안 떠 있어요 — npm run web`); process.exit(2); }
 
