@@ -16,6 +16,11 @@
 //   합류:   join_owners 는 신청자의 pending_unit_id 사장에게 (아직 소속 아님)
 //   방어:   unit 없는 유저 → 403 no_unit
 //   매장별 설정(0076): unit_member_prefs 의 muted / 방해금지(quiet)가 그 매장 발송을 억제
+//   M2(2026-11-05) 사용자 발송 선점 — RPC 를 service_role 로 직접 친다(엣지 serve 불필요):
+//     P1 push_client_event_v2 가 key 를 돌려주고 push_client_event(v1 · 옛 엣지·0339 트리거)는 5열 그대로
+//     P2 release 뒤 같은 사건이 다시 ok · P3 10분 지난 키·assign: 키는 release 가 지우지 않는다
+//     P4 엣지 deliver 인프라 실패 → release → 503 은 외부에서 유발 불가 → review 1(통과로 세지 않는다)
+//   엣지가 안 떠 있으면 T1~T14 는 skip 1 로 찍는다(통과로 세지 않는다). 로컬은 --local(키 = npx -y supabase@2 status).
 //
 // 자가정리: 만든 모든 테스트 계정은 끝에 delete_my_account 로 삭제.
 // 실행: node scripts/qa-push.mjs
@@ -26,6 +31,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 import { joinAsStaff, seedPending } from './lib/qa-staff.mjs';
+import { IS_LOCAL, localEnv } from './qa-local-target.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -41,7 +47,7 @@ function loadEnv() {
   }
   return env;
 }
-const env = loadEnv();
+const env = IS_LOCAL ? { ...process.env, ...localEnv() } : loadEnv();
 const URL = env.EXPO_PUBLIC_SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY; // 있으면 phone_otps 시드(게이트 0088 대비)
@@ -51,8 +57,12 @@ const PUSH_URL = `${URL}/functions/v1/push`;
 const mk = () => createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
 const s = String(Date.now()).slice(-9);
 const pw = 'Test1234!qa';
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, skip = 0, review = 0;
 const check = (name, ok, extra = '') => { ok ? (pass++, console.log('  PASS', name, extra)) : (fail++, console.log('  FAIL', name, extra)); };
+// 돌릴 수 없는 검사(skip)·코드 검토 항목(review)은 통과로 세지 않는다 — 최종 줄에 따로 찍는다.
+const skipCase = (name, why) => { skip++; console.log('  SKIP', name, `(${why})`); };
+const reviewCase = (name) => { review++; console.log('  REVIEW', name); };
+const EDGE_DOWN = Symbol('edge_down');
 
 async function signUpSession(client, email, meta) {
   const { data, error } = await client.auth.signUp({ email, password: pw, options: { data: { birth_date: '1990-01-15', ...meta } } });
@@ -151,6 +161,63 @@ try {
   cleanup.push(nobody);
 
   console.log(`\n[셋업 완료] unitA=${unitA} ownerA=${ownerAId.slice(0,8)} staffA1=${staffA1Id.slice(0,8)} staffA2=${staffA2Id.slice(0,8)} ownerB=${ownerBId.slice(0,8)} staffB1=${staffB1Id.slice(0,8)}\n`);
+
+  // ── P1~P4 ★M2 사용자 발송 선점(push_client_event_v2 · release) — RPC 를 service_role 로 직접 친다 ──
+  //  함수가 없으면(마이그레이션 전) rpc 오류 → 그 검사는 FAIL 이다(없어서 skip 으로 숨기지 않는다).
+  console.log('[P] M2 사용자 발송 선점 — push_client_event_v2 · push_client_event_release');
+  {
+    const adminM2 = createClient(URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
+    let pn = 0;
+    const askM2 = async () => {
+      const id = `uq_qam2_${s}_${++pn}`;
+      const { error } = await staffA1.from('unknown_queries').insert({ id, unit_id: unitA, query_text: `QA M2 질문 ${pn}`, status: 'pending_owner_answer' });
+      if (error) throw new Error(`질문 넣기 실패: ${error.message}`);
+      return id;
+    };
+    const args = (item) => ({ p_caller: staffA1Id, p_unit: unitA, p_pending_unit: null, p_audience: 'owners', p_tag: 'question', p_item_id: item, p_target: null });
+    const one = (r) => (Array.isArray(r.data) ? r.data[0] : r.data);
+    const keysMade = [];
+    // P1 v2 는 key 를 돌려주고, v1(옛 엣지 · 0339 트리거가 부른다)은 5열 그대로.
+    const q1 = await askM2();
+    const v2 = await adminM2.rpc('push_client_event_v2', args(q1));
+    const r2 = one(v2);
+    if (r2?.key) keysMade.push(r2.key);
+    check('P1a ★push_client_event_v2 가 ok 와 key 를 돌려준다', !v2.error && r2?.ok === true && typeof r2?.key === 'string' && r2.key.length > 0,
+      v2.error?.message ?? JSON.stringify(r2));
+    const q2 = await askM2();
+    const v1 = await adminM2.rpc('push_client_event', args(q2));
+    const r1 = one(v1);
+    keysMade.push(`question:owners:${q2}`);
+    check('P1b push_client_event(v1)는 5열 그대로(ok·reason·title·body·item_id · key 없음)',
+      !v1.error && r1?.ok === true && JSON.stringify(Object.keys(r1 ?? {}).sort()) === JSON.stringify(['body', 'item_id', 'ok', 'reason', 'title']),
+      v1.error?.message ?? JSON.stringify(r1));
+    // P2 같은 사건은 duplicate → release 뒤에는 다시 ok(새 선점 · notify.ts 의 5xx 재시도가 이 길로 다시 보낸다).
+    const rd = one(await adminM2.rpc('push_client_event_v2', args(q1)));
+    const rel = await adminM2.rpc('push_client_event_release', { p_key: r2?.key ?? '' });
+    const ra = one(await adminM2.rpc('push_client_event_v2', args(q1)));
+    check('P2 ★release 뒤 같은 사건이 다시 ok(release 전에는 duplicate)',
+      rd?.ok === false && rd?.reason === 'duplicate' && !rel.error && rel.data === true && ra?.ok === true && ra?.key === r2?.key,
+      rel.error?.message ?? JSON.stringify({ dup: rd, rel: rel.data, again: ra }));
+    // P3 10분 지난 키(창 밖) · assign: 키(0339 트리거가 관리)는 지우지 않는다.
+    const oldKey = `qa-m2-old:${s}`, assignKey = `assign:qa-m2:${s}`;
+    keysMade.push(oldKey, assignKey);
+    const { error: pkIns } = await adminM2.from('push_client_events').insert([
+      { key: oldKey, sent_at: new Date(Date.now() - 11 * 60_000).toISOString() },
+      { key: assignKey, sent_at: new Date().toISOString() },
+    ]);
+    const relOld = await adminM2.rpc('push_client_event_release', { p_key: oldKey });
+    const relAsg = await adminM2.rpc('push_client_event_release', { p_key: assignKey });
+    const { data: left } = await adminM2.from('push_client_events').select('key').in('key', [oldKey, assignKey]);
+    check('P3 ★10분 지난 키 · assign: 키는 release 가 false · 행이 남는다',
+      !pkIns && !relOld.error && relOld.data === false && !relAsg.error && relAsg.data === false && (left ?? []).length === 2,
+      pkIns?.message ?? relOld.error?.message ?? relAsg.error?.message ?? JSON.stringify({ old: relOld.data, asg: relAsg.data, left: left?.length }));
+    reviewCase('P4 엣지 deliver 인프라 실패 → push_client_event_release → 503 경로는 외부에서 유발할 수 없다(코드 검토 · push/index.ts)');
+    await adminM2.from('push_client_events').delete().in('key', keysMade);
+  }
+
+  // 엣지가 안 떠 있으면(로컬 functions serve 없음) T1~T14 는 돌릴 수 없다 → skip 1 로 찍고 통과로 세지 않는다.
+  const edgeUp = await fetch(PUSH_URL, { method: 'OPTIONS' }).then(() => true).catch(() => false);
+  if (!edgeUp) { skipCase('T1~T14 엣지 경로', `엣지가 안 떠 있다 ${PUSH_URL}`); throw EDGE_DOWN; }
 
   // ── T1 인증: 유저 JWT 없이(anon 토큰만) → 401 ──────────────────────────────
   const t1 = await invokePushRaw(ANON, { audience: 'owners', title: 't' });
@@ -264,7 +331,7 @@ try {
   check(`T14b 매장 방해금지 지금 제외(${outStart}~${outEnd}): 억제 안 함 → recipients=2 복귀`, t14.status === 200 && t14.json?.recipients === 2, JSON.stringify(t14.json));
 
 } catch (e) {
-  fail++; console.log('  FAIL exception:', e.message);
+  if (e !== EDGE_DOWN) { fail++; console.log('  FAIL exception:', e.message); }
 } finally {
   for (const c of cleanup) {
     try { await c.rpc('delete_my_account'); } catch { /* best-effort */ }
@@ -272,5 +339,5 @@ try {
   await cleanupSeededPhones(URL, SERVICE, qaPhones);
 }
 
-console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
+console.log(`\nRESULT: pass ${pass} fail ${fail} skip ${skip} review ${review}`);
 process.exit(fail ? 1 : 0);
