@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { markSendFailed, carryUnsent, restampForResend } from '@/lib/work/chatRules';
+import { markSendFailed, carryUnsent, restampForResend, upsertFeedItem, replayLatePatches, type FeedPatch } from '@/lib/work/chatRules';
 import { create } from 'zustand';
 import { todayStr, nowISO } from '@/lib/utils/attendance';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -25,6 +25,7 @@ import {
   editFeedText as dbEditFeedText,
   broadcastNotice as dbBroadcastNotice,
   subscribeWork,
+  type FeedRowPatch,
   type WorkTable,
   fetchTemplateKnowhow,
   insertTemplateKnowhow,
@@ -203,6 +204,20 @@ const pendingDone = new Map<string, { patch: DonePatch; settledAt?: number }>();
 const sendingIds = new Set<string>();
 /** loadDoneMonth 가 읽는 중인 달 — 달력을 빠르게 넘겨도 같은 달을 두 번 읽지 않는다. */
 const loadingMonths = new Set<string>();
+/** realtime 로 제자리 반영한 피드 행(M4 2차). board 축 finish 가 조회 시작 뒤 도착한 것을 스냅샷 위에 다시 얹는다(replayLatePatches · 역전 방어).
+ *  매장 전환 뒤엔 새 매장의 첫 조회 시작 시각이 옛 항목의 도착 시각보다 늦어 전부 걸러진다(db.ts 가 unit_id 다른 행은 애초에 안 넘긴다). */
+const feedPatchLog = new Map<string, FeedPatch>();
+/** 로그 상한 — 축 러너는 HYDRATE_TIMEOUT_MS 안에 끝나므로 그보다 훨씬 오래된 항목은 어느 finish 도 다시 얹을 일이 없다(채팅만 오고 재조회가 없는 세션에서 로그가 자라지 않게). */
+const FEED_PATCH_LOG_MAX_AGE_MS = HYDRATE_TIMEOUT_MS * 2;
+/** work_feed INSERT·UPDATE 1건을 재조회 없이 반영한다. 내 낙관 항목과 id 가 같으면 서버 행으로 바뀌고 전송 중 표시가 끝난다. */
+function applyFeedRow(p: FeedRowPatch) {
+  const arrivedAt = Date.now();
+  for (const [id, e] of feedPatchLog) if (arrivedAt - e.arrivedAt > FEED_PATCH_LOG_MAX_AGE_MS) feedPatchLog.delete(id);
+  feedPatchLog.set(p.item.id, { item: p.item, event: p.event, arrivedAt });
+  sendingIds.delete(p.item.id);
+  useWorkStore.setState((s) => ({ feed: upsertFeedItem(s.feed, p.item, p.event) }));
+  if (__DEV__) syncStats.feedPatches++;
+}
 /** 서버 스냅샷(fetchedAt 에 조회 시작) 위에 아직 반영이 보장되지 않은 토글을 다시 얹는다.
  *  ★쓰기가 끝난 뒤에도 바로 지우지 않는다(2026-09-03 실기기): A·B 연속 체크 → A 의 재조회가 **B 쓰기 완료 직전**에
  *    시작되면 스냅샷엔 B 가 없는데 B 는 이미 pending 에서 빠져 있어 B 체크가 잠깐 풀렸다가 다음 재조회에서 돌아왔다.
@@ -904,7 +919,8 @@ const AXES: Record<WorkAxis, () => Promise<void>> = {
     const live = overlayPendingDone(merged, feed.data, fetchedAt);
     return {
       // 서버에 아직 없는 실패·저장 중 내 메시지는 다시 얹는다(D4 · J15 ① 재전송이 새로고침에 지워지지 않게).
-      patch: { done: live.done, feed: carryUnsent(live.feed, useWorkStore.getState().feed, sendingIds) },
+      // 조회 시작(fetchedAt) 뒤 realtime 로 도착한 피드 행은 이 스냅샷에 없을 수 있다 → 다시 얹는다(M4 2차 · 역전 방어).
+      patch: { done: live.done, feed: replayLatePatches(carryUnsent(live.feed, useWorkStore.getState().feed, sendingIds), feedPatchLog, fetchedAt) },
       ok: !(done.error || feed.error),
     };
   }),
@@ -1024,9 +1040,20 @@ export const useWorkStore = create<State>((set, get) => ({
     await get().hydrate();
   },
   // realtime 이벤트마다 전체 재조회를 하면 채팅 1건(work_feed INSERT 1건)이 HTTP 15회+ 가 된다
-  // → 디바운스 창 동안 바뀐 표를 모아 그 표의 축만 다시 읽는다(M4 축 무효화 · 채팅 1건 = board 축 2쿼리).
+  // → 디바운스 창 동안 바뀐 표를 모아 그 표의 축만 다시 읽는다(M4 축 무효화).
+  // work_feed 의 INSERT·UPDATE 는 행이 같이 오므로 재조회 없이 제자리 반영한다(M4 2차 · 채팅 1건 = REST 0). 디바운스를 타지 않고 즉시 적용한다.
+  // DELETE 와 나머지 표는 그대로 축 재조회. 목록에 없는 행의 UPDATE 도 재조회 — 창(90일·PAGE_LIMIT) 밖 옛 공지를 고정하면
+  // fetchFeed 의 pinned 별도 조회만 그 행을 싣는다(제자리 패치로는 못 넣는다 · 2026-11-05 verify).
   subscribe: () =>
-    subscribeDebouncedKeyed<WorkTable>(subscribeWork, (tables) => { void get().refreshAxes(axesForTables(tables)); }, 300, 'work'),
+    subscribeDebouncedKeyed<WorkTable>(
+      (emit) => subscribeWork((table, patch) => {
+        if (patch && (patch.event === 'INSERT' || get().feed.some((f) => f.id === patch.item.id))) applyFeedRow(patch);
+        else emit(table);
+      }),
+      (tables) => { void get().refreshAxes(axesForTables(tables)); },
+      300,
+      'work',
+    ),
 
   addTask: async (input, retryId) => {
     const epoch = currentTenantEpoch();
@@ -1526,7 +1553,8 @@ export const useWorkStore = create<State>((set, get) => ({
     // J15 ①: 실패하면 글을 지우지 않고 실패로 표시한다. 말풍선에서 [다시 보내기]·[지우기]를 고른다.
     void guardWrite(
       upsertFeed(item),
-      () => set((s) => ({ feed: markSendFailed(s.feed, item.id) })),
+      // realtime echo 가 먼저 도착했으면 서버에 이미 있는 글이다 — 응답만 잃은 경우에 거짓 실패 표시를 하지 않는다(M4 2차).
+      () => { if (!feedPatchLog.has(item.id)) set((s) => ({ feed: markSendFailed(s.feed, item.id) })); },
       '메시지 전송에 실패했어요.',
     ).then((ok) => {
       sendingIds.delete(item.id);
@@ -1544,7 +1572,7 @@ export const useWorkStore = create<State>((set, get) => ({
     sendingIds.add(id);
     void guardWrite(
       upsertFeed(item),
-      () => set((s) => ({ feed: markSendFailed(s.feed, id) })),
+      () => { if (!feedPatchLog.has(id)) set((s) => ({ feed: markSendFailed(s.feed, id) })); },
       '메시지 전송에 실패했어요.',
     ).then((ok) => {
       sendingIds.delete(id);
