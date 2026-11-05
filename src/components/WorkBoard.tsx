@@ -1119,7 +1119,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onPost={(text) => postNotice(today, text, userId, userName, role, false)}
           currentStore={isStoreOwner ? currentStore : undefined}
           targetStores={isStoreOwner ? broadcastTargets : undefined}
-          onBroadcast={isStoreOwner ? (text, unitIds) => { void broadcastNotice(unitIds, text, false); } : undefined}
+          onBroadcast={isStoreOwner ? async (text, unitIds) => (await broadcastNotice(unitIds, text, false)).ok : undefined}
           onTogglePin={togglePin}
           onEdit={editFeedText}
           onDelete={deleteFeedItem}

@@ -49,6 +49,7 @@ import { FORMATS } from '@/lib/quiz/formats';
 import { quizErrorMessage } from '@/lib/quiz/errors';
 import { itemsOfCourse } from '@/lib/quiz/courseItems';
 import { latestQuizAssignments, latestCourseAnswers } from '@/lib/quiz/courseStats';
+import { currentSend } from '@/lib/quiz/progress';
 // KST 오늘은 일정 SSOT 하나만 쓴다(이 파일·만들기·설정 패널에 복붙돼 있던 것을 걷었다).
 import { cycleLabel } from '@/lib/quiz/schedule';
 import { Appear, stagger } from '@/components/Appear';
@@ -148,11 +149,10 @@ export default function QuizDetailScreen() {
   }, [id, entryIds, itemsReload]);
 
   const sends = useMemo(() => sendsByCourse.get(id ?? '') ?? [], [sendsByCourse, id]);
-  // 가장 최근 예약분이 사장이 달력으로 고른 날짜로 나갔으면 그 날짜가 모두의 마감이다(0291 · E11).
-  const latestSend = useMemo(
-    () => [...sends].sort((x, y) => x.scheduledOn.localeCompare(y.scheduledOn)).at(-1) ?? null,
-    [sends],
-  );
+  // 현재 발송이 사장이 달력으로 고른 날짜로 나갔으면 그 날짜가 모두의 마감이다(0291 · E11).
+  //   현재 발송 = currentSend(이미 나간 것 중 가장 늦은 것 · 목록·직원 화면과 같은 판정).
+  //   ★예전엔 가장 늦은 예약을 골라, 안 나간 다시 알리기 행(마감 없음)이 목록과 다른 마감을 보였다(오류 탐지 11-03 #10).
+  const latestSend = useMemo(() => currentSend(sends) ?? null, [sends]);
   const fixedDue = latestSend?.dueDate ?? null;
   /** 설정 탭 달력의 처음 값 — 고정 마감이 없으면 가장 최근 발송의 실제 마감(받은 날 + N일). 둘 다 없으면 마감 없음. */
   const currentDue = fixedDue ?? latestSend?.dueOn ?? null;

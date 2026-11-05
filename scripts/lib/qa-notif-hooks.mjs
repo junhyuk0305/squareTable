@@ -1,6 +1,6 @@
 // qa-notif-hooks.mjs — 알림 SSOT(src/lib/utils/notifications.ts)를 노드에서 그대로 import 하기 위한 동기 훅.
 //
-// notifications.ts 는 순수 함수인데 값 import 두 개가 스토어에서 온다(occursOn · answerableQuestions).
+// notifications.ts 는 순수 함수인데 값 import 몇 개가 스토어에서 온다(occursOn · answerableQuestions · canAcceptSwap).
 // 스토어 파일은 zustand·supabase·react-native 를 끌고 와서 노드가 못 읽는다. 그래서:
 //   ① 두 스토어 파일은 **그 함수 본문만 잘라** 타입을 벗겨 돌려준다(로직 복제 없음 · 원문 그대로).
 //   ② react-native 는 Platform 만 있는 빈 모듈로 바꾼다(store-policy 가 Platform.OS 만 읽는다).
@@ -19,6 +19,7 @@ const withExt = (base) => EXTS.map((e) => base + e).find(existsSync);
 const CUT = {
   'lib/store/useWorkStore.ts': ['occursOn', 'assigneesOf'],
   'lib/store/useUnknownQueueStore.ts': ['answerableQuestions'],
+  'lib/store/useScheduleStore.ts': ['swapTargets', 'canAcceptSwap'],
 };
 
 function cutFunctions(file, names) {

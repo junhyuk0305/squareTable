@@ -14,8 +14,8 @@ import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
-import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
+import { useManageNotifArgs } from '@/lib/hooks/useManageNotifArgs';
 import { todayStr } from '@/lib/utils/attendance';
 import { accountAckAt, juniorUnreadCount, manageUnreadCount } from '@/lib/utils/notifications';
 import { canManage } from '@/lib/utils/roles';
@@ -105,12 +105,11 @@ export function useAppBadgeSync(): void {
   const swaps = useScheduleStore((s) => s.swaps);
   const scheduleNotices = useScheduleStore((s) => s.notices);
   const joinNotices = useStaffStore((s) => s.joinNotices);
-  // 사장 집계 입력 — queue 는 직원 집계('도와줄 수 있는 질문', D4)에서도 함께 쓴다. assignments 는 양쪽(안 푼 퀴즈 · 응시 완료).
+  // 사장 집계 입력 — queue 는 직원 집계('도와줄 수 있는 질문', D4)에서도 함께 쓴다.
   const queue = useUnknownQueueStore((s) => s.queue);
   const suggestions = useSuggestionStore((s) => s.suggestions);
-  const pending = useStaffStore((s) => s.pending);
-  const timeRequests = useScheduleStore((s) => s.timeRequests);
-  const claims = usePaymentClaimStore((s) => s.claims);
+  // 관리 화면 세트 입력은 벨·알림 목록과 같은 훅 하나(useManageNotifArgs · 매니저 본인 퀴즈 포함).
+  const manage = useManageNotifArgs();
 
   const today = todayStr();
 
@@ -121,16 +120,12 @@ export function useAppBadgeSync(): void {
     }
     const count =
       canManage(role)
-        // 나에게 온 배정도 센다(D11 · 벨과 같은 축). 이름은 세는 데 쓰지 않는다.
+        // 나에게 온 배정도 센다(D11 · 벨과 같은 축).
         //   역할 분기는 벨과 같은 manageUnreadCount — 매니저는 매니저 목록과 같은 배열(근무 알림·역할 변경 포함).
         //   사장 알림(alerts)은 예전처럼 앱 배지에서 세지 않는다.
-        ? manageUnreadCount(
-            role,
-            { queue, suggestions, swaps, pending, nameOf: () => '', feed, userId: me, ackAt, claims, alerts: [], assignments, timeRequests },
-            { feed, taskTemplates: templates, done, today, suggestions, userId: me, nameOf: () => '', ackAt, scheduleNotices },
-          )
+        ? manageUnreadCount(role, { ...manage.ownerArgs, alerts: [] }, manage.received)
         // 레지스트리 badgeUnit 과 같은 축 — 벨(NotificationBell)과 같은 인자(assignments · joinNotices 포함).
         : juniorUnreadCount(feed, swaps, me, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, joinAckAt, quizProgress, courses, legacyQuizIds);
     setAppBadge(count);
-  }, [role, me, signedIn, feed, templates, done, swaps, queue, suggestions, pending, today, ackAt, joinAckAt, claims, scheduleNotices, assignments, joinNotices, timeRequests, quizProgress, courses, legacyQuizIds]);
+  }, [role, me, signedIn, feed, templates, done, swaps, queue, suggestions, today, ackAt, joinAckAt, scheduleNotices, assignments, joinNotices, quizProgress, courses, legacyQuizIds, manage]);
 }
