@@ -55,7 +55,7 @@ console.log('본사(브랜드) QA 시드');
   );
   if (error) {
     console.error('✗ brands upsert 실패 —', error.message);
-    console.error('  0208 마이그레이션이 올라갔는지 확인: npx supabase migration list');
+    console.error('  0208 마이그레이션이 올라갔는지 확인: npx -y supabase@2 migration list');
     process.exit(1);
   }
   console.log(`  · 브랜드: ${BRAND_ID} "${BRAND_NAME}"`);

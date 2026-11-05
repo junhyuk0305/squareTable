@@ -23,7 +23,7 @@ import {guardResolvedUrls} from './lib/local-target-guard.mjs';
 //          고정 계정 대신 이 실행 전용 사장·직원·매장을 만들고 끝에 지운다. 원격 적용 전 마이그레이션 검증용.
 const LOCAL=process.argv.includes('--local');
 let url,key,srvKey;
-if(LOCAL){const st=Object.fromEntries(execFileSync('npx',['supabase','status','-o','env'],{encoding:'utf8',shell:true,stdio:['ignore','pipe','ignore']}).split('\n').map(l=>l.match(/^([A-Z_]+)="?(.*?)"?$/)).filter(Boolean).map(m=>[m[1],m[2]]));
+if(LOCAL){const st=Object.fromEntries(execFileSync('npx',['-y','supabase@2.122.1','status','-o','env'],{encoding:'utf8',shell:true,stdio:['ignore','pipe','ignore']}).split('\n').map(l=>l.match(/^([A-Z_]+)="?(.*?)"?$/)).filter(Boolean).map(m=>[m[1],m[2]]));
  url=st.API_URL;key=st.ANON_KEY;srvKey=st.SERVICE_ROLE_KEY;
  if(!url||!/^http:\/\/127\.0\.0\.1:/.test(url)){console.error('중단: 로컬 도커 주소가 아니다 —',url);process.exit(2);}
 }else{const env={...process.env};

@@ -43,7 +43,7 @@ const { data, error } = await admin.rpc('schedule_task_reminder_cron', { p_url: 
 
 if (error) {
   console.error('FAIL: schedule_task_reminder_cron 호출 실패 —', error.message);
-  console.error('  0118 마이그레이션이 적용됐는지 먼저 확인하세요: npx supabase migration list');
+  console.error('  0118 마이그레이션이 적용됐는지 먼저 확인하세요: npx -y supabase@2 migration list');
   process.exit(1);
 }
 if (data !== 'ok') {
