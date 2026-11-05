@@ -1,7 +1,7 @@
 // qa-journey-task.mjs — 할일 여정 하니스(2026-10-15). 사장 창(S)과 직원 창(J)을 한 스크립트에서 같이 연다.
 //   사장 할일 만들기(담당 2명 반복 1 + 단건 1) → 직원 목록 → 직원 완료(사진 1장) → 사장 확인.
 //   화면 문자열을 DB 원본(service_role 읽기)과 맞대어 단언한다. DB 쓰기는 셋업(K2 비오늘 반복 1건 · K4-m 멘션 글 1건 · K7 근무 1건+시간 수정 요청 1건 · K-R4 숨김 할일 12 + 완료 1008행)·정리에만 쓴다.
-//   M4 동기 예산(2026-11-04 · 계획_M4_변경반영증분화.md §4): K8-①② 채팅 1건 교차 세션 + 사장 창 REST ≤4 · K8-③ 채널 수 ≤ 레이아웃 구독 수 · K8-④ 중복 구독 0.
+//   M4 동기 예산(2026-11-04 · 계획_M4_변경반영증분화.md §4): K8-①② 채팅 1건 교차 세션 + 사장 창 REST ≤1(2차 · 1차는 ≤4) · K8-③ 채널 수 ≤ 레이아웃 구독 수 · K8-④ 중복 구독 0.
 //   기존 K3(완료 INSERT)·K5-b0(해제 DELETE)이 그대로 있어 세 가지 이벤트(INSERT·DELETE·채팅 INSERT)의 교차 세션 반영이 모두 잡힌다.
 //   M1 완료 표 윈도(2026-11-05): K-R4 는 K8 뒤(6-d)에 둔다 — 1008행 심기가 K8 의 REST 예산 창에 섞이지 않게.
 //
@@ -725,10 +725,11 @@ try {
 
   // ── 7-b. K8-①② 채팅 1건 교차 세션 + 사장 창 REST 예산(M4 · 2026-11-04) ─────────
   //   직원 창이 채팅 1건을 보내면 사장 창(업무 탭 채팅 · 새로고침 없음)이 10초 안에 그 본문을 그린다.
-  //   그 10초 동안 사장 창의 /rest/v1/ 요청 수 ≤4 = work_feed INSERT 1건 → board 축(done+feed · feed 는 2요청일 수 있음)만 재조회.
-  //   전체 hydrate(13 fetcher · HTTP 15회+)면 RED. 시작 전 사장 창이 유휴(직전 3초 요청 0)인지 확인해 다른 활동이 섞이지 않게 한다.
-  //   ⚠️ 사장 레이아웃의 refreshMembership 30초 폴링(1요청)이 창에 겹칠 수 있다 — 메모의 url 목록으로 가른다.
-  section('6-b. K8-①② 직원 채팅 1건 → 사장 업무 탭 10초 안 표시 · 그동안 사장 창 REST 요청 ≤4');
+  //   그 10초 동안 사장 창의 /rest/v1/ 요청 수 ≤1 (M4 2차 · 2026-11-05): work_feed INSERT 의 payload 행을 스토어가 제자리 반영하므로
+  //   재조회가 0 이다. 1 은 사장 레이아웃의 소속 폴링(M3 · 120초 · 1요청)이 창에 겹칠 때의 여유다 — 메모의 url 목록으로 가른다.
+  //   ★되돌리면 RED: subscribeWork 가 행을 안 넘기거나 스토어가 applyFeedRow 대신 emit 하면 board 축 재조회 = done 1 + feed 2 = 3요청(1차 실측 3건).
+  //   전체 hydrate(13 fetcher · HTTP 15회+)면 더 크게 RED. 시작 전 사장 창이 유휴(직전 3초 요청 0)인지 확인해 다른 활동이 섞이지 않게 한다.
+  section('6-b. K8-①② 직원 채팅 1건 → 사장 업무 탭 10초 안 표시 · 그동안 사장 창 REST 요청 ≤1');
   await go(S.page, 'S', '/owner/work', '채팅(대기)');
   await S.page.waitFor(`!!document.querySelector('[placeholder="메시지 보내기"]')`, 30000);
   await go(J.page, 'J', '/junior/work', '채팅');
@@ -775,7 +776,7 @@ try {
   const urlShort = (u) => { try { const x = new URL(u); return `${x.pathname.replace('/rest/v1', '')}${x.search ? '?' + x.search.slice(1, 40) : ''}`; } catch { return u.slice(-60); } };
   const winSummary = win.map((r) => `${r.method} ${urlShort(r.url)}`).join(' | ').slice(0, 400);
   check(`K8-① 직원 채팅 1건(${chatVia.split('(')[0]}) → 사장 업무 탭에 새로고침 없이 10초 안 표시 [문자열]`, shown, `${shown ? `${shownSecs}초` : '10초 동안 안 보임'} · 경로=${chatVia}`);
-  check('K8-② 사장 창 REST 요청 ≤4 [건]', win.length <= 4, `${win.length}건(10초 창 · 유휴 시작=${idle}) · ${winSummary || '요청 없음'}`);
+  check('K8-② 사장 창 REST 요청 ≤1 [건]', win.length <= 1, `${win.length}건(10초 창 · 유휴 시작=${idle}) · ${winSummary || '요청 없음'}`);
   await stat(S.page, 'S', 'K8-①②');
   await stat(J.page, 'J', 'K8-①②');
 
@@ -807,7 +808,7 @@ try {
     if (!sync) { skipCheck(label, 'globalThis.__stSync 없음(프로덕션 번들 또는 미구현)'); continue; }
     const subs = sync.activeSubs ?? {};
     const dup = Object.entries(subs).filter(([, v]) => Number(v) > 1);
-    info(`${tag} __stSync: hydrates=${sync.hydrates} · axisRuns=${sync.axisRuns} · activeSubs=${JSON.stringify(subs)}`);
+    info(`${tag} __stSync: hydrates=${sync.hydrates} · axisRuns=${sync.axisRuns} · feedPatches=${sync.feedPatches ?? '-'} · activeSubs=${JSON.stringify(subs)}`);
     check(label, dup.length === 0, dup.length ? `중복 ${dup.map(([k, v]) => `${k}×${v}`).join(', ')}` : `${Object.keys(subs).length}개 스토어 모두 ≤1`);
   }
 

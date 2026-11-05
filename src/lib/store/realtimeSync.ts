@@ -20,8 +20,8 @@
  */
 import { reportError, connectivityMeta, flushUnsentErrors } from '@/lib/analytics/track';
 
-/** 개발 계측 — 전체 hydrate 수 · 축 러너 실행 수 · 구독 이름별 활성 구독 수(레이아웃 한 곳이면 전부 ≤1). */
-export const syncStats = { hydrates: 0, axisRuns: 0, activeSubs: {} as Record<string, number> };
+/** 개발 계측 — 전체 hydrate 수 · 축 러너 실행 수 · 피드 제자리 패치 수(M4 2차 · 재조회 없이 반영된 행) · 구독 이름별 활성 구독 수(레이아웃 한 곳이면 전부 ≤1). */
+export const syncStats = { hydrates: 0, axisRuns: 0, feedPatches: 0, activeSubs: {} as Record<string, number> };
 if (__DEV__) (globalThis as any).__stSync = syncStats;
 
 /**

@@ -3671,6 +3671,10 @@ export async function clearDone(date: string, templateId: string): Promise<Decis
 }
 
 // ── 업무보드: 피드(공지/메시지/완료) ──────────────────────
+/** work_feed 행 → FeedItem. 행의 data(jsonb)가 FeedItem 그 자체다(upsertFeed 가 그렇게 싣는다 · join 열 없음).
+ *  fetchFeed 와 realtime payload(subscribeWork)가 같은 변환을 쓴다 — 변환이 둘이면 패치와 재조회 결과가 어긋난다. */
+export const feedRowToItem = (r: { data: unknown }): FeedItem => r.data as FeedItem;
+
 export async function fetchFeed(): Promise<ReadResult<FeedItem[]>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
   const [recent, pinned] = await Promise.all([
@@ -3692,10 +3696,10 @@ export async function fetchFeed(): Promise<ReadResult<FeedItem[]>> {
     readFail('fetchFeed', recent.error ?? pinned.error);
     return { data: [], error: true };
   }
-  const items = (recent.data ?? []).map((r: any) => r.data as FeedItem).reverse();
+  const items = (recent.data ?? []).map(feedRowToItem).reverse();
   // 최근 목록에 없는 고정 공지는 그보다 오래된 것이라 앞에 붙인다(오름차순 유지).
   const have = new Set(items.map((f) => f.id));
-  const older = (pinned.data ?? []).map((r: any) => r.data as FeedItem).filter((f) => !have.has(f.id));
+  const older = (pinned.data ?? []).map(feedRowToItem).filter((f) => !have.has(f.id));
   return { data: [...older, ...items], error: false };
 }
 /** opts.ignoreDuplicates — 같은 id 가 이미 있으면 덮지 않고 비긴다(ON CONFLICT DO NOTHING). 결정적 id 를 쓰는
@@ -3877,8 +3881,15 @@ const WORK_TABLES: readonly WorkTable[] = [
   // 구독이 없으면 푸시는 가는데 앱은 그대로라 "알림은 왔는데 앱엔 없다"가 된다(재하이드레이트 전까지).
   'quiz_assignments',
 ];
+/** work_feed INSERT·UPDATE 의 행 1건(M4 2차). 스토어가 재조회 없이 제자리 반영한다. */
+export type FeedRowPatch = { event: 'INSERT' | 'UPDATE'; item: FeedItem };
 /**
- * 업무 6표 구독 — 핸들러에 **바뀐 표 이름**을 넘긴다(payload 내용은 쓰지 않는다 · 재조회가 RLS 를 거친다).
+ * 업무 6표 구독 — 핸들러에 **바뀐 표 이름**을 넘긴다(재조회가 RLS 를 거친다).
+ *  예외 = work_feed 의 INSERT·UPDATE 는 행(payload.new)도 넘긴다(M4 2차 · 2026-11-05 · 채팅 1건 = 재조회 0).
+ *  - 행의 data 가 FeedItem 이라(feedRowToItem) 변환이 따로 없다. RLS 밖으로 나가는 UPDATE(보관·방 이동)는 이벤트 자체가 안 와서
+ *    상대 화면에서 사라지는 건 다음 재조회 때다(이전과 같다). 필터가 매장을 거르므로 클라에서 방·권한을 다시 판정하지 않는다.
+ *  - unit_id 가 지금 매장과 다르면(매장 전환 직후 아직 안 닫힌 옛 채널) 행을 버리고 표 이름만 넘긴다 — 새 매장 스토어에 옛 매장 행을 넣지 않는다.
+ *  - DELETE 는 PK 만 와서 패치할 수 없다 → 표 이름만(board 축 재조회).
  *
  * 필터 규칙(2026-11-04 · 계획_M4 §1-(3)):
  *  - INSERT·UPDATE 는 `unit_id=eq.<내 매장>` 으로 거른다. 다른 매장 이벤트로 재조회가 돌지 않게 한다.
@@ -3889,7 +3900,7 @@ const WORK_TABLES: readonly WorkTable[] = [
  *    남의 매장 DELETE 가 와도 표 이름만 쓰고 재조회는 RLS 가 거르므로 새는 것은 없다.
  *  - `_unitId` 가 아직 없으면 구독하지 않는다(fail-closed). 필터 없는 구독으로 떨어뜨리지 않는다.
  */
-export function subscribeWork(onChange: (table: WorkTable) => void): () => void {
+export function subscribeWork(onChange: (table: WorkTable, patch?: FeedRowPatch) => void): () => void {
   if (!HAS_SUPABASE) return () => {};
   if (!_unitId) {
     console.warn('[subscribeWork] 매장이 아직 정해지지 않아 구독하지 않는다');
@@ -3897,11 +3908,18 @@ export function subscribeWork(onChange: (table: WorkTable) => void): () => void 
   }
   const filter = `unit_id=eq.${_unitId}`;
   const handler = (p: { table: string }) => onChange(p.table as WorkTable);
+  const feedHandler = (p: { table: string; eventType: string; new: { unit_id?: string; data?: unknown } | null }) => {
+    const row = p.new;
+    const event = p.eventType === 'INSERT' || p.eventType === 'UPDATE' ? p.eventType : null;
+    if (event && row && row.data && row.unit_id === _unitId) onChange('work_feed', { event, item: feedRowToItem(row as { data: unknown }) });
+    else onChange('work_feed');
+  };
   let ch = supabase.channel(uniqueChannel('work'));
   for (const table of WORK_TABLES) {
+    const upsertHandler = table === 'work_feed' ? feedHandler : handler;
     ch = ch
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table, filter }, handler)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table, filter }, handler)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table, filter }, upsertHandler)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table, filter }, upsertHandler)
       .on(
         'postgres_changes',
         table === 'work_done'
