@@ -165,6 +165,8 @@ try {
     'mn:shift_time_result': { manager: 'schedule', junior: 'schedule' },
     'mn:shift_changed': { manager: 'schedule', junior: 'schedule' },
     'mn:role_changed': { manager: 'role', junior: 'role' },
+    'mn:join_request': {}, // ★0460 공간 멤버 요청 → 공간 주인. 공간 역할은 이 표의 ROLES 밖이다. 공간 벨 행은 4번 덩이 화면에서
+    'mn:join_approved': {}, // ★0460 공간 멤버 수락 → 요청한 사람. 계정 벨(fetchJoinNotices)이 새 값을 읽는 것은 4번 덩이 화면에서
     // ── 서버 크론 발송(그 밖) ──
     'cron:owner_alerts': { owner: 'src:const raw of alerts' }, // 0191 · ownerRows 가 owner_alerts 행을 그대로 그린다
     'cron:task_reminders': { manager: 'assign', junior: 'assign' }, // 배정된 할일 시각 — 배정 행

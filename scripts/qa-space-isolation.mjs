@@ -909,5 +909,182 @@ rollback;
   }
 }
 
+// ── 4부: 공간 합류 · 멤버 요청 · 수락과 거절 · 내보내기 · 나가기(0460) ──────────────
+//   1부처럼 한 트랜잭션 안에서 심고 끝에 전부 되돌린다(흔적 0). 입구는 이 트랜잭션 안에서 끄고 허용 목록으로만 연다.
+//   기대값은 오류 코드까지 적는다. 함수가 없거나 엉뚱한 이유로 거절되면 코드가 달라 실패로 센다.
+//   옛 앱이 공간 코드를 매장 합류 칸에 넣는 경우는 [2] "E 공간 초대코드로 매장 합류 0행"이 잰다.
+console.log('\n[6] 공간 합류 · 멤버 요청 · 수락과 거절 · 내보내기 · 나가기');
+{
+  const ks = ['P', 'Q', 'R', 'R2', 'R3', 'R4', 'T', 'G', 'H', 'L', 'N'];
+  const V = Object.fromEntries(ks.map((k, i) => [k, `00000000-0000-4000-c${rnd.slice(0, 3)}-${rnd}${String(i).padStart(4, '0')}`]));
+  const VS = Object.fromEntries(ks.map((k, i) => [k, `00000000-0000-4000-d${rnd.slice(0, 3)}-${rnd}${String(i).padStart(4, '0')}`]));
+  const S6 = `qa_ms_${rnd}`, S6B = `qa_msb_${rnd}`, S6D = `qa_msd_${rnd}`;
+  const C6 = `Q6${rnd.slice(0, 4).toUpperCase()}`, C6D = `QD${rnd.slice(4, 8).toUpperCase()}`;
+  const TK = `qa_mem_tok_${rnd}_${rnd}`, TKB = `qa_mem_tokb_${rnd}_${rnd}`, TKC = `qa_mem_tokc_${rnd}_${rnd}`, TKX = `qa_mem_tokx_${rnd}_${rnd}`;
+  const as = (who, s, keep = false, role = 'authenticated') => `pg_temp.qa_as(${who ? q(V[who]) + '::uuid' : 'null'}, ${who ? q(VS[who]) + '::uuid' : 'null'}, ${q(role)}, ${q(s)}, ${keep})`;
+  const chk = (name, expect, gotSql) => `insert into qa_out(l) select ${q(`QA|MEM|${name}¦${expect}¦`)} || (${gotSql});`;
+  const svc = (s) => `(select coalesce((${s})::text, '<null>'))`;
+  const join = (who, code, keep = true) => as(who, `select count(*)::text from public.join_space_by_code(${q(code)})`, keep);
+  const req = (who, tok, keep = true) => as(who, `select (public.request_space_join(${q(tok)}) is not null)::text`, keep);
+  // 요청 번호는 클라가 못 읽는 표에 있다. 관리자 권한으로 먼저 꺼내 호출 글에 넣는다(표가 없으면 null · 수정 전 RED 용).
+  const decide = (who, of, accept) => `pg_temp.qa_as(${q(V[who])}::uuid, ${q(VS[who])}::uuid, 'authenticated', format('select ''done'' from public.decide_space_join_request(%L, ${accept})', pg_temp.qa_req_id(${q(V[of])}::uuid)), true)`;
+  const sql4 = String.raw`
+begin;
+create temp table qa_out(i serial, l text);
+insert into auth.users(id, instance_id, aud, role, email, raw_user_meta_data, email_confirmed_at, created_at, updated_at)
+select v.id::uuid, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'qa_spm_' || lower(v.k) || '_${rnd}@example.com',
+       jsonb_build_object('name', 'QA멤버' || v.k, 'role', 'junior', 'birth_date', '1994-03-03'), now(), now(), now()
+  from (values ${ks.map((k) => `(${q(k)}, ${q(V[k])})`).join(', ')}) v(k, id);
+insert into auth.sessions(id, user_id, created_at, updated_at)
+select v.sid::uuid, v.uid::uuid, now(), now()
+  from (values ${ks.map((k) => `(${q(VS[k])}, ${q(V[k])})`).join(', ')}) v(sid, uid);
+-- 전화 인증: 면제 날짜 이전 계정으로 만든다. H 만 새 계정 · 번호 없음(인증 전).
+update public.profiles set created_at = '2020-01-01' where id in (${ks.filter((k) => k !== 'H').map((k) => q(V[k])).join(', ')});
+-- 입구: 전체 스위치를 끄고 허용 목록으로만 연다. G 는 목록에 없다.
+update public.unit_kind_features set enabled = false where kind = 'space' and feature = 'enter';
+insert into public.space_entry_allowlist(user_id, note)
+select v::uuid, 'qa' from unnest(array[${ks.filter((k) => k !== 'G').map((k) => q(V[k])).join(', ')}]) v;
+
+create function pg_temp.qa_as(p_uid uuid, p_sid uuid, p_role text, p_sql text, p_keep boolean) returns text language plpgsql as $f$
+declare r text;
+begin
+  begin
+    perform set_config('request.jwt.claims', case when p_uid is null then json_build_object('role', p_role)::text
+      else json_build_object('sub', p_uid, 'role', p_role, 'session_id', p_sid)::text end, true);
+    perform set_config('request.jwt.claim.sub', coalesce(p_uid::text, ''), true);
+    execute format('set local role %I', p_role);
+    execute p_sql into r;
+    if not p_keep then raise exception using errcode = 'QAOK0', message = 'qa_ok'; end if;
+    execute 'reset role';
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claim.sub', '', true);
+    return 'ok|' || coalesce(r, '<null>');
+  exception
+    when sqlstate 'QAOK0' then return 'ok|' || coalesce(r, '<null>');
+    when others then return 'err|' || left(sqlerrm, 60);
+  end;
+end $f$;
+create function pg_temp.qa_req_id(p_uid uuid) returns uuid language plpgsql as $f$
+declare r uuid;
+begin
+  execute 'select id from public.space_join_requests where user_id = $1 order by created_at desc limit 1' into r using p_uid;
+  return r;
+exception when others then return null;
+end $f$;
+
+-- 자리: 공간 S6(주인 P · 코드 C6) · 공간 S6B(주인 N) · 지운 공간 S6D(코드를 일부러 남김) · 매장 X 사장 T
+insert into public.units(id, store_name, kind, invite_code) values
+  (${q(S6)}, 'QA멤버공간', 'space', ${q(C6)}), (${q(S6B)}, 'QA멤버공간B', 'space', null), (${q(S6D)}, 'QA지운공간', 'space', ${q(C6D)});
+update public.units set deleted_at = now() where id = ${q(S6D)};
+insert into public.unit_members(user_id, unit_id, role) values
+  (${q(V.P)}, ${q(S6)}, 'space_owner'), (${q(V.N)}, ${q(S6B)}, 'space_owner'), (${q(V.T)}, ${q(X)}, 'owner');
+update public.profiles set role = 'owner', active_unit_id = ${q(X)} where id = ${q(V.T)};
+update public.units set invite_code = coalesce(invite_code, 'QX' || upper(substr(md5(random()::text), 1, 4))), invite_expires_at = null where id = ${q(X)};
+insert into public.edu_links(id, unit_id, token, title) values
+  ('qa_mem_el_${rnd}', ${q(S6)}, ${q(TK)}, 'QA 멤버 링크'), ('qa_mem_elb_${rnd}', ${q(S6B)}, ${q(TKB)}, 'QA 멤버 링크B'),
+  ('qa_mem_elc_${rnd}', ${q(S6)}, ${q(TKC)}, 'QA 닫힌 링크'), ('qa_mem_elx_${rnd}', ${q(X)}, ${q(TKX)}, 'QA 매장 링크');
+update public.edu_links set closed_at = now() where id = 'qa_mem_elc_${rnd}';
+select set_config('request.jwt.claims', json_build_object('sub', ${q(V.P)}, 'role', 'authenticated')::text, true);
+insert into public.playbook_entries(id, unit_id, category, title, status, creator_role, creator_id, creator_name) values
+  ('qa_mpe_${rnd}', ${q(S6)}, '서비스', 'QA 멤버 노하우', 'published', 'space_owner', ${q(V.P)}, 'QA멤버P');
+select set_config('request.jwt.claims', '', true);
+create temp table qa_before as select id, role, active_unit_id, unit_id from public.profiles where id = ${q(V.T)};
+
+-- 초대코드로 바로 멤버
+${chk('로그인 없이 합류 거절', 'err|permission denied for function join_space_by_code', as(null, `select count(*)::text from public.join_space_by_code(${q(C6)})`, false, 'anon'))}
+${chk('입구 닫힌 계정 거절', 'err|space_closed', join('G', C6, false))}
+${chk('전화 인증 전 거절', 'err|PHONE_NOT_VERIFIED', join('H', C6, false))}
+${chk('틀린 코드 0행', 'ok|0', join('Q', 'ZZZZZ9', false))}
+${chk('매장 X 코드로 공간 합류 0행', 'ok|0', `pg_temp.qa_as(${q(V.Q)}::uuid, ${q(VS.Q)}::uuid, 'authenticated', format('select count(*)::text from public.join_space_by_code(%L)', (select invite_code from public.units where id = ${q(X)})), false)`)}
+${chk('지운 공간 코드 거절(코드가 남아 있어도)', 'err|space_not_accepting', join('Q', C6D, false))}
+${chk('맞는 코드(소문자로 쳐도) 합류 됨', 'ok|1', join('Q', C6.toLowerCase()))}
+${chk('합류한 사람 = 공간 멤버', 'space_member', svc(`select role from public.unit_members where unit_id = ${q(S6)} and user_id = ${q(V.Q)}`))}
+${chk('같은 사람 다시 합류 거절', 'err|already_member', join('Q', C6, false))}
+${chk('주인이 자기 코드 넣기 거절', 'err|already_member', join('P', C6, false))}
+${chk('사장 계정도 남의 공간 합류 됨', 'ok|1', join('T', C6))}
+${chk('사장 계정 역할·현재 매장 그대로', 'true', svc(`select (p.role, p.active_unit_id, p.unit_id) is not distinct from (b.role, b.active_unit_id, b.unit_id) and p.role = 'owner' from public.profiles p, qa_before b where p.id = b.id`))}
+${chk('사장 계정 현재 매장이 공간으로 안 바뀜', `ok|${X}`, as('T', `select coalesce(public.auth_member_unit_id(), '<null>')`))}
+${[1, 2, 3, 4, 5].map((n) => chk(`틀린 코드 ${n}번째 0행(기록 남김)`, 'ok|0', join('L', 'ZZZZZ8'))).join('\n')}
+${chk('틀린 코드 5번이면 맞는 코드도 잠김(매장 합류와 같은 잠금)', 'err|too_many_attempts', join('L', C6, false))}
+
+-- 링크로 온 사람의 멤버 요청
+${chk('닫힌 링크로 요청 거절', 'err|link_closed', req('R', TKC, false))}
+${chk('없는 토큰으로 요청 거절', 'err|link_closed', req('R', `nope_${rnd}_${rnd}_xx`, false))}
+${chk('매장 링크로 요청 거절', 'err|feature_off', req('R', TKX, false))}
+${chk('입구 닫힌 계정 요청 거절', 'err|space_closed', req('G', TK, false))}
+${chk('이미 멤버는 요청 거절', 'err|already_member', req('Q', TK, false))}
+${chk('요청 됨', 'ok|true', req('R', TK))}
+${chk('같은 요청 다시 거절', 'err|already_pending', req('R', TK, false))}
+${chk('주인에게 합류 신청 알림 1개(공간 경로 · 본문 없음)', `1|/space/settings?space=${S6}&member=${V.R}|QA멤버R님이 합류를 신청했어요`, svc(`select count(*) || '|' || max(url) || '|' || max(title) from public.member_notices where user_id = ${q(V.P)} and kind = 'join_request' and unit_id = ${q(S6)}`))}
+${chk('주인 요청 목록 1개(이름)', 'ok|1|QA멤버R', as('P', `select count(*) || '|' || max(name) from public.space_pending_requests(${q(S6)})`))}
+${chk('멤버는 요청 목록 거절', 'err|not_space_owner', as('Q', `select count(*)::text from public.space_pending_requests(${q(S6)})`))}
+${chk('남의 공간 주인은 요청 목록 거절', 'err|not_space_owner', as('N', `select count(*)::text from public.space_pending_requests(${q(S6)})`))}
+${chk('남의 공간 주인이 수락 거절', 'err|not_space_owner', decide('N', 'R', true))}
+${chk('멤버가 수락 거절', 'err|not_space_owner', decide('Q', 'R', true))}
+${chk('수락 전 요청한 사람은 멤버 아님', '0', svc(`select count(*) from public.unit_members where unit_id = ${q(S6)} and user_id = ${q(V.R)}`))}
+${chk('주인이 수락', 'ok|done', decide('P', 'R', true))}
+${chk('수락하면 공간 멤버', 'space_member', svc(`select role from public.unit_members where unit_id = ${q(S6)} and user_id = ${q(V.R)}`))}
+${chk('요청한 사람에게 승인 알림(새 종류 값 · 옛 벨 값 아님)', `1|/space/joined/${S6}|QA멤버공간 합류가 승인됐어요|0`, svc(`select count(*) filter (where kind = 'join_approved') || '|' || max(url) || '|' || max(title) || '|' || count(*) filter (where kind in ('approved', 'rejected', 'removed')) from public.member_notices where user_id = ${q(V.R)}`))}
+${chk('다시 수락 거절', 'err|request_not_pending', decide('P', 'R', true))}
+${chk('수락 뒤 요청 목록 0', 'ok|0', as('P', `select count(*)::text from public.space_pending_requests(${q(S6)})`))}
+${chk('R2 요청 됨', 'ok|true', req('R2', TK))}
+${chk('주인이 거절', 'ok|done', decide('P', 'R2', false))}
+${chk('거절하면 멤버 아님', '0', svc(`select count(*) from public.unit_members where unit_id = ${q(S6)} and user_id = ${q(V.R2)}`))}
+${chk('거절 뒤 10분 안 재요청 거절', 'err|request_cooldown', req('R2', TK, false))}
+${chk('R3 요청 됨', 'ok|true', req('R3', TK))}
+delete from public.space_entry_allowlist where user_id = ${q(V.R3)};
+${chk('요청한 사람 입구가 닫히면 수락 거절', 'err|space_closed', decide('P', 'R3', true))}
+${chk('R4 가 공간 B 에 요청 됨', 'ok|true', req('R4', TKB))}
+${chk('공간 B 주인 N 이 공간을 지움', 'ok|done', as('N', `select 'done' from public.delete_space(${q(S6B)})`, true))}
+${chk('지운 공간 요청은 수락 거절', 'err|not_space_owner', decide('N', 'R4', true))}
+${chk('지운 공간 링크로 요청 거절', 'err|link_closed', req('R2', TKB, false))}
+
+-- 멤버 목록
+${chk('멤버가 보는 멤버 목록(주인 먼저 · 이름과 역할만)', 'ok|4|space_owner', as('Q', `select count(*) || '|' || (array_agg(role))[1] from public.space_members(${q(S6)})`))}
+${chk('멤버 목록 칸 = 번호·이름·역할·합류 시각(전화번호 없음)', 'TABLE(user_id uuid, name text, role text, joined_at timestamp with time zone)', svc(`select pg_get_function_result(to_regprocedure('public.space_members(text)'))`))}
+${chk('멤버 아닌 사람 멤버 목록 거절', 'err|not_space_member', as('G', `select count(*)::text from public.space_members(${q(S6)})`))}
+${chk('매장 X 사장이라도 남의 공간 목록은 멤버일 때만(T 는 멤버)', 'ok|4', as('T', `select count(*)::text from public.space_members(${q(S6)})`))}
+
+-- 내보내기
+${chk('멤버가 남을 내보내기 거절', 'err|not_space_owner', as('Q', `select 'done' from public.space_remove_member(${q(S6)}, ${q(V.R)})`))}
+${chk('남의 공간 주인이 내보내기 거절', 'err|not_space_owner', as('N', `select 'done' from public.space_remove_member(${q(S6)}, ${q(V.R)})`))}
+${chk('주인이 자기 자신 내보내기 거절', 'err|space_owner_cannot_leave', as('P', `select 'done' from public.space_remove_member(${q(S6)}, ${q(V.P)})`))}
+${chk('멤버 아닌 사람 내보내기 거절', 'err|not_space_member', as('P', `select 'done' from public.space_remove_member(${q(S6)}, ${q(V.G)})`))}
+${chk('(대조) 내보내기 전 R 이 공간에 들어감', 'ok|', as('R', `select public.enter_space(${q(S6)})::text`, true))}
+${chk('(대조) 내보내기 전 R 현재 공간 = S6 · 노하우 읽기 1', `ok|${S6}|1`, as('R', `select coalesce(public.auth_space_id(), '<null>') || '|' || (select count(*) from public.playbook_entries where unit_id = ${q(S6)})`))}
+${chk('주인이 R 을 내보냄', 'ok|done', as('P', `select 'done' from public.space_remove_member(${q(S6)}, ${q(V.R)})`, true))}
+${chk('내보낸 뒤 R 현재 공간 기록 0', '0', svc(`select count(*) from public.session_active_spaces where user_id = ${q(V.R)}`))}
+${chk('내보낸 뒤 R 현재 공간 비움', 'ok|<null>', as('R', `select coalesce(public.auth_space_id(), '<null>')`))}
+${chk('내보낸 뒤 R 공간 노하우 읽기 0', 'ok|0', as('R', `select count(*)::text from public.playbook_entries where unit_id = ${q(S6)}`))}
+${chk('내보낸 뒤 R 공간 들어가기 거절', 'err|not_a_member', as('R', `select public.enter_space(${q(S6)})::text`))}
+
+-- 나가기
+${chk('Q 가 공간에 들어감', 'ok|', as('Q', `select public.enter_space(${q(S6)})::text`, true))}
+${chk('(대조) 나가기 전 Q 현재 공간 = S6 · 내 공간 1', `ok|${S6}|1`, as('Q', `select coalesce(public.auth_space_id(), '<null>') || '|' || (select count(*) from public.my_spaces())`))}
+${chk('Q 가 나감', 'ok|done', as('Q', `select 'done' from public.leave_space(${q(S6)})`, true))}
+${chk('나간 뒤 Q 현재 공간 비움', 'ok|<null>', as('Q', `select coalesce(public.auth_space_id(), '<null>')`))}
+${chk('나간 뒤 Q 의 내 공간 0', 'ok|0', as('Q', 'select count(*)::text from public.my_spaces()'))}
+${chk('다시 나가기 거절', 'err|not_space_member', as('Q', `select 'done' from public.leave_space(${q(S6)})`))}
+${chk('주인 나가기 거절(공간 삭제로)', 'err|space_owner_cannot_leave', as('P', `select 'done' from public.leave_space(${q(S6)})`))}
+${chk('멤버 아닌 사람 나가기 거절', 'err|not_space_member', as('G', `select 'done' from public.leave_space(${q(S6)})`))}
+${chk('나간 뒤에도 무료 1개 계산 그대로: 주인 P 새 공간 거절', 'err|space_limit_reached', as('P', `select count(*)::text from public.create_space('QA둘째')`))}
+${chk('나간 멤버 Q 는 자기 공간을 만들 수 있음', 'ok|1', as('Q', `select count(*)::text from public.create_space('QA큐공간')`))}
+${chk('공간 S6 은 그대로(주인 1 · 멤버 T)', '1|1', svc(`select count(*) filter (where role = 'space_owner') || '|' || count(*) filter (where role = 'space_member') from public.unit_members where unit_id = ${q(S6)}`))}
+
+select l from qa_out order by i;
+rollback;
+`;
+  const r = spawnSync('docker', ['exec', '-i', DB, 'psql', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1', '-tA', '-q'], { input: sql4, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  if (r.status !== 0) {
+    check('4부 셋업', false, (r.stderr || '').split('\n').filter((l) => /ERROR|DETAIL|CONTEXT|LINE/.test(l)).slice(0, 8).join(' | '));
+  } else {
+    for (const l of r.stdout.split(/\r?\n/).filter((l) => l.startsWith('QA|MEM|'))) {
+      const [name, expect, got] = l.slice(7).split('¦');
+      calls++; if (got.startsWith('err|')) rejected++;
+      check(name, got === expect, got === expect ? '' : `기대 ${expect} · 실제 ${got}`);
+    }
+  }
+}
+
 console.log(`\n최종: ${fail === 0 ? 'PASS' : 'FAIL'} · 통과 ${pass} · 실패 ${fail} · skip ${skip} · 부른 수 ${calls} · 거절 ${rejected} · AI 호출 0회`);
 process.exit(fail === 0 ? 0 : 1);
