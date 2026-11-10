@@ -28,7 +28,7 @@
     "관련 검사 연결. 실행은 별도"
   ],
   "unknowns": [
-    "로컬 HEAD f03eecd의 코드 관찰이다. 원격 DB 적용, 배포 버전, 실제 데이터, 기기 실행은 확인하지 않았다.",
+    "처음 기록은 로컬 HEAD f03eecd, 근무표 대조 소비 부분은 59d15ab에서 다시 읽은 코드 관찰이다. 원격 DB 적용, 배포 버전, 실제 데이터, 기기 실행은 확인하지 않았다.",
     "반복근무 추가/분할/종료, 부분 교대의 transfer_shift 내부 알고리즘, 화면 시트의 모든 입력 제약은 미추적이다.",
     "실시간 publication 정의는 소스 확인이며 운영 구독 수신을 입증하지 않는다. 푸시 공급자별 전달과 발송 중복은 미검증이다.",
     "시간 수정 요청 생성의 모든 검사는 미추적이다. 최신 결정 함수 0316의 권한과 상태 처리만 포함한다."
@@ -148,9 +148,9 @@
       "kind": "code"
     },
     {
-      "id": "pay",
+      "id": "reconcile",
       "file": "src/components/TimesheetView.tsx",
-      "symbol": "computePay(shiftsToPayRecords(payShifts)",
+      "symbol": "reconcileSchedule(monthShifts, monthRecs)",
       "kind": "code"
     },
     {
@@ -363,16 +363,17 @@
       "changeKinds": []
     },
     {
-      "id": "pay-consumer",
+      "id": "reconcile-consumer",
       "type": "consumer",
-      "name": "근무표를 급여 입력으로 소비",
+      "name": "근무표를 출퇴근 대조 기준으로 소비",
       "aliases": [
         "TimesheetView",
-        "shiftsToPayRecords"
+        "scheduledShiftsFor",
+        "reconcileSchedule"
       ],
-      "current": "TimesheetView가 해결된 근무표를 payShifts로 구성해 computePay에 넘긴다. 승인으로 근무가 바뀌면 예상 급여의 입력도 바뀐다. 급여 계산 코드 변경이 자동으로 필요한 것은 아니다.",
+      "current": "TimesheetView가 scheduledShiftsFor로 템플릿/교대/예외를 풀어 그 달 근무를 만들고 reconcileSchedule로 출퇴근과 비교한다. 승인으로 근무가 바뀌면 \"근무표와 다른 날\" 안내도 바뀐다. 급여 계산은 2026-11-02에 없어졌다.",
       "evidence": [
-        "pay"
+        "reconcile"
       ],
       "changeKinds": []
     }
@@ -536,13 +537,13 @@
       "confidence": "confirmed-code"
     },
     {
-      "id": "pay-consumer-templates",
-      "from": "pay-consumer",
+      "id": "reconcile-consumer-templates",
+      "from": "reconcile-consumer",
       "to": "templates",
       "relation": "consumes",
-      "when": "resolved shift를 급여 입력으로 사용",
+      "when": "resolved shift를 출퇴근 대조 기준으로 사용",
       "evidence": [
-        "pay"
+        "reconcile"
       ],
       "kinds": [
         "contract",
@@ -573,9 +574,9 @@
       "result": "실제 근무 이전 뒤 approved와 결과 큐를 기록한다."
     },
     {
-      "node": "pay-consumer",
+      "node": "reconcile-consumer",
       "when": "바뀐 근무표 재조회",
-      "result": "근무표의 근무자를 기준으로 예상 급여 입력이 달라진다."
+      "result": "근무표의 근무자를 기준으로 출퇴근 대조 결과가 달라진다."
     }
   ],
   "transitions": [
@@ -614,11 +615,11 @@
   ],
   "tests": [
     {
-      "file": "scripts/qa-payroll.mjs",
-      "command": "node scripts/qa-payroll.mjs",
-      "scope": "schedule/payroll 순수 함수 회귀. 교대 서버 권한/동시성 증거는 아님.",
+      "file": "scripts/qa-open-record.mjs",
+      "command": "npm run qa:open-record",
+      "scope": "reconcileSchedule 대조 순수 함수 회귀(qa-payroll에서 옮김). 교대 서버 권한/동시성 증거는 아님.",
       "execution": "not-run",
-      "requires": "로컬 설치 TypeScript가 필요하며 .paytest 산출물을 만든다. npx가 다운로드하지 않도록 의존성 준비 후 실행. 미실행."
+      "requires": "Node 22.18+와 설치된 앱 의존성. DB/네트워크 없음."
     },
     {
       "file": "scripts/qa-swap-guard.mjs",
