@@ -4695,3 +4695,195 @@ export async function saveUnknownAnswer(uqId: string, entry: PlaybookEntry, sugg
   }
   return { data: (data as string | null) ?? null, error: error as DbErr };
 }
+
+// ── 교육 링크(0400) — 손님 열기·노하우 읽기 + 주인 만들기·고치기·닫기 ─────────────────
+// 손님 함수 둘은 anon 으로 돈다. 토큰이 열쇠다. 실패는 조용하다(닫힘·만료·없는 토큰·지운 자리 = ok=false 하나).
+// ★토큰은 계측·로그에 싣지 않는다. reportError 에는 오류 객체만 넘긴다(q/[token] 과 같은 규칙).
+// 화면 = src/app/l/[token].tsx(손님) · src/app/space/link/*(주인). 오류 문구 = src/lib/edu/errors.ts.
+
+/**
+ * 손님 첫 열기. 열 때마다 서버가 열람 수를 1 올린다. 그래서 화면은 한 번 열 때 한 번만 부른다.
+ * failed = 우리 쪽 문제(네트워크·서버). ok=false = 링크가 닫힘. 둘을 뭉치면 장애가 "닫힌 링크"로 보인다(openQuizLink 와 같은 이유).
+ */
+export type EduPlaceKind = 'space' | 'store';
+export type EduLinkInfo = {
+  ok: boolean;
+  failed: boolean;
+  placeKind: EduPlaceKind | null;
+  placeName: string;
+  /** 공간 주인 이름(빈 링크 문구용). 매장 링크는 ''. */
+  ownerName: string;
+  title: string;
+  entryCount: number;
+  expiresAt: string | null;
+};
+export async function openEduLink(token: string): Promise<EduLinkInfo> {
+  const none: EduLinkInfo = { ok: false, failed: false, placeKind: null, placeName: '', ownerName: '', title: '', entryCount: 0, expiresAt: null };
+  if (!HAS_SUPABASE) return { ...none, failed: true };
+  const { data, error } = await supabase.rpc('edu_link_open', { p_token: token }).single();
+  if (error) {
+    reportError('db.rpc:openEduLink', error);
+    return { ...none, failed: true };
+  }
+  const row = data as any;
+  if (!row?.ok) return none;
+  return {
+    ok: true,
+    failed: false,
+    placeKind: row.place_kind === 'space' || row.place_kind === 'store' ? row.place_kind : null,
+    placeName: row.place_name ?? '',
+    ownerName: row.owner_name ?? '',
+    title: row.title ?? '',
+    entryCount: Number(row.entry_count ?? 0),
+    expiresAt: row.expires_at ?? null,
+  };
+}
+
+/** 링크에 담긴 노하우 중 발행된 것만(사진 없음). 순서 = 링크에 담은 순서. 실패와 빈 목록을 error 로 가른다. */
+export type EduLinkEntry = {
+  id: string;
+  category: string;
+  subcategory: string;
+  title: string;
+  square: import('@/types').SquareBlock;
+  execution: Record<string, unknown>;
+  updatedAt: string;
+};
+/** 링크 하나에 담을 수 있는 노하우 상한 — 서버(_edu_link_check_entries)와 같은 200. */
+export const EDU_LINK_MAX_ENTRIES = 200;
+export async function fetchEduLinkEntries(token: string): Promise<DbResult<EduLinkEntry[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('edu_link_entries', { p_token: token }).limit(EDU_LINK_MAX_ENTRIES);
+  if (error) {
+    reportError('db.rpc:fetchEduLinkEntries', error);
+    return { data: null, error: error as DbErr };
+  }
+  return {
+    data: ((data as any[]) ?? []).map((r) => ({
+      id: r.id,
+      category: r.category ?? '',
+      subcategory: r.subcategory ?? '',
+      title: r.title ?? '',
+      square: r.square,
+      execution: (r.execution as Record<string, unknown>) ?? {},
+      updatedAt: r.updated_at ?? '',
+    })),
+    error: null,
+  };
+}
+
+/** 주인 쪽 링크 한 줄(0370 edu_links · RLS = manage_links 권한만 읽는다). 만료 판정은 화면이 expiresAt 으로 한다. */
+export type EduLinkRow = {
+  id: string;
+  unitId: string;
+  token: string;
+  title: string;
+  entryIds: string[];
+  createdBy: string | null;
+  expiresAt: string;
+  closedAt: string | null;
+  openedCount: number;
+  createdAt: string;
+};
+export async function fetchEduLinks(unitId: string): Promise<DbResult<EduLinkRow[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase
+    .from('edu_links')
+    .select('id, unit_id, token, title, entry_ids, created_by, expires_at, closed_at, opened_count, created_at')
+    .eq('unit_id', unitId)
+    .order('created_at', { ascending: false })
+    .limit(PAGE_LIMIT);
+  if (error) {
+    readFail('fetchEduLinks', error);
+    return { data: null, error: error as DbErr };
+  }
+  return {
+    data: ((data as any[]) ?? []).map((r) => ({
+      id: r.id,
+      unitId: r.unit_id,
+      token: r.token,
+      title: r.title ?? '',
+      entryIds: (r.entry_ids as string[]) ?? [],
+      createdBy: r.created_by ?? null,
+      expiresAt: r.expires_at,
+      closedAt: r.closed_at ?? null,
+      openedCount: Number(r.opened_count ?? 0),
+      createdAt: r.created_at,
+    })),
+    error: null,
+  };
+}
+
+/**
+ * 링크에 담을 수 있는 노하우(S10·S11 고르기 목록) — 그 자리의 초안·발행본. 보관·숨긴 본사 사본은 뺀다(서버 검사와 같은 조건).
+ * 공간 행은 RLS(0371)가 auth_space_id() = 그 공간일 때만 내준다. 공간에 들어간 세션(enter_space)이 전제다.
+ */
+export type EduLinkPickEntry = { id: string; title: string; status: string };
+export async function fetchEduLinkPickEntries(unitId: string): Promise<DbResult<EduLinkPickEntry[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase
+    .from('playbook_entries')
+    .select('id, title, status')
+    .eq('unit_id', unitId)
+    .in('status', ['draft', 'published'])
+    .is('archived_at', null)
+    .is('brand_hidden_at', null)
+    .order('created_at', { ascending: false })
+    .limit(PAGE_LIMIT);
+  if (error) {
+    readFail('fetchEduLinkPickEntries', error);
+    return { data: null, error: error as DbErr };
+  }
+  return {
+    data: ((data as any[]) ?? []).map((r) => ({ id: r.id, title: r.title ?? '', status: r.status ?? '' })),
+    error: null,
+  };
+}
+
+/** 링크 만들기. 토큰은 서버가 만든다. 오류 message 첫 낱말 = 코드(not_space_owner · not_manager · invalid_argument · EDU_LINK_ENTRY_DENIED · not_authenticated). */
+export async function createEduLink(
+  unitId: string,
+  input: { title: string; entryIds: string[]; days: number },
+): Promise<DbResult<{ id: string; token: string; expiresAt: string }>> {
+  if (!HAS_SUPABASE) return { data: null, error: { message: 'no_backend' } };
+  const { data, error } = await supabase
+    .rpc('edu_link_create', { p_unit: unitId, p_title: input.title, p_entry_ids: input.entryIds, p_days: input.days })
+    .single();
+  if (error) {
+    reportError('db.rpc:createEduLink', error);
+    return { data: null, error: error as DbErr };
+  }
+  const row = data as any;
+  if (!row?.id || !row?.token) return { data: null, error: { message: 'create_edu_link_empty' } };
+  return { data: { id: row.id, token: row.token, expiresAt: row.expires_at }, error: null };
+}
+
+/** 링크 고치기(S11). 넘기지 않은 칸은 그대로 둔다(서버 null = 그대로). 코드 = link_closed · link_expired · link_not_found · invalid_argument · EDU_LINK_ENTRY_DENIED. */
+export async function updateEduLink(
+  linkId: string,
+  patch: { title?: string; entryIds?: string[]; expiresAt?: string },
+): Promise<DbResult<true>> {
+  if (!HAS_SUPABASE) return { data: true, error: null };
+  const { error } = await supabase.rpc('edu_link_update', {
+    p_link: linkId,
+    p_title: patch.title ?? null,
+    p_entry_ids: patch.entryIds ?? null,
+    p_expires_at: patch.expiresAt ?? null,
+  });
+  if (error) {
+    reportError('db.rpc:updateEduLink', error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: true, error: null };
+}
+
+/** 링크 닫기. 두 번 불러도 같다(서버 멱등). 닫으면 손님 쪽 전부 끊긴다. */
+export async function closeEduLink(linkId: string): Promise<DbResult<true>> {
+  if (!HAS_SUPABASE) return { data: true, error: null };
+  const { error } = await supabase.rpc('edu_link_close', { p_link: linkId });
+  if (error) {
+    reportError('db.rpc:closeEduLink', error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: true, error: null };
+}
