@@ -149,7 +149,8 @@ export type PlaybookEntry = {
 export type PlaybookSuggestion = {
   id: string;
   unit_id: string;
-  kind: 'improve' | 'new';
+  /** from_space = 공간에서 보낸 노하우 사본 제안(0490 · 승인은 approve_space_proposal). */
+  kind: 'improve' | 'new' | 'from_space';
   /** improve: 대상 노하우 id. */
   target_entry_id?: string;
   /** improve: 표시용 대상 제목 스냅샷(노하우가 바뀌어도 맥락 보존). */
@@ -168,6 +169,10 @@ export type PlaybookSuggestion = {
   source_template_id?: string;
   /** S1 ③(D4) 직원의 새-답 제안이 답하는 미답질문(unknown_queries.id, 0071). 승인·발행 시 그 질문 자동 resolve. */
   source_uq_id?: string;
+  /** 0490 from_space: 보낸 공간 · 원본 노하우 · 보낼 때의 본문(사진 경로 포함). 앱이 쓰지 않는다(서버만 넣는다). */
+  source_unit_id?: string | null;
+  source_entry_id?: string | null;
+  source_snapshot?: Record<string, unknown> | null;
   created_at: string;
   reviewed_at?: string;
   reviewed_by?: string;

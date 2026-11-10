@@ -159,12 +159,15 @@ try {
     'mn:account_deleted': { owner: 'member_left' },
     'mn:member_joined': { owner: 'member_joined' }, // ★0346 즉시 합류 → 사장
     'mn:join_full': { owner: 'join_full' }, // ★0346 인원 초과(report_join_full) → 사장
+    'mn:suggestion': { owner: 'suggestion' }, // ★0490 매장과 연결하기 제안(propose_to_store) → 받는 매장 사장
     'mn:owner_deleted': {}, // 넣는 곳이 없다(0247 close_member_tenure 는 알림 없음)
     'mn:question_answered': {}, // 넣는 곳이 없다(답 알림은 앱 q_answered 푸시)
     'mn:swap_confirmed': { manager: 'schedule', junior: 'schedule' },
     'mn:shift_time_result': { manager: 'schedule', junior: 'schedule' },
     'mn:shift_changed': { manager: 'schedule', junior: 'schedule' },
     'mn:role_changed': { manager: 'role', junior: 'role' },
+    'mn:join_request': {}, // ★0460 공간 멤버 요청 → 공간 주인. 공간 역할은 이 표의 ROLES 밖이다. 공간 벨 행은 4번 덩이 화면에서
+    'mn:join_approved': {}, // ★0460 공간 멤버 수락 → 요청한 사람. 계정 벨(fetchJoinNotices)이 새 값을 읽는 것은 4번 덩이 화면에서
     // ── 서버 크론 발송(그 밖) ──
     'cron:owner_alerts': { owner: 'src:const raw of alerts' }, // 0191 · ownerRows 가 owner_alerts 행을 그대로 그린다
     'cron:task_reminders': { manager: 'assign', junior: 'assign' }, // 배정된 할일 시각 — 배정 행
