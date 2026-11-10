@@ -79,14 +79,17 @@ try {
   const K = mk();
   const kId = await signUpSession(K, `qa_rrb_k_${s}@example.com`, { name: 'QA직원2', role: 'junior', phone: qaPhones[3] });
   cleanup.push(K);
-  await M.rpc('join_by_invite', { p_code: code1 });
-  await J.rpc('join_by_invite', { p_code: code1 });
-  await K.rpc('join_by_invite', { p_code: code1 });
-  await O.rpc('approve_member', { p_uid: mId });
-  await O.rpc('approve_member', { p_uid: jId });
-  const { error: ke } = await O.rpc('approve_member', { p_uid: kId });
+  // 직원 3명(M·J·K)이 필요하다. 무료 매장 좌석은 free_staff_cap()=2(0336)라 무료 모드가 꺼진 DB 에선
+  // 3번째가 staff_limit 로 막힌다 → 매장을 유료(single)로 올린다(qa-blocks-browser 등과 같은 방식).
+  const { error: actErr } = await admin.rpc('admin_activate_store', { p_unit_id: S1, p_days: 1, p_plan: 'single' });
+  // 0346 부터 join_by_invite 가 바로 합류시킨다(승인 단계 없음 · 멤버에게 approve_member 는 아무것도 안 한다).
+  //   그래서 합류 결과 자체를 검사한다. 예전엔 결과를 버려 staff_limit 가 approve_member 의 not_pending 으로만 보였다.
+  const { error: mje } = await M.rpc('join_by_invite', { p_code: code1 });
+  const { error: jje } = await J.rpc('join_by_invite', { p_code: code1 });
+  const { error: kje } = await K.rpc('join_by_invite', { p_code: code1 });
   const { error: pe } = await O.rpc('set_member_role', { p_uid: mId, p_role: 'manager' });
-  check('setup: 사장/매니저/직원 구성', !!S1 && !pe && !ke, `S1=${S1} ${pe?.message ?? ''} ${ke?.message ?? ''}`);
+  const setupErr = [actErr, mje, jje, kje, pe].filter(Boolean).map((e) => e.message).join(' ');
+  check('setup: 사장/매니저/직원 구성', !!S1 && !setupErr, `S1=${S1} ${setupErr}`);
 
   // 시급 3인분 · 출퇴근 3인분(사장이 심는다 — 쓰기 권한은 qa-roles 담당).
   const { error: we } = await O.from('wages').upsert([
@@ -191,7 +194,7 @@ try {
   // 그 전역 설정을 하니스가 뒤집으면 같은 DB 를 쓰는 다른 하니스가 흔들린다 → 재현하지 않고 skip 으로 찍는다.
   const { data: freeMode } = await O.rpc('billing_free_mode');
   if (freeMode === false) {
-    skipped('좌석 잠긴 매니저: 본인 행만', '무료 모드 off — 잠금 재현(직원 3명 초과 + 명단 밖)은 이 하니스에 아직 없다');
+    skipped('좌석 잠긴 매니저: 본인 행만', '무료 모드 off — 잠금 재현(직원 2명 초과 + 명단 밖)은 이 하니스에 아직 없다');
   } else {
     skipped('좌석 잠긴 매니저: 본인 행만', 'billing_free_mode()=true 라 seat_locked_for 가 항상 false(잠금 재현 불가)');
   }

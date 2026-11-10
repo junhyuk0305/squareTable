@@ -26,6 +26,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { assertSeedTarget } from './lib/seed-target.mjs';
+// 유료 판정 = 클라 SSOT effectivePlanOf(서버 카운터파트 effective_plan · 0115:38). 규칙을 여기 복제하지 않는다.
+import { effectivePlanOf } from '../src/lib/utils/subscription.ts';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const readJson = (p) => JSON.parse(readFileSync(join(__dir, '..', 'src', 'data', p), 'utf8'));
@@ -302,10 +304,14 @@ async function main() {
   console.log('3) 구독 = 무료 유지 (심사관이 구매 화면을 보통 사장님과 같게 보도록)');
   {
     const { data: sub } = await db.from('unit_subscriptions')
-      .select('plan,status,paid_until').eq('unit_id', UNIT).maybeSingle();
-    const paidLeft = sub?.status === 'active' && (!sub?.paid_until || new Date(sub.paid_until) > now);
-    if (!paidLeft) {
-      console.log(`  · 이미 무료 판정 (status=${sub?.status ?? '행 없음'}) → 건너뜀`);
+      .select('plan,status,paid_until,trial_ends_at').eq('unit_id', UNIT).maybeSingle();
+    // ⛔status='active' 는 유료가 아니다(첫 가입 = active·free). 유료 판정은 effective_plan 규칙으로 한다.
+    //   예전 판정(status==='active' 만 봄)은 무료 매장도 만료시키고, multi 체험(trialing)은 놓쳤다.
+    const eff = sub ? effectivePlanOf({
+      plan: sub.plan, subStatus: sub.status ?? '', paidUntil: sub.paid_until ?? '', trialEndsAt: sub.trial_ends_at ?? '',
+    }, now.getTime()) : 'free';
+    if (eff === 'free') {
+      console.log(`  · 이미 무료 판정 (plan=${sub?.plan ?? '행 없음'} status=${sub?.status ?? '-'}) → 건너뜀`);
     } else {
       const { error } = await db.rpc('admin_expire_store', { p_unit_id: UNIT });
       if (error) throw error;
@@ -335,7 +341,7 @@ async function main() {
       if (sErr || !sSess?.session) throw new Error(`직원 로그인 실패: ${sErr?.message}`);
       const { error: jErr } = await sc.rpc('join_by_invite', { p_code: u.invite_code, p_birth_date: '2003-09-22' });
       if (jErr) throw new Error(`join_by_invite 실패: ${jErr.message}`);
-      console.log('  ✓ join_by_invite (승인 대기 상태)');
+      console.log('  ✓ join_by_invite (즉시 합류 · 0346)');
 
       const oc = anon();
       const { data: oSess, error: oErr } = await oc.auth.signInWithPassword({ email: OWNER_EMAIL, password: PASSWORD });
