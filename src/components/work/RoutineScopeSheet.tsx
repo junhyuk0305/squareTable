@@ -35,7 +35,7 @@ export function RoutineScopeSheet({
 }) {
   return (
     <BottomSheet visible onClose={onClose} sheetStyle={s.sheet}>
-      <Text style={s.title}>어디까지 바꿀까요?</Text>
+      <Text style={s.title}>바꿀 범위</Text>
       <Text style={s.sub} numberOfLines={2}>‘{title}’</Text>
 
       <Pressable

@@ -23,17 +23,11 @@ import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { confirmAction } from '@/lib/utils/confirm';
 import { suggestionErrorMessage } from '@/lib/suggestion/errors';
+import { SUGGESTION_STATUS_CHIP, SUGGESTION_STATUS_LABEL } from '@/lib/suggestion/labels';
 import type { PlaybookSuggestion } from '@/types';
 
 /** 제안 본문 최소 글자 — 보낼 때와 고칠 때 같은 기준. */
 const MIN_TEXT = 5;
-
-/** 제안 상태 칩 — 면(bg)과 글자(fg)를 한 쌍으로 묶는다. 떨어져 있으면 '반영됨'에 빨간 틴트가 깔린다. */
-const STATUS_CHIP: Record<PlaybookSuggestion['status'], { bg: string; fg: string }> = {
-  approved: { bg: BrandColors.goodSoft, fg: BrandColors.goodText },
-  rejected: { bg: InkColors.bgSoft, fg: TextColor.secondary },
-  pending: { bg: BrandColors.yellowSoft, fg: BrandColors.warnText },
-};
 
 /**
  * 알바 노하우 제안 — ① 새 노하우 등록 신청 / ② 기존 노하우 개선 제안.
@@ -295,9 +289,9 @@ export default function JuniorSuggestScreen() {
               {mine.slice(0, 10).map((s, i) => (
                 <View key={s.id} style={i > 0 && styles.mineRowLine}>
                 <View style={styles.mineRow}>
-                  <View style={[styles.mineChip, { backgroundColor: STATUS_CHIP[s.status].bg }]}>
-                    <Text style={[styles.mineChipText, { color: STATUS_CHIP[s.status].fg }]}>
-                      {s.status === 'approved' ? '반영됨' : s.status === 'rejected' ? '반려' : '검토 중'}
+                  <View style={[styles.mineChip, { backgroundColor: SUGGESTION_STATUS_CHIP[s.status].bg }]}>
+                    <Text style={[styles.mineChipText, { color: SUGGESTION_STATUS_CHIP[s.status].fg }]}>
+                      {SUGGESTION_STATUS_LABEL[s.status]}
                     </Text>
                   </View>
                   <Text style={styles.mineText} numberOfLines={1}>{s.text}</Text>

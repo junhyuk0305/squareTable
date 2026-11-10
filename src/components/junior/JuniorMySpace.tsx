@@ -18,6 +18,7 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { getSectionMeta } from '@/lib/utils/category';
 import { showToast } from '@/lib/store/useToastStore';
 import { searchPlaybook } from '@/lib/rag';
+import { SUGGESTION_STATUS_LABEL } from '@/lib/suggestion/labels';
 import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -264,7 +265,7 @@ export function JuniorMySpace({ me }: { me: string }) {
                     unit: '건' as const,
                     // 검토 중·반려가 위로 정렬돼 있으므로 첫 줄이 곧 "지금 신경 쓸 것"이다.
                     target: myProposals[0]
-                      ? `${myProposals[0].text} · ${myProposals[0].status === 'approved' ? '반영됨' : myProposals[0].status === 'rejected' ? '반려' : '검토 중'}`
+                      ? `${myProposals[0].text} · ${SUGGESTION_STATUS_LABEL[myProposals[0].status]}`
                       : undefined,
                     onPress: () => setOpenRecord((v) => (v === 'proposals' ? null : 'proposals')),
                   } satisfies RollupRow]
@@ -317,7 +318,7 @@ export function JuniorMySpace({ me }: { me: string }) {
                       <Ionicons name={sug.status === 'approved' ? 'checkmark-circle' : sug.status === 'rejected' ? 'close-circle' : 'time-outline'} size={16} color={sug.status === 'approved' ? BrandColors.good : sug.status === 'rejected' ? BrandColors.bad : InkColors.ink3} />
                       <Text style={s.rowText} numberOfLines={1}>{sug.text}</Text>
                       <Text style={[s.statusTag, sug.status === 'approved' && { color: BrandColors.goodText }, sug.status === 'rejected' && { color: BrandColors.badText }]}>
-                        {sug.status === 'approved' ? '반영됨' : sug.status === 'rejected' ? '반려' : '검토 중'}
+                        {SUGGESTION_STATUS_LABEL[sug.status]}
                       </Text>
                     </View>
                     {sug.status === 'rejected' && !!sug.owner_note && (

@@ -331,7 +331,7 @@ export function buildJuniorNotifications(args: {
     out.push({
       id: `sugres_${sg.id}`,
       kind: ok ? 'suggestion_approved' : 'suggestion_rejected',
-      title: ok ? '내 노하우 제안이 반영됐어요' : '내 노하우 제안이 반려됐어요',
+      title: ok ? '내 노하우 제안이 승인됐어요' : '내 노하우 제안이 반려됐어요',
       body: !ok && sg.owner_note ? `${sg.text}\n사유: ${sg.owner_note}` : sg.text,
       at: sg.reviewed_at as string,
       unread: isAfterAck(sg.reviewed_at, ackAt),
@@ -862,7 +862,7 @@ function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
     out.push({
       id: `sugres_${sg.id}`,
       kind: ok ? 'suggestion_approved' : 'suggestion_rejected',
-      title: ok ? '내 노하우 제안이 반영됐어요' : '내 노하우 제안이 반려됐어요',
+      title: ok ? '내 노하우 제안이 승인됐어요' : '내 노하우 제안이 반려됐어요',
       body: !ok && sg.owner_note ? `${sg.text}\n사유: ${sg.owner_note}` : sg.text,
       at: sg.reviewed_at as string,
       unread: isAfterAck(sg.reviewed_at, ackAt),

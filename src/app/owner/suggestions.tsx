@@ -13,6 +13,7 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { isPendingSuggestionToReview } from '@/lib/utils/notifications';
+import { SUGGESTION_STATUS_CHIP, SUGGESTION_STATUS_LABEL } from '@/lib/suggestion/labels';
 import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -22,13 +23,6 @@ import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { screenScrollStyle } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import type { PlaybookSuggestion } from '@/types';
-
-/** 처리됨 상태칩 — 면(bg)과 글자(fg)를 한 쌍으로 묶는다. 떨어져 있으면 '반영'에 빨간 틴트가 깔린다. */
-const STATUS_CHIP: Record<PlaybookSuggestion['status'], { bg: string; fg: string }> = {
-  approved: { bg: BrandColors.goodSoft, fg: BrandColors.goodText },
-  rejected: { bg: InkColors.bgSoft, fg: TextColor.secondary },
-  pending: { bg: InkColors.bgSoft, fg: TextColor.secondary },
-};
 
 /**
  * 노하우 제안함(사장) — 알바가 올린 ① 개선 제안 / ② 신규 등록 신청을 검토.
@@ -143,9 +137,9 @@ export default function OwnerSuggestionsScreen() {
             <Text style={styles.handledHeader}>처리됨</Text>
             {handled.map((s) => (
               <View key={s.id} style={styles.handledRow}>
-                <View style={[styles.statusChip, { backgroundColor: STATUS_CHIP[s.status].bg }]}>
-                  <Text style={[styles.statusChipText, { color: STATUS_CHIP[s.status].fg }]}>
-                    {s.status === 'approved' ? '반영' : '반려'}
+                <View style={[styles.statusChip, { backgroundColor: SUGGESTION_STATUS_CHIP[s.status].bg }]}>
+                  <Text style={[styles.statusChipText, { color: SUGGESTION_STATUS_CHIP[s.status].fg }]}>
+                    {SUGGESTION_STATUS_LABEL[s.status]}
                   </Text>
                 </View>
                 <Text style={styles.handledText} numberOfLines={1}>
