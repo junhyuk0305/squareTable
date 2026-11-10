@@ -1,4 +1,4 @@
--- 0362_space_values.sql — 공간·매장 통합 1번 덩이 1단계: 값 넓히기 (2026-11-10 · 데이터구조 A안 3판 부록 C 1단계 · A-1)
+-- 0364_space_values.sql — 공간·매장 통합 1번 덩이 1단계: 값 넓히기 (2026-11-10 · 데이터구조 A안 3판 부록 C 1단계 · A-1)
 -- 옛 앱 호환: 안전 · CHECK 허용값을 더하기만 한다 · 기존 값은 그대로 · 함수·RLS·grant·publication 무변경.
 --   이 파일 뒤에도 새 값을 쓰는 행은 하나도 없다(공간 입구가 꺼져 있다 · 3판 16장 "공간 입구를 켜는 날").
 --   옛 앱(1.1.0 · 1.1.1)은 이 값들을 쓰지도 읽지도 않는다. 옛 앱이 보내는 값은 전부 지금처럼 통과한다.
@@ -47,18 +47,18 @@ do $$
 begin
   if not exists (select 1 from pg_constraint where conname = 'units_kind_check'
                    and conrelid = 'public.units'::regclass and pg_get_constraintdef(oid) like '%''space''%') then
-    raise exception '0362 self-check: units_kind_check';
+    raise exception '0364 self-check: units_kind_check';
   end if;
   if not exists (select 1 from pg_constraint where conname = 'unit_members_role_check'
                    and conrelid = 'public.unit_members'::regclass and pg_get_constraintdef(oid) like '%''space_member''%') then
-    raise exception '0362 self-check: unit_members_role_check';
+    raise exception '0364 self-check: unit_members_role_check';
   end if;
   if not exists (select 1 from pg_constraint where conname = 'playbook_entries_creator_role_check'
                    and conrelid = 'public.playbook_entries'::regclass and pg_get_constraintdef(oid) like '%''space_owner''%') then
-    raise exception '0362 self-check: playbook_entries_creator_role_check';
+    raise exception '0364 self-check: playbook_entries_creator_role_check';
   end if;
   if not exists (select 1 from pg_constraint where conname = 'unknown_queries_status_check'
                    and conrelid = 'public.unknown_queries'::regclass and pg_get_constraintdef(oid) like '%''answered_direct''%') then
-    raise exception '0362 self-check: unknown_queries_status_check';
+    raise exception '0364 self-check: unknown_queries_status_check';
   end if;
 end $$;

@@ -1,4 +1,4 @@
--- 0364_space_close_store_write_paths.sql — 공간·매장 통합 1번 덩이 3단계: 현재 매장 기록에 공간을 쓰는 길을 닫는다 (2026-11-10 · 데이터구조 A안 3판 5-3 · 14장 · 부록 C 3단계 · A-4)
+-- 0366_space_close_store_write_paths.sql — 공간·매장 통합 1번 덩이 3단계: 현재 매장 기록에 공간을 쓰는 길을 닫는다 (2026-11-10 · 데이터구조 A안 3판 5-3 · 14장 · 부록 C 3단계 · A-4)
 -- 옛 앱 호환: 안전 · 함수 drop 없음 · 서명·반환형·언어·security definer·search_path·권한 그대로 · 열·제약·RLS·publication 무변경.
 --   매장(store)과 본사 작업실(brand_workspace)에 대한 결과는 지금과 같다. 공간 행은 아직 하나도 없다(입구 꺼짐).
 --   옛 앱이 부르는 것: switch_active_unit(1.1.0 · 1.1.1 매장 전환) · switch_session_unit(1.1.1) · join_by_invite(둘 다) · leave_store(둘 다).
@@ -6,7 +6,7 @@
 --   (src/lib/store/useSessionStore.ts switchUnit · 문구 = 기존 매핑). 새 오류 코드는 만들지 않았다(AGENTS ⑨).
 --   공간 초대코드는 매장 합류 칸에서 "없는 코드"와 같은 0행 결과다. 틀린 시도로 세고 잠금도 같다(3판 16장 첫 줄 · 조건 = 공간 코드 첫 발급 전 라이브).
 --
--- 무엇이 바뀌나 (각 함수 = 최고 번호 정의 본문 통째 승계 · grep -niE 전수 확인 · 바뀐 줄에만 ★0364):
+-- 무엇이 바뀌나 (각 함수 = 최고 번호 정의 본문 통째 승계 · grep -niE 전수 확인 · 바뀐 줄에만 ★0366):
 --   ① switch_session_unit — 베이스 0285:95. 멤버십 검사 뒤 "대상이 매장·본사 작업실이 아니면 not_a_member".
 --   ② switch_active_unit  — 베이스 0142:353(정의 0055 · 0142). 같은 검사.
 --   ③ _admit_member       — 베이스 0348:471(정의 0346 · 0348). 대상이 매장·본사 작업실이 아니면 계정 기록(active_unit_id)과
@@ -16,7 +16,7 @@
 --   ⑤ leave_store         — 베이스 0303:123(정의 0237 · 0246 · 0303). 다음 매장 고르기를 매장·본사 작업실 중에서만.
 --   ⑥ join_by_invite      — 베이스 0346:170(정의 … 0323 · 0325 · 0346). 코드 조회에 u.kind = 'store'.
 --   ⑦ report_join_full    — 베이스 0346:267(유일 정의). 코드 조회에 같은 한 줄. 공간 코드가 잠금 집계에서도 없는 코드와 같다.
--- 허용 목록: ①~⑤는 ('store','brand_workspace') 허용 목록이다(0363 auth_member_unit_id 와 같은 목록 · 종류가 늘어도 닫힌 쪽).
+-- 허용 목록: ①~⑤는 ('store','brand_workspace') 허용 목록이다(0365 auth_member_unit_id 와 같은 목록 · 종류가 늘어도 닫힌 쪽).
 --   본사 작업실은 지금도 멤버십만으로 전환·다음 매장이 될 수 있으므로 목록에 남겨 지금 동작을 지킨다(3판 5-1 · brand_enter_workspace 0285:159).
 --   ⑥만 'store' 하나다(3판 A-4). 본사 작업실은 초대코드 없이 만든다(0209:81 · 로컬 확인 = 작업실 1행 · 코드 0개).
 -- 다음 매장 고르기(④⑤)의 역할 조건 m.role in ('junior','manager') 는 그대로다. 공간 역할(space_owner·space_member)은 이 조건에서도 이미 빠진다.
@@ -26,7 +26,7 @@
 -- 적용 뒤 게이트(3판 부록 C 3단계): qa:onboarding · qa:junior-multistore · qa:delete-store · qa:quiz-resend:local.
 
 -- ════════════════════════════════════════════════════════════════════════════
--- ① switch_session_unit (0285 본문 + ★0364 공간 거절)
+-- ① switch_session_unit (0285 본문 + ★0366 공간 거절)
 -- ════════════════════════════════════════════════════════════════════════════
 -- ── ③ 매장 전환 (switch_active_unit 0142 검사 그대로) ─────────────────────────
 create or replace function public.switch_session_unit(p_unit_id text)
@@ -39,7 +39,7 @@ begin
   ) then
     raise exception 'not_a_member';
   end if;
-  -- ★0364: 현재 매장에는 매장·본사 작업실만 담는다(3판 5-1). 공간이면 소속이 아닌 매장과 같은 거절이다.
+  -- ★0366: 현재 매장에는 매장·본사 작업실만 담는다(3판 5-1). 공간이면 소속이 아닌 매장과 같은 거절이다.
   if not exists (
     select 1 from public.units u where u.id = p_unit_id and u.kind in ('store', 'brand_workspace')
   ) then
@@ -54,7 +54,7 @@ revoke all on function public.switch_session_unit(text) from public, anon, authe
 grant execute on function public.switch_session_unit(text) to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- ② switch_active_unit (0142 본문 + ★0364 공간 거절)
+-- ② switch_active_unit (0142 본문 + ★0366 공간 거절)
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0142: 클라 게이팅만으로는 우회된다(URL 직진입·구버전 앱). 잠긴 매장으로 들어가는 유일한 문을 서버가 닫는다.
 -- ※ 데이터 자체의 RLS 차단은 이번 범위가 아니다 — auth_unit_id() 기반 정책 전체에 영향이 가고,
@@ -69,7 +69,7 @@ begin
   ) then
     raise exception 'not_a_member';
   end if;
-  -- ★0364: 현재 매장에는 매장·본사 작업실만 담는다(3판 5-1). 공간이면 소속이 아닌 매장과 같은 거절이다.
+  -- ★0366: 현재 매장에는 매장·본사 작업실만 담는다(3판 5-1). 공간이면 소속이 아닌 매장과 같은 거절이다.
   if not exists (
     select 1 from public.units u where u.id = p_unit_id and u.kind in ('store', 'brand_workspace')
   ) then
@@ -82,7 +82,7 @@ end $$;
 grant execute on function public.switch_active_unit(text) to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- ③ _admit_member (0348 본문 통째 + ★0364 공간이면 계정 기록을 안 건드림)
+-- ③ _admit_member (0348 본문 통째 + ★0366 공간이면 계정 기록을 안 건드림)
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0348: 베이스 = 0346 본문 통째(유일 정의 · AGENTS ⑧ · signup-drift ③). 0169 입사 트리거 블록만 걷었다.
 --   서명·권한·호출자(join_by_invite · approve_member)는 그대로다. p_assigner 는 이제 안 쓰지만 서명을 지키려고 남긴다.
@@ -92,7 +92,7 @@ create or replace function public._admit_member(p_uid uuid, p_unit text, p_assig
 returns void language plpgsql volatile security definer set search_path = public as $$
 declare
   v_phone  text;
-  v_store  boolean;   -- ★0364: 현재 매장이 될 수 있는 자리(매장·본사 작업실)인가
+  v_store  boolean;   -- ★0366: 현재 매장이 될 수 있는 자리(매장·본사 작업실)인가
 begin
   -- ★0346: 같은 매장 합류를 한 줄로 세운다. 승인제에서는 사장 한 명이 눌렀지만, 즉시 합류는 직원 여럿이
   --   같은 순간에 들어올 수 있다. 세는 사이에 끼어들면 무료 좌석을 넘는다.
@@ -104,14 +104,14 @@ begin
   end if;
   if public._staff_seat_full(p_unit) then raise exception 'staff_limit'; end if;
 
-  -- ★0364: 공간은 현재 매장 기록(계정 기록 · 옛 주매장 칸)에 절대 안 담긴다(3판 5-1 · 5-3). 허용 목록 = 0363 과 같다.
+  -- ★0366: 공간은 현재 매장 기록(계정 기록 · 옛 주매장 칸)에 절대 안 담긴다(3판 5-1 · 5-3). 허용 목록 = 0365 과 같다.
   v_store := exists (select 1 from public.units u where u.id = p_unit and u.kind in ('store', 'brand_workspace'));
 
   -- 소속 확정. 주매장은 첫 매장만 보존, 활성도 첫 매장일 때만(추가 합류는 현재 활성 유지).
   --   이 매장 대기 신청이 있었으면 같이 지운다(승인 경로). 다른 매장 대기는 건드리지 않는다.
   update public.profiles
-     set unit_id         = case when v_store then coalesce(unit_id, p_unit) else unit_id end,                -- ★0364
-         active_unit_id  = case when v_store then coalesce(active_unit_id, p_unit) else active_unit_id end,  -- ★0364
+     set unit_id         = case when v_store then coalesce(unit_id, p_unit) else unit_id end,                -- ★0366
+         active_unit_id  = case when v_store then coalesce(active_unit_id, p_unit) else active_unit_id end,  -- ★0366
          pending_unit_id = case when pending_unit_id = p_unit then null else pending_unit_id end,
          role            = 'junior'
    where id = p_uid;
@@ -149,7 +149,7 @@ end $$;
 revoke all on function public._admit_member(uuid, text, uuid) from public, anon, authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- ④ close_member_tenure (0352 본문 통째 + ★0364 ⑩ 다음 매장 = 매장·본사 작업실만)
+-- ④ close_member_tenure (0352 본문 통째 + ★0366 ⑩ 다음 매장 = 매장·본사 작업실만)
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0352: 0247 본문 그대로 + ⑤-2(열린 출근 닫기). 클라에 안 열린 내부 함수다(remove_staff · leave_store · delete_my_account 등이 부른다).
 create or replace function public.close_member_tenure(p_unit text, p_user uuid, p_reason text, p_notify boolean default false)
@@ -231,10 +231,13 @@ begin
   delete from public.quiz_assignments where unit_id = p_unit and user_id = p_user and sent_at is null;
 
   -- ⑩ 포인터 재지정: 이 매장이 주매장/활성이면 남은 소속으로(없으면 null → 허브 빈 상태).
-  --   ★0364: 남은 소속 중 매장·본사 작업실만 고른다. 공간은 현재 매장 기록에 안 담긴다(3판 5-3).
+  --   ★0366: 남은 소속 중 매장·본사 작업실만 고른다. 공간은 현재 매장 기록에 안 담긴다(3판 5-3).
+  --   ★0366: 지운 매장(0358 deleted_at)도 고르지 않는다. 사장 탈퇴로 지워진 매장의 직원 멤버십은 남는다(0359).
+  --          그 매장이 뽑히면 auth_unit_id 가 null 을 내 다른 매장이 있어도 "매장 없음"이 된다.
   select m.unit_id into v_next
     from public.unit_members m
-    join public.units u on u.id = m.unit_id and u.kind in ('store', 'brand_workspace')   -- ★0364
+    join public.units u on u.id = m.unit_id and u.kind in ('store', 'brand_workspace')   -- ★0366
+                       and u.deleted_at is null
    where m.user_id = p_user and m.role in ('junior', 'manager')
    order by m.created_at
    limit 1;
@@ -274,7 +277,7 @@ end $$;
 revoke all on function public.close_member_tenure(text, uuid, text, boolean) from public, anon, authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- ⑤ leave_store (0303 본문 통째 + ★0364 다음 매장 = 매장·본사 작업실만)
+-- ⑤ leave_store (0303 본문 통째 + ★0366 다음 매장 = 매장·본사 작업실만)
 -- ════════════════════════════════════════════════════════════════════════════
 -- ── leave_store (0246 본문) ──
 create or replace function public.leave_store()
@@ -296,10 +299,12 @@ begin
   perform public.close_member_tenure(v_unit, v_uid, 'left', true);
 
   -- 남은 소속으로 재지정(없으면 null → 허브 빈 상태).
-  --   ★0364: 남은 소속 중 매장·본사 작업실만 고른다. 공간은 현재 매장 기록에 안 담긴다(3판 5-3).
+  --   ★0366: 남은 소속 중 매장·본사 작업실만 고른다. 공간은 현재 매장 기록에 안 담긴다(3판 5-3).
+  --   ★0366: 지운 매장(0358 deleted_at)도 고르지 않는다(close_member_tenure ⑩ 과 같은 이유).
   select m.unit_id into v_next
     from public.unit_members m
-    join public.units u on u.id = m.unit_id and u.kind in ('store', 'brand_workspace')   -- ★0364
+    join public.units u on u.id = m.unit_id and u.kind in ('store', 'brand_workspace')   -- ★0366
+                       and u.deleted_at is null
    where m.user_id = v_uid and m.role in ('junior', 'manager')
    order by m.created_at
    limit 1;
@@ -312,7 +317,7 @@ revoke all on function public.leave_store() from public, anon, authenticated;
 grant execute on function public.leave_store() to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- ⑥ join_by_invite — 0346 본문 통째(코드 조회에 매장만 · ★0364 표시)
+-- ⑥ join_by_invite — 0346 본문 통째(코드 조회에 매장만 · ★0366 표시)
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0346: 베이스 0325 본문 통째(맨 끝 합류 자리만 바꿨다 · ★0346 표시).
 --   반환형 TABLE(unit_id, store_name)과 join_attempts 기록은 그대로다(옛 앱).
@@ -356,12 +361,12 @@ begin
     raise exception 'already_pending';
   end if;
 
-  -- ★0364: 매장 코드만 찾는다. 공간 코드는 없는 코드와 같다(아래 0행 · 틀린 시도 기록 · 잠금 집계 모두 같은 모양).
+  -- ★0366: 매장 코드만 찾는다. 공간 코드는 없는 코드와 같다(아래 0행 · 틀린 시도 기록 · 잠금 집계 모두 같은 모양).
   --   공간 합류는 별도 함수가 맡는다(3판 5-3 · 덩이 4). 코드 모양으로 공간인지 알 수 없게 한다.
   select u.id, u.store_name, u.deleted_at, u.owner_id into v_unit, v_name, v_deleted, v_owner
     from public.units u
     where u.invite_code = trim(p_code)
-      and u.kind = 'store'   -- ★0364
+      and u.kind = 'store'   -- ★0366
       and (u.invite_expires_at is null or u.invite_expires_at > now());
 
   if v_unit is null then
@@ -411,7 +416,7 @@ begin
 end $function$;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- ⑦ report_join_full — 0346 본문 통째(유일 정의 · 코드 조회에 매장만 · ★0364 표시)
+-- ⑦ report_join_full — 0346 본문 통째(유일 정의 · 코드 조회에 매장만 · ★0366 표시)
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0346: 인원 초과로 막힌 직원이 사장에게 알린다(새 앱이 join_by_invite 실패 직후 부른다).
 -- 앱이 보낸 것은 코드 하나다. 매장·인원·사람은 서버가 다시 정한다(client-trust).
@@ -432,11 +437,11 @@ begin
   if public.code_locked(v_uid, 'join') then return false; end if;
   if exists (select 1 from public.profiles p where p.id = v_uid and p.role = 'owner') then return false; end if;
 
-  -- ★0364: join_by_invite 와 같이 매장 코드만 찾는다. 공간 코드는 없는 코드와 같다(실패 기록 · 잠금 집계 같은 모양).
+  -- ★0366: join_by_invite 와 같이 매장 코드만 찾는다. 공간 코드는 없는 코드와 같다(실패 기록 · 잠금 집계 같은 모양).
   select u.id, u.store_name into v_unit, v_name
     from public.units u
    where u.invite_code = trim(p_code)
-     and u.kind = 'store'   -- ★0364
+     and u.kind = 'store'   -- ★0366
      and (u.invite_expires_at is null or u.invite_expires_at > now())
      and u.deleted_at is null;
   if v_unit is null then
@@ -481,9 +486,9 @@ begin
      or (select p.prosrc from pg_proc p where p.oid = 'public.leave_store()'::regprocedure) not like '%' || v_kinds || '%'
      or (select p.prosrc from pg_proc p where p.oid = 'public.join_by_invite(text, date)'::regprocedure) not like '%u.kind = ''store''%'
      or (select p.prosrc from pg_proc p where p.oid = 'public.report_join_full(text)'::regprocedure) not like '%u.kind = ''store''%'
-     -- 앞 단계가 먼저 와 있어야 한다(0363 현재 매장 함수 · 0303 잠금 전 값 유지).
+     -- 앞 단계가 먼저 와 있어야 한다(0365 현재 매장 함수 · 0303 잠금 전 값 유지).
      or (select p.prosrc from pg_proc p where p.oid = 'public.auth_member_unit_id()'::regprocedure) not like '%brand_workspace%'
      or (select p.prosrc from pg_proc p where p.oid = 'public.leave_store()'::regprocedure) not like '%auth_member_unit_id()%' then
-    raise exception '0364 자가점검 실패';
+    raise exception '0366 자가점검 실패';
   end if;
 end $$;

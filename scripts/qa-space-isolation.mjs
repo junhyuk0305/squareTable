@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// qa-space-isolation.mjs — 공간·매장 통합 1번 덩이 "바닥" 격리 하니스 (2026-11-10 · 0362~0369 · 데이터구조 A안 3판 부록 C-0)
+// qa-space-isolation.mjs — 공간·매장 통합 1번 덩이 "바닥" 격리 하니스 (2026-11-10 · 0364~0371 · 데이터구조 A안 3판 부록 C-0)
 //
 // 무엇을 증명하나: 공간 사람이 어떤 세션 상태에서도 매장 기능에 닿지 못하고, 매장 결과가 공간이 없을 때와 같다.
 //   기대값을 손으로 쓰지 않는다. 같은 호출을 "공간이 없을 때"와 "공간이 있을 때" 두 번 해서 결과가 같은지 본다.
@@ -321,14 +321,14 @@ select pg_temp.qa_state(${q(U.A)}, ${q(S.A)}, null, ${q(SP)}, null, null);
 select pg_temp.qa_chk('A 공간 주인이 매장 X 노하우를 링크에 담기 거절', 'A', $s$insert into public.edu_links(id, unit_id, token, title, expires_at, entry_ids) values ('qa_el_x_${rnd}', '${SP}', md5('x') || md5('y'), 'x', now() + interval '1 day', array[(select id from public.playbook_entries where unit_id = '${X}' limit 1)]) returning 'inserted'$s$, 'err');
 select pg_temp.qa_chk('A 공간 주인이 자기 공간 노하우를 링크에 담기 됨', 'A', $s$insert into public.edu_links(id, unit_id, token, title, expires_at, entry_ids) values ('qa_el_s_${rnd}', '${SP}', md5('s') || md5('t'), 's', now() + interval '1 day', array['qa_pb_pub_${rnd}']) returning 'inserted'$s$, 'ok|inserted');
 
--- ── 질문 보호 트리거(0368)의 공간 행 판정 ──
+-- ── 질문 보호 트리거(0370)의 공간 행 판정 ──
 select pg_temp.qa_state(${q(U.B)}, ${q(S.B)}, ${q(X)}, ${q(SP)}, null, null);
 select pg_temp.qa_chk('B 공간 멤버가 자기 질문을 직접 답함으로 바꾸기 거절', 'B', $s$update public.unknown_queries set status = 'answered_direct' where id = 'qa_uq_B_${rnd}' returning 'updated'$s$, 'err');
 select pg_temp.qa_chk('A 공간 주인이 승인한 사람을 남으로 적기 거절', 'A', $s$update public.unknown_queries set approved_by = '${U.B}' where id = 'qa_uq_B_${rnd}' returning 'updated'$s$, 'err');
 select pg_temp.qa_chk('A 공간 주인이 답 쓴 사람을 남으로 적기 거절', 'A', $s$update public.unknown_queries set answer_author_id = '${U.C}' where id = 'qa_uq_B_${rnd}' returning 'updated'$s$, 'err');
 select pg_temp.qa_chk('A 공간 주인이 대기 질문을 직접 답함으로 바꾸기 됨', 'A', $s$update public.unknown_queries set status = 'answered_direct', answer_kind = 'sent', answered_by = auth.uid(), answer_author_id = auth.uid() where id = 'qa_uq_B_${rnd}' returning 'updated'$s$, 'ok|updated');
 
--- ── 합류와 나가기(0364): 공간 초대코드는 매장 합류로 안 열리고, 나간 뒤 다음 매장으로 공간을 안 고른다 ──
+-- ── 합류와 나가기(0366): 공간 초대코드는 매장 합류로 안 열리고, 나간 뒤 다음 매장으로 공간을 안 고른다 ──
 update public.units set invite_code = 'QS' || upper(substr(md5(random()::text), 1, 4)) where id = ${q(SP)};
 select pg_temp.qa_state(${q(U.E)}, ${q(S.E)}, null, null, null, null);
 -- 전화 인증 판정(phone_verified_ok)을 지나야 코드 대조까지 간다. 인증 면제 날짜 이전 계정으로 만든다(끝에 되돌림).
@@ -351,7 +351,7 @@ end $f$;
 grant execute on function pg_temp.qa_after(text) to authenticated;
 select pg_temp.qa_state(${q(U.B)}, ${q(S.B)}, ${q(X)}, null, ${q(X)}, ${q(X)});
 select pg_temp.qa_chk('B 매장 나가기 → 다음 매장으로 공간을 안 고름', 'B', $s$select pg_temp.qa_after('select public.leave_store()')$s$, 'ok|false');
--- 내보내기의 다음 매장 고르기는 close_member_tenure(0364) 안에 있다. 데모 매장은 주인 칸이 D 가 아니라
+-- 내보내기의 다음 매장 고르기는 close_member_tenure(0366) 안에 있다. 데모 매장은 주인 칸이 D 가 아니라
 --   remove_staff 의 사장 판정에 걸린다. 그래서 내부 함수를 서비스 권한으로 직접 부르고 되돌린다.
 update public.profiles set active_unit_id = ${q(X)}, unit_id = ${q(X)} where id = ${q(U.B)};
 create function pg_temp.qa_close_tenure() returns text language plpgsql as $f$
@@ -369,7 +369,45 @@ begin
 end $f$;
 select 'QA|CHK|B 내보내기(close_member_tenure) → 다음 매장으로 공간을 안 고름¦ok|false¦' || pg_temp.qa_close_tenure();
 
--- ── AI 상한 한 곳(0367): 경계 199/200 · 2999/3000 · 공간 299/300(무료 모드에도) ──
+-- 다음 매장 고르기는 지운 매장(0358 deleted_at)을 건너뛴다(0366). 지운 매장 Y 가 더 오래된 소속이라 먼저 뽑히는 자리에 둔다.
+--   주인 칸은 비운다(사장을 넣으면 전화 인증 트리거가 먼저 거절한다 · 이 검사는 사장과 무관하다).
+--   지운 매장에는 합류가 막히므로(0335 트리거) 직원이 들어온 뒤에 지운다. 실제 순서와 같다.
+insert into public.units(id, store_name, kind) values
+  ('qa_spi_y_${rnd}', 'QA지운매장', 'store'), ('qa_spi_z_${rnd}', 'QA살아있는매장', 'store');
+insert into public.unit_members(user_id, unit_id, role, created_at) values
+  (${q(U.B)}, 'qa_spi_y_${rnd}', 'junior', '2000-01-01'), (${q(U.B)}, 'qa_spi_z_${rnd}', 'junior', '2001-01-01');
+update public.units set deleted_at = now() where id = 'qa_spi_y_${rnd}';
+update public.profiles set active_unit_id = ${q(X)}, unit_id = ${q(X)} where id = ${q(U.B)};
+create function pg_temp.qa_next_live() returns text language plpgsql as $f$
+declare r text;
+begin
+  begin
+    perform public.close_member_tenure(${q(X)}, ${q(U.B)}::uuid, 'removed', false);
+    select coalesce(p.unit_id, '<null>') into r from public.profiles p where p.id = ${q(U.B)};
+    raise exception using errcode = 'QAOK0', message = r;
+  exception
+    when sqlstate 'QAOK0' then return 'ok|' || sqlerrm;
+    when others then return 'err|' || sqlstate || '|' || left(sqlerrm, 80);
+  end;
+end $f$;
+select 'QA|CHK|B 내보내기 → 다음 매장으로 지운 매장을 안 고름¦ok|qa_spi_z_${rnd}¦' || pg_temp.qa_next_live();
+
+-- 매일 파기의 백스톱(purge_deleted_accounts)이 공간을 지우지 않는다(0372). 공간은 주인 칸이 원래 비어 있다.
+create function pg_temp.qa_purge_keeps_space() returns text language plpgsql as $f$
+declare r text;
+begin
+  begin
+    perform public.purge_deleted_accounts();
+    select coalesce((select (u.deleted_at is null and u.purged_at is null)::text from public.units u where u.id = ${q(SP)}), 'gone') into r;
+    raise exception using errcode = 'QAOK0', message = r;
+  exception
+    when sqlstate 'QAOK0' then return 'ok|' || sqlerrm;
+    when others then return 'err|' || sqlstate || '|' || left(sqlerrm, 80);
+  end;
+end $f$;
+select 'QA|CHK|매일 파기 백스톱이 공간을 남김¦ok|true¦' || pg_temp.qa_purge_keeps_space();
+
+-- ── AI 상한 한 곳(0369): 경계 199/200 · 2999/3000 · 공간 299/300(무료 모드에도) ──
 --   엣지를 거치지 않고 상한 함수를 서비스 권한으로 직접 부른다(로컬에서 AI 를 부르지 않는다). 무료 모드 변경은 끝에 되돌아간다.
 insert into public.units(id, store_name, kind) values ('qa_paid_${rnd}', 'QA유료', 'store'), ('qa_free_${rnd}', 'QA무료', 'store');
 insert into public.unit_subscriptions(unit_id, status, plan, paid_until) values ('qa_paid_${rnd}', 'active', 'single', now() + interval '30 days')
@@ -461,7 +499,7 @@ const parseTbl = (o) => {
 
 console.log(`\n[1] 매장 기능 전수 호출 · 함수 ${nFn}개 · 표 ${nTbl}개`);
 check('매장 기능 목록이 비지 않았다', nFn > 50 && nTbl > 20, `함수 ${nFn} · 표 ${nTbl}`);
-// 공간 부품 표: 0369 가 공간 갈래를 붙인 표. 현재 공간이 있을 때만 공간 행이 보여도 된다.
+// 공간 부품 표: 0371 가 공간 갈래를 붙인 표. 현재 공간이 있을 때만 공간 행이 보여도 된다.
 const SPACE_PART_TABLES = new Set(['playbook_entries', 'playbook_embeddings', 'chat_queries', 'unknown_queries', 'ai_usage']);
 const fnDiff = [], tblDiff = [], leaks = [];
 for (const [k, v] of res) {

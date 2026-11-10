@@ -1,4 +1,4 @@
--- 0366_space_features_and_current_space.sql — 기능 목록표 · 권한 함수 · 현재 공간 (2026-11-10 · 공간·매장 통합 1번 덩이 5·6단계)
+-- 0368_space_features_and_current_space.sql — 기능 목록표 · 권한 함수 · 현재 공간 (2026-11-10 · 공간·매장 통합 1번 덩이 5·6단계)
 -- 옛 앱 호환: 안전 | 새 표 2개와 새 함수만 더한다. 기존 함수·정책·표는 하나도 다시 정의하지 않는다.
 --   옛 앱·옛 엣지는 새 이름을 부르지 않는다. 공간 입구(space × enter)가 꺼져 있어 enter_space 는 늘 거절되고
 --   session_active_spaces 에는 행이 생기지 않는다. 그래서 auth_space_id() 는 늘 null 이다.
@@ -21,7 +21,7 @@
 --   ⑧ auth_can(p_unit, p_perm) — 4장 권한표 한 곳. 새 부품과 공간 부품이 쓴다.
 --
 -- ── 바꾸지 않는 것 ─────────────────────────────────────────────────────────
---   auth_unit_id · auth_member_unit_id · auth_is_owner · auth_can_manage · session_active_units · 모든 정책(0369 담당).
+--   auth_unit_id · auth_member_unit_id · auth_is_owner · auth_can_manage · session_active_units · 모든 정책(0371 담당).
 --   매장 기존 기능은 지금 자기 판정(auth_can_manage · auth_is_owner)을 그대로 쓴다(4장 · 결정 114 ③).
 --
 -- ── 기능 키 (6장 표 → 짧은 영문) ───────────────────────────────────────────
@@ -78,7 +78,7 @@ grant select on table public.unit_kind_features to authenticated;
 drop policy if exists ukf_read on public.unit_kind_features;
 create policy ukf_read on public.unit_kind_features for select to authenticated using (true);
 comment on table public.unit_kind_features is
-  '자리 종류 × 기능 → 켜짐(0366 · 3판 6장). 줄이 없으면 꺼짐. 쓰기 정책 없음 = 운영자만. 공간 입구 = (space, enter).';
+  '자리 종류 × 기능 → 켜짐(0368 · 3판 6장). 줄이 없으면 꺼짐. 쓰기 정책 없음 = 운영자만. 공간 입구 = (space, enter).';
 
 -- 씨앗 줄. 이미 있는 줄은 덮지 않는다(운영자가 켠 입구를 다시 끄지 않게).
 insert into public.unit_kind_features (kind, feature, enabled) values
@@ -157,14 +157,25 @@ create index if not exists session_active_spaces_space_idx on public.session_act
 alter table public.session_active_spaces enable row level security;
 revoke all on table public.session_active_spaces from public, anon, authenticated;
 comment on table public.session_active_spaces is
-  '로그인 세션마다 보고 있는 공간(0366 · 3판 5-2). 정책 0개 — 쓰기는 enter_space 만. 계정 단위 기록은 없다.';
+  '로그인 세션마다 보고 있는 공간(0368 · 3판 5-2). 정책 0개 — 쓰기는 enter_space 만. 계정 단위 기록은 없다.';
+
+-- 0335: public RLS 표를 더하면 account_access_allowed 제한 정책도 같이 단다(RESTRICTIVE · 여는 정책이 아니다).
+--   unit_kind_features 는 using(true) 읽기라 탈퇴한 계정의 토큰으로도 읽히던 것을 막는다. session_active_spaces 는 규칙을 맞추려고 단다.
+do $$
+declare t text;
+begin
+  foreach t in array array['unit_kind_features', 'session_active_spaces'] loop
+    execute format('drop policy if exists account_access_allowed on public.%I', t);
+    execute format('create policy account_access_allowed on public.%I as restrictive for all to authenticated using ((select public.account_access_allowed())) with check ((select public.account_access_allowed()))', t);
+  end loop;
+end $$;
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ⑤ auth_space_id — 현재 공간. 아니면 null
 -- ══════════════════════════════════════════════════════════════════════════
 -- 세션 번호 = jwt_session_uuid()(0285 · 토큰의 session_id · uuid 모양이 아니면 null). auth_unit_id 와 같은 길이다.
 -- plpgsql 로 둔다: 계획이 캐시돼 호출당 비용이 작다(0303 auth_unit_id 주석 · 로컬 실측 1,000회 sql 3.3초 → plpgsql 0.35초).
--- 정책에서는 (select public.auth_space_id()) 로 감싸 문장마다 1번만 돈다(0369).
+-- 정책에서는 (select public.auth_space_id()) 로 감싸 문장마다 1번만 돈다(0371).
 -- 입구 스위치는 여기서 보지 않는다. 입구는 들어가는 길(enter_space)만 막는다(6장). 꺼진 동안에는 기록이 생기지 않는다.
 create or replace function public.auth_space_id()
 returns text language plpgsql stable security definer set search_path = public as $$
@@ -302,23 +313,23 @@ declare
 begin
   -- 씨앗 줄: 종류 2 × 기능 14 = 28줄. 공간 입구는 꺼짐(이 파일이 처음 넣을 때).
   if (select count(*) from public.unit_kind_features where kind in ('store', 'space')) < 28 then
-    raise exception '0366: 기능 목록표 씨앗 줄이 모자란다';
+    raise exception '0368: 기능 목록표 씨앗 줄이 모자란다';
   end if;
   if not exists (select 1 from public.unit_kind_features where kind = 'store' and feature = 'enter' and enabled) then
-    raise exception '0366: 매장 입구가 꺼져 있다';
+    raise exception '0368: 매장 입구가 꺼져 있다';
   end if;
 
   -- 클라는 표를 읽기만 한다.
   if has_table_privilege('authenticated', 'public.unit_kind_features', 'INSERT,UPDATE,DELETE')
      or has_table_privilege('anon', 'public.unit_kind_features', 'SELECT,INSERT,UPDATE,DELETE') then
-    raise exception '0366: 기능 목록표 쓰기가 클라에 열려 있다';
+    raise exception '0368: 기능 목록표 쓰기가 클라에 열려 있다';
   end if;
   if has_table_privilege('anon', 'public.session_active_spaces', 'SELECT,INSERT,UPDATE,DELETE')
      or has_table_privilege('authenticated', 'public.session_active_spaces', 'SELECT,INSERT,UPDATE,DELETE') then
-    raise exception '0366: 클라가 session_active_spaces 에 접근할 수 있다';
+    raise exception '0368: 클라가 session_active_spaces 에 접근할 수 있다';
   end if;
   if exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'session_active_spaces') then
-    raise exception '0366: session_active_spaces 에 정책이 있다';
+    raise exception '0368: session_active_spaces 에 정책이 있다';
   end if;
 
   -- 함수: definer · authenticated 만.
@@ -327,24 +338,24 @@ begin
     'public.enter_space(text)', 'public.my_spaces()', 'public.auth_can(text, text)'
   ] loop
     if not (select prosecdef from pg_proc where oid = v_fn::regprocedure) then
-      raise exception '0366: % 이 definer 가 아니다', v_fn;
+      raise exception '0368: % 이 definer 가 아니다', v_fn;
     end if;
     if not has_function_privilege('authenticated', v_fn, 'execute') or has_function_privilege('anon', v_fn, 'execute') then
-      raise exception '0366: % 실행 권한이 틀렸다', v_fn;
+      raise exception '0368: % 실행 권한이 틀렸다', v_fn;
     end if;
   end loop;
   if (select provolatile from pg_proc where oid = 'public.auth_space_id()'::regprocedure) <> 's'
      or (select provolatile from pg_proc where oid = 'public.auth_can(text, text)'::regprocedure) <> 's'
      or (select provolatile from pg_proc where oid = 'public.unit_has_feature(text, text)'::regprocedure) <> 's' then
-    raise exception '0366: 판정 함수가 stable 이 아니다';
+    raise exception '0368: 판정 함수가 stable 이 아니다';
   end if;
 
   -- 4장 함정: auth_can 이 현재 매장 역할 함수를 부르지 않는다.
   if (select prosrc from pg_proc where oid = 'public.auth_can(text, text)'::regprocedure) ~ 'auth_can_manage\s*\(|auth_is_owner\s*\(' then
-    raise exception '0366: auth_can 이 auth_can_manage/auth_is_owner 를 부른다(4장 함정)';
+    raise exception '0368: auth_can 이 auth_can_manage/auth_is_owner 를 부른다(4장 함정)';
   end if;
   -- enter_space 가 현재 매장 기록을 건드리지 않는다.
   if (select prosrc from pg_proc where oid = 'public.enter_space(text)'::regprocedure) ~ 'session_active_units|active_unit_id|profiles' then
-    raise exception '0366: enter_space 가 현재 매장 기록을 건드린다';
+    raise exception '0368: enter_space 가 현재 매장 기록을 건드린다';
   end if;
 end $$;

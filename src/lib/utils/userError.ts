@@ -17,28 +17,28 @@ const COMMON: { test: RegExp; msg: string }[] = [
     msg: '새 초대코드를 만들지 못했어요. 잠시 후 다시 시도해 주세요.',
   },
   {
-    // ★0366: 공간 입구(space × enter)가 꺼져 있다. 운영자가 켜기 전까지 공간에 들어갈 수 없다.
+    // ★0368: 공간 입구(space × enter)가 꺼져 있다. 운영자가 켜기 전까지 공간에 들어갈 수 없다.
     test: /space_closed/,
     msg: '공간은 아직 열리지 않았어요.',
   },
   {
-    // ★0368: 질문 보호 트리거. 링크 번호가 그 자리의 링크가 아니다.
+    // ★0370: 질문 보호 트리거. 링크 번호가 그 자리의 링크가 아니다.
     // CQ_LINK_IMMUTABLE: 질문 기록의 링크 번호는 넣은 뒤 못 바꾼다.
     test: /UQ_LINK_DENIED|CQ_LINK_IMMUTABLE/,
     msg: '이 링크에는 질문을 남길 수 없어요.',
   },
   {
-    // ★0368: 링크에는 같은 자리의 노하우만 담는다.
+    // ★0370: 링크에는 같은 자리의 노하우만 담는다.
     test: /EDU_LINK_ENTRY_DENIED/,
     msg: '이 노하우는 링크에 담을 수 없어요.',
   },
   {
-    // ★0368: 답 쓴 사람·승인한 사람 칸에 내가 아닌 사람을 적었다.
+    // ★0370: 답 쓴 사람·승인한 사람 칸에 내가 아닌 사람을 적었다.
     test: /UQ_(APPROVER|AUTHOR)_NOT_SELF/,
     msg: '다른 사람 이름으로는 답을 남길 수 없어요.',
   },
   {
-    // ★0368: 바로 답하기는 아직 답이 없는 질문에, 답할 수 있는 사람만 한다.
+    // ★0370: 바로 답하기는 아직 답이 없는 질문에, 답할 수 있는 사람만 한다.
     test: /UQ_DIRECT_ANSWER_DENIED/,
     msg: '이 질문에는 바로 답할 수 없어요.',
   },
@@ -55,7 +55,7 @@ const COMMON: { test: RegExp; msg: string }[] = [
     msg: '잠시 후 다시 시도해 주세요. 요청이 잠깐 몰렸어요.',
   },
   {
-    // ★0366: no_session = 이 기기의 로그인 세션을 서버가 못 찾았다(enter_space).
+    // ★0368: no_session = 이 기기의 로그인 세션을 서버가 못 찾았다(enter_space).
     test: /jwt|token|not authenticated|no_session|auth session|session.*(expired|missing)|로그인이 필요/i,
     msg: '로그인이 만료됐어요. 다시 로그인해 주세요.',
   },

@@ -1,10 +1,10 @@
--- 0365_space_no_mixing.sql — 공간·매장 통합 1번 덩이 4단계: 섞임 막기 (2026-11-10 · 데이터구조 A안 3판 부록 C 4단계 · 14장 · A-4)
+-- 0367_space_no_mixing.sql — 공간·매장 통합 1번 덩이 4단계: 섞임 막기 (2026-11-10 · 데이터구조 A안 3판 부록 C 4단계 · 14장 · A-4)
 -- 옛 앱 호환: 안전 · 함수 drop 없음 · 서명·반환 열·권한·search_path·definer 그대로 · 표·제약·RLS·publication 무변경.
 --   이 파일 뒤에도 공간 행(units.kind='space')·공간 역할 행(space_owner·space_member)은 하나도 없다(입구가 꺼져 있다 · 3판 16장).
 --   그래서 지금 있는 매장·본사 작업실의 결과는 글자 그대로 같다. 옛 앱(1.1.0 · 1.1.1)은 허브 합계·벨을 같은 이름으로 부른다(db.ts:416 · 488).
 --   16장 조건: 이 파일이 공간 행보다 먼저 라이브에 가야 한다. 순서가 뒤집히면 공간이 "매장 2곳 합계"·벨에 섞인다.
 --
--- 무엇이 바뀌나 (여섯 다 최고 번호 본문 통째 승계 · grep 정의 전수 확인 · 바뀐 곳은 ★0365 표시):
+-- 무엇이 바뀌나 (여섯 다 최고 번호 본문 통째 승계 · grep 정의 전수 확인 · 바뀐 곳은 ★0367 표시):
 --   ① my_cross_summary_v2   — 베이스 0305:69 (정의 0242 → 0245 → 0246 → 0257 → 0305). 멤버십 조인에 u.kind <> 'space' 한 줄.
 --   ①-2 my_cross_summary(v1) — 베이스 0305:21 (정의 0242 → 0246 → 0305). 같은 한 줄.
 --   ①-3 my_growth            — 베이스 0305:128 (정의 0184 … 0248 → 0305). 같은 한 줄. 옛 앱 1.1.0·1.1.1 이 부른다(db.ts:437).
@@ -28,7 +28,7 @@
 -- 검증: qa:notify · qa:notif-axis · qa:quiz-schedule · qa:brand-boundary (부록 C 4단계).
 
 -- ════════════════════════════════════════════════════════════════════════════
--- ① my_cross_summary_v2 (베이스 = 0305_closed_store_hub_summary.sql 본문 통째 · 바뀐 곳은 ★0365 한 줄)
+-- ① my_cross_summary_v2 (베이스 = 0305_closed_store_hub_summary.sql 본문 통째 · 바뀐 곳은 ★0367 한 줄)
 --   0305 머리말: 0257 본문 · 바뀐 곳은 ★0305 표시와 'and not h.hid'. 닫힌 매장의 직원·매니저는 숫자 칸을 비운다.
 -- ════════════════════════════════════════════════════════════════════════════
 create or replace function public.my_cross_summary_v2()
@@ -83,7 +83,7 @@ language sql stable security definer set search_path = public as $$
     case when h.hid then null else u.payroll_settings end
   from public.unit_members m
   join public.units u on u.id = m.unit_id and u.deleted_at is null
-                     and u.kind <> 'space'      -- ★0365: 공간은 허브 합계에 안 섞는다(매장·본사 작업실은 지금처럼)
+                     and u.kind <> 'space'      -- ★0367: 공간은 허브 합계에 안 섞는다(매장·본사 작업실은 지금처럼)
   cross join lateral (select (m.role in ('junior', 'manager') and public.unit_access_locked(u.id)) as hid) h   -- ★0305: 닫힌 매장의 직원·매니저
   where auth.uid() is not null
     and m.user_id = auth.uid()       -- ★소속 매장만(0077과 동일 게이트)
@@ -94,7 +94,7 @@ revoke all on function public.my_cross_summary_v2() from public, anon, authentic
 grant execute on function public.my_cross_summary_v2() to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- ①-2 my_cross_summary (베이스 = 0305_closed_store_hub_summary.sql 본문 통째 · 바뀐 곳은 ★0365 한 줄)
+-- ①-2 my_cross_summary (베이스 = 0305_closed_store_hub_summary.sql 본문 통째 · 바뀐 곳은 ★0367 한 줄)
 --   0305 머리말: 0246 본문 · 바뀐 곳은 ★0305 표시와 'and not h.hid'.
 -- ════════════════════════════════════════════════════════════════════════════
 create or replace function public.my_cross_summary()
@@ -138,7 +138,7 @@ language sql stable security definer set search_path = public as $$
       where w.unit_id = u.id and not h.hid and w.staff_id = auth.uid()::text), 0)
   from public.unit_members m
   join public.units u on u.id = m.unit_id and u.deleted_at is null
-                     and u.kind <> 'space'      -- ★0365: 공간은 허브 합계에 안 섞는다(매장·본사 작업실은 지금처럼)
+                     and u.kind <> 'space'      -- ★0367: 공간은 허브 합계에 안 섞는다(매장·본사 작업실은 지금처럼)
   cross join lateral (select (m.role in ('junior', 'manager') and public.unit_access_locked(u.id)) as hid) h   -- ★0305: 닫힌 매장의 직원·매니저
   where auth.uid() is not null
     and m.user_id = auth.uid()       -- ★소속 매장만(0077과 동일 게이트)
@@ -148,7 +148,7 @@ revoke all on function public.my_cross_summary() from public, anon, authenticate
 grant execute on function public.my_cross_summary() to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- ①-3 my_growth (베이스 = 0305_closed_store_hub_summary.sql 본문 통째 · 바뀐 곳은 ★0365 한 줄)
+-- ①-3 my_growth (베이스 = 0305_closed_store_hub_summary.sql 본문 통째 · 바뀐 곳은 ★0367 한 줄)
 --   0305 머리말: 0248 본문 · 바뀐 곳은 ★0305 표시와 'and not h.hid'.
 -- ════════════════════════════════════════════════════════════════════════════
 create or replace function public.my_growth()
@@ -198,7 +198,7 @@ language sql stable security definer set search_path = public as $$
        where e.unit_id = u.id and not h.hid and e.status = 'published' and e.archived_at is null)   -- ★0248
   from public.unit_members m
   join public.units u on u.id = m.unit_id and u.deleted_at is null
-                     and u.kind <> 'space'      -- ★0365: 공간은 허브 성장 숫자에 안 섞는다(매장·본사 작업실은 지금처럼)
+                     and u.kind <> 'space'      -- ★0367: 공간은 허브 성장 숫자에 안 섞는다(매장·본사 작업실은 지금처럼)
   cross join lateral (select (m.role in ('junior', 'manager') and public.unit_access_locked(u.id)) as hid) h   -- ★0305: 닫힌 매장의 직원·매니저
   where m.user_id = (select auth.uid())   -- ★본인 멤버십만(0055 idx)
   order by u.created_at
@@ -207,7 +207,7 @@ revoke all on function public.my_growth() from public, anon, authenticated;
 grant execute on function public.my_growth() to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- ①-4 my_knowhow_entries (베이스 = 0305_closed_store_hub_summary.sql 본문 통째 · 바뀐 곳은 ★0365 한 줄)
+-- ①-4 my_knowhow_entries (베이스 = 0305_closed_store_hub_summary.sql 본문 통째 · 바뀐 곳은 ★0367 한 줄)
 --   0305 머리말: 0248 본문 · 행 목록이라 닫힌 매장 행을 뺀다.
 -- ════════════════════════════════════════════════════════════════════════════
 create or replace function public.my_knowhow_entries()
@@ -216,7 +216,7 @@ language sql stable security definer set search_path = public as $$
   select e.*
   from public.unit_members m
   join public.units u on u.id = m.unit_id and u.deleted_at is null
-                     and u.kind <> 'space'      -- ★0365: 공간 노하우는 허브 내 노하우 목록에 안 섞는다(매장·본사 작업실은 지금처럼)
+                     and u.kind <> 'space'      -- ★0367: 공간 노하우는 허브 내 노하우 목록에 안 섞는다(매장·본사 작업실은 지금처럼)
   join public.playbook_entries e on e.unit_id = u.id and e.status = 'published'
                                 and e.brand_hidden_at is null   -- ★0231
                                 and e.archived_at is null       -- ★0248
@@ -234,7 +234,7 @@ revoke all on function public.my_knowhow_entries() from public, anon, authentica
 grant execute on function public.my_knowhow_entries() to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- ② my_units_notif_data — 베이스 0346 본문 통째 (my CTE 에 ★0365 한 줄만 더했다)
+-- ② my_units_notif_data — 베이스 0346 본문 통째 (my CTE 에 ★0367 한 줄만 더했다)
 --   0346 머리말: 베이스 0345 본문 통째 (schednotice 종류에 member_joined·join_full · payload 에 actor_id 만 더했다)
 -- ════════════════════════════════════════════════════════════════════════════
 create or replace function public.my_units_notif_data()
@@ -249,7 +249,7 @@ language sql stable security definer set search_path = public as $$
     where me.uid is not null and m.user_id = me.uid
       -- ★0314 닫힌 매장의 직원·매니저는 그 매장 알림을 허브에서 받지 않는다(0305 my_cross_summary 와 같은 술어 · 사용자 결정 10-17).
       and not (m.role in ('junior', 'manager') and public.unit_access_locked(m.unit_id))
-      -- ★0365 공간은 매장 벨에 안 섞는다. 공간 알림은 공간 함수가 따로 준다(3판 14장). 매장·본사 작업실은 지금처럼.
+      -- ★0367 공간은 매장 벨에 안 섞는다. 공간 알림은 공간 함수가 따로 준다(3판 14장). 매장·본사 작업실은 지금처럼.
       and exists (select 1 from public.units u where u.id = m.unit_id and u.kind <> 'space')
   ),
   kst as (
@@ -447,10 +447,10 @@ revoke execute on function public.my_units_notif_data() from public, anon, authe
 grant  execute on function public.my_units_notif_data() to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- ③ enqueue_knowhow_rechecks (베이스 = 0310 본문 통째 · 바뀐 곳은 ★0365 한 줄)
+-- ③ enqueue_knowhow_rechecks (베이스 = 0310 본문 통째 · 바뀐 곳은 ★0367 한 줄)
 --   0310 머리말: 베이스 0273. 재확인 발송은 코스 단위다(ce.course_id 로 원장 행을 만든다). "문항이 검수돼 최신인가"
 --   판정을 그 코스의 문항으로 좁힌다 — 다른 퀴즈에만 최신 문항이 있는 코스로 재확인을 보내면 직원 카드에 낼 문항이 없다.
---   함수 담당표: enqueue_knowhow_rechecks 0169 → 0231 → 0248 → 0273 → 0310 → 0365.
+--   함수 담당표: enqueue_knowhow_rechecks 0169 → 0231 → 0248 → 0273 → 0310 → 0367.
 -- ════════════════════════════════════════════════════════════════════════════
 create or replace function public.enqueue_knowhow_rechecks()
 returns int language plpgsql security definer set search_path = public as $$
@@ -498,7 +498,7 @@ begin
        and pe.updated_at > now() - interval '14 days'
        -- 사장 자신에게는 안 보낸다. 고친 사람이 자기 매장 노하우를 다시 확인받는 것은 의미가 없고,
        -- 사장 폰에 자기가 누른 수정만큼 알림이 오면 그것부터 끈다.
-       -- ★0365: "사장이 아닌 모든 멤버"가 아니라 매장 직원·매니저만. 공간 주인·공간 멤버(0362 새 역할)는 받지 않는다.
+       -- ★0367: "사장이 아닌 모든 멤버"가 아니라 매장 직원·매니저만. 공간 주인·공간 멤버(0364 새 역할)는 받지 않는다.
        --   지금 역할 값은 owner·manager·junior 셋뿐이라 매장 결과는 같다.
        and m.role in ('junior', 'manager')
        -- ★★ 문항이 검수돼 최신인가(0114 재사용). 낡은 문항으로 다시 물으면 옛 정답을 채점한다.
@@ -553,7 +553,7 @@ begin
   if (select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace
        and p.proname in ('my_cross_summary', 'my_growth', 'my_knowhow_entries')
        and p.prosrc like '%u.kind <> ''space''%' and p.prosrc like '%unit_access_locked%') <> 3 then
-    raise exception '0365 자가점검 실패 — my_cross_summary·my_growth·my_knowhow_entries 술어';
+    raise exception '0367 자가점검 실패 — my_cross_summary·my_growth·my_knowhow_entries 술어';
   end if;
   if has_function_privilege('anon', 'public.my_cross_summary()', 'execute')
      or has_function_privilege('anon', 'public.my_growth()', 'execute')
@@ -561,30 +561,30 @@ begin
      or not has_function_privilege('authenticated', 'public.my_cross_summary()', 'execute')
      or not has_function_privilege('authenticated', 'public.my_growth()', 'execute')
      or not has_function_privilege('authenticated', 'public.my_knowhow_entries()', 'execute') then
-    raise exception '0365 자가점검 실패 — 허브 함수 셋 권한';
+    raise exception '0367 자가점검 실패 — 허브 함수 셋 권한';
   end if;
   -- ① ② 공간 제외 술어 + 0305·0314 닫힌 매장 술어가 함께 남았나
   if v_cross not like '%u.kind <> ''space''%' or v_cross not like '%unit_access_locked%' then
-    raise exception '0365 자가점검 실패 — my_cross_summary_v2 술어';
+    raise exception '0367 자가점검 실패 — my_cross_summary_v2 술어';
   end if;
   if v_notif not like '%u.kind <> ''space''%' or v_notif not like '%unit_access_locked%'
      or v_notif not like '%join_history_rows%' then
-    raise exception '0365 자가점검 실패 — my_units_notif_data 술어';
+    raise exception '0367 자가점검 실패 — my_units_notif_data 술어';
   end if;
   -- ③ 새 역할 술어 · 옛 술어 없음 · 0310 코스 술어 유지
   if v_rech not like '%m.role in (''junior'', ''manager'')%' or v_rech like '%role <> ''owner''%'
      or v_rech not like '%course_id is null or%course_id =%' then
-    raise exception '0365 자가점검 실패 — enqueue_knowhow_rechecks 술어';
+    raise exception '0367 자가점검 실패 — enqueue_knowhow_rechecks 술어';
   end if;
   -- 권한: 앞 정의와 같게
   if has_function_privilege('anon', 'public.my_cross_summary_v2()', 'execute')
      or has_function_privilege('anon', 'public.my_units_notif_data()', 'execute')
      or not has_function_privilege('authenticated', 'public.my_cross_summary_v2()', 'execute')
      or not has_function_privilege('authenticated', 'public.my_units_notif_data()', 'execute') then
-    raise exception '0365 자가점검 실패 — 허브 함수 권한';
+    raise exception '0367 자가점검 실패 — 허브 함수 권한';
   end if;
   if has_function_privilege('authenticated', 'public.enqueue_knowhow_rechecks()', 'execute') then
-    raise exception '0365 자가점검 실패 — enqueue_knowhow_rechecks 가 authenticated 에 열렸다';
+    raise exception '0367 자가점검 실패 — enqueue_knowhow_rechecks 가 authenticated 에 열렸다';
   end if;
-  raise notice '0365 자가점검 통과';
+  raise notice '0367 자가점검 통과';
 end $$;

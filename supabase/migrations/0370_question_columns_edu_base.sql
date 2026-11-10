@@ -1,13 +1,13 @@
--- 0368_question_columns_edu_base.sql — 질문 덧칸 + 교육 링크·손님 바닥 + 질문 쓰기 보호 다시 정의 (2026-11-10 · 공간·매장 통합 1번 덩이 8단계)
+-- 0370_question_columns_edu_base.sql — 질문 덧칸 + 교육 링크·손님 바닥 + 질문 쓰기 보호 다시 정의 (2026-11-10 · 공간·매장 통합 1번 덩이 8단계)
 -- 옛 앱 호환: 안전 | 기존 표에는 비어 있어도 되는 칸만 더한다(기본값 없음 · 옛 앱 select('*') 는 모르는 칸을 무시한다).
---   새 표 3개는 옛 앱이 모른다. guard_unknown_query_write 는 0320 본문을 통째로 옮기고 ★0368 줄만 더했다.
---   ★0368 규칙은 전부 새 칸(link_id·answer_kind·answer_author_id·approved_by)·새 상태 값(answered_direct)·공간 행에만 걸린다.
+--   새 표 3개는 옛 앱이 모른다. guard_unknown_query_write 는 0320 본문을 통째로 옮기고 ★0370 줄만 더했다.
+--   ★0370 규칙은 전부 새 칸(link_id·answer_kind·answer_author_id·approved_by)·새 상태 값(answered_direct)·공간 행에만 걸린다.
 --   옛 앱이 보내는 쓰기(insertUnknown · bumpUnknownSimilar · resolveUnknown · updateUnknownStatus · answer_unknown_query 0311)는
 --   이 칸들을 안 보내므로 판정이 0320 과 한 글자도 다르지 않다. 근거 = src/lib/db.ts 1683-1716(e3eb417 · 1.1.1 abe65d8 도 같은 길).
 --
 -- 정본: 산출물/공간매장통합_2026-11-10/데이터구조_A안_3판_2026-11-10.md 8-1·8-3·8-4·9장·13장·15장 · 부록 A-1·A-2 · 부록 C 8단계.
--- 앞선 파일: 0362(units.kind 'space' · unit_members.role 'space_owner'/'space_member' · unknown_queries.status 'answered_direct')
---           0366(auth_space_id() · auth_can(unit, perm) · unit_has_feature(unit, feature)). 맨 아래 자가점검이 있는지 본다.
+-- 앞선 파일: 0364(units.kind 'space' · unit_members.role 'space_owner'/'space_member' · unknown_queries.status 'answered_direct')
+--           0368(auth_space_id() · auth_can(unit, perm) · unit_has_feature(unit, feature)). 맨 아래 자가점검이 있는지 본다.
 --
 -- 무엇이 바뀌나:
 --   ① chat_queries.link_id · unknown_queries.link_id — 어느 교육 링크로 온 질문인지(FK edu_links · on delete set null).
@@ -22,15 +22,16 @@
 --   ⑤ guard_unknown_query_write — 0320 본문 승계(최고 번호 정의 · grep 확인: 0239:123 → 0320:29 둘뿐).
 --
 -- 바꾸지 않는 것:
---   · 정책(cq_*·uq_* 등)은 0369 가 넓힌다. 이 파일은 정책을 안 건드린다.
+--   · 정책(cq_*·uq_* 등)은 0371 가 넓힌다. 이 파일은 정책을 안 건드린다.
 --   · 손님 함수(edu_link_open·entries·ask·unhelpful·answers·close)는 덩이 3. 그래서 지금은 손님 표에 쓰는 길이 서버(service_role)뿐이다.
 --   · answer_unknown_query(0311)·resolveUnknown 두 단계 쓰기는 그대로다. 링크 담기는 트리거라 두 길 다 걸린다(④ 주석).
 --   · 다른 에이전트 담당 함수(auth_can·auth_space_id·unit_has_feature·auth_member_unit_id 등)는 부르기만 한다.
---   · realtime publication 은 0369 끝 자가점검이 본다. edu_links 는 새 앱 구독 계획이 정본에 없어 넣지 않는다.
+--   · realtime publication 은 0371 끝 자가점검이 본다. edu_links 는 새 앱 구독 계획이 정본에 없어 넣지 않는다.
 --
 -- 보관(13장): 새 표의 자리 번호는 units on delete cascade 다. 자리 행이 지워지면 같이 지워진다.
---   ⚠️ st-db 의 0361 purge_deleted_store(작업 중)는 units 행을 남기고(purged_at) 질문만 지운다. 그 길에서는
---   edu_guest_questions 만 chat_queries cascade 로 지워지고 edu_link_guests(손님 이름)·edu_links 는 남는다. 0361 쪽 목록에 더해야 한다.
+--   0361 purge_deleted_store 는 units 행을 남기더라도(purged_at) units 를 cascade 로 가리키는 표를 전부 찾아 지운다.
+--   그래서 edu_links·edu_link_guests·session_active_spaces 도 지워지고 edu_guest_questions 는 chat_queries cascade 로 같이 간다.
+--   0361 목록에 더할 표는 없다(라이브 적용 전 확인 · 11-10).
 -- 되돌리기: 트리거 2개·함수 2개 drop → 표 3개 drop → 칸 5개 drop → guard_unknown_query_write 를 0320 본문으로 다시 만든다.
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -183,11 +184,11 @@ end $$;
 create index if not exists idx_cq_link on public.chat_queries(link_id) where link_id is not null;
 create index if not exists idx_uq_link on public.unknown_queries(link_id) where link_id is not null;
 
-comment on column public.chat_queries.link_id is '어느 교육 링크로 온 질문인지(0368). 비어 있으면 앱 안 질문. 손님 번호는 edu_guest_questions(서버 전용).';
-comment on column public.unknown_queries.link_id is '어느 교육 링크로 온 질문인지(0368). 넣을 때 같은 자리 링크만 · 그 뒤 못 바꿈(guard).';
-comment on column public.unknown_queries.answer_kind is '어떻게 답했나(0368): sent 보내기 · saved 남기기 · merged 고쳐 남기기 · existing 있는 노하우 · ai. 비어 있으면 옛 길.';
-comment on column public.unknown_queries.answer_author_id is '답을 쓴 사람(0368). 승인이 있으면 제안한 사람. 표시는 이 칸 먼저, 비면 answered_by.';
-comment on column public.unknown_queries.approved_by is '승인한 사람(0368). 승인 없이 답했으면 비어 있다. answered_by(해결 처리한 사람)의 뜻은 그대로.';
+comment on column public.chat_queries.link_id is '어느 교육 링크로 온 질문인지(0370). 비어 있으면 앱 안 질문. 손님 번호는 edu_guest_questions(서버 전용).';
+comment on column public.unknown_queries.link_id is '어느 교육 링크로 온 질문인지(0370). 넣을 때 같은 자리 링크만 · 그 뒤 못 바꿈(guard).';
+comment on column public.unknown_queries.answer_kind is '어떻게 답했나(0370): sent 보내기 · saved 남기기 · merged 고쳐 남기기 · existing 있는 노하우 · ai. 비어 있으면 옛 길.';
+comment on column public.unknown_queries.answer_author_id is '답을 쓴 사람(0370). 승인이 있으면 제안한 사람. 표시는 이 칸 먼저, 비면 answered_by.';
+comment on column public.unknown_queries.approved_by is '승인한 사람(0370). 승인 없이 답했으면 비어 있다. answered_by(해결 처리한 사람)의 뜻은 그대로.';
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- ④ 링크 담기 — 질문 표 트리거 한 곳(8-3 "링크에 담는 규칙은 질문 표의 트리거 한 곳에 둔다")
@@ -232,14 +233,14 @@ create trigger trg_uq_link_add_entry
   for each row execute function public.uq_link_add_entry();
 
 -- ════════════════════════════════════════════════════════════════════════════
--- ④-2 질문 두 표의 링크 번호는 넣은 뒤 못 바꾼다 (★0368 · 보안 검토 11-10)
+-- ④-2 질문 두 표의 링크 번호는 넣은 뒤 못 바꾼다 (★0370 · 보안 검토 11-10)
 --   question_link_change_ok — 바뀌지 않았거나, 링크가 이미 지워져 비워지는 경우(FK on delete set null)만 참.
 --     링크 지우기 → 질문 칸 비우기는 로그인한 사람의 요청 안에서도 일어난다(정의자 함수가 링크를 지울 때).
 --     그 갈래까지 막으면 링크를 지울 수 없다(11-10 rollback 실험: guard 가 UQ_IMMUTABLE_COLUMN 으로 막았다).
 --   chat_queries 에는 쓰기 보호 트리거가 없다. 지금 정책은 본인 행 고치기를 칸 구분 없이 연다(cq_update).
 --     그래서 직원이 자기 질문 기록에 남의 자리 링크 번호를 달 수 있었다(11-10 rollback 실험 · 1행 바뀜).
 --     3번 덩이가 링크별로 질문을 모으면 다른 매장 질문이 남의 링크에 섞인다. 고치기에서 링크 번호만 막는다.
---     넣기는 정책(0369 `link_id is null`)과 덩이 3 손님 함수가 맡는다.
+--     넣기는 정책(0371 `link_id is null`)과 덩이 3 손님 함수가 맡는다.
 -- 옛 앱 호환: 안전 · 옛 앱은 link_id 를 모른다(늘 null → null). satisfaction 등 다른 칸 고치기는 그대로다.
 -- ════════════════════════════════════════════════════════════════════════════
 create or replace function public.question_link_change_ok(p_old text, p_new text)
@@ -266,7 +267,7 @@ create trigger trg_guard_chat_query_link
   for each row execute function public.guard_chat_query_link();
 
 -- ════════════════════════════════════════════════════════════════════════════
--- ⑤ 받은 질문 쓰기 트리거 — guard_unknown_query_write (베이스 = 0320:29 본문 통째 · ★0368 줄만 더함)
+-- ⑤ 받은 질문 쓰기 트리거 — guard_unknown_query_write (베이스 = 0320:29 본문 통째 · ★0370 줄만 더함)
 --
 -- 0239 설계(그대로 유효):
 --   BEFORE INSERT OR UPDATE ON unknown_queries (definer).
@@ -287,7 +288,7 @@ create trigger trg_guard_chat_query_link
 --   ① 질문을 넣을 때 이름·상태·답한 사람을 앱이 정하던 구멍 → insert 는 대기·자동답변 상태로만 · 이름은 서버가.
 --   ② 동료가 남의 대기 질문을 아무 노하우 id 로 '해결'로 바꾸던 구멍 → 이 매장의 살아 있는 노하우로만 · 기록(peer_answer_log).
 --   옛 앱 호환: 옛 앱은 insert 에 pending_owner_answer/auto_answered 와 자기 이름을 보낸다 · 동료 답변은 화면에서 고른 실제 노하우 id.
--- ★0368 설계(공간·매장 통합 8-4 · 4장):
+-- ★0370 설계(공간·매장 통합 8-4 · 4장):
 --   · 새 칸 셋: 넣을 때 비운다(AI 가 답해 넣는 auto_answered 행의 'ai' 만 남김). 승인한 사람은 나만 적는다.
 --     답 쓴 사람은 나, 또는 이번에 내가 승인한 사람(approved_by = 나)일 때 제안한 사람.
 --   · link_id: 넣을 때 같은 자리 링크만(남의 자리 링크에 노하우를 밀어 넣지 못하게 · ④ 트리거와 짝). 그 뒤 누구도 못 바꾼다.
@@ -309,8 +310,8 @@ declare
   v_uid uuid := auth.uid();
   -- 동료가 바꿀 수 있는 열. 이 밖의 열이 바뀌면 거부한다.
   v_peer_cols text[] := array['similar_queries_count', 'status', 'resolved_with_entry_id', 'answered_by',
-                              'answer_kind', 'answer_author_id'];   -- ★0368: 답 방식·답 쓴 사람(아래에서 값 검사)
-  v_space boolean;   -- ★0368: 이 행의 자리가 공간인가
+                              'answer_kind', 'answer_author_id'];   -- ★0370: 답 방식·답 쓴 사람(아래에서 값 검사)
+  v_space boolean;   -- ★0370: 이 행의 자리가 공간인가
 begin
   -- service_role·크론·마이그레이션(사용자 없음)은 검사하지 않는다.
   if v_uid is null then return new; end if;
@@ -323,11 +324,11 @@ begin
     end if;
     new.answered_by := null;
     new.resolved_with_entry_id := null;
-    -- ★0368: 답 방식·답 쓴 사람·승인한 사람도 넣을 때는 비운다. AI 가 답해 넣는 행의 'ai' 만 남긴다.
+    -- ★0370: 답 방식·답 쓴 사람·승인한 사람도 넣을 때는 비운다. AI 가 답해 넣는 행의 'ai' 만 남긴다.
     if not (new.status = 'auto_answered' and new.answer_kind = 'ai') then new.answer_kind := null; end if;
     new.answer_author_id := null;
     new.approved_by := null;
-    -- ★0368: 링크 번호는 같은 자리의 링크만. 클라 넣기는 정책이 막는다(0369 cq_insert·uq_insert `link_id is null`).
+    -- ★0370: 링크 번호는 같은 자리의 링크만. 클라 넣기는 정책이 막는다(0371 cq_insert·uq_insert `link_id is null`).
     --   여기 오는 것은 덩이 3 손님 함수(정의자 · 로그인한 손님이면 auth.uid() 가 있다)뿐이다. 그 함수의 실수를 막는 둘째 겹이다.
     if new.link_id is not null
        and not exists (select 1 from public.edu_links l where l.id = new.link_id and l.unit_id = new.unit_id) then
@@ -342,7 +343,7 @@ begin
   if new.id is distinct from old.id
      or new.unit_id is distinct from old.unit_id
      or new.junior_id is distinct from old.junior_id
-     or not public.question_link_change_ok(old.link_id, new.link_id) then   -- ★0368
+     or not public.question_link_change_ok(old.link_id, new.link_id) then   -- ★0370
     raise exception 'UQ_IMMUTABLE_COLUMN' using errcode = '42501';
   end if;
 
@@ -354,7 +355,7 @@ begin
     raise exception 'UQ_ANSWERED_BY_NOT_SELF' using errcode = '42501';
   end if;
 
-  -- ★0368: 승인한 사람은 나만 적는다. 답 쓴 사람은 나, 또는 이번에 내가 승인하며 적는 제안한 사람.
+  -- ★0370: 승인한 사람은 나만 적는다. 답 쓴 사람은 나, 또는 이번에 내가 승인하며 적는 제안한 사람.
   if new.approved_by is distinct from old.approved_by and new.approved_by is distinct from v_uid then
     raise exception 'UQ_APPROVER_NOT_SELF' using errcode = '42501';
   end if;
@@ -366,26 +367,26 @@ begin
     raise exception 'UQ_AUTHOR_NOT_SELF' using errcode = '42501';
   end if;
 
-  -- ★0368: 직접 답함(보내기)은 대기에서만, 그 행 자리의 답하기 권한으로만. 본인·관리자 길보다 먼저 본다.
+  -- ★0370: 직접 답함(보내기)은 대기에서만, 그 행 자리의 답하기 권한으로만. 본인·관리자 길보다 먼저 본다.
   if new.status = 'answered_direct' and old.status is distinct from 'answered_direct' then
     if old.status <> 'pending_owner_answer' or not public.auth_can(old.unit_id, 'answer') then
       raise exception 'UQ_DIRECT_ANSWER_DENIED' using errcode = '42501';
     end if;
   end if;
 
-  -- ★0368: 공간 행은 그 행 자리 번호의 역할로 본다(auth_can_manage 는 현재 매장 역할이다 · 4장 함정).
+  -- ★0370: 공간 행은 그 행 자리 번호의 역할로 본다(auth_can_manage 는 현재 매장 역할이다 · 4장 함정).
   v_space := exists (select 1 from public.units u where u.id = old.unit_id and u.kind = 'space');
 
   -- 본인 행과 관리자는 여기까지.
   if old.junior_id = v_uid::text then return new; end if;
   if v_space then
-    if public.auth_can(old.unit_id, 'answer_direct') then return new; end if;   -- ★0368: 공간 주인
+    if public.auth_can(old.unit_id, 'answer_direct') then return new; end if;   -- ★0370: 공간 주인
   elsif public.auth_can_manage() then
     return new;                                                                -- 매장: 0320 그대로
   end if;
 
   -- 동료: 허용 열 밖은 그대로여야 한다.
-  -- ★0368: link_id 는 위 불변 검사가 "링크가 지워져 비워질 때"만 바뀌게 막았다. 여기서 또 보면 질문 주인도 관리자도
+  -- ★0370: link_id 는 위 불변 검사가 "링크가 지워져 비워질 때"만 바뀌게 막았다. 여기서 또 보면 질문 주인도 관리자도
   --   아닌 사람의 요청 안에서 링크가 지워질 때 FK set null 이 이 줄에 막힌다(11-10 하니스 RED · verify 지적).
   if (to_jsonb(new) - v_peer_cols - 'link_id') is distinct from (to_jsonb(old) - v_peer_cols - 'link_id') then
     raise exception 'UQ_PEER_UPDATE_DENIED' using errcode = '42501';
@@ -395,13 +396,13 @@ begin
   if new.status is distinct from old.status
      or new.resolved_with_entry_id is distinct from old.resolved_with_entry_id
      or new.answered_by is distinct from old.answered_by
-     or new.answer_kind is distinct from old.answer_kind               -- ★0368
-     or new.answer_author_id is distinct from old.answer_author_id then -- ★0368
-    -- ★0368: 공간 행은 그 자리의 답하기 권한이 있어야 한다(공간 멤버는 못 답한다 · 4장). 매장 행은 0320 그대로.
+     or new.answer_kind is distinct from old.answer_kind               -- ★0370
+     or new.answer_author_id is distinct from old.answer_author_id then -- ★0370
+    -- ★0370: 공간 행은 그 자리의 답하기 권한이 있어야 한다(공간 멤버는 못 답한다 · 4장). 매장 행은 0320 그대로.
     if v_space and not public.auth_can(old.unit_id, 'answer') then
       raise exception 'UQ_PEER_UPDATE_DENIED' using errcode = '42501';
     end if;
-    -- ★0368: 보내기 — 대기 → 직접 답함(권한은 위에서 봤다). 노하우 칸은 그대로. 답 방식·답한 사람·답 쓴 사람은 나다.
+    -- ★0370: 보내기 — 대기 → 직접 답함(권한은 위에서 봤다). 노하우 칸은 그대로. 답 방식·답한 사람·답 쓴 사람은 나다.
     if old.status = 'pending_owner_answer' and new.status = 'answered_direct' then
       if new.resolved_with_entry_id is distinct from old.resolved_with_entry_id then
         raise exception 'UQ_PEER_UPDATE_DENIED' using errcode = '42501';
@@ -416,7 +417,7 @@ begin
             and new.resolved_with_entry_id is not null) then
       raise exception 'UQ_PEER_UPDATE_DENIED' using errcode = '42501';
     end if;
-    -- ★0368: 동료가 고를 수 있는 답 방식은 '있는 노하우' 하나다(옛 앱은 이 칸을 안 보낸다 → 그대로 통과).
+    -- ★0370: 동료가 고를 수 있는 답 방식은 '있는 노하우' 하나다(옛 앱은 이 칸을 안 보낸다 → 그대로 통과).
     if new.answer_kind is distinct from old.answer_kind and new.answer_kind is distinct from 'existing' then
       raise exception 'UQ_PEER_UPDATE_DENIED' using errcode = '42501';
     end if;
@@ -442,7 +443,7 @@ revoke all on function public.guard_unknown_query_write() from public, anon, aut
 -- 트리거 자체는 0239 그대로(BEFORE INSERT OR UPDATE). 함수만 바꿨으니 다시 만들지 않는다.
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 자가점검 — 앞선 파일 · 새 표 RLS · 손님 표 여는 정책 0 · 트리거 · guard 본문(0239 표식 + ★0368)
+-- 자가점검 — 앞선 파일 · 새 표 RLS · 손님 표 여는 정책 0 · 트리거 · guard 본문(0239 표식 + ★0370)
 -- ════════════════════════════════════════════════════════════════════════════
 do $$
 declare
@@ -451,13 +452,13 @@ declare
   fn text;
   v int;
 begin
-  -- 앞선 파일(0362 · 0366)
+  -- 앞선 파일(0364 · 0368)
   foreach fn in array array['public.auth_can(text,text)', 'public.auth_space_id()', 'public.unit_has_feature(text,text)'] loop
-    if to_regprocedure(fn) is null then v_bad := v_bad || fn || '(없음 · 0366 먼저) '; end if;
+    if to_regprocedure(fn) is null then v_bad := v_bad || fn || '(없음 · 0368 먼저) '; end if;
   end loop;
   select pg_get_constraintdef(oid) into fn from pg_constraint
    where conrelid = 'public.unknown_queries'::regclass and conname = 'unknown_queries_status_check';
-  if position('answered_direct' in coalesce(fn, '')) = 0 then v_bad := v_bad || '(질문 상태에 answered_direct 없음 · 0362 먼저) '; end if;
+  if position('answered_direct' in coalesce(fn, '')) = 0 then v_bad := v_bad || '(질문 상태에 answered_direct 없음 · 0364 먼저) '; end if;
 
   -- 새 표 3개 RLS 켜짐
   select count(*) into v from pg_class c
@@ -495,7 +496,7 @@ begin
     v_bad := v_bad || '(unknown_queries guard 트리거 없음) ';
   end if;
 
-  -- guard 본문: 0239 표식 그대로 + ★0368
+  -- guard 본문: 0239 표식 그대로 + ★0370
   v_def := pg_get_functiondef('public.guard_unknown_query_write()'::regprocedure);
   foreach fn in array array['UQ_IMMUTABLE_COLUMN', 'UQ_ANSWERED_BY_NOT_SELF', 'UQ_PEER_UPDATE_DENIED', 'UQ_ENTRY_NOT_FOUND',
                             'new.similar_queries_count := 0', 'old.similar_queries_count',
@@ -514,6 +515,6 @@ begin
     end if;
   end loop;
 
-  if v_bad <> '' then raise exception '0368 자가점검 실패: %', v_bad; end if;
-  raise notice '0368 자가점검 통과';
+  if v_bad <> '' then raise exception '0370 자가점검 실패: %', v_bad; end if;
+  raise notice '0370 자가점검 통과';
 end $$;
