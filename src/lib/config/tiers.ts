@@ -76,6 +76,14 @@ export function aiCapNextStep(canUpgrade: boolean): string {
   return canUpgrade ? '설정의 구독 및 결제에서 바꾸면 바로 더 쓸 수 있어요.' : '다음 달 1일에 다시 채워져요.';
 }
 
+/** 공간 AI 상한 문구 — 엣지 402 의 scope:'space'(client.ts AiQuotaScope)일 때 쓴다. aiCapNextStep 의 공간 짝.
+ *  정본 = 화면지도_단어사전_2026-11-10 3-2 `aiCapOwner`·`aiCapAsker` 공간 칸. ⛔공간에는 결제가 없다 → 요금제 말을 쓰지 않는다.
+ *  owner = 공간 주인 상태 한 줄(S03) · asker(주인 이름) = 묻는 사람 안내(P1·P5). */
+export const SPACE_AI_CAP_COPY = {
+  owner: '이번 달 AI 답을 다 썼어요. 질문이 바로 나에게 와요.',
+  asker: (owner: string) => `이번 달 AI 답은 다 썼어요. ${owner}께 바로 보냈어요.`,
+} as const;
+
 export const PLAN_ORDER: PlanId[] = ['free', 'single', 'multi'];
 
 // 전면 무료 프로모션 문구 — 기간이 바뀌면 여기만 고친다(화면 3곳이 이걸 참조).

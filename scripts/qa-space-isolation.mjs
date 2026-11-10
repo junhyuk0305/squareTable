@@ -24,7 +24,8 @@ const DB = process.env.QA_DB_CONTAINER || 'supabase_db_SquareTable';
 const X = process.env.QA_SPACE_STORE || 'store_001';
 const rnd = Math.random().toString(16).slice(2, 10);
 const SP = `qa_sp_${rnd}`, WS = `qa_ws_${rnd}`;
-const U = Object.fromEntries(['A', 'B', 'C', 'D', 'E', 'W'].map((k, i) => [k, `00000000-0000-4000-8${rnd.slice(0, 3)}-${rnd}${String(i).padStart(4, '0')}`]));
+// F·G(2번 덩이 · 0374~0381): F 공간을 새로 만드는 사람(허용 목록) · G 사장 계정(공간 만들기 거절 대조군).
+const U = Object.fromEntries(['A', 'B', 'C', 'D', 'E', 'W', 'F', 'G'].map((k, i) => [k, `00000000-0000-4000-8${rnd.slice(0, 3)}-${rnd}${String(i).padStart(4, '0')}`]));
 const S = Object.fromEntries(Object.keys(U).map((k, i) => [k, `00000000-0000-4000-9${rnd.slice(0, 3)}-${rnd}${String(i).padStart(4, '0')}`]));
 
 let pass = 0, fail = 0, skip = 0, calls = 0, rejected = 0;
@@ -39,6 +40,254 @@ function psql(sql) {
 
 // ── 1부 SQL ─────────────────────────────────────────────────────────────────
 const q = (s) => `'${String(s).replace(/'/g, "''")}'`;
+
+// ── 2번 덩이 검사(0374~0381) — 1부 트랜잭션 안에서 돈다 ─────────────────────────
+//   새 객체가 없는 DB(마이그레이션 전)에서도 끝까지 돌아 RED 를 보이게, 셋업 쓰기는 qa_try 로 감싼다.
+//   셋업 실패는 QA|SETUPFAIL 줄로 남겨 실패로 센다(건너뛴 것을 통과로 세지 않는다).
+function part2Sql() {
+  const SPQ = `qa_spq_${rnd}`, SPF = `qa_spf_${rnd}`;
+  const st = (w, store, space) => `select pg_temp.qa_state(${q(U[w])}, ${q(S[w])}, ${store ? q(store) : 'null'}, ${space ? q(space) : 'null'}, null, null);`;
+  const chk = (name, w, s, e) => `select pg_temp.qa_chk(${q(name)}, '${w}', ${q(s)}, ${q(e)});`;
+  const act = (name, w, a, c, e) => `select pg_temp.qa_act(${q(name)}, '${w}', ${q(a)}, ${q(c)}, ${q(e)});`;
+  const tryq = (s) => `select pg_temp.qa_try(${q(s)});`;
+  const asWho = (w) => `select set_config('request.jwt.claims', json_build_object('sub', ${q(U[w])}, 'role', 'authenticated', 'session_id', ${q(S[w])})::text, true);`;
+  const noWho = `select set_config('request.jwt.claims', '', true);`;
+  const ent = (id, role) => `'{"id":"${id}","title":"QA 답","category":"서비스","creator_role":"${role}"}'::jsonb`;
+  const vec = `array_fill(0.1::real, array[768])::extensions.vector`;
+  const M = `to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM')`;
+  const lastMonth = `(date_trunc('month', now() at time zone 'Asia/Seoul') at time zone 'Asia/Seoul') - interval '1 hour'`;
+  const xEntry = `(select id from public.playbook_entries where unit_id = ${q(X)} and brand_entry_id is null and status = 'published' and archived_at is null limit 1)`;
+  return String.raw`
+-- ════ 2번 덩이 (0374~0381) ════
+create function pg_temp.qa_try(p text) returns void language plpgsql as $f$
+begin execute p; exception when others then raise notice 'QA|SETUPFAIL|%|%', left(p, 60), left(sqlerrm, 80); end $f$;
+-- 쓰기 하나를 그 사람 권한으로 하고, 결과를 서비스 권한으로 읽은 뒤 전부 되돌린다.
+create function pg_temp.qa_act(p_name text, p_who text, p_act text, p_check text, p_expect text) returns text language plpgsql as $f$
+declare u uuid; s uuid; r text;
+begin
+  select case p_who ${Object.keys(U).map((k) => `when '${k}' then ${q(U[k])}::uuid`).join(' ')} end,
+         case p_who ${Object.keys(U).map((k) => `when '${k}' then ${q(S[k])}::uuid`).join(' ')} end into u, s;
+  begin
+    perform set_config('request.jwt.claims', json_build_object('sub', u, 'role', 'authenticated', 'session_id', s)::text, true);
+    perform set_config('statement_timeout', '5000', true);
+    execute 'set local role authenticated';
+    execute p_act;
+    execute 'reset role';
+    execute p_check into r;
+    raise exception using errcode = 'QAOK0', message = coalesce(r, '<null>');
+  exception
+    when sqlstate 'QAOK0' then r := 'ok|' || sqlerrm;
+    when others then r := 'err|' || sqlstate || '|' || left(sqlerrm, 80);
+  end;
+  return 'QA|CHK|' || p_name || '¦' || p_expect || '¦' || r;
+end $f$;
+
+-- ── A. 공간 입구 허용 목록 · B. create_space ──
+${st('F', null, null)}
+${chk('F 목록 밖 · 입구 꺼짐 → create_space 거절', 'F', `select count(*)::text from public.create_space('QA새공간')`, 'err:space_closed')}
+${chk('F 목록 밖 → my_kind_features 공간 입구 꺼짐', 'F', `select enabled::text from public.my_kind_features() where kind = 'space' and feature = 'enter'`, 'ok|false')}
+${tryq(`insert into public.space_entry_allowlist(user_id, note) values (${q(U.F)}, 'qa'), (${q(U.G)}, 'qa'), (${q(U.D)}, 'qa')`)}
+${chk('F 목록 안 → my_kind_features 공간 입구 켜짐', 'F', `select enabled::text from public.my_kind_features() where kind = 'space' and feature = 'enter'`, 'ok|true')}
+${chk('E 목록 밖 → 공간 입구 그대로 꺼짐', 'E', `select enabled::text from public.my_kind_features() where kind = 'space' and feature = 'enter'`, 'ok|false')}
+${chk('F 목록 안 → 매장 줄은 표 그대로', 'F', `select count(*)::text from public.my_kind_features() f join public.unit_kind_features k using (kind, feature) where f.kind = 'store' and f.enabled is distinct from k.enabled`, 'ok|0')}
+${chk('F 전화 인증 전 → create_space 거절', 'F', `select count(*)::text from public.create_space('QA새공간')`, 'err:PHONE_NOT_VERIFIED')}
+update public.profiles set created_at = '2020-01-01' where id in (${q(U.F)}, ${q(U.G)}, ${q(U.D)});
+update public.profiles set role = 'owner' where id = ${q(U.G)};
+${chk('F 빈 이름 → 거절', 'F', `select count(*)::text from public.create_space('   ')`, 'err:space_name_required')}
+${chk('F 41자 이름 → 거절', 'F', `select count(*)::text from public.create_space(repeat('가', 41))`, 'err:invalid_argument')}
+${chk('G 사장 계정 → 새 공간 거절', 'G', `select count(*)::text from public.create_space('QA사장공간')`, 'err:owner_cannot_create_space')}
+${st('D', X, null)}
+${chk('D 매장 사장 멤버십 → 새 공간 거절', 'D', `select count(*)::text from public.create_space('QA사장공간')`, 'err:owner_cannot_create_space')}
+${st('F', null, null)}
+${act('F 공간 만들기 → 주인 칸 비움 · space_owner · 계정 기록 그대로 · 바로 들어가기', 'F',
+  `select public.enter_space((select c.space_id from public.create_space('QA새공간') c))`,
+  `select (select count(*) from public.units u join public.unit_members m on m.unit_id = u.id and m.user_id = ${q(U.F)} and m.role = 'space_owner'
+            where u.kind = 'space' and u.owner_id is null and u.invite_code ~ '^[A-Z0-9]{6}$' and u.store_name = 'QA새공간')::text
+       || '/' || (select coalesce(p.role, '-') || ':' || coalesce(p.active_unit_id, '-') || ':' || coalesce(p.unit_id, '-') from public.profiles p where p.id = ${q(U.F)})
+       || '/' || coalesce((public.auth_space_id() like 'space\_%')::text, 'null')
+       || '/' || (select count(*) from public.session_active_units where session_id = ${q(S.F)})::text`,
+  'ok|1/junior:-:-/true/0')}
+${tryq(`insert into public.units(id, store_name, kind) values (${q(SPF)}, 'QA F공간', 'space')`)}
+${tryq(`insert into public.unit_members(user_id, unit_id, role) values (${q(U.F)}, ${q(SPF)}, 'space_owner')`)}
+${chk('F 두 번째 공간 → 무료 1개 초과 거절', 'F', `select count(*)::text from public.create_space('QA둘째')`, 'err:space_limit_reached')}
+${chk('F 목록 안 → 자기 공간 들어가기 됨', 'F', `select public.enter_space(${q(SPF)})::text`, 'ok|')}
+${chk('F 목록 안 · 남의 공간 들어가기 거절', 'F', `select public.enter_space(${q(SP)})::text`, 'err:not_a_member')}
+${chk('F 목록 안 · 매장 번호로 들어가기 → 닫힌 입구와 같음', 'F', `select public.enter_space(${q(X)})::text`, 'err:space_closed')}
+${chk('F 클라가 허용 목록에 쓰기 거절', 'F', `insert into public.space_entry_allowlist(user_id) values (auth.uid()) returning 'inserted'`, 'err:42501')}
+${chk('F 클라가 허용 목록 읽기 거절', 'F', `select count(*)::text from public.space_entry_allowlist`, 'err:42501')}
+${tryq(`delete from public.space_entry_allowlist where user_id = ${q(U.F)}`)}
+${chk('F 목록에서 빼면 → 자기 공간 들어가기 다시 거절', 'F', `select public.enter_space(${q(SPF)})::text`, 'err:space_closed')}
+${chk('F 목록에서 빼면 → 공간 만들기 다시 거절', 'F', `select count(*)::text from public.create_space('QA셋째')`, 'err:space_closed')}
+${chk('F 목록에서 빼면 → my_kind_features 다시 꺼짐', 'F', `select enabled::text from public.my_kind_features() where kind = 'space' and feature = 'enter'`, 'ok|false')}
+
+-- ── C. 공간 노하우 쓰기·지우기 · 색인 · 사진 ──
+${tryq(`insert into public.playbook_embeddings(entry_id, unit_id, embedding) values ('qa_pb_pub_${rnd}', ${q(SP)}, ${vec})`)}
+${tryq(`insert into storage.objects(bucket_id, name) values ('playbook-photos', '${SP}/qa_seed.jpg')`)}
+${st('A', null, SP)}
+${chk('A 공간 주인 노하우 넣기 됨(작성자 space_owner)', 'A', `insert into public.playbook_entries(id, unit_id, category, title, status, creator_role) values ('qa_pb_a_${rnd}', '${SP}', '서비스', 'a', 'published', 'space_owner') returning 'inserted'`, 'ok|inserted')}
+${chk('A 공간 주인 노하우 고치기 됨', 'A', `with x as (update public.playbook_entries set title = 'b' where id = 'qa_pb_pub_${rnd}' returning 1) select count(*)::text from x`, 'ok|1')}
+${chk('A 공간 주인 노하우 지우기(archive_knowhow) 됨', 'A', `select public.archive_knowhow('qa_pb_pub_${rnd}', true)::text`, 'ok|')}
+${chk('A 옛 앱 삭제 길(DELETE) → 보관으로 됨', 'A', `with d as (delete from public.playbook_entries where id = 'qa_pb_pub_${rnd}' returning 1) select count(*)::text from d`, 'ok|0')}
+${chk('A 지우기 확인창 재료(knowhow_usage) 됨', 'A', `select (public.knowhow_usage('qa_pb_pub_${rnd}') ->> 'courses')`, 'ok|0')}
+${chk('A 공간 초안은 보관이 아니라 → draft_entry', 'A', `select public.archive_knowhow('qa_pb_drf_${rnd}', true)::text`, 'err:draft_entry')}
+select pg_temp.qa_chk('A 공간 주인이 매장 X 노하우 지우기 거절', 'A', format('select public.archive_knowhow(%L, true)::text', ${xEntry}), 'err:not_owner');
+${chk('A 공간 노하우 색인 쓰기(엣지 embed upsert 길) 됨', 'A', `insert into public.playbook_embeddings(entry_id, unit_id, embedding) values ('qa_pb_pub_${rnd}', '${SP}', ${vec}) on conflict (entry_id) do update set embedding = excluded.embedding, embedded_at = now() returning 'ok'`, 'ok|ok')}
+${chk('A match_playbook(공간) → 공간 노하우', 'A', `select count(*)::text from public.match_playbook(${vec}, '${SP}', 8)`, 'ok|1')}
+${chk('A 공간 폴더 사진 올리기 됨', 'A', `insert into storage.objects(bucket_id, name) values ('playbook-photos', '${SP}/qa_up.jpg') returning 'inserted'`, 'ok|inserted')}
+${chk('A 공간 폴더 사진 고치기 됨', 'A', `with x as (update storage.objects set metadata = '{}'::jsonb where bucket_id = 'playbook-photos' and name = '${SP}/qa_seed.jpg' returning 1) select count(*)::text from x`, 'ok|1')}
+${chk('A 매장 X 폴더 사진 올리기 거절', 'A', `insert into storage.objects(bucket_id, name) values ('playbook-photos', '${X}/qa_up.jpg') returning 'inserted'`, 'err')}
+${chk('A 공간 폴더라도 확장자 막기 그대로', 'A', `insert into storage.objects(bucket_id, name) values ('playbook-photos', '${SP}/qa_up.exe') returning 'inserted'`, 'err')}
+${st('A', null, null)}
+${chk('A 현재 공간 없이 지우기 거절', 'A', `select public.archive_knowhow('qa_pb_pub_${rnd}', true)::text`, 'err:not_owner')}
+${chk('A 현재 공간 없이 공간 사진 올리기 거절', 'A', `insert into storage.objects(bucket_id, name) values ('playbook-photos', '${SP}/qa_up2.jpg') returning 'inserted'`, 'err')}
+${st('C', X, SP)}
+${chk('C 공간 멤버(매장 매니저)가 공간 노하우 지우기 거절', 'C', `select public.archive_knowhow('qa_pb_pub_${rnd}', true)::text`, 'err:not_owner')}
+${chk('C 공간 멤버 match_playbook(공간) → 발행 노하우', 'C', `select count(*)::text from public.match_playbook(${vec}, '${SP}', 8)`, 'ok|1')}
+${chk('C 공간 멤버(매장 매니저)가 공간 색인 쓰기 거절', 'C', `insert into public.playbook_embeddings(entry_id, unit_id, embedding) values ('qa_pb_pub_${rnd}', '${SP}', ${vec}) on conflict (entry_id) do update set embedding = excluded.embedding returning 'ok'`, 'err')}
+select pg_temp.qa_chk('C 매장 X 노하우 지우기는 그대로 매니저 거절', 'C', format('select public.archive_knowhow(%L, true)::text', ${xEntry}), 'err:not_owner');
+${st('B', X, SP)}
+${chk('B 공간 멤버 노하우 지우기 거절', 'B', `select public.archive_knowhow('qa_pb_pub_${rnd}', true)::text`, 'err:not_owner')}
+${chk('B 공간 멤버 공간 사진 읽기 됨', 'B', `select count(*)::text from storage.objects where bucket_id = 'playbook-photos' and name = '${SP}/qa_seed.jpg'`, 'ok|1')}
+${chk('B 공간 멤버 공간 폴더 사진 올리기 거절', 'B', `insert into storage.objects(bucket_id, name) values ('playbook-photos', '${SP}/qa_b.jpg') returning 'inserted'`, 'err')}
+${st('B', X, null)}
+${chk('B 현재 공간 없이 공간 사진 0', 'B', `select count(*)::text from storage.objects where bucket_id = 'playbook-photos' and name = '${SP}/qa_seed.jpg'`, 'ok|0')}
+${st('D', X, null)}
+${chk('D 매장 사장이 공간 노하우 지우기 거절', 'D', `select public.archive_knowhow('qa_pb_pub_${rnd}', true)::text`, 'err:not_owner')}
+${chk('D 매장 사장 match_playbook(공간) 0', 'D', `select count(*)::text from public.match_playbook(${vec}, '${SP}', 8)`, 'ok|0')}
+${chk('D 매장 사장 공간 사진 0', 'D', `select count(*)::text from storage.objects where bucket_id = 'playbook-photos' and name = '${SP}/qa_seed.jpg'`, 'ok|0')}
+${st('E', null, null)}
+${chk('E 멤버 아님 공간 사진 0', 'E', `select count(*)::text from storage.objects where bucket_id = 'playbook-photos' and name = '${SP}/qa_seed.jpg'`, 'ok|0')}
+
+-- ── D. 답하기: 보내기(reply_unknown_query · question_replies) · 노하우로 남기기(save_unknown_answer) ──
+${asWho('B')}
+insert into public.unknown_queries(id, unit_id, query_text) values ('qa_uq_x_${rnd}', ${q(X)}, '매장 질문 x'), ('qa_uq_x2_${rnd}', ${q(X)}, '매장 질문 x2');
+${noWho}
+insert into public.playbook_suggestions(id, unit_id, kind, proposer_id, text, status, source_uq_id) values
+  ('qa_ps_x_${rnd}', ${q(X)}, 'new', ${q(U.B)}, '제안', 'pending', 'qa_uq_x_${rnd}'),
+  ('qa_ps_y_${rnd}', ${q(X)}, 'new', ${q(U.B)}, '제안', 'pending', null);
+${st('A', null, SP)}
+${act('A 공간 주인 보내기 → 직접 답함 · sent · 답 글 한 번', 'A',
+  `select public.reply_unknown_query('qa_uq_C_${rnd}', '  이렇게 하세요  ')`,
+  `select u.status || '/' || coalesce(u.answer_kind, '-') || '/' || (u.answered_by = ${q(U.A)}::uuid) || '/' || (u.answer_author_id = ${q(U.A)}::uuid)
+       || '/' || coalesce(u.resolved_with_entry_id, '-') || '/' || coalesce((select r.body || ':' || (r.author_id = ${q(U.A)}::uuid) from public.question_replies r where r.uq_id = u.id), '-')
+     from public.unknown_queries u where u.id = 'qa_uq_C_${rnd}'`,
+  'ok|answered_direct/sent/true/true/-/이렇게 하세요:true')}
+${chk('A 같은 질문 두 번 보내기 → not_pending', 'A', `select (public.reply_unknown_query('qa_uq_C_${rnd}', 'x')).uq_id || (public.reply_unknown_query('qa_uq_C_${rnd}', 'y')).uq_id`, 'err:not_pending')}
+${chk('A 빈 답 글 → invalid_argument', 'A', `select (public.reply_unknown_query('qa_uq_C_${rnd}', '   ')).uq_id`, 'err:invalid_argument')}
+${chk('A 2001자 답 글 → invalid_argument', 'A', `select (public.reply_unknown_query('qa_uq_C_${rnd}', repeat('가', 2001))).uq_id`, 'err:invalid_argument')}
+${chk('A 없는 질문 → question_not_found', 'A', `select (public.reply_unknown_query('qa_uq_none_${rnd}', 'x')).uq_id`, 'err:question_not_found')}
+${st('B', X, SP)}
+${chk('B 공간 멤버가 자기 질문에 보내기 → not_space_owner', 'B', `select (public.reply_unknown_query('qa_uq_B_${rnd}', 'x')).uq_id`, 'err:not_space_owner')}
+${st('C', X, SP)}
+${chk('C 공간 멤버(매장 매니저)가 남의 공간 질문에 보내기 → question_not_found', 'C', `select (public.reply_unknown_query('qa_uq_B_${rnd}', 'x')).uq_id`, 'err:question_not_found')}
+${st('E', null, null)}
+${chk('E 멤버 아님 → question_not_found', 'E', `select (public.reply_unknown_query('qa_uq_B_${rnd}', 'x')).uq_id`, 'err:question_not_found')}
+${st('D', X, null)}
+${chk('D 매장 사장 보내기 → feature_off(매장 보내기는 6번 덩이)', 'D', `select (public.reply_unknown_query('qa_uq_x_${rnd}', 'x')).uq_id`, 'err:feature_off')}
+${st('A', null, null)}
+${chk('A 현재 공간 없이 보내기 → question_not_found', 'A', `select (public.reply_unknown_query('qa_uq_C_${rnd}', 'x')).uq_id`, 'err:question_not_found')}
+-- 읽기 검사용으로 보내기 하나를 남긴다(A → C 의 질문).
+${st('A', null, SP)}
+${asWho('A')}
+${tryq(`select public.reply_unknown_query('qa_uq_C_${rnd}', '남긴 답')`)}
+${noWho}
+${chk('A 공간 주인 보내기 답 읽기', 'A', `select count(*)::text from public.question_replies where uq_id = 'qa_uq_C_${rnd}'`, 'ok|1')}
+${chk('A 보낸 질문에 노하우로 남기기 → not_pending', 'A', `select public.save_unknown_answer('qa_uq_C_${rnd}', ${ent(`qa_pb_sv0_${rnd}`, 'space_owner')})`, 'err:not_pending')}
+${st('C', X, SP)}
+${chk('C 질문자 본인 보내기 답 읽기', 'C', `select count(*)::text from public.question_replies where uq_id = 'qa_uq_C_${rnd}'`, 'ok|1')}
+${chk('C 보내기 답 고치기 거절', 'C', `update public.question_replies set body = 'x' where uq_id = 'qa_uq_C_${rnd}' returning 'u'`, 'err:42501')}
+${chk('C 보내기 답 직접 넣기 거절', 'C', `insert into public.question_replies(uq_id, unit_id, body, author_id) values ('qa_uq_B_${rnd}', '${SP}', 'x', auth.uid()) returning 'i'`, 'err:42501')}
+${st('C', X, null)}
+${chk('C 현재 공간 없이 보내기 답 0', 'C', `select count(*)::text from public.question_replies`, 'ok|0')}
+${st('B', X, SP)}
+${chk('B 남(C)의 보내기 답 0', 'B', `select count(*)::text from public.question_replies`, 'ok|0')}
+${st('E', null, null)}
+${chk('E 멤버 아님 보내기 답 0', 'E', `select count(*)::text from public.question_replies`, 'ok|0')}
+${st('A', null, SP)}
+${act('A 공간 주인 노하우로 남기기 → saved · 답 쓴 사람 = 나 · 승인 없음', 'A',
+  `select public.save_unknown_answer('qa_uq_B_${rnd}', ${ent(`qa_pb_sv1_${rnd}`, 'space_owner')})`,
+  `select u.status || '/' || coalesce(u.answer_kind, '-') || '/' || (u.answer_author_id = ${q(U.A)}::uuid) || '/' || (u.approved_by is null) || '/' || (u.answered_by = ${q(U.A)}::uuid)
+       || '/' || (select count(*) from public.playbook_entries e where e.id = 'qa_pb_sv1_${rnd}' and e.unit_id = '${SP}' and e.creator_role = 'space_owner')
+     from public.unknown_queries u where u.id = 'qa_uq_B_${rnd}'`,
+  'ok|resolved_with_entry/saved/true/true/true/1')}
+${st('C', X, SP)}
+${chk('C 공간 멤버(매장 매니저)가 공간 질문 노하우로 남기기 → not_pending', 'C', `select public.save_unknown_answer('qa_uq_B_${rnd}', ${ent(`qa_pb_sv2_${rnd}`, 'owner')})`, 'err:not_pending')}
+${st('D', X, null)}
+${act('D 매장 사장 승인 → 답 쓴 사람 = 제안한 B · 승인한 사람 = D · 답한 사람 = D', 'D',
+  `select public.save_unknown_answer('qa_uq_x_${rnd}', ${ent(`qa_pb_sv3_${rnd}`, 'owner')}, 'qa_ps_x_${rnd}')`,
+  `select (u.answer_author_id = ${q(U.B)}::uuid) || '/' || (u.approved_by = ${q(U.D)}::uuid) || '/' || (u.answered_by = ${q(U.D)}::uuid) || '/' || coalesce(u.answer_kind, '-') || '/' || u.status
+     from public.unknown_queries u where u.id = 'qa_uq_x_${rnd}'`,
+  'ok|true/true/true/saved/resolved_with_entry')}
+${chk('D 다른 질문의 제안으로 승인 → suggestion_not_found', 'D', `select public.save_unknown_answer('qa_uq_x_${rnd}', ${ent(`qa_pb_sv4_${rnd}`, 'owner')}, 'qa_ps_y_${rnd}')`, 'err:suggestion_not_found')}
+${act('D 옛 길 answer_unknown_query 그대로 됨 · saved · 답 쓴 사람 = D', 'D',
+  `select public.answer_unknown_query('qa_uq_x2_${rnd}', ${ent(`qa_pb_sv5_${rnd}`, 'owner')})`,
+  `select u.status || '/' || coalesce(u.answer_kind, '-') || '/' || coalesce((u.answer_author_id = ${q(U.D)}::uuid)::text, '-') || '/' || (u.approved_by is null)
+       || '/' || (select count(*) from public.playbook_entries e where e.id = 'qa_pb_sv5_${rnd}' and e.unit_id = ${q(X)})
+     from public.unknown_queries u where u.id = 'qa_uq_x2_${rnd}'`,
+  'ok|resolved_with_entry/saved/true/true/1')}
+${st('B', X, null)}
+${chk('B 매장 직원 노하우로 남기기 거절(노하우 쓰기 권한 없음)', 'B', `select public.save_unknown_answer('qa_uq_x2_${rnd}', ${ent(`qa_pb_sv6_${rnd}`, 'owner')})`, 'err')}
+
+-- ── E. 홈 숫자 넷(unit_question_counts) — 따로 공간 SPQ 에 정해진 행을 심는다 ──
+insert into public.units(id, store_name, kind) values (${q(SPQ)}, 'QA숫자공간', 'space');
+insert into public.unit_members(user_id, unit_id, role) values (${q(U.A)}, ${q(SPQ)}, 'space_owner');
+insert into public.chat_queries(id, unit_id, query_text, was_deflected, matched_entry_ids, response_block, asked_at) values
+  ('qa_cq_n1_${rnd}', ${q(SPQ)}, 'q', true,  array['e1'], '{"mode":"served"}'::jsonb, now()),
+  ('qa_cq_n2_${rnd}', ${q(SPQ)}, 'q', true,  array[]::text[], '{"mode":"generated"}'::jsonb, now()),
+  ('qa_cq_n3_${rnd}', ${q(SPQ)}, 'q', true,  array[]::text[], '{"mode":"smalltalk"}'::jsonb, now()),
+  ('qa_cq_n4_${rnd}', ${q(SPQ)}, 'q', false, array[]::text[], null, now()),
+  ('qa_cq_n5_${rnd}', ${q(SPQ)}, 'q', true,  array['e1'], '{"mode":"served"}'::jsonb, ${lastMonth});
+insert into public.unknown_queries(id, unit_id, query_text, status, asked_at) values
+  ('qa_uq_n1_${rnd}', ${q(SPQ)}, 'q', 'pending_owner_answer', now()),
+  ('qa_uq_n2_${rnd}', ${q(SPQ)}, 'q', 'answered_direct', now()),
+  ('qa_uq_n3_${rnd}', ${q(SPQ)}, 'q', 'resolved_with_entry', now()),
+  ('qa_uq_n4_${rnd}', ${q(SPQ)}, 'q', 'auto_answered', now()),
+  ('qa_uq_n5_${rnd}', ${q(SPQ)}, 'q', 'dismissed', now()),
+  ('qa_uq_n6_${rnd}', ${q(SPQ)}, 'q', 'pending_owner_answer', ${lastMonth}),
+  ('qa_uq_n7_${rnd}', ${q(SPQ)}, 'q', 'pending_owner_answer', now());
+insert into public.playbook_suggestions(id, unit_id, kind, proposer_id, text, status, source_uq_id) values
+  ('qa_ps_n7_${rnd}', ${q(SPQ)}, 'new', ${q(U.B)}, '제안', 'pending', 'qa_uq_n7_${rnd}');
+${st('A', null, SPQ)}
+${chk('A 공간 주인 홈 숫자 넷(질문 3 · AI 2 · 직접 2 · 미응답 1)', 'A', `select questions || '/' || ai_answered || '/' || direct_answered || '/' || unanswered from public.unit_question_counts('${SPQ}')`, 'ok|3/2/2/1')}
+${st('A', null, SP)}
+${chk('A 현재 공간이 다른 공간이면 → not_space_member', 'A', `select questions::text from public.unit_question_counts('${SPQ}')`, 'err:not_space_member')}
+${chk('A 공간에서 매장 X 숫자 → not_manager', 'A', `select questions::text from public.unit_question_counts('${X}')`, 'err:not_manager')}
+${st('B', X, SP)}
+${chk('B 공간 멤버 → not_space_owner', 'B', `select questions::text from public.unit_question_counts('${SP}')`, 'err:not_space_owner')}
+${st('B', X, null)}
+${chk('B 매장 직원 → not_manager', 'B', `select questions::text from public.unit_question_counts('${X}')`, 'err:not_manager')}
+${st('E', null, null)}
+${chk('E 멤버 아님 → not_space_member', 'E', `select questions::text from public.unit_question_counts('${SP}')`, 'err:not_space_member')}
+${st('D', X, null)}
+${chk('D 매장 사장 현재 매장 숫자 됨', 'D', `select questions::text from public.unit_question_counts('${X}')`, 'ok*')}
+${st('C', X, null)}
+${chk('C 매장 매니저 현재 매장 숫자 됨', 'C', `select questions::text from public.unit_question_counts('${X}')`, 'ok*')}
+
+-- ── F. ai_quota_status_at — 현재 매장 = ai_quota_status 그대로 · 현재 공간 = 공간 상한(무료 모드 무시) · 그 밖 forbidden ──
+insert into public.ai_usage_monthly(unit_id, month, used, updated_at) values (${q(SP)}, ${M}, 299, now())
+  on conflict (unit_id, month) do update set used = excluded.used;
+insert into public.app_config(key, value) values ('billing_free_mode', 'false') on conflict (key) do update set value = excluded.value;
+${st('A', null, SP)}
+${chk('A 공간 299 → 상한 300 · 아직 됨', 'A', `select used_count || '/' || cap_count || '/' || exceeded from public.ai_quota_status_at('${SP}')`, 'ok|299/300/false')}
+${chk('A 공간 299 · 이번 호출 2단위 → 넘음', 'A', `select used_count || '/' || cap_count || '/' || exceeded from public.ai_quota_status_at('${SP}', 2)`, 'ok|299/300/true')}
+${chk('A 매장 X 번호 → forbidden', 'A', `select cap_count::text from public.ai_quota_status_at('${X}')`, 'err:forbidden')}
+${chk('A 빈 번호 → forbidden', 'A', `select cap_count::text from public.ai_quota_status_at(null)`, 'err:forbidden')}
+update public.ai_usage_monthly set used = 300 where unit_id = ${q(SP)} and month = ${M};
+update public.app_config set value = 'true' where key = 'billing_free_mode';
+${chk('A 공간 300 · 무료 모드 켜짐 → 다 씀(공간은 상한을 본다)', 'A', `select used_count || '/' || cap_count || '/' || exceeded from public.ai_quota_status_at('${SP}')`, 'ok|300/300/true')}
+${st('D', X, null)}
+${chk('D 현재 매장 = ai_quota_status() 와 같음(무료 모드 켜짐)', 'D', `select ((select row(t.*)::text from public.ai_quota_status_at('${X}') t) = (select row(t.*)::text from public.ai_quota_status() t))::text`, 'ok|true')}
+update public.app_config set value = 'false' where key = 'billing_free_mode';
+${chk('D 현재 매장 = ai_quota_status() 와 같음(무료 모드 꺼짐)', 'D', `select ((select row(t.*)::text from public.ai_quota_status_at('${X}') t) = (select row(t.*)::text from public.ai_quota_status() t))::text`, 'ok|true')}
+${chk('D 현재 매장 · 5단위 = ai_quota_status(5) 와 같음', 'D', `select ((select row(t.*)::text from public.ai_quota_status_at('${X}', 5) t) = (select row(t.*)::text from public.ai_quota_status(5) t))::text`, 'ok|true')}
+${chk('D 매장 사장이 공간 번호 → forbidden', 'D', `select cap_count::text from public.ai_quota_status_at('${SP}')`, 'err:forbidden')}
+${st('C', X, SP)}
+${chk('C 현재 매장 + 현재 공간 → 공간 번호는 공간 상한', 'C', `select cap_count::text from public.ai_quota_status_at('${SP}')`, 'ok|300')}
+${chk('C 현재 매장 + 현재 공간 → 매장 번호는 ai_quota_status 그대로', 'C', `select ((select row(t.*)::text from public.ai_quota_status_at('${X}') t) = (select row(t.*)::text from public.ai_quota_status() t))::text`, 'ok|true')}
+${st('E', null, null)}
+${chk('E 멤버 아님 공간 번호 → forbidden', 'E', `select cap_count::text from public.ai_quota_status_at('${SP}')`, 'err:forbidden')}
+`;
+}
 const sql = String.raw`
 begin;
 -- 계정 6 · 세션 6 (트리거 handle_new_user 가 프로필을 만든다)
@@ -431,6 +680,8 @@ select pg_temp.qa_cap('공간 300 → 거절', ${q(SP)}, 300, 'false', 'ok|false
 select pg_temp.qa_cap('무료 모드 켜짐 · 공간 300 → 거절(공간은 상한을 본다)', ${q(SP)}, 300, 'true', 'ok|false/300');
 select 'QA|CHK|공간은 사용량 사장 알림을 안 남긴다¦ok|0¦ok|' || count(*) from public.owner_alerts where unit_id = ${q(SP)};
 
+${part2Sql()}
+
 -- ── 속도: auth_member_unit_id 1,000회 · 지금 정의 vs 0303 정의(종류 조건 없음) ──
 create function pg_temp.qa_old_amui() returns text language sql stable security definer set search_path = public as $f$
   select coalesce(
@@ -500,7 +751,10 @@ const parseTbl = (o) => {
 console.log(`\n[1] 매장 기능 전수 호출 · 함수 ${nFn}개 · 표 ${nTbl}개`);
 check('매장 기능 목록이 비지 않았다', nFn > 50 && nTbl > 20, `함수 ${nFn} · 표 ${nTbl}`);
 // 공간 부품 표: 0371 가 공간 갈래를 붙인 표. 현재 공간이 있을 때만 공간 행이 보여도 된다.
-const SPACE_PART_TABLES = new Set(['playbook_entries', 'playbook_embeddings', 'chat_queries', 'unknown_queries', 'ai_usage']);
+const SPACE_PART_TABLES = new Set(['playbook_entries', 'playbook_embeddings', 'chat_queries', 'unknown_queries', 'ai_usage_monthly', 'question_replies']);
+// 공간 부품 함수(2번 덩이): 현재 공간에서 공간 결과를 돌려주는 것이 정상이라 A·B 의 ①②④ 비교에서 뺀다.
+//   매장 쪽 비교(B·C ③a=③b=③c)와 섞임 검사는 그대로 받는다.
+const SPACE_PART_FNS = new Set(['ai_quota_status_at']);
 const fnDiff = [], tblDiff = [], leaks = [];
 for (const [k, v] of res) {
   const [kind, name] = k.split('|');
@@ -517,8 +771,9 @@ for (const [k, v] of res) {
       const leakX = lab.startsWith('A') && p.hasX;
       if (p.hasSP || leakX) leaks.push(`${lab} ${name} (${p.hasSP ? '공간' : ''}${leakX ? '매장 X' : ''})`);
     }
-    if (a1.sig !== a2.sig || (!echoesProfile && a1.sig !== a4.sig)) fnDiff.push(`A ${name}: ①${a1.sig.slice(0, 40)} ②${a2.sig.slice(0, 40)} ④${a4.sig.slice(0, 40)}`);
-    if (b1.sig !== b2.sig) fnDiff.push(`B ${name}: ①${b1.sig.slice(0, 40)} ②${b2.sig.slice(0, 40)}`);
+    const spacePart = SPACE_PART_FNS.has(name.split('(')[0]);
+    if (!spacePart && (a1.sig !== a2.sig || (!echoesProfile && a1.sig !== a4.sig))) fnDiff.push(`A ${name}: ①${a1.sig.slice(0, 40)} ②${a2.sig.slice(0, 40)} ④${a4.sig.slice(0, 40)}`);
+    if (!spacePart && b1.sig !== b2.sig) fnDiff.push(`B ${name}: ①${b1.sig.slice(0, 40)} ②${b2.sig.slice(0, 40)}`);
     for (const w of ['B', 'C']) { const x = parse(v[`${w}3a`]); for (const st of ['3b', '3c']) { const y = parse(v[`${w}${st}`]); if (x.sig !== y.sig) fnDiff.push(`${w} ${name}: ③a ${x.sig.slice(0, 50)} ${st} ${y.sig.slice(0, 50)}`); } }
   } else {
     const a1 = parseTbl(v.A1), a2 = parseTbl(v.A2), a4 = parseTbl(v.A4), b1 = parseTbl(v.B1), b2 = parseTbl(v.B2);
@@ -540,11 +795,16 @@ check('표 결과: 매장 쪽 행이 같고 공간 행은 공간 부품 표에�
 }
 
 console.log('\n[2] 이름 붙인 검사');
+for (const l of lines.filter((l) => l.startsWith('QA|SETUPFAIL|'))) check(`셋업: ${l.slice(13)}`, false);
 for (const l of lines.filter((l) => l.startsWith('QA|CHK|'))) {
   const [name, expect, got] = l.slice(7).split('¦');
   calls++; if (got.startsWith('err|')) rejected++;
-  const ok = expect === 'err' ? got.startsWith('err|') : got === expect;
-  check(name, ok, ok ? (expect === 'err' ? got.split('|').slice(1, 3).join(' ') : '') : `기대 ${expect} · 실제 ${got}`);
+  // 'err' = 아무 오류 · 'err:<코드>' = 그 코드로 거절(엉뚱한 이유의 거절을 통과로 세지 않는다) · 'ok*' = 오류 없이 돌아옴.
+  const ok = expect === 'err' ? got.startsWith('err|')
+    : expect.startsWith('err:') ? got.startsWith('err|') && got.includes(expect.slice(4))
+    : expect === 'ok*' ? got.startsWith('ok|')
+    : got === expect;
+  check(name, ok, ok ? (expect.startsWith('err') ? got.split('|').slice(1, 3).join(' ') : '') : `기대 ${expect} · 실제 ${got}`);
 }
 
 console.log('\n[3] 속도 · auth_member_unit_id 1,000회 (3번 중 가장 빠른 값)');

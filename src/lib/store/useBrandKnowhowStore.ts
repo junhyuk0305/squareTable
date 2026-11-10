@@ -59,7 +59,8 @@ export const useBrandKnowhowStore = create<State>((set, get) => {
       set({ loaded: true, error: brandErrorMessage(ws.error) });
       return;
     }
-    const [e, l, m] = await Promise.all([fetchEntries(), fetchBrandKnowhow(), fetchBrandDeployMatrix()]);
+    // ★0371: fetchEntries 는 자리 번호로 거른다. 작업실 번호를 직접 넘긴다(세션의 매장 번호와 다를 수 있다).
+    const [e, l, m] = await Promise.all([fetchEntries(ws.data), fetchBrandKnowhow(), fetchBrandDeployMatrix()]);
     if (isStaleAccountEpoch(epoch)) return;
     const err = l.error ?? m.error;
     if (e.error || err) {

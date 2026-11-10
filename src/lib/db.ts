@@ -1439,21 +1439,25 @@ async function readAllPages<T>(
   return { data: rows, error: null };
 }
 
-export async function fetchEntries(): Promise<ReadResult<PlaybookEntry[]>> {
-  if (!HAS_SUPABASE) return { data: [], error: false };
+// ★0371(공간 · 3판 5-2): 노하우·색인·질문 두 표·AI 사용량 표의 읽기 정책은 "현재 매장 또는 현재 공간"이다.
+//   공간에 들어간 세션에서 자리 번호 없이 읽으면 매장 것과 공간 것이 섞여 온다 → 이 표들의 읽기는 늘 자리 번호로 거른다.
+//   기본값 = 현재 매장(_unitId). 공간 화면은 같은 함수에 공간 번호를 넘긴다. 자리 번호가 없으면 읽지 않는다(닫힌 쪽).
+export async function fetchEntries(unitId: string | null = _unitId): Promise<ReadResult<PlaybookEntry[]>> {
+  if (!HAS_SUPABASE || !unitId) return { data: [], error: false };
   // 보관한 노하우(0248 archived_at)는 뺀다. 서버 RLS 도 막지만 앱이 먼저 기대지 않게 여기서도 거른다.
   // 0248 전 서버(웹이 먼저 나간 경우)에는 열이 없어 42703 이 온다 → 거르지 않고 한 번 더 읽는다.
   let { data, error } = await readAllPages<PlaybookEntry>((last) => {
     const q = supabase
     .from('playbook_entries')
     .select('*')
+    .eq('unit_id', unitId)
     .is('archived_at', null)
     .order('id');
     return (last === null ? q : q.gt('id', last.id)).range(0, PAGE_SIZE - 1);
   });
   if (error?.code === '42703') {
     ({ data, error } = await readAllPages<PlaybookEntry>((last) => {
-      const q = supabase.from('playbook_entries').select('*').order('id');
+      const q = supabase.from('playbook_entries').select('*').eq('unit_id', unitId).order('id');
       return (last === null ? q : q.gt('id', last.id)).range(0, PAGE_SIZE - 1);
     }));
   }
@@ -1558,12 +1562,14 @@ export async function fetchKnowhowUsage(id: string): Promise<KnowhowUsage | null
  * 단일 bulk update 라 per-entry 재색인(embedEntry)을 태우지 않는다(섹션은 색인 텍스트가 아님).
  * RLS가 활성 매장 행으로 범위를 좁힌다. 0행 매칭도 성공(이미 옮겨진 재시도 멱등).
  */
-export async function renameEntrySection(from: string, to: string | null): Promise<boolean> {
+export async function renameEntrySection(from: string, to: string | null, unitId: string | null = _unitId): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
+  if (!unitId) return false; // ★0371: 자리 번호 없이 일괄로 고치면 현재 공간 노하우까지 같이 바뀐다(닫힌 쪽)
   return write(
     'renameEntrySection',
     // updated_at 은 안 건드린다 — 분류만 바뀌었지 내용이 바뀐 게 아니다(E6 · NON_CONTENT_KEYS).
-    supabase.from('playbook_entries').update({ section: to }).eq('section', from),
+    // ★0371: 쓰기 정책도 "현재 매장 또는 현재 공간"이라 자리 번호로 좁힌다.
+    supabase.from('playbook_entries').update({ section: to }).eq('unit_id', unitId).eq('section', from),
   );
 }
 
@@ -1636,18 +1642,20 @@ export function subscribeSuggestions(onChange: () => void): () => void {
  *  ② 나머지(해결·보관) = 최신순. 참고용이라 최근 것만 있으면 된다.
  *  한쪽만 실패해도 '못 불러옴'으로 올린다 — 반쪽 목록을 정상처럼 보여주면 무음 실패가 된다.
  */
-export async function fetchUnknownQueue(): Promise<ReadResult<UnknownQuery[]>> {
-  if (!HAS_SUPABASE) return { data: [], error: false };
+export async function fetchUnknownQueue(unitId: string | null = _unitId): Promise<ReadResult<UnknownQuery[]>> {
+  if (!HAS_SUPABASE || !unitId) return { data: [], error: false }; // ★0371: 자리 번호로 거른다(fetchEntries 머리말)
   const [pending, others] = await Promise.all([
     supabase
       .from('unknown_queries')
       .select('*')
+      .eq('unit_id', unitId)
       .eq('status', 'pending_owner_answer')
       .order('asked_at', { ascending: true })
       .limit(PAGE_LIMIT),
     supabase
       .from('unknown_queries')
       .select('*')
+      .eq('unit_id', unitId)
       .neq('status', 'pending_owner_answer')
       .order('asked_at', { ascending: false })
       .limit(PAGE_LIMIT),
@@ -1667,11 +1675,12 @@ export async function fetchUnknownQueue(): Promise<ReadResult<UnknownQuery[]>> {
  *  2026-08-08 실측: 서버 1,200건인데 홈 히어로와 '답할 질문' 라벨이 둘 다 "1000건"이라고 했다.
  *  행은 안 불러와도 **수는 정확히** 말할 수 있다. 실패하면 null → 호출부가 목록 길이로 물러난다.
  */
-export async function fetchPendingQuestionCount(): Promise<number | null> {
-  if (!HAS_SUPABASE) return null;
+export async function fetchPendingQuestionCount(unitId: string | null = _unitId): Promise<number | null> {
+  if (!HAS_SUPABASE || !unitId) return null; // ★0371: 자리 번호로 거른다 · null = 호출부가 목록 길이로 물러난다
   const { count, error } = await supabase
     .from('unknown_queries')
     .select('id', { count: 'exact', head: true })
+    .eq('unit_id', unitId)
     .eq('status', 'pending_owner_answer');
   if (error) {
     readFail('fetchPendingQuestionCount', error);
@@ -1728,11 +1737,12 @@ export async function answerUnknownQuery(uqId: string, entry: PlaybookEntry): Pr
 
 // ── 채팅 기록 ──────────────────────────────────────────────
 // G4: 실패를 빈 목록과 가른다 — 빈 목록으로 돌려주면 hydrate 가 화면의 대화를 통째로 지운다.
-export async function fetchChatQueries(juniorId: string): Promise<ReadResult<ChatQuery[]>> {
-  if (!HAS_SUPABASE) return { data: [], error: false };
+export async function fetchChatQueries(juniorId: string, unitId: string | null = _unitId): Promise<ReadResult<ChatQuery[]>> {
+  if (!HAS_SUPABASE || !unitId) return { data: [], error: false }; // ★0371: 자리 번호로 거른다(fetchEntries 머리말)
   const { data, error } = await supabase
     .from('chat_queries')
     .select('*')
+    .eq('unit_id', unitId)
     .eq('junior_id', juniorId)
     .gte('asked_at', sinceTs(CHAT_WINDOW_DAYS))
     // ★내림차순으로 잘라야 상한에 걸렸을 때 **최근** 대화가 남는다(오름차순 + limit 은 가장 오래된 것만 온다 · M1 2026-11-04).
@@ -1766,11 +1776,12 @@ export type AiAnswerRow = {
 };
 /** 'AI가 답한 질문' 목록 상한 — 화면이 "몇 건까지만 보여주는지"를 정직하게 말하려면 이 수를 알아야 한다. */
 export const AI_ANSWER_LIMIT = 50;
-export async function fetchAiAnswers(days = 30, limit = AI_ANSWER_LIMIT): Promise<DbResult<AiAnswerRow[]>> {
-  if (!HAS_SUPABASE) return { data: [], error: null };
+export async function fetchAiAnswers(days = 30, limit = AI_ANSWER_LIMIT, unitId: string | null = _unitId): Promise<DbResult<AiAnswerRow[]>> {
+  if (!HAS_SUPABASE || !unitId) return { data: [], error: null }; // ★0371: 자리 번호로 거른다(fetchEntries 머리말)
   const { data, error } = await supabase
     .from('chat_queries')
     .select('id, query_text, junior_name, asked_at, matched_entry_ids, satisfaction')
+    .eq('unit_id', unitId)
     .gte('asked_at', sinceTs(days))
     // 컬럼이 `text[] not null default '{}'`(0001)라 빈 배열을 서버에서 거른다(`neq.{}` · 로컬 실호출 200 확인 · M1 2026-11-04).
     // 전에는 최근 창 PAGE_LIMIT 을 받아 클라에서 걸렀다 — 월 캡 3000이면 30일 창이 1000을 넘어 **노하우로 답한 질문이 잘렸다**.
@@ -1958,11 +1969,17 @@ export async function resolvePhotoUri(stored?: string | null): Promise<string | 
 
 // ── Realtime 구독 ──────────────────────────────────────────
 // 사장님 인박스: 다른 기기(알바 폰)에서 질문이 들어오면 즉시 onChange 호출.
-export function subscribeUnknownQueue(onChange: () => void): () => void {
-  if (!HAS_SUPABASE) return () => {};
+// ★0371: 구독도 자리 번호로 거른다(현재 공간 질문 이벤트로 매장 목록이 다시 읽히지 않게). 모양은 subscribeWork 와 같다 —
+//   INSERT·UPDATE 는 `unit_id=eq.<자리>` · DELETE 는 PK 만 와서 필터를 걸면 영영 안 오므로 따로 필터 없이 건다(전과 같다).
+//   자리 번호가 없으면 구독하지 않는다(닫힌 쪽 · 필터 없는 구독으로 떨어뜨리지 않는다).
+export function subscribeUnknownQueue(onChange: () => void, unitId: string | null = _unitId): () => void {
+  if (!HAS_SUPABASE || !unitId) return () => {};
+  const filter = `unit_id=eq.${unitId}`;
   const ch = supabase
     .channel(uniqueChannel('unknown_queue'))
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'unknown_queries' }, onChange)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'unknown_queries', filter }, onChange)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'unknown_queries', filter }, onChange)
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'unknown_queries' }, onChange)
     .subscribe();
   return () => {
     supabase.removeChannel(ch);
@@ -1970,12 +1987,17 @@ export function subscribeUnknownQueue(onChange: () => void): () => void {
 }
 
 // 알바 채팅: 사장님이 답변을 발행(playbook_entries insert)하면 즉시 갱신.
-export function subscribePlaybook(onChange: () => void): () => void {
-  if (!HAS_SUPABASE) return () => {};
+// ★0371: 자리 번호로 거른다(subscribeUnknownQueue 와 같은 모양 · DELETE 만 필터 없이).
+export function subscribePlaybook(onChange: () => void, unitId: string | null = _unitId): () => void {
+  if (!HAS_SUPABASE || !unitId) return () => {};
+  const filter = `unit_id=eq.${unitId}`;
   const ch = supabase
     .channel(uniqueChannel('playbook'))
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'playbook_entries' }, onChange)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'playbook_entries', filter }, onChange)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'playbook_entries', filter }, onChange)
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'playbook_entries' }, onChange)
     // ★E10(0277): 보관(삭제)은 UPDATE 라 읽기 정책에 걸려 위 이벤트가 안 온다 — 신호 테이블로 받는다.
+    //   필터를 안 거는 이유: knowhow_events 읽기 정책은 현재 매장만이라(0277) 공간 신호는 애초에 안 온다.
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'knowhow_events' }, onChange)
     .subscribe();
   return () => {
@@ -4541,4 +4563,9 @@ export async function fetchEssentialSections(): Promise<string[]> {
 export async function saveEssentialSections(sections: string[]): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return write('saveEssentialSections', supabase.rpc('save_essential_sections', { p_sections: sections }));
+}
+
+/** 지금 매장 번호(setUnitId 로 맞춘 값). db.ts 밖에서 자리 번호 기본값이 필요할 때만 쓴다(embedBacklog · 0371 자리 번호 거르기). */
+export function currentUnitId(): string | null {
+  return _unitId;
 }
