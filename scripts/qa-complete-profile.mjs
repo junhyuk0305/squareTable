@@ -9,17 +9,19 @@
 // 매트릭스:
 //   A OAuth 사장: create_store 트랩(birth_date_required) → complete_profile → create_store 성공 + role='owner'
 //   B 필수 강제: birth_date 없이 complete_profile → birth_date_required
-//   C OAuth 직원: join_by_invite 트랩 → complete_profile → join_by_invite 성공(승인대기)
-//   D 전화 중복: 이미 쓰는 번호로 complete_profile → 예외 없이 phone=null 보류(계정 생존)
+//   C OAuth 직원: join_by_invite 트랩 → complete_profile → join_by_invite 성공(즉시 합류 · 0346)
+//   D 전화 중복: 이미 쓰는 번호로 complete_profile → phone_taken 으로 거부(0204 · 기존 번호 보존)
 //   F role 스코프(0157): 같은 번호로 owner 1개+junior 1개는 공존, 같은 role 재사용은 여전히 차단
 //
 // 자가정리: 만든 테스트 계정은 끝에 delete_my_account 로 삭제.
-// 실행: node scripts/qa-complete-profile.mjs
+// 실행: node scripts/qa-complete-profile.mjs --local (로컬 도커 · 키는 supabase status 에서)
+//       node scripts/qa-complete-profile.mjs        (.env 가 로컬 주소일 때만)
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
+import { IS_LOCAL, localEnv, assertLocalUrl } from './qa-local-target.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -36,7 +38,9 @@ function loadEnv() {
   return env;
 }
 const env = loadEnv();
+if (IS_LOCAL) Object.assign(env, localEnv());
 const URL = env.EXPO_PUBLIC_SUPABASE_URL;
+if (IS_LOCAL) assertLocalUrl(URL);
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY; // 있으면 phone_otps 시드(게이트 0088 대비)
 if (!URL || !ANON) { console.error('FAIL: EXPO_PUBLIC_SUPABASE_URL/ANON_KEY 필요'); process.exit(2); }
@@ -100,10 +104,19 @@ try {
   const { error: reqErr } = await b.rpc('complete_profile', { p_name: 'CP필수', p_phone: `0106${s.slice(0, 7)}`, p_birth_date: null });
   check('B1 birth_date 없이 완성 → birth_date_required', /birth_date_required/.test(reqErr?.message ?? ''), reqErr?.message ?? '(에러 없음!)');
 
-  // ── C: OAuth 직원 — 트랩 → 완성 → join_by_invite 성공(승인대기) ────────────
+  // ── C: OAuth 직원 — 트랩 → 완성 → join_by_invite 성공(즉시 합류 · 0346) ────────────
   const staff = mk();
   const sid = await signUpOAuthLike(staff, `qa_cp_s_${s}@example.com`, 'CP직원');
   cleanup.push(staff);
+  // 0323 부터 join_by_invite 는 번호 인증(PHONE_NOT_VERIFIED)을 생년월일보다 먼저 본다(0346:191 → :194).
+  // C 는 birth_date 결손 축만 검증하므로 E 와 같이 인증된 번호(C2 에서 쓸 0108)를 service_role 로 선충전한다.
+  if (SERVICE) {
+    await fetch(`${URL}/rest/v1/profiles?id=eq.${sid}`, {
+      method: 'PATCH',
+      headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: `0108${s.slice(0, 7)}` }),
+    });
+  }
   const { error: jTrap } = await staff.rpc('join_by_invite', { p_code: code });
   check('C1 완성 전 join 트랩(birth_date_required)', /birth_date_required/.test(jTrap?.message ?? ''), jTrap?.message ?? '(에러 없음!)');
   const { error: scpErr } = await staff.rpc('complete_profile', { p_name: 'CP직원', p_phone: `0108${s.slice(0, 7)}`, p_birth_date: '1992-03-03' });
