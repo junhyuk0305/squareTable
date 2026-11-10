@@ -91,6 +91,15 @@ try {
     M('★전체방 없는 매장에 다른 번호로 첫 전체방 만들기(0373 정책)', '직원A', '거부', !made, made ? '만들어짐' : errStr(error));
     if (made) await admin.from('work_rooms').delete().eq('id', FAKE0);
   }
+  //   ★0383: 일반 방(is_default=false)으로 전체방 번호를 먼저 차지하는 것. 차지되면 그 매장 전체방을 영영 못 만든다.
+  //     다른 매장 사람도 자기 매장 번호로 남의 매장 전체방 번호를 차지할 수 있었다(PK 는 매장을 안 가린다 · CSO 11-11).
+  {
+    const SQ = `room_main_${UNIT}`;
+    const { error } = await A.from('work_rooms').insert([{ id: SQ, unit_id: UNIT, name: '잡담', is_default: false }]);
+    const { data: made } = await admin.from('work_rooms').select('id').eq('id', SQ).eq('is_default', false).maybeSingle();
+    M('★일반 방으로 전체방 번호 차지하기(0383 정책)', '직원A', '거부', !made, made ? '만들어짐' : errStr(error));
+    if (made) await admin.from('work_rooms').delete().eq('id', SQ);
+  }
   //   ★0373: 사장 세션으로 심는다 = 앱이 실제로 타는 경로(wr_insert)가 열려 있는지도 같이 잰다.
   const DROOM = `room_main_${UNIT}`;
   {
