@@ -249,7 +249,7 @@ export const notifyUserSuggestionResult = (userId: string, approved: boolean, te
     audience: 'user',
     kind: 'suggestion_result',
     userId,
-    title: approved ? '내 노하우 제안이 반영됐어요' : '내 노하우 제안이 반려됐어요',
+    title: approved ? '내 노하우 제안이 승인됐어요' : '내 노하우 제안이 반려됐어요',
     body: text,
   });
 
