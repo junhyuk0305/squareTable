@@ -457,6 +457,131 @@ begin
   raise notice 'QA|SPEED|%|%|%', round(best_new, 1), round(best_old, 1), r;
 end $d$;
 
+-- ── 교육 링크 함수(3번 덩이 앞부분 · 0400) ─────────────────────────────────
+-- 손님(anon) 길: 틀린 토큰·만료·닫힘·지운 자리·다른 자리 노하우·초안·보관·숨김 → 전부 거절이나 빈 값.
+-- 주인 길: 만들기·고치기·닫기는 그 행 자리의 링크 관리 권한(auth_can)으로만. 오류 코드까지 맞는지 본다.
+reset role;
+select set_config('request.jwt.claims', '', true);
+insert into public.playbook_entries(id, unit_id, category, title, status, creator_role, archived_at, brand_hidden_at) values
+  ('qa_pb_arc_${rnd}', ${q(SP)}, '서비스', '공간 보관', 'published', 'space_owner', now(), null),
+  ('qa_pb_hid_${rnd}', ${q(SP)}, '서비스', '공간 숨김', 'published', 'space_owner', null, now()),
+  ('qa_pb_x_${rnd}',   ${q(X)},  '서비스', '매장 X 노하우', 'published', null, null, null);
+insert into public.units(id, store_name, kind, deleted_at) values ('qa_spd_${rnd}', 'QA지운공간', 'space', now());
+insert into public.edu_links(id, unit_id, token, title, entry_ids, expires_at, closed_at) values
+  ('qa_el1_${rnd}', ${q(SP)}, 'qatok1_${rnd}_aaaaaaaaaaaa', 'QA 링크1', array['qa_pb_drf_${rnd}', 'qa_pb_pub_${rnd}', 'qa_pb_arc_${rnd}', 'qa_pb_hid_${rnd}'], now() + interval '7 days', null),
+  ('qa_el2_${rnd}', ${q(SP)}, 'qatok2_${rnd}_aaaaaaaaaaaa', 'QA 닫힘', array['qa_pb_pub_${rnd}'], now() + interval '7 days', now()),
+  ('qa_el3_${rnd}', ${q(SP)}, 'qatok3_${rnd}_aaaaaaaaaaaa', 'QA 만료', array['qa_pb_pub_${rnd}'], now() - interval '1 minute', null),
+  ('qa_el4_${rnd}', ${q(SP)}, 'qatok4_${rnd}_aaaaaaaaaaaa', 'QA 빈 링크', '{}', now() + interval '7 days', null),
+  ('qa_el5_${rnd}', 'qa_spd_${rnd}', 'qatok5_${rnd}_aaaaaaaaaaaa', 'QA 지운 자리', '{}', now() + interval '7 days', null);
+-- 다른 자리 노하우 번호가 이미 담겨 버린 행(옛 쓰기 길·사고 가정). 트리거를 잠시 끄고 심는다. 손님 함수가 그래도 걸러야 한다.
+set local session_replication_role = replica;
+update public.edu_links set entry_ids = entry_ids || 'qa_pb_x_${rnd}'::text where id = 'qa_el1_${rnd}';
+set local session_replication_role = origin;
+
+create function pg_temp.qa_anon(p_sql text) returns text language plpgsql as $f$
+declare r text;
+begin
+  begin
+    perform set_config('request.jwt.claims', '{"role":"anon"}', true);
+    perform set_config('request.jwt.claim.sub', '', true);
+    execute 'set local role anon';
+    execute p_sql into r;
+    raise exception using errcode = 'QAOK0', message = 'qa_ok';
+  exception
+    when sqlstate 'QAOK0' then return 'ok|' || coalesce(r, '<null>');
+    when others then return 'err|' || sqlstate || '|' || left(sqlerrm, 80);
+  end;
+end $f$;
+create function pg_temp.qa_chk_anon(p_name text, p_sql text, p_expect text) returns text language sql as $f$
+  select 'QA|CHK|' || p_name || '¦' || p_expect || '¦' || pg_temp.qa_anon(p_sql)
+$f$;
+${[
+  ['살아 있는 링크 열림 · 발행 1개만 셈', 'aaaaaaaaaaaa', 1, `select o.ok || '/' || o.place_kind || '/' || o.entry_count from public.edu_link_open('qatok1_${rnd}_aaaaaaaaaaaa') o`, 'ok|true/space/1'],
+  ['노하우 읽기 = 발행된 같은 자리 것만(초안·보관·숨김·다른 자리 빠짐)', '', 0, `select coalesce(string_agg(e.id, ','), '') from public.edu_link_entries('qatok1_${rnd}_aaaaaaaaaaaa') e`, `ok|qa_pb_pub_${rnd}`],
+  ['열기 결과에 토큰·자리 번호 없음', '', 0, `select (strpos(o::text, 'qatok1') = 0 and strpos(o::text, ${q(SP)}) = 0)::text from public.edu_link_open('qatok1_${rnd}_aaaaaaaaaaaa') o`, 'ok|true'],
+  ['빈 링크 열림 · 0개', '', 0, `select o.ok || '/' || o.entry_count from public.edu_link_open('qatok4_${rnd}_aaaaaaaaaaaa') o`, 'ok|true/0'],
+  ['틀린 토큰 → 열기 실패', '', 0, `select o.ok::text from public.edu_link_open('qatok1_${rnd}_aaaaaaaaaaab') o`, 'ok|false'],
+  ['짧은 토큰·빈 토큰 → 열기 실패', '', 0, `select (select ok from public.edu_link_open('') ) || '/' || (select ok from public.edu_link_open(null))`, 'ok|false/false'],
+  ['닫힌 링크 → 열기 실패', '', 0, `select o.ok::text from public.edu_link_open('qatok2_${rnd}_aaaaaaaaaaaa') o`, 'ok|false'],
+  ['만료된 링크 → 열기 실패', '', 0, `select o.ok::text from public.edu_link_open('qatok3_${rnd}_aaaaaaaaaaaa') o`, 'ok|false'],
+  ['지운 자리 링크 → 열기 실패', '', 0, `select o.ok::text from public.edu_link_open('qatok5_${rnd}_aaaaaaaaaaaa') o`, 'ok|false'],
+  ['닫힘·만료·틀린 토큰 → 노하우 0행', '', 0, `select count(*)::text from (select * from public.edu_link_entries('qatok2_${rnd}_aaaaaaaaaaaa') union all select * from public.edu_link_entries('qatok3_${rnd}_aaaaaaaaaaaa') union all select * from public.edu_link_entries('nope_nope_nope_nope_nope')) s`, 'ok|0'],
+  ['토큰 검사 함수는 손님이 못 부름', '', 0, `select (public.edu_link_resolve('qatok1_${rnd}_aaaaaaaaaaaa')).id`, 'err:permission denied'],
+  ['링크 표를 손님이 못 읽음', '', 0, `select count(*)::text from public.edu_links`, 'err:permission denied'],
+  ['손님 표를 손님이 못 읽음', '', 0, `select count(*)::text from public.edu_link_guests`, 'err:permission denied'],
+  ['손님은 링크를 못 만듦', '', 0, `select id from public.edu_link_create(${q(SP)}, 't', '{}', 7)`, 'err:permission denied'],
+  ['손님은 링크를 못 닫음', '', 0, `select public.edu_link_close('qa_el1_${rnd}')::text`, 'err:permission denied'],
+].map(([n, , , s, e]) => `select pg_temp.qa_chk_anon(${q(`손님 ${n}`)}, ${q(s)}, ${q(e)});`).join('\n')}
+
+-- 열람 수는 열기마다 1 오른다(되돌리지 않는 호출로 한 번 연다)
+do $d$ begin
+  perform set_config('request.jwt.claims', '{"role":"anon"}', true);
+  execute 'set local role anon';
+  perform count(*) from public.edu_link_open('qatok1_${rnd}_aaaaaaaaaaaa');
+exception when others then null;  -- 함수가 없으면(수정 전) 아래 검사가 0 으로 RED 가 된다
+end $d$;
+reset role;
+select set_config('request.jwt.claims', '', true);
+select 'QA|CHK|손님 열면 열람 수 1 오름¦ok|1¦ok|' || opened_count from public.edu_links where id = 'qa_el1_${rnd}';
+
+-- 주인 길. A = 공간 주인(현재 공간) · B = 공간 멤버 겸 매장 X 직원 · D = 매장 X 사장 · C = 매장 X 매니저
+create function pg_temp.qa_close_then_open(p_link text, p_token text) returns text language plpgsql as $f$
+begin
+  perform public.edu_link_close(p_link);
+  perform public.edu_link_close(p_link);  -- 두 번 닫아도 같다
+  return (select ok::text from public.edu_link_open(p_token));
+end $f$;
+-- 한 문장 안에서는 방금 쓴 행이 안 보인다. 쓰기와 읽기를 차례로 하는 도우미.
+create function pg_temp.qa_create_then_read(p_unit text) returns text language plpgsql as $f$
+declare v_id text; v_tok text; v_exp timestamptz; l public.edu_links;
+begin
+  select c.id, c.token, c.expires_at into v_id, v_tok, v_exp
+    from public.edu_link_create(p_unit, '  새 링크  ', array['qa_pb_pub_${rnd}', 'qa_pb_drf_${rnd}', 'qa_pb_pub_${rnd}'], null) c;
+  select * into l from public.edu_links where id = v_id;  -- 주인은 RLS 로 자기 링크를 읽는다
+  return (length(v_tok) >= 20 and v_exp between now() + interval '6 days 23 hours' and now() + interval '7 days 1 minute'
+          and l.created_by = auth.uid() and l.token = v_tok)::text || '/' || l.title || '/' || array_to_string(l.entry_ids, ',');
+end $f$;
+create function pg_temp.qa_update_then_read(p_link text, p_ids text[]) returns text language plpgsql as $f$
+begin
+  perform public.edu_link_update(p_link, '고친 제목', p_ids, null);
+  return (select title || '/' || array_to_string(entry_ids, ',') from public.edu_links where id = p_link);
+end $f$;
+select pg_temp.qa_state(${q(U.A)}, ${q(S.A)}, null, ${q(SP)}, null, null);
+select pg_temp.qa_state(${q(U.B)}, ${q(S.B)}, ${q(X)}, ${q(SP)}, null, null);
+select pg_temp.qa_state(${q(U.D)}, ${q(S.D)}, ${q(X)}, null, null, null);
+select pg_temp.qa_state(${q(U.C)}, ${q(S.C)}, ${q(X)}, null, null, null);
+${[
+  ['A', '주인 링크 만들기 됨 · 토큰 20자 이상 · 7일 · 만든 사람 = 나',
+    `select pg_temp.qa_create_then_read(${q(SP)})`, `ok|true/새 링크/qa_pb_pub_${rnd},qa_pb_drf_${rnd}`],
+  ['A', '주인 링크 30일 됨', `select (c.expires_at > now() + interval '29 days')::text from public.edu_link_create(${q(SP)}, '', '{}', 30) c`, 'ok|true'],
+  ['A', '주인 링크 31일 거절', `select id from public.edu_link_create(${q(SP)}, '', '{}', 31)`, 'err:invalid_argument'],
+  ['A', '주인 링크 0일 거절', `select id from public.edu_link_create(${q(SP)}, '', '{}', 0)`, 'err:invalid_argument'],
+  ['A', '주인이 다른 매장 노하우 담기 거절', `select id from public.edu_link_create(${q(SP)}, '', array['qa_pb_x_${rnd}'], 7)`, 'err:EDU_LINK_ENTRY_DENIED'],
+  ['A', '주인이 보관된 노하우 담기 거절', `select id from public.edu_link_create(${q(SP)}, '', array['qa_pb_arc_${rnd}'], 7)`, 'err:EDU_LINK_ENTRY_DENIED'],
+  ['A', '주인이 없는 노하우 담기 거절', `select id from public.edu_link_create(${q(SP)}, '', array['qa_pb_none_${rnd}'], 7)`, 'err:EDU_LINK_ENTRY_DENIED'],
+  ['A', '주인이 매장 X 에 링크 만들기 거절', `select id from public.edu_link_create(${q(X)}, '', '{}', 7)`, 'err:not_manager'],
+  ['B', '공간 멤버 링크 만들기 거절', `select id from public.edu_link_create(${q(SP)}, '', '{}', 7)`, 'err:not_space_owner'],
+  ['B', '매장 직원 매장 링크 만들기 거절', `select id from public.edu_link_create(${q(X)}, '', '{}', 7)`, 'err:not_manager'],
+  ['D', '매장 사장 공간 링크 만들기 거절', `select id from public.edu_link_create(${q(SP)}, '', '{}', 7)`, 'err:not_space_owner'],
+  ['D', '매장 사장 매장 링크 만들기 됨', `select (c.id is not null)::text from public.edu_link_create(${q(X)}, 'X', array['qa_pb_x_${rnd}'], 7) c`, 'ok|true'],
+  ['C', '매장 매니저 매장 링크 만들기 됨', `select (c.id is not null)::text from public.edu_link_create(${q(X)}, 'X', '{}', 7) c`, 'ok|true'],
+  ['E', '아무 데도 아닌 사람 링크 만들기 거절', `select id from public.edu_link_create(${q(SP)}, '', '{}', 7)`, 'err:not_space_owner'],
+  ['A', '주인이 닫으면 손님 열기 실패(두 번 닫아도 됨)', `select pg_temp.qa_close_then_open('qa_el1_${rnd}', 'qatok1_${rnd}_aaaaaaaaaaaa')`, 'ok|false'],
+  ['B', '공간 멤버 링크 닫기 거절', `select public.edu_link_close('qa_el1_${rnd}')::text`, 'err:not_space_owner'],
+  ['D', '매장 사장 공간 링크 닫기 거절', `select public.edu_link_close('qa_el1_${rnd}')::text`, 'err:not_space_owner'],
+  ['A', '없는 링크 닫기 → 찾을 수 없음', `select public.edu_link_close('qa_el_none_${rnd}')::text`, 'err:link_not_found'],
+  ['A', '주인 노하우 빼기·넣기 됨', `select pg_temp.qa_update_then_read('qa_el4_${rnd}', array['qa_pb_pub_${rnd}'])`, `ok|고친 제목/qa_pb_pub_${rnd}`],
+  ['A', '이미 담긴 다른 자리 번호는 다시 안 봄 · 새로 넣는 것만 검사', `select public.edu_link_update('qa_el1_${rnd}', null, array['qa_pb_pub_${rnd}', 'qa_pb_x_${rnd}'], null)::text`, 'ok|'],
+  ['A', '주인 다른 매장 노하우 새로 넣기 거절', `select public.edu_link_update('qa_el4_${rnd}', null, array['qa_pb_x_${rnd}'], null)::text`, 'err:EDU_LINK_ENTRY_DENIED'],
+  ['A', '닫힌 링크 고치기 거절', `select public.edu_link_update('qa_el2_${rnd}', 'x', null, null)::text`, 'err:link_closed'],
+  ['A', '기간 끝난 링크 고치기 거절', `select public.edu_link_update('qa_el3_${rnd}', 'x', null, null)::text`, 'err:link_expired'],
+  ['A', '만든 날부터 30일 넘게 늘리기 거절', `select public.edu_link_update('qa_el4_${rnd}', null, null, now() + interval '31 days')::text`, 'err:invalid_argument'],
+  ['A', '기간 줄이기 됨', `select public.edu_link_update('qa_el4_${rnd}', null, null, now() + interval '2 days')::text`, 'ok|'],
+  ['B', '공간 멤버 링크 고치기 거절', `select public.edu_link_update('qa_el4_${rnd}', 'x', null, null)::text`, 'err:not_space_owner'],
+  ['A', '주인은 지운 자리 링크를 못 닫음', `select public.edu_link_close('qa_el5_${rnd}')::text`, 'err:not_space_owner'],
+  ['A', '주인 쪽 토큰 검사 함수 직접 호출 거절', `select (public.edu_link_resolve('qatok1_${rnd}_aaaaaaaaaaaa')).id`, 'err:permission denied'],
+].map(([k, n, s, e]) => `select pg_temp.qa_chk(${q(`교육 링크 ${n}`)}, '${k}', ${q(s)}, ${q(e)});`).join('\n')}
+
 rollback;
 `;
 
@@ -543,8 +668,11 @@ console.log('\n[2] 이름 붙인 검사');
 for (const l of lines.filter((l) => l.startsWith('QA|CHK|'))) {
   const [name, expect, got] = l.slice(7).split('¦');
   calls++; if (got.startsWith('err|')) rejected++;
-  const ok = expect === 'err' ? got.startsWith('err|') : got === expect;
-  check(name, ok, ok ? (expect === 'err' ? got.split('|').slice(1, 3).join(' ') : '') : `기대 ${expect} · 실제 ${got}`);
+  // 'err:<코드>' = 거절이고 오류 글에 그 코드가 있다(함수가 없어서 난 거절을 통과로 세지 않는다 · 3번 덩이 교육 링크).
+  const ok = expect === 'err' ? got.startsWith('err|')
+    : expect.startsWith('err:') ? got.startsWith('err|') && got.includes(expect.slice(4))
+    : got === expect;
+  check(name, ok, ok ? (expect.startsWith('err') ? got.split('|').slice(1, 3).join(' ') : '') : `기대 ${expect} · 실제 ${got}`);
 }
 
 console.log('\n[3] 속도 · auth_member_unit_id 1,000회 (3번 중 가장 빠른 값)');
