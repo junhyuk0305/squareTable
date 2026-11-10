@@ -82,7 +82,7 @@ export type OwnerCoachChatProps = {
    *  · 노하우 목록(비슷한 노하우 · 받아쓰기 힌트 · 최근 노하우) = entries. 매장 스토어(usePlaybookStore)를 안 읽는다.
    *  · AI 를 부를 자리 = id(엣지가 현재 공간과 맞을 때만 공간으로 돈다 · client.ts AiTarget).
    *  · 저장할 노하우의 자리 = id · 저자 역할 = space_owner(buildEntry spaceId).
-   *  · 사진 첨부와 문서로 추가는 뺀다. 사진 올리기(db.ts uploadPhoto)가 현재 매장 폴더에만 올린다.
+   *  · 사진 = 공간 폴더(id)에 올린다(db.ts uploadPhoto 의 자리 인수). 문서로 추가는 뺀다(매장 인수인계 화면이라).
    */
   space?: { id: string; entries: PlaybookEntry[] };
 };
@@ -669,7 +669,7 @@ export function OwnerCoachChat({
         try {
           const asset = await pickImageNative();
           if (!asset) return; // 선택창을 닫음 — 조용히 원상태
-          const url = await uploadPhotoNative(asset);
+          const url = await uploadPhotoNative(asset, spaceId);
           if (url) setPhotos((prev) => (prev.length >= MAX_PHOTOS ? prev : [...prev, url]));
           else setError('사진을 올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
         } catch {
@@ -684,7 +684,7 @@ export function OwnerCoachChat({
       setUploadingPhoto(true);
       setError(null);
       try {
-        const url = await uploadPhoto(file);
+        const url = await uploadPhoto(file, spaceId);
         if (url) setPhotos((prev) => (prev.length >= MAX_PHOTOS ? prev : [...prev, url]));
         else setError('사진을 올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
       } catch {
@@ -693,7 +693,7 @@ export function OwnerCoachChat({
         setUploadingPhoto(false);
       }
     });
-  }, [uploadingPhoto, photos.length]);
+  }, [uploadingPhoto, photos.length, spaceId]);
 
   const removePhoto = useCallback((url: string) => {
     setPhotos((prev) => prev.filter((p) => p !== url));
@@ -909,14 +909,12 @@ export function OwnerCoachChat({
           />
           {/* 열릴 때 공용 등장 애니메이션 — 앱의 다른 토글과 같은 프리미티브(Appear). */}
           <Appear style={styles.menu}>
-            {!space && (
-              <CoachMenuItem
-                icon="image-outline"
-                label="사진 첨부"
-                sub={uploadingPhoto ? '올리는 중…' : `최대 ${MAX_PHOTOS}장`}
-                onPress={() => { setMenu(false); attachPhoto(); }}
-              />
-            )}
+            <CoachMenuItem
+              icon="image-outline"
+              label="사진 첨부"
+              sub={uploadingPhoto ? '올리는 중…' : `최대 ${MAX_PHOTOS}장`}
+              onPress={() => { setMenu(false); attachPhoto(); }}
+            />
             {voiceSupported && (
               <CoachMenuItem
                 icon="mic-outline"
@@ -936,17 +934,15 @@ export function OwnerCoachChat({
                 accent
               />
             )}
-            {!space && (
-              <View style={styles.menuInfoRow}>
-                <Text style={styles.menuInfoText}>사진은 자동으로 압축돼서 올라가요</Text>
-                <InfoDot
-                  title={PHOTO_UPLOAD_INFO.title}
-                  body={PHOTO_UPLOAD_INFO.body}
-                  size={14}
-                  accessibilityLabel="사진 업로드 규격 안내"
-                />
-              </View>
-            )}
+            <View style={styles.menuInfoRow}>
+              <Text style={styles.menuInfoText}>사진은 자동으로 압축돼서 올라가요</Text>
+              <InfoDot
+                title={PHOTO_UPLOAD_INFO.title}
+                body={PHOTO_UPLOAD_INFO.body}
+                size={14}
+                accessibilityLabel="사진 업로드 규격 안내"
+              />
+            </View>
           </Appear>
         </>
       )}
@@ -965,8 +961,7 @@ export function OwnerCoachChat({
               onEnd={() => setVoiceOpen(false)}
               onText={(t) => setInput((prev) => appendDictation(prev, t, INPUT_MAX_LEN))}
             />
-          ) : space && !voiceSupported ? null : (
-            // 공간은 ＋ 메뉴에 음성 입력 하나만 남는다 → 음성이 안 되는 환경이면 빈 메뉴를 여는 ＋ 를 그리지 않는다.
+          ) : (
             <Pressable
               onPress={() => setMenu((v) => !v)}
               accessibilityRole="button"

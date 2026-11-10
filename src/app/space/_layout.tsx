@@ -6,6 +6,8 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 
 /** 공간이 없어도 열리는 화면 — 공간 만들기(S02 앞 단계). */
 const START = '/space/start';
+/** 확인 중에 만들기 화면을 열었다(아래 문지기 주석). */
+let pendingStart = false;
 
 /**
  * 공간 층(2번 덩이) — 매장 층(owner·junior)과 나란한 세 번째 층. 하단 탭 = 홈·노하우·교육·설정.
@@ -27,6 +29,15 @@ export default function SpaceLayout() {
   const spaceRole = useSessionStore((s) => s.spaceRole);
   const loadSpaces = useSessionStore((s) => s.loadSpaces);
   const pathname = usePathname();
+  // ★주소창·새로고침으로 /space/start 를 열면, 아래에서 null 을 그리는 동안 안쪽 Stack 이 없어 경로가 /space 로 바뀌고
+  //   확인이 끝나 Stack 이 서면 첫 화면(/space/first)이 열린다. 그러면 문지기가 /stores 로 보냈다(2026-11-11 실측).
+  //   확인 중에 만들기 화면을 열었으면 확인이 끝난 뒤 그 화면으로 다시 보낸다. 만들기 화면에 서거나 공간을 못 쓰면 잊는다.
+  //   레이아웃이 경로가 바뀔 때 다시 마운트돼 ref 로는 값이 사라진다 → 모듈 변수에 둔다.
+  const ready = status === 'signed_in' && spacesLoaded && spaceOpen === true;
+  useEffect(() => {
+    if (!ready && pathname === START) pendingStart = true;
+    else if ((ready && pathname === START) || status === 'signed_out' || (spacesLoaded && spaceOpen !== true)) pendingStart = false;
+  }, [ready, pathname, status, spacesLoaded, spaceOpen]);
 
   useEffect(() => {
     if (status === 'signed_in' && userId && !spacesLoaded) void loadSpaces();
@@ -37,6 +48,7 @@ export default function SpaceLayout() {
   if (status === 'signed_out') return <Redirect href="/" />;
   if (!spacesLoaded) return null;
   if (spaceOpen !== true) return <Redirect href="/stores" />;
+  if (pendingStart && pathname !== START) return <Redirect href={START} />;
   // 만들기 화면은 공간이 이미 있어도 막지 않는다. 만드는 도중 목록이 먼저 바뀌어 화면이 튕기지 않게.
   //   두 번째 공간은 서버가 space_limit_reached 로 거절하고 화면이 그 문구를 보인다.
   if (pathname !== START && (!spaceId || spaceRole !== 'space_owner')) return <Redirect href="/stores" />;

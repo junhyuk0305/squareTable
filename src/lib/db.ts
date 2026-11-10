@@ -1890,13 +1890,14 @@ async function compressImage(file: File): Promise<File> {
   }
 }
 
-export async function uploadPhoto(file: File): Promise<string | null> {
+// 폴더 = 자리 번호(기본 현재 매장). 공간 화면은 공간 번호를 넘긴다(서버 정책 0377 = 현재 공간 폴더 · 올리기는 공간 주인만).
+export async function uploadPhoto(file: File, unitId: string | null = _unitId): Promise<string | null> {
   if (!HAS_SUPABASE) {
     return typeof URL !== 'undefined' && URL.createObjectURL ? URL.createObjectURL(file) : null;
   }
   const compressed = await compressImage(file);
   const ext = compressed.name.split('.').pop() || 'jpg';
-  const path = `${_unitId ?? 'unknown'}/${Date.now()}-${Math.round(Math.random() * 1e6)}.${ext}`;
+  const path = `${unitId ?? 'unknown'}/${Date.now()}-${Math.round(Math.random() * 1e6)}.${ext}`;
   const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, compressed, {
     contentType: compressed.type || 'image/jpeg',
     // 경로가 매번 유니크(타임스탬프+난수)라 내용이 바뀔 일이 없다 → 1년 immutable 캐싱으로
@@ -1922,11 +1923,11 @@ export async function uploadPhotoNative(asset: {
   uri: string;
   mimeType?: string | null;
   fileName?: string | null;
-}): Promise<string | null> {
+}, unitId: string | null = _unitId): Promise<string | null> {
   if (!HAS_SUPABASE) return asset.uri; // mock 모드 — 로컬 file:// 경로를 그대로 미리보기로 반환
   const contentType = asset.mimeType || 'image/jpeg';
   const ext = (asset.fileName?.split('.').pop() || contentType.split('/').pop() || 'jpg').toLowerCase();
-  const path = `${_unitId ?? 'unknown'}/${Date.now()}-${Math.round(Math.random() * 1e6)}.${ext}`;
+  const path = `${unitId ?? 'unknown'}/${Date.now()}-${Math.round(Math.random() * 1e6)}.${ext}`;
   try {
     const res = await fetch(asset.uri);
     const blob = await res.blob();
