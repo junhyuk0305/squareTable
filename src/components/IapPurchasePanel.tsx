@@ -420,7 +420,8 @@ export function IapPurchasePanel({
                         <Text style={styles.offerTitle}>매장 {o.storeCount}개</Text>
                         {current && <Text style={styles.offerTag}>이용 중</Text>}
                       </View>
-                      <Text style={styles.offerPrice}>{o.priceString}</Text>
+                      {/* 지운 요약 줄과 같은 표기(고정 "/ 월"). 이용권은 월 구독뿐이다(연간 상품 없음 · 2026-11-10). */}
+                      <Text style={styles.offerPrice}>{o.priceString} / 월</Text>
                     </Pressable>
                   );
                 })}

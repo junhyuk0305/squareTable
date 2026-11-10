@@ -152,7 +152,6 @@ export default function JuniorHub() {
       >
         {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>합류하기</Text>}
       </Pressable>
-      <Text style={styles.codeHint}>코드가 없으신가요? 사장님께 요청하세요 (사장님: 설정 › 매장 관리).</Text>
     </View>
   );
 
@@ -283,22 +282,23 @@ export default function JuniorHub() {
         )}
 
         {/* 코드 입력 본문은 한 벌이고 한 자리에서만 그린다(SSOT).
-            ① 매장 0개 — 코드 입력이 곧 이 화면의 전부다.
-            ③ 매장 있음 — 접지 않고 '매장 추가' 섹션으로 늘 보인다(2026-11-10 W3 ④-9 · 숨기지 않고 ⓘ로 설명). */}
-        {!pendingUnitId && (hasStore ? (
-          <View style={styles.section} testID="hub-add-store">
+            ① 매장 0개 — '초대코드' 섹션. 코드 입력이 곧 이 화면의 전부다.
+            ③ 매장 있음 — 접지 않고 '매장 추가' 섹션으로 늘 보인다(2026-11-10 W3 ④-9 · 숨기지 않고 ⓘ로 설명).
+            코드를 어디서 받는지는 늘 보이는 설명 줄 대신 제목 옆 ⓘ 하나가 말한다(두 상태 같은 문구). */}
+        {!pendingUnitId && (
+          <View style={styles.section} testID={hasStore ? 'hub-add-store' : 'hub-code-entry'}>
             <SectionLabel
-              title="매장 추가"
+              title={hasStore ? '매장 추가' : '초대코드'}
               titleAccessory={
                 <InfoDot
-                  title="매장 추가"
-                  body="다른 매장에서도 일하면 그 매장 사장님께 초대코드 6자리를 받아 넣으세요. 코드는 사장님 화면 설정 맨 위에 있어요."
+                  title="초대코드"
+                  body="초대코드 6자리는 그 매장 사장님께 받아 넣으세요. 코드는 사장님 화면 설정 맨 위에 있어요."
                 />
               }
             />
             {codeEntry}
           </View>
-        ) : codeEntry)}
+        )}
         </SectionStack>
         </Appear>
 
@@ -391,8 +391,6 @@ const styles = StyleSheet.create({
   err: { fontSize: 15, color: BrandColors.accentText, fontWeight: '600' },
   primary: { ...ButtonStyles.primary, backgroundColor: BrandColors.brand },
   primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
-  // 안내문 = 설명(Type.desc · secondary). 꼬리표용 ink3(2.55:1) 금지.
-  codeHint: { ...Type.desc },
 
   avatarSm: { width: 30, height: 30, borderRadius: Radius.pill, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: InkColors.bubbleText, fontSize: 14, fontWeight: '900' },
