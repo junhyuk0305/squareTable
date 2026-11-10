@@ -252,6 +252,47 @@ console.log('\n[C6] 모든 초대코드는 만료가 없다(사장이 바꿀 때
   }
 }
 
+console.log('\n[W1] 새 매장 코드 = 영문·숫자 6자(0·O·1·I·L 제외 · 영문 1자 이상) · 발급 규칙은 _new_join_code 한 곳');
+{
+  const g = lastDef('_new_join_code');
+  check('★발급 함수 _new_join_code 가 있고 문자 31개(ABCDEFGHJKMNPQRSTUVWXYZ23456789)에서 고른다',
+    !!g.file && g.body.includes("'ABCDEFGHJKMNPQRSTUVWXYZ23456789'") && /not exists \(select 1 from public\.units u where u\.invite_code = v_code\)/.test(g.body), g.file || '없음');
+  check('_new_join_code 는 내부 전용이다(클라 실행 불가)',
+    fileHas(g.file, 'revoke all on function public._new_join_code() from public, anon, authenticated;'));
+  for (const fn of ['create_store', 'rotate_invite_code', 'reopen_store']) {
+    const d = lastDef(fn);
+    check(`★${fn} 가 _new_join_code 로 발급하고 옛 숫자 루프가 없다 · 같은 코드 충돌(unique_violation)은 다시 뽑는다`,
+      /public\._new_join_code\(\)/.test(d.body) && !/random\(\) \* 900000/.test(d.body) && /when unique_violation/.test(d.body), d.file);
+  }
+  if (!dbUp) console.log('  SKIP 서버 동작 — 로컬 도커 DB 없음');
+  else {
+    const OK = (c) => `(${c} ~ '^[A-HJKMNP-Z2-9]{6}$' and ${c} ~ '[A-Z]')`;
+    const g1 = psql(`select 'R=' || count(*) filter (where ${OK('c')}) || '/' || count(*) from (select public._new_join_code() as c from generate_series(1, 2000)) s;\n`);
+    check('★2000번 뽑아 전부 형식이 맞다(영문·숫자 6자 · 영문 1자 이상)', g1.includes('R=2000/2000'), tail(g1));
+    const g2 = psql(`${IDS}${as('o')}select 'R=' || public._new_join_code();\nrollback;\n`);
+    check('★사장 세션은 _new_join_code 를 직접 못 부른다', /permission denied/.test(g2), tail(g2));
+    const r1 = psql(`${IDS}${as('o')}select 'R=' || ${OK('invite_code')} from public.rotate_invite_code();\nrollback;\n`);
+    check('★코드 변경(rotate_invite_code)이 새 형식 코드를 준다', r1.includes('R=true'), tail(r1));
+    const SLOT = `set local session_replication_role = replica;
+insert into public.store_slots (owner_id, paid_until, plan) values (current_setting('qa.o')::uuid, now() + interval '30 days', 'multi');
+set local session_replication_role = origin;
+`;
+    // 로컬에서 새로 만든 고정 계정은 전화 인증 컷오프 뒤라 매장 insert 트리거(PHONE_NOT_VERIFIED)에 걸린다 → 컷오프 이전 계정으로 둔다(되돌림).
+    const OLD = `set local session_replication_role = replica;
+update public.profiles set created_at = timestamptz '2000-01-01' where id = current_setting('qa.o')::uuid;
+set local session_replication_role = origin;
+`;
+    const c1 = psql(`${IDS}${SLOT}${OLD}${as('o')}select 'R=' || ${OK('invite_code')} from public.create_store('QA W1', 'cafe', null, date '1980-01-01');\nrollback;\n`);
+    check('★매장 만들기(create_store)가 새 형식 코드를 준다', c1.includes('R=true'), tail(c1));
+    // 사장에게 유료 매장이 생기면 무료 매장 store_001 은 잠긴다(0196 · [C2] 와 같은 방법) → 슬롯으로 다시 연다.
+    const PAID = extraUnit('qa_w1_paid', '991104',
+      `insert into public.unit_subscriptions (unit_id, status, plan, paid_until) values ('qa_w1_paid', 'active', 'single', now() + interval '30 days')
+         on conflict (unit_id) do update set status = 'active', plan = 'single', paid_until = excluded.paid_until;`);
+    const o1 = psql(`${IDS}${PAID}${SLOT}${as('o')}select 'R=' || ${OK('invite_code')} from public.reopen_store('store_001');\nrollback;\n`);
+    check('★다시 열기(reopen_store)가 새 형식 코드를 준다', o1.includes('R=true'), tail(o1));
+  }
+}
+
 console.log('\n[C8] 매장 설정에서 사업자번호를 넣고 바꾼다(RPC 저장 · 중복은 내 매장/다른 매장 구분)');
 {
   const f = lastDef('set_store_biz_no');

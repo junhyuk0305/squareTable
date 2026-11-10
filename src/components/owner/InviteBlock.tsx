@@ -10,6 +10,7 @@ import { siteOrigin } from '@/lib/config/site';
 import { track } from '@/lib/analytics/track';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { rotateInviteCode } from '@/lib/db';
+import { friendlyError } from '@/lib/utils/userError';
 import { inviteExpiryLabel, INVITE_ROTATE_LABEL, INVITE_ASK_OWNER_TEXT } from '@/lib/invite/inviteExpiry';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -89,11 +90,11 @@ export function InviteBlock({
     setRotating(true);
     const res = await rotateInviteCode();
     setRotating(false);
-    if (res) {
+    if (res && 'inviteCode' in res) {
       useSessionStore.setState({ inviteCode: res.inviteCode, inviteExpiresAt: res.expiresAt });
       showToast('초대코드를 변경했어요', 'good');
     } else {
-      showToast('코드 변경에 실패했어요. 잠시 후 다시 시도해 주세요.', 'warn');
+      showToast(friendlyError(res?.error, '코드 변경에 실패했어요. 잠시 후 다시 시도해 주세요.'), 'warn');
     }
   };
 

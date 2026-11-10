@@ -12,6 +12,11 @@
 // 더 구체적인 패턴이 위로 오도록 정렬.
 const COMMON: { test: RegExp; msg: string }[] = [
   {
+    // ★0356: 새 초대코드가 5번 연속 다른 매장 코드와 겹쳤다(매장 만들기·코드 변경·다시 열기). 다시 누르면 된다.
+    test: /invite_code_busy/,
+    msg: '새 초대코드를 만들지 못했어요. 잠시 후 다시 시도해 주세요.',
+  },
+  {
     test: /failed to fetch|networkerror|network request failed|fetch failed|err_internet|offline|net::/i,
     msg: '인터넷 연결이 불안정해요. 연결을 확인하고 다시 시도해 주세요.',
   },

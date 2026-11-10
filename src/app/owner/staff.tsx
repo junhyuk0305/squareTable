@@ -29,6 +29,7 @@ import { EmptyStyles } from '@/lib/theme/empty';
 import { fmtDuration, todayStr, liveMinutes, staffWorkStatus } from '@/lib/utils/attendance';
 import { showToast } from '@/lib/store/useToastStore';
 import { rotateInviteCode } from '@/lib/db';
+import { friendlyError } from '@/lib/utils/userError';
 import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
 
 // 등장 애니메이션(Appear)이 가라앉은 뒤 재야 행 위치가 맞다(schedule.tsx 와 같은 값).
@@ -139,11 +140,11 @@ export default function OwnerStaffScreen() {
     setRotating(false);
     setRotateOpen(false);
     // 실패(null) 시 예전엔 모달만 닫고 아무 신호가 없어, 사장이 코드가 바뀐 줄 착각했다(무음 실패).
-    if (res) {
+    if (res && 'inviteCode' in res) {
       useSessionStore.setState({ inviteCode: res.inviteCode, inviteExpiresAt: res.expiresAt });
       showToast('초대코드를 변경했어요', 'good');
     } else {
-      showToast('코드 변경에 실패했어요. 잠시 후 다시 시도해 주세요.', 'warn');
+      showToast(friendlyError(res?.error, '코드 변경에 실패했어요. 잠시 후 다시 시도해 주세요.'), 'warn');
     }
   };
 
