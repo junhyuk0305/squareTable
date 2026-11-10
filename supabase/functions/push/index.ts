@@ -392,8 +392,9 @@ async function deliver(
     const native = nativeIn ? { ...notifIn, ...nativeIn } : notifIn;
     // Q24: 2곳 이상 소속인 사람에게는 제목 앞에 매장 이름을 붙인다. 그 사람이 이 매장에 붙인 별명을 먼저 쓴다.
     //   읽기에 실패하면 매장 이름 없이 보낸다(알림이 안 가는 것보다 낫다).
+    //   공간(units.kind='space')은 소속으로 세지 않는다(0367 허브 합계·벨과 같은 술어 · 매장·본사 작업실은 지금처럼).
     const [memberRes, unitRes] = await Promise.all([
-      admin.from('unit_members').select('user_id').in('user_id', recipientIds),
+      admin.from('unit_members').select('user_id, units!inner(kind)').in('user_id', recipientIds).neq('units.kind', 'space'),
       admin.from('units').select('store_name').eq('id', scopeUnit),
     ]);
     const stores = new Map<string, number>();

@@ -78,8 +78,8 @@ try {
     const r = await (LIBRARY.has(t) ? exceptWs(q, 'unit_id') : q).limit(5);
     check(`①${t} 직접 조회 차단`, blocked(r), r.error ? `${r.error.code} ${r.error.message}` : `${(r.data ?? []).length}행`);
   }
-  const un = await H.from('units').select('id').neq('kind', 'brand_workspace').limit(5);
-  check('①units 직접 조회 차단(작업실 제외)', blocked(un), un.error ? `${un.error.code} ${un.error.message}` : `${(un.data ?? []).length}행`);
+  const un = await H.from('units').select('id').eq('kind', 'store').limit(5);
+  check('①units 직접 조회 차단(매장만)', blocked(un), un.error ? `${un.error.code} ${un.error.message}` : `${(un.data ?? []).length}행`);
   const um = await exceptWs(H.from('unit_members').select('user_id'), 'unit_id').limit(5);
   check('①unit_members 직접 조회 차단(작업실 제외)', blocked(um), um.error ? `${um.error.code} ${um.error.message}` : `${(um.data ?? []).length}행`);
 
