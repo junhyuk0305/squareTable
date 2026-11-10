@@ -160,11 +160,12 @@ comment on table public.session_active_spaces is
   '로그인 세션마다 보고 있는 공간(0368 · 3판 5-2). 정책 0개 — 쓰기는 enter_space 만. 계정 단위 기록은 없다.';
 
 -- 0335: public RLS 표를 더하면 account_access_allowed 제한 정책도 같이 단다(RESTRICTIVE · 여는 정책이 아니다).
---   unit_kind_features 는 using(true) 읽기라 탈퇴한 계정의 토큰으로도 읽히던 것을 막는다. session_active_spaces 는 규칙을 맞추려고 단다.
+--   unit_kind_features 는 using(true) 읽기라 탈퇴한 계정의 토큰으로도 읽히던 것을 막는다.
+--   session_active_spaces 에는 달지 않는다. 권한·정책 0개라 클라가 원래 못 닿고, 아래 자가점검이 "정책 0개"를 지킨다.
 do $$
 declare t text;
 begin
-  foreach t in array array['unit_kind_features', 'session_active_spaces'] loop
+  foreach t in array array['unit_kind_features'] loop
     execute format('drop policy if exists account_access_allowed on public.%I', t);
     execute format('create policy account_access_allowed on public.%I as restrictive for all to authenticated using ((select public.account_access_allowed())) with check ((select public.account_access_allowed()))', t);
   end loop;
