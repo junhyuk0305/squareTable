@@ -56,11 +56,27 @@ export const SPACE_WORDS = {
   link: '교육 링크',
   emptyLink: (owner: string) => `${subj(owner)} 아직 담은 노하우가 없어요. 궁금한 걸 물어보세요.`,
   linkClose: '링크 닫기',
-  linkClosed: '이 링크는 닫혔어요.',
+  // 교육 링크 화면(EduLinkView)과 오류 코드 link_closed 가 같이 쓴다. 공간 링크·매장 링크 공통.
+  linkClosed: '이 링크는 닫혔어요. 보낸 분께 새 링크를 받아 주세요.',
+  askSoon: '묻기는 곧 열려요. 지금은 아래 노하우를 읽어 주세요.',
   connectStore: '매장과 연결하기',
   // connectNoStore(매장에 합류하면 …)는 5번 덩이에서 넣는다. 정본 문구가 앞절 규칙(npm run voice S4)에 걸려 그때 다듬는다.
   enterCode: '초대코드 넣기',
 } as const;
+
+/** 교육 링크가 걸린 자리 종류(0400 edu_link_open 의 place_kind). */
+export type EduPlace = 'space' | 'store';
+
+/**
+ * 빈 링크 문구. 공간은 주인 이름 + 님이 들어간다.
+ * 서버(edu_link_open)가 주인 이름을 안 주면 이름 없는 문장으로 떨어진다. "손님"은 화면에 쓰지 않는다.
+ */
+export function emptyLinkText(place: EduPlace | null, owner?: string): string {
+  if (place === 'store') return '사장님이 아직 담은 노하우가 없어요. 궁금한 걸 물어보세요.';
+  const name = owner?.trim();
+  if (name) return SPACE_WORDS.emptyLink(ownerName(name));
+  return '아직 담긴 노하우가 없어요. 궁금한 걸 물어보세요.';
+}
 
 /**
  * 공간 화면 틀 문구(탭·제목·설정 행·만들기 단계). 정본 사전에 없는 화면 이름이라 여기 모은다.

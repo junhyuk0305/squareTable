@@ -4,7 +4,7 @@
 // 2026-10-04 마스터 계획 P3-10 (J4 · J5 · J8).
 // 웹의 매장 삭제 확인창·토스트 동결(토스 심사)은 2026-11-10 해제했다. 웹도 앱과 같은 문구를 쓴다.
 import { friendlyError, isMissingRpc } from '@/lib/utils/userError';
-import { spaceErrorMessage } from '@/lib/space/errors';
+import { placeErrorMessage } from '@/lib/place/errors';
 
 /** J4 — 0235 부터 다시 열어도 출퇴근·업무 기록이 남는다. 직원 소속만 정리한다. 이용권 문장은 그대로 둔다. */
 export const REOPEN_STORE_MESSAGE =
@@ -40,7 +40,7 @@ export const OWNER_HAS_STAFF_TEXT = '직원이 있으면 탈퇴할 수 없어요
 export function deleteAccountError(raw: string | null | undefined): { text: string; toStaff: boolean } {
   if (raw && /owner_has_staff/.test(raw)) return { text: OWNER_HAS_STAFF_TEXT, toStaff: true };
   // 0430: 멤버가 남은 공간의 주인. 직원 관리로 보내지 않는다(공간을 먼저 지우는 길은 4번 덩이 화면).
-  if (raw && /space_has_members/.test(raw)) return { text: spaceErrorMessage({ message: raw }), toStaff: false };
+  if (raw && /space_has_members/.test(raw)) return { text: placeErrorMessage({ message: raw }), toStaff: false };
   return { text: friendlyError(raw, '탈퇴 처리에 실패했어요. 잠시 후 다시 시도해 주세요.'), toStaff: false };
 }
 

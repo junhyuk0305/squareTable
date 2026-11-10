@@ -19,7 +19,7 @@ import { Appear, stagger } from '@/components/Appear';
 import { SectionLabel } from '@/components/SectionLabel';
 import { KnowhowRows, type KnowhowRow } from '@/components/blocks/KnowhowRows';
 import type { EduLinkEntry, EduLinkInfo } from '@/lib/db';
-import { EDU_WORDS, emptyLinkText } from '@/lib/edu/words';
+import { SPACE_WORDS, emptyLinkText } from '@/lib/place/words';
 import { InkColors, TextColor } from '@/lib/theme/colors';
 import { CardStyles } from '@/lib/theme/card';
 import { EmptyStyles } from '@/lib/theme/empty';
@@ -48,13 +48,13 @@ export function EduLinkView({ info, entries }: { info: EduLinkInfo; entries: Edu
       <Appear style={st.fill}>
         <View style={st.center}>
           <Ionicons name="lock-closed-outline" size={26} color={TextColor.iconMuted} />
-          <Text style={st.centerText}>{EDU_WORDS.linkClosed}</Text>
+          <Text style={st.centerText}>{SPACE_WORDS.linkClosed}</Text>
         </View>
       </Appear>
     );
   }
 
-  const title = info.title.trim() || EDU_WORDS.link;
+  const title = info.title.trim() || SPACE_WORDS.link;
 
   return (
     <View style={st.body}>
@@ -65,11 +65,11 @@ export function EduLinkView({ info, entries }: { info: EduLinkInfo; entries: Edu
 
       {/* 묻는 칸 — 다음 단계에서 연다. 지금은 모양만 두고 입력을 받지 않는다. */}
       <Appear delay={stagger(1)} style={st.askWrap}>
-        <View style={st.askBox} accessibilityRole="text" accessibilityLabel={`${EDU_WORDS.askPlaceholder}. ${EDU_WORDS.askSoon}`}>
+        <View style={st.askBox} accessibilityRole="text" accessibilityLabel={`${SPACE_WORDS.askPlaceholder}. ${SPACE_WORDS.askSoon}`}>
           <Ionicons name="chatbubble-ellipses-outline" size={18} color={TextColor.iconMuted} />
-          <Text style={st.askPlaceholder} numberOfLines={1}>{EDU_WORDS.askPlaceholder}</Text>
+          <Text style={st.askPlaceholder} numberOfLines={1}>{SPACE_WORDS.askPlaceholder}</Text>
         </View>
-        <Text style={st.askNote}>{EDU_WORDS.askSoon}</Text>
+        <Text style={st.askNote}>{SPACE_WORDS.askSoon}</Text>
       </Appear>
 
       {entries.length === 0 ? (
@@ -80,7 +80,7 @@ export function EduLinkView({ info, entries }: { info: EduLinkInfo; entries: Edu
         </Appear>
       ) : (
         <Appear delay={stagger(2)} style={st.section}>
-          <SectionLabel title={EDU_WORDS.firstRead} hint={`${entries.length}개`} />
+          <SectionLabel title={SPACE_WORDS.firstRead} hint={`${entries.length}개`} />
           <View style={st.list}>
             {entries.map((e, i) => {
               const open = openId === e.id;

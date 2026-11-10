@@ -27,9 +27,9 @@ import {
   type EduLinkPickEntry,
   type EduLinkRow,
 } from '@/lib/db';
-import { eduErrorMessage } from '@/lib/edu/errors';
+import { placeErrorMessage } from '@/lib/place/errors';
 import { EDU_LINK_DAY_OPTIONS, createdPlusDays, daysLeft, eduLinkUrl } from '@/lib/edu/link';
-import { EDU_WORDS } from '@/lib/edu/words';
+import { SPACE_WORDS } from '@/lib/place/words';
 import { copyLinkToast, COPY_LINK_LABEL } from '@/lib/quiz/link';
 import { shareText } from '@/lib/utils/shareText';
 import { confirmAction } from '@/lib/utils/confirm';
@@ -85,7 +85,7 @@ export default function EduLinkDetailScreen() {
   const toggle = (eid: string) =>
     setPicked((prev) => (prev.includes(eid) ? prev.filter((x) => x !== eid) : [...prev, eid]));
 
-  const header = <ScreenTitleHeader title={link?.title.trim() || EDU_WORDS.link} backFallback />;
+  const header = <ScreenTitleHeader title={link?.title.trim() || SPACE_WORDS.link} backFallback />;
 
   if (!unitId || (ready && failed)) {
     return (
@@ -108,7 +108,7 @@ export default function EduLinkDetailScreen() {
       <Screen header={header}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={EmptyStyles.box}>
-          <Text style={EmptyStyles.text}>{eduErrorMessage({ message: 'link_not_found' })}</Text>
+          <Text style={EmptyStyles.text}>{placeErrorMessage({ message: 'link_not_found' })}</Text>
         </View>
       </Screen>
     );
@@ -131,7 +131,7 @@ export default function EduLinkDetailScreen() {
       expiresAt: nextExpiry ?? undefined,
     });
     setBusy(false);
-    if (r.error) { showToast(eduErrorMessage(r.error)); return; }
+    if (r.error) { showToast(placeErrorMessage(r.error)); return; }
     showToast('저장했어요', 'good');
     setRetry((n) => n + 1);
   };
@@ -141,14 +141,14 @@ export default function EduLinkDetailScreen() {
     const ok = await confirmAction(
       '링크를 닫을까요?',
       '닫으면 이 주소로 아무도 열 수 없어요. 다시 열 수는 없어요.',
-      EDU_WORDS.linkClose,
+      SPACE_WORDS.linkClose,
       { destructive: true, cancelLabel: '그대로 두기' },
     );
     if (!ok) return;
     setBusy(true);
     const r = await closeEduLink(link.id);
     setBusy(false);
-    if (r.error) { showToast(eduErrorMessage(r.error)); return; }
+    if (r.error) { showToast(placeErrorMessage(r.error)); return; }
     showToast('링크를 닫았어요', 'good');
     router.back();
   };
@@ -197,7 +197,7 @@ export default function EduLinkDetailScreen() {
           </>
         ) : (
           <Text style={st.desc}>
-            {closed ? '닫힌 링크예요. 새 링크를 만들어 주세요.' : eduErrorMessage({ message: 'link_expired' })}
+            {closed ? '닫힌 링크예요. 새 링크를 만들어 주세요.' : placeErrorMessage({ message: 'link_expired' })}
           </Text>
         )}
       </Appear>
@@ -249,10 +249,10 @@ export default function EduLinkDetailScreen() {
           onPress={() => void close()}
           disabled={busy}
           accessibilityRole="button"
-          accessibilityLabel={EDU_WORDS.linkClose}
+          accessibilityLabel={SPACE_WORDS.linkClose}
           style={({ pressed }) => [st.textBtn, pressed && st.pressed]}
         >
-          <Text style={st.closeText}>{EDU_WORDS.linkClose}</Text>
+          <Text style={st.closeText}>{SPACE_WORDS.linkClose}</Text>
         </Pressable>
       ) : null}
     </Screen>

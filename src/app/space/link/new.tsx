@@ -19,9 +19,9 @@ import { Appear } from '@/components/Appear';
 import { PickRow } from '@/components/blocks/PickRow';
 import { DayChips } from '@/components/edu/DayChips';
 import { createEduLink, fetchEduLinkPickEntries, type EduLinkPickEntry } from '@/lib/db';
-import { eduErrorMessage } from '@/lib/edu/errors';
+import { placeErrorMessage } from '@/lib/place/errors';
 import { EDU_LINK_DAY_OPTIONS, EDU_LINK_DEFAULT_DAYS, eduLinkUrl } from '@/lib/edu/link';
-import { EDU_WORDS } from '@/lib/edu/words';
+import { SPACE_WORDS } from '@/lib/place/words';
 import { copyLinkToast, COPY_LINK_LABEL } from '@/lib/quiz/link';
 import { shareText } from '@/lib/utils/shareText';
 import { showToast } from '@/lib/store/useToastStore';
@@ -72,7 +72,7 @@ export default function EduLinkNewScreen() {
     setBusy(true);
     const r = await createEduLink(unitId, { title: title.trim(), entryIds: picked, days });
     setBusy(false);
-    if (r.error || !r.data) { showToast(eduErrorMessage(r.error)); return; }
+    if (r.error || !r.data) { showToast(placeErrorMessage(r.error)); return; }
     setMade({ id: r.data.id, token: r.data.token });
   };
 
@@ -170,7 +170,7 @@ export default function EduLinkNewScreen() {
           returnKeyType="done"
           accessibilityLabel="링크 제목"
         />
-        <Text style={st.desc}>비우면 &apos;{EDU_WORDS.link}&apos;로 보여요.</Text>
+        <Text style={st.desc}>비우면 &apos;{SPACE_WORDS.link}&apos;로 보여요.</Text>
       </Section>
 
       <Pressable

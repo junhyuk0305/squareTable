@@ -4699,7 +4699,7 @@ export async function saveUnknownAnswer(uqId: string, entry: PlaybookEntry, sugg
 // ── 교육 링크(0400) — 손님 열기·노하우 읽기 + 주인 만들기·고치기·닫기 ─────────────────
 // 손님 함수 둘은 anon 으로 돈다. 토큰이 열쇠다. 실패는 조용하다(닫힘·만료·없는 토큰·지운 자리 = ok=false 하나).
 // ★토큰은 계측·로그에 싣지 않는다. reportError 에는 오류 객체만 넘긴다(q/[token] 과 같은 규칙).
-// 화면 = src/app/l/[token].tsx(손님) · src/app/space/link/*(주인). 오류 문구 = src/lib/edu/errors.ts.
+// 화면 = src/app/l/[token].tsx(손님) · src/app/space/link/*(주인). 오류 문구 = src/lib/place/errors.ts.
 
 /**
  * 손님 첫 열기. 열 때마다 서버가 열람 수를 1 올린다. 그래서 화면은 한 번 열 때 한 번만 부른다.
@@ -4889,13 +4889,15 @@ export async function closeEduLink(linkId: string): Promise<DbResult<true>> {
 }
 
 // ── 공간 합류 · 멤버 요청 · 내보내기 · 나가기(0460 · 4번 덩이) ──────────────────
-// 오류 message 첫 낱말 = 코드. 문구는 src/lib/space/errors.ts 의 spaceErrorMessage 로 바꾼다.
+// 오류 message 첫 낱말 = 코드. 문구는 src/lib/place/errors.ts 의 placeErrorMessage 로 바꾼다.
 
 /** 공간 멤버 한 줄. 이름과 역할만(전화번호 없음). */
 export type SpaceMember = { userId: string; name: string; role: 'space_owner' | 'space_member'; joinedAt: string };
 /** 주인이 보는 대기 요청 한 줄. */
 export type SpaceJoinRequest = { requestId: string; userId: string; name: string; requestedAt: string };
 
+// check:select-bounds 무경계 1건(2026-11-11 기준선 갱신): 읽기 결과는 서버가 한 공간으로 묶는다.
+//   space_members = 그 공간 멤버만 · space_pending_requests = 사람당 대기 요청 하나(0460 부분 유일 색인).
 async function spaceRpc<T>(fn: string, args: Record<string, unknown>, tag: string): Promise<DbResult<T>> {
   const { data, error } = await supabase.rpc(fn, args);
   if (error) {

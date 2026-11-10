@@ -67,7 +67,7 @@
     {
       "id": "fetch",
       "file": "src/lib/db.ts",
-      "symbol": "export async function fetchEntries()",
+      "symbol": "export async function fetchEntries(unitId: string | null = _unitId)",
       "kind": "code"
     },
     {
