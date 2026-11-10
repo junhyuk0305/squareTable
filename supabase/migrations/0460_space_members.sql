@@ -164,7 +164,7 @@ grant execute on function public.join_space_by_code(text) to authenticated;
 -- ══════════════════════════════════════════════════════════════════════════
 -- 링크 토큰을 가진 것이 "이 공간 링크를 받은 사람"의 증거다. 손님 행을 계정으로 옮기는 일(3번 나머지 묻기 함수 뒤)과 따로 돈다.
 -- 오류 코드: not_authenticated · space_closed · PHONE_NOT_VERIFIED · link_closed(닫힘·만료·없는 토큰·지운 자리 = 하나 · 0400 과 같다)
---   · feature_off(매장 링크 · 매장은 초대코드로만 합류) · already_member · already_pending · request_cooldown(처리된 요청 뒤 10분 안 재요청).
+--   · feature_off(매장 링크 · 매장은 초대코드로만 합류) · already_member · already_pending · request_cooldown(처리된 요청 뒤 30분 안 재요청 · 사용자 결정 11-11 · 처음엔 10분).
 create or replace function public.request_space_join(p_token text)
 returns uuid
 language plpgsql security definer set search_path = public as $$
@@ -195,10 +195,11 @@ begin
               where r.space_id = l.unit_id and r.user_id = v_uid and r.status = 'pending') then
     raise exception 'already_pending';
   end if;
-  -- 처리된 요청(거절·수락 뒤 내보내짐)에서 10분 안에는 다시 못 넣는다(주인에게 같은 알림이 몰리지 않게 · 알림사건 N7 ⑧).
+  -- 처리된 요청(거절·수락 뒤 내보내짐)에서 30분 안에는 다시 못 넣는다(주인에게 같은 알림이 몰리지 않게 · 알림사건 N7 ⑧).
+  --   30분 = 사용자 결정(11-11 · CSO: 10분이면 거절당한 사람이 10분마다 알림을 보낼 수 있었다).
   --   틀린 시도가 아니므로 코드 잠금(too_many_attempts)과 다른 코드를 쓴다.
   if exists (select 1 from public.space_join_requests r
-              where r.space_id = l.unit_id and r.user_id = v_uid and r.created_at > now() - interval '10 minutes') then
+              where r.space_id = l.unit_id and r.user_id = v_uid and r.created_at > now() - interval '30 minutes') then
     raise exception 'request_cooldown';
   end if;
 

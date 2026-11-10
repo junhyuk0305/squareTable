@@ -1303,7 +1303,12 @@ ${chk('수락 뒤 요청 목록 0', 'ok|0', as('P', `select count(*)::text from 
 ${chk('R2 요청 됨', 'ok|true', req('R2', TK))}
 ${chk('주인이 거절', 'ok|done', decide('P', 'R2', false))}
 ${chk('거절하면 멤버 아님', '0', svc(`select count(*) from public.unit_members where unit_id = ${q(S6)} and user_id = ${q(V.R2)}`))}
-${chk('거절 뒤 10분 안 재요청 거절', 'err|request_cooldown', req('R2', TK, false))}
+${chk('거절 뒤 바로 재요청 거절', 'err|request_cooldown', req('R2', TK, false))}
+-- 재요청 대기 = 30분(사용자 결정 11-11 · 예전 10분). 요청 시각을 당겨 경계를 잰다.
+update public.space_join_requests set created_at = now() - interval '20 minutes' where space_id = ${q(S6)} and user_id = ${q(V.R2)};
+${chk('거절 뒤 20분이어도 재요청 거절(30분 대기)', 'err|request_cooldown', req('R2', TK, false))}
+update public.space_join_requests set created_at = now() - interval '31 minutes' where space_id = ${q(S6)} and user_id = ${q(V.R2)};
+${chk('거절 뒤 31분이면 재요청 됨', 'ok|true', req('R2', TK, false))}
 ${chk('R3 요청 됨', 'ok|true', req('R3', TK))}
 delete from public.space_entry_allowlist where user_id = ${q(V.R3)};
 ${chk('요청한 사람 입구가 닫히면 수락 거절', 'err|space_closed', decide('P', 'R3', true))}

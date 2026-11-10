@@ -39,6 +39,7 @@ const MESSAGES: Record<string, string> = {
   already_proposed: '이미 보낸 노하우예요. 사장님 승인을 기다리고 있어요.',
   suggestion_not_pending: '이미 처리한 제안이에요.',
   too_many_entries: '한 번에 50개까지 보낼 수 있어요.',
+  too_many_pending: '사장님이 볼 노하우가 50개 쌓였어요. 사장님이 확인한 뒤 다시 보내 주세요.',
   not_authenticated: '다시 로그인해 주세요.',
   // ── 교육 링크(0400) ── not_space_owner · not_manager · invalid_argument 는 위 문구를 같이 쓴다.
   //   EDU_LINK_ENTRY_DENIED 처럼 userError.ts 에 있는 코드는 그쪽 문구를 쓴다.
@@ -53,7 +54,7 @@ const MESSAGES: Record<string, string> = {
   already_pending: '이미 합류를 신청했어요. 공간 주인의 승인을 기다리고 있어요.',
   request_not_pending: '이미 처리한 요청이에요.',
   too_many_attempts: '여러 번 틀렸어요. 잠시 뒤 다시 시도해 주세요.',
-  request_cooldown: '방금 처리된 요청이에요. 10분 뒤에 다시 신청할 수 있어요.',
+  request_cooldown: '방금 처리된 요청이에요. 30분 뒤에 다시 신청할 수 있어요.',
   space_owner_cannot_leave: '공간 주인은 나갈 수 없어요. 공간을 지우면 멤버도 함께 나가요.',
 };
 

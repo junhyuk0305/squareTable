@@ -158,6 +158,19 @@ ${call('옛 사장 앱 승인(status·resulting_entry_id 만 update)', 'D', `wit
 ${val('옛 앱 승인 = 승인됨 · 검토한 사람 사장(0319 도장)', `select status || '/' || reviewed_by from public.playbook_suggestions where id = ${sugOf(8)}`, `approved/${U.D}`)}
 ${call('51개 고르면 거절', 'A', `select count(*) from public.propose_to_store(${q(SP)}, ${q(X)}, (select array_agg('x' || g) from generate_series(1, 51) g))`, 'err:too_many_entries')}
 
+-- 받는 매장 대기 공간 제안 상한 50(사용자 결정 11-11). 대기 수를 가짜 행으로 49 까지 채우고 2개 → 거절 · 1개 → 됨. 끝나면 지운다.
+insert into public.playbook_entries(id, unit_id, category, title, status, creator_role, square, photos) values
+  (${q(e(11))}, ${q(SP)}, '서비스', '상한 노하우 11', 'published', 'space_owner', '{}'::jsonb, '{}'),
+  (${q(e(12))}, ${q(SP)}, '서비스', '상한 노하우 12', 'published', 'space_owner', '{}'::jsonb, '{}');
+insert into public.playbook_suggestions(id, unit_id, kind, proposer_id, text, status)
+  select 'qa_slcap_' || g || '_${rnd}', ${q(X)}, 'from_space', ${q(U.A)}, 'x', 'pending'
+    from generate_series(1, greatest(0, 49 - (select count(*) from public.playbook_suggestions
+                                              where unit_id = ${q(X)} and kind = 'from_space' and status = 'pending'))) g;
+${val('대기 공간 제안 49개로 채움', `select count(*) from public.playbook_suggestions where unit_id = ${q(X)} and kind = 'from_space' and status = 'pending'`, '49')}
+${call('대기 49 + 2개 → 상한 거절', 'A', prop([e(11), e(12)]), 'err:too_many_pending')}
+${call('대기 49 + 1개 → 됨(50)', 'A', prop([e(11)]), 'ok|' + '*')}
+delete from public.playbook_suggestions where unit_id = ${q(X)} and (id like 'qa_slcap_%' or source_entry_id in (${q(e(11))}, ${q(e(12))}));
+
 -- 공간 사람이 매장 제안 목록을 못 본다(M 은 X 직원 · 남의 제안)
 ${call('남의 제안 안 보임(매장 직원 M)', 'M', `select count(*) from public.playbook_suggestions where source_unit_id = ${q(SP)}`, 'ok|0')}
 rollback;
