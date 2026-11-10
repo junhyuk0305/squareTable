@@ -4887,3 +4887,74 @@ export async function closeEduLink(linkId: string): Promise<DbResult<true>> {
   }
   return { data: true, error: null };
 }
+
+// ── 공간 합류 · 멤버 요청 · 내보내기 · 나가기(0460 · 4번 덩이) ──────────────────
+// 오류 message 첫 낱말 = 코드. 문구는 src/lib/space/errors.ts 의 spaceErrorMessage 로 바꾼다.
+
+/** 공간 멤버 한 줄. 이름과 역할만(전화번호 없음). */
+export type SpaceMember = { userId: string; name: string; role: 'space_owner' | 'space_member'; joinedAt: string };
+/** 주인이 보는 대기 요청 한 줄. */
+export type SpaceJoinRequest = { requestId: string; userId: string; name: string; requestedAt: string };
+
+async function spaceRpc<T>(fn: string, args: Record<string, unknown>, tag: string): Promise<DbResult<T>> {
+  const { data, error } = await supabase.rpc(fn, args);
+  if (error) {
+    reportError(`db.rpc:${tag}`, error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: data as T, error: null };
+}
+
+/** 초대코드로 바로 멤버. data null + error null = 없는 코드(매장 코드 포함 · 서버가 틀린 시도로 센다).
+ *  코드 = space_closed · PHONE_NOT_VERIFIED · too_many_attempts · space_not_accepting · already_member. */
+export async function joinSpaceByCode(code: string): Promise<DbResult<{ spaceId: string; spaceName: string }>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const r = await spaceRpc<any[]>('join_space_by_code', { p_code: code }, 'joinSpaceByCode');
+  if (r.error) return { data: null, error: r.error };
+  const row = r.data?.[0];
+  return { data: row ? { spaceId: row.space_id, spaceName: row.space_name } : null, error: null };
+}
+
+/** 링크로 온 사람의 멤버 요청. 코드 = space_closed · PHONE_NOT_VERIFIED · link_closed · feature_off · already_member · already_pending · request_cooldown. */
+export async function requestSpaceJoin(token: string): Promise<DbResult<true>> {
+  if (!HAS_SUPABASE) return { data: true, error: null };
+  const r = await spaceRpc<string>('request_space_join', { p_token: token }, 'requestSpaceJoin');
+  return r.error ? { data: null, error: r.error } : { data: true, error: null };
+}
+
+/** 주인이 보는 대기 요청. 코드 = not_space_owner. */
+export async function fetchSpaceJoinRequests(spaceId: string): Promise<DbResult<SpaceJoinRequest[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const r = await spaceRpc<any[]>('space_pending_requests', { p_space: spaceId }, 'fetchSpaceJoinRequests');
+  if (r.error) return { data: null, error: r.error };
+  return { data: (r.data ?? []).map((x) => ({ requestId: x.request_id, userId: x.user_id, name: x.name, requestedAt: x.requested_at })), error: null };
+}
+
+/** 요청 수락·거절. 코드 = not_space_owner · request_not_pending · space_closed. */
+export async function decideSpaceJoinRequest(requestId: string, accept: boolean): Promise<DbResult<true>> {
+  if (!HAS_SUPABASE) return { data: true, error: null };
+  const r = await spaceRpc<null>('decide_space_join_request', { p_request: requestId, p_accept: accept }, 'decideSpaceJoinRequest');
+  return r.error ? { data: null, error: r.error } : { data: true, error: null };
+}
+
+/** 주인이 멤버를 내보낸다. 코드 = not_space_owner · space_owner_cannot_leave · not_space_member. */
+export async function removeSpaceMember(spaceId: string, userId: string): Promise<DbResult<true>> {
+  if (!HAS_SUPABASE) return { data: true, error: null };
+  const r = await spaceRpc<null>('space_remove_member', { p_space: spaceId, p_user: userId }, 'removeSpaceMember');
+  return r.error ? { data: null, error: r.error } : { data: true, error: null };
+}
+
+/** 멤버가 스스로 나간다. 주인은 공간 삭제로. 코드 = space_owner_cannot_leave · not_space_member. */
+export async function leaveSpace(spaceId: string): Promise<DbResult<true>> {
+  if (!HAS_SUPABASE) return { data: true, error: null };
+  const r = await spaceRpc<null>('leave_space', { p_space: spaceId }, 'leaveSpace');
+  return r.error ? { data: null, error: r.error } : { data: true, error: null };
+}
+
+/** 그 공간 멤버(주인 먼저). 코드 = not_space_member. */
+export async function fetchSpaceMembers(spaceId: string): Promise<DbResult<SpaceMember[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const r = await spaceRpc<any[]>('space_members', { p_space: spaceId }, 'fetchSpaceMembers');
+  if (r.error) return { data: null, error: r.error };
+  return { data: (r.data ?? []).map((x) => ({ userId: x.user_id, name: x.name, role: x.role, joinedAt: x.joined_at })), error: null };
+}
