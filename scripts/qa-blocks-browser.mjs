@@ -617,16 +617,18 @@ async function main() {
     check('B5-8 ② 대기 중엔 코드 입력을 숨긴다', !(await see(ph, '코드가 없으신가요')));
     await shot(ph, '06-junior-hub-2-pending');
 
-    // ③ 매장 있음 — 코드 입력은 접힌 한 줄로 강등. 펼치면 아래로 열린다.
+    // ③ 매장 있음 — 코드 입력을 접지 않는다. 매장 목록 아래 '매장 추가' 섹션 + ⓘ(2026-11-10 W3 ④-9).
     const { error: apErr2 } = await owner.rpc('approve_member', { p_uid: hubId });
     if (apErr2) throw new Error('approve_member(hub): ' + apErr2.message);
     await ph.reload({ waitUntil: 'domcontentloaded' });
     await ph.waitForTimeout(2500);
     check('B5-9 ③ 매장 카드', await see(ph, 'QA블록카페'));
-    check('B5-10 ③ 코드 입력이 접혀 있다', !(await see(ph, '코드가 없으신가요')));
-    await ph.getByLabel('코드로 매장 추가 — 초대코드 입력', { exact: true }).last().dispatchEvent('click');
+    check('B5-10 ③ 코드 입력이 늘 보인다(접힌 줄 없음)',
+      (await ph.locator('[data-testid="hub-add-store"] input[maxlength="6"]').count()) === 1 &&
+      (await ph.getByLabel('코드로 매장 추가 — 초대코드 입력', { exact: true }).count()) === 0);
+    await ph.getByLabel('매장 추가 설명 보기', { exact: true }).last().dispatchEvent('click');
     await ph.waitForTimeout(700);
-    check('B5-11 ③ 펼치면 코드 입력이 열린다', await see(ph, '코드가 없으신가요'));
+    check('B5-11 ③ ⓘ를 누르면 설명 시트가 뜬다', await see(ph, '초대코드 6자리를 받아 넣으세요'));
     await shot(ph, '07-junior-hub-3-joined');
 
     // ═══════════ B10 카드 3연속 해체 6화면 — 형태를 DOM에서 실측 ═══════════

@@ -498,7 +498,7 @@ export function OwnerKnowhowBrowse({
               // 기본은 접어 두고 '더 보기'로 편다 — 아래 목록·찾기 바가 첫 화면 안으로 올라온다.
               maxGroups={4}
               legend={KNOWHOW_LEGEND}
-              hint="상자 하나 = 노하우 하나 · 카테고리를 누르면 아래 목록이 걸러져요"
+              hint="상자 하나가 노하우 하나예요. 카테고리 이름을 누르면 아래 목록이 걸러져요."
               onPressCell={onSelect}
               onPressGroup={(name) => selectCat(name === getSectionMeta(UNSECTIONED).label ? UNSECTIONED : name)}
             />

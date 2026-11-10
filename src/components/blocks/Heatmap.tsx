@@ -6,6 +6,7 @@ import { BrandColors, InkColors, TextColor } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
 import { Type } from '@/lib/theme/type';
+import { InfoDot } from '@/components/InfoDot';
 
 /**
  * 규모 3단계(퀴즈 개발계획 §10-9 · 데모 §2-11) — 열 수는 개수로 자동.
@@ -73,7 +74,7 @@ export function Heatmap({
   onPressCell,
   onPressGroup,
   legend = QUIZ_LEGEND,
-  hint = '상자 하나 = 노하우 하나 · 길게 누르면 이름이 보여요',
+  hint = '상자 하나가 노하우 하나예요. 길게 누르면 이름이 보이고, 누르면 그 노하우로 가요.',
   maxGroups,
 }: {
   /** 머리줄 — 큰 값("41" + "%") · 제목("직원이 아는 노하우") · 우측 보조("58개"·"이번 주 ↑14칸"). */
@@ -83,7 +84,7 @@ export function Heatmap({
   /** 카테고리 이름 탭 + 3단계(접힘)의 "+n개 더 · 이 카테고리 보기 ›". 없으면 글자만 남는다. */
   onPressGroup?: (name: string) => void;
   legend?: HeatLegend;
-  /** 피크 줄의 평소 안내문. */
+  /** 머리줄 제목 옆 ⓘ 의 설명(2026-11-10 W3 ④-21 · 늘 보이는 안내 줄 대신). */
   hint?: string;
   /** 이 개수까지만 카테고리를 펴고 나머지는 접는다. 없으면 전부 편다(노하우 탭은 그대로). */
   maxGroups?: number;
@@ -113,10 +114,12 @@ export function Heatmap({
           {head.unit ? <Text style={styles.bigUnit}>{head.unit}</Text> : null}
         </Text>
         <Text style={styles.headTitle} numberOfLines={1}>{head.title}</Text>
+        <InfoDot title={head.title} body={hint} />
         {head.aside ? <Text style={styles.aside} numberOfLines={1}>{head.aside}</Text> : null}
       </View>
+      {/* 피크 줄 — 길게 누르거나 호버할 때만 글자가 뜬다. 자리는 늘 지킨다(minHeight · 격자가 밀리지 않게). */}
       <Text style={styles.peek} numberOfLines={1}>
-        {peek ? `${peek.title} — ${peek.status}` : hint}
+        {peek ? `${peek.title} — ${peek.status}` : ''}
       </Text>
 
       {shownGroups.map((g) => {
@@ -245,8 +248,9 @@ const styles = StyleSheet.create({
   // 대표 숫자 = Type.numHero(32/40/900 · 2026-11-02. 옛 28).
   big: { ...Type.numHero, color: InkColors.ink },
   bigUnit: { fontSize: 15, fontWeight: '800', color: TextColor.secondary, letterSpacing: 0 },
-  headTitle: { flex: 1, minWidth: 0, fontSize: Type.desc.fontSize, lineHeight: 19, fontWeight: '800', color: InkColors.ink2 },
-  aside: { ...Type.tag, lineHeight: 16, fontWeight: '800', color: BrandColors.goodText },
+  // 제목은 ⓘ 가 바로 옆에 붙게 줄어들기만 한다(flex 1 이면 ⓘ 가 오른쪽 끝으로 밀린다). 오른쪽 보조는 marginLeft auto.
+  headTitle: { flexShrink: 1, minWidth: 0, fontSize: Type.desc.fontSize, lineHeight: 19, fontWeight: '800', color: InkColors.ink2 },
+  aside: { ...Type.tag, marginLeft: 'auto', lineHeight: 16, fontWeight: '800', color: BrandColors.goodText },
   // 피크·그룹 라벨·범례는 꼬리표(보조)라 본문 15sp 하한 대상이 아니다(simplicity-voice §4).
   peek: { ...Type.micro, marginTop: Space.xs, minHeight: PEEK_MIN_H, lineHeight: PEEK_MIN_H, fontWeight: '700', color: InkColors.ink2 },
   group: { marginTop: Space.md },

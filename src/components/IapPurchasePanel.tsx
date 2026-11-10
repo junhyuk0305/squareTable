@@ -93,7 +93,6 @@ export function IapPurchasePanel({
   const paidUntil = useSessionStore((s) => s.paidUntil);
   const [offers, setOffers] = useState<IapOffer[]>([]);
   const [picked, setPicked] = useState<number>(0); // 고른 매장 수(0 = 아직 목록이 없음)
-  const [moreOpen, setMoreOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   // 줄이기 — 닫을 매장으로 체크한 것.
   const [release, setRelease] = useState<string[]>([]);
@@ -392,28 +391,12 @@ export function IapPurchasePanel({
         </View>
       </Appear>
 
-      {/* ③ 매장 수 — 가진 수를 기본으로 제시하고 나머지는 접는다(5개를 다 묻지 않는다). */}
+      {/* ③ 매장 수 — 가진 수를 기본으로 고른 채 선택지를 전부 보인다(2026-11-10 W3 ④-16 · 접지 않는다).
+          고른 줄이 곧 요약이라 따로 요약 줄을 두지 않는다. */}
       {!!selected && (
         <Appear delay={stagger(3)}>
           <View style={styles.card}>
-            <View style={styles.pickRow}>
-              <Text style={styles.pickTitle}>매장 {selected.storeCount}개</Text>
-              <Text style={styles.pickPrice}>{selected.priceString} / 월</Text>
-            </View>
-
-            {offers.length > 1 && (
-              <Pressable
-                onPress={() => setMoreOpen((v) => !v)}
-                accessibilityRole="button"
-                accessibilityState={{ expanded: moreOpen }}
-                style={({ pressed }) => [styles.moreBtn, pressed && { opacity: 0.7 }]}
-              >
-                <Text style={styles.moreText}>매장 수 바꾸기</Text>
-                <Ionicons name={moreOpen ? 'chevron-up' : 'chevron-down'} size={16} color={InkColors.ink3} />
-              </Pressable>
-            )}
-            {moreOpen && (
-              <Collapse style={styles.moreList}>
+              <View style={styles.moreList}>
                 {offers.map((o) => {
                   const on = o.storeCount === picked;
                   const current = o.storeCount === owned;
@@ -423,7 +406,6 @@ export function IapPurchasePanel({
                       onPress={() => {
                         setPicked(o.storeCount);
                         setRelease([]);
-                        setMoreOpen(false);
                       }}
                       accessibilityRole="button"
                       accessibilityState={{ selected: on }}
@@ -442,8 +424,7 @@ export function IapPurchasePanel({
                     </Pressable>
                   );
                 })}
-              </Collapse>
-            )}
+              </View>
 
             {/* C1 늘리기 — 오늘 결제·오늘부터 적용. 무엇이 어떻게 되는지 버튼 위에서 말한다. */}
             {isUp && (
@@ -637,9 +618,6 @@ const styles = StyleSheet.create({
   diffTextOn: { color: InkColors.ink, fontWeight: '600' },
 
   // 매장 수 고르기
-  pickRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Space.md },
-  pickTitle: { fontSize: 17, fontWeight: '700', color: InkColors.ink },
-  pickPrice: { fontSize: 17, fontWeight: '900', color: InkColors.ink },
   moreBtn: {
     flexDirection: 'row',
     alignItems: 'center',

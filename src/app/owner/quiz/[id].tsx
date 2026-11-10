@@ -56,6 +56,8 @@ import { Appear, stagger } from '@/components/Appear';
 import { BottomSheet } from '@/components/BottomSheet';
 import { SegmentTabs, type SegmentItem } from '@/components/SegmentTabs';
 import { EmptyState } from '@/components/EmptyState';
+import { InfoDot } from '@/components/InfoDot';
+import { Section } from '@/components/Screen';
 import { ProgressRing } from '@/components/blocks/ProgressRing';
 import { ProgressPill } from '@/components/blocks/ProgressPill';
 import { QuizEditorSheet } from '@/components/owner/quiz/QuizEditorSheet';
@@ -543,6 +545,15 @@ export default function QuizDetailScreen() {
           />
         ) : (
           <>
+            <Section
+              title="담긴 문항"
+              titleAccessory={
+                <InfoDot
+                  title="담긴 문항"
+                  body="문항을 누르면 미리보기·고치기·빼기를 할 수 있어요. 뺀 문항은 이미 푼 사람의 결과에 그대로 남아요."
+                />
+              }
+            >
             <View style={st.listCard}>
               {items.map((q, i) => {
                 const s = itemAnswers(quizAnswers, q.id);
@@ -580,11 +591,15 @@ export default function QuizDetailScreen() {
                     ) : (
                       <ProgressPill text={s.answers === 0 ? '—' : '괜찮음'} tone={s.answers === 0 ? 'neutral' : 'done'} />
                     )}
+                    {/* 줄을 누르면 시트가 뜬다는 표시(2026-11-10 W3 ④-13). 누를 수 없는 아이콘이다 — 줄 전체가 버튼 하나라
+                        안에 버튼을 또 두지 않는다(RNW 중첩 button). 머리 ⋯ 와 헷갈리지 않게 화살표를 쓴다. */}
+                    <Ionicons name="chevron-forward" size={18} color={InkColors.ink3} />
                   </Pressable>
                   </Appear>
                 );
               })}
             </View>
+            </Section>
 
             {/* C2 되먹임 — 우리만의 차별점. 오답률을 직원 평가가 아니라 **노하우 결함 신호**로 뒤집는다. */}
             {items

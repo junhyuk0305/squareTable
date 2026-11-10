@@ -12,6 +12,8 @@ import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { CardStyles } from '@/lib/theme/card';
 import { Type } from '@/lib/theme/type';
 import { SectionLabel } from '@/components/SectionLabel';
+import { InfoDot } from '@/components/InfoDot';
+import { SectionStack } from '@/components/Screen';
 import { Wordmark } from '@/components/Wordmark';
 import { Appear, stagger } from '@/components/Appear';
 import { PhoneVerifyBlock } from '@/components/PhoneVerifyBlock';
@@ -51,9 +53,6 @@ export default function JuniorHub() {
   const [phoneReady, setPhoneReady] = useState(false);
   const sessionPhone = useSessionStore((s) => s.phone);
   const updateProfile = useSessionStore((s) => s.updateProfile);
-  /** 매장이 이미 있을 때 코드 입력을 접어두는 상태. 매장 0개면 이 값과 무관하게 항상 펼쳐진다.
-   *  초대 링크로 코드를 들고 왔으면 펼친 채 연다 — 다른 매장 직원도 채워진 코드를 바로 본다(2026-10-29 결정 5). */
-  const [addOpen, setAddOpen] = useState(code.length > 0);
 
   // 내 가게 목록 — 단일매장이라 연결 시 1개. 멀티매장 전환 시 여기만 배열로 바뀐다.
   const stores = unitId ? [{ id: unitId, name: storeName || '내 매장' }] : [];
@@ -67,14 +66,6 @@ export default function JuniorHub() {
   };
 
   const focusCode = () => inputRef.current?.focus();
-
-  // 접힌 줄을 펼치면 곧바로 입력 대기 상태로 — 펼치고 다시 탭하게 만들지 않는다.
-  const openAdd = () => {
-    setAddOpen((v) => {
-      if (!v) setTimeout(focusCode, 120);
-      return !v;
-    });
-  };
 
   const join = async () => {
     if (code.length < CODE_LEN) {
@@ -115,7 +106,7 @@ export default function JuniorHub() {
     setCode('');
   };
 
-  // 코드 입력 본문 — 상태 ①(매장 0개)과 ③(펼친 '매장 추가하기')이 **같은 한 벌**을 쓴다.
+  // 코드 입력 본문 — 상태 ①(매장 0개)과 ③('매장 추가' 섹션)이 **같은 한 벌**을 쓴다.
   // 컴포넌트로 쪼개지 않는다: 새 컴포넌트 경계를 만들면 상태가 바뀔 때 TextInput이 리마운트되며 포커스가 풀린다.
   const codeEntry = (
     <View style={styles.codeCard}>
@@ -149,10 +140,15 @@ export default function JuniorHub() {
         />
       )}
       {err && <Text style={styles.err}>{err}</Text>}
+      {/* 코드 6자를 다 넣기 전에는 흐리게 둔다(2026-11-10 W3 ④-9). 눌러도 막지 않는다 — 누르면 아래 err 가 이유를 말한다. */}
       <Pressable
         disabled={busy}
         onPress={join}
-        style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}
+        style={({ pressed }) => [
+          styles.primary,
+          pressed && { opacity: 0.88 },
+          (busy || code.length < CODE_LEN) && { opacity: 0.6 },
+        ]}
       >
         {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>합류하기</Text>}
       </Pressable>
@@ -230,11 +226,13 @@ export default function JuniorHub() {
               ② 승인 대기 = C 몰입형 — 기다리는 것 말곤 할 게 없다. 대기 카드 하나.
                  (매장이 이미 있는 직원의 추가 신청도 같은 카드다 — 대기의 SSOT 는 profiles.pending_unit_id 이고
                   매장 유무와 무관하다. 그 아래 ③의 매장 목록은 그대로 두고, 코드 입력만 접는다.)
-              ③ 매장 있음 = A 조합형 — 매장 고르기. 코드 입력은 '＋ 매장 추가하기' 한 줄로 접는다.
+              ③ 매장 있음 = A 조합형 — 매장 고르기 + 그 아래 '매장 추가' 섹션(코드 입력을 접지 않는다 · 2026-11-10).
             옛 판본은 셋을 한 레이아웃으로 그려서 ①에 "코드를 넣어라"가 세 번(히어로 배너·빈 카드·
             입력 섹션) 나왔고, 그중 히어로의 [코드 입력]은 화면 이동이 아니라 포커스만 주는 가짜 버튼이었다.
             ③에서는 이미 연결된 직원에게 코드 입력이 상시 노출됐다. */}
         <Appear delay={stagger(2)}>
+        <SectionStack>
+        {(pendingUnitId || hasStore) && (
         <View style={styles.section}>
           {(pendingUnitId || hasStore) && <SectionLabel title="내 매장" />}
 
@@ -280,28 +278,28 @@ export default function JuniorHub() {
                 <Ionicons name="chevron-forward" size={18} color={InkColors.ink3} />
               </Pressable>
             ))}
-
-          {/* ③ 매장 있음 — 코드 입력은 접힌 한 줄. 펼침은 아래로(집 스타일). */}
-          {!pendingUnitId && hasStore && (
-            <Pressable
-              onPress={openAdd}
-              style={({ pressed }) => [styles.addRow, pressed && { opacity: 0.7 }]}
-              accessibilityRole="button"
-              accessibilityState={{ expanded: addOpen }}
-              accessibilityLabel="코드로 매장 추가 — 초대코드 입력"
-            >
-              <Ionicons name="add" size={18} color={InkColors.ink2} />
-              {/* 펼치면 나오는 Primary가 '합류하기'라 라벨을 다르게 둔다 —
-                  같은 말이 위아래로 겹치면 어느 쪽을 눌러야 하는지 흐려진다. */}
-              <Text style={styles.addRowText}>코드로 매장 추가</Text>
-              <Ionicons name={addOpen ? 'chevron-up' : 'chevron-down'} size={16} color={InkColors.ink3} />
-            </Pressable>
-          )}
-
-          {/* ① 매장 0개면 곧바로 · ③ 매장 있으면 펼쳤을 때만 — 코드 입력 본문은 한 벌뿐이다(SSOT). */}
-          {!pendingUnitId && (!hasStore || addOpen) && codeEntry}
           </View>
         </View>
+        )}
+
+        {/* 코드 입력 본문은 한 벌이고 한 자리에서만 그린다(SSOT).
+            ① 매장 0개 — 코드 입력이 곧 이 화면의 전부다.
+            ③ 매장 있음 — 접지 않고 '매장 추가' 섹션으로 늘 보인다(2026-11-10 W3 ④-9 · 숨기지 않고 ⓘ로 설명). */}
+        {!pendingUnitId && (hasStore ? (
+          <View style={styles.section} testID="hub-add-store">
+            <SectionLabel
+              title="매장 추가"
+              titleAccessory={
+                <InfoDot
+                  title="매장 추가"
+                  body="다른 매장에서도 일하면 그 매장 사장님께 초대코드 6자리를 받아 넣으세요. 코드는 사장님 화면 설정 맨 위에 있어요."
+                />
+              }
+            />
+            {codeEntry}
+          </View>
+        ) : codeEntry)}
+        </SectionStack>
         </Appear>
 
         {/* 기능 소개 캐러셀(3장)은 2026-08-06에 제거했다.
@@ -362,22 +360,6 @@ const styles = StyleSheet.create({
   storeIcon: { width: 40, height: 40, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
   storeName: { ...Type.body, fontWeight: '800' },
   storeMeta: { ...Type.tag, color: TextColor.secondary, marginTop: 2 },
-
-  // '＋ 매장 추가하기' — 매장이 이미 있을 때 코드 입력을 접어두는 줄.
-  // 매장 카드와 형태를 일부러 다르게 한다(카드가 아니라 점선 행) — 같은 형태가 이어지면 목록으로 읽힌다.
-  addRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    minHeight: 48,
-    paddingHorizontal: Space.lg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    // 회색 바탕(Surface.screen) 위 점선은 line(#EAECEF)이면 안 보인다 → lineStrong.
-    borderColor: InkColors.lineStrong,
-    borderStyle: 'dashed',
-  },
-  addRowText: { ...Type.body, flex: 1, fontWeight: '800', color: TextColor.secondary },
 
   pendingCard: { ...CardStyles.list, gap: Space.md },
   pendingHead: { flexDirection: 'row', alignItems: 'center', gap: Space.md },

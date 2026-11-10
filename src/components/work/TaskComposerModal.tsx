@@ -165,7 +165,8 @@ function TaskComposerBody({
   // 화면 어휘는 '업무 시간', 코드·DB 이름은 remindAt/remind_at 유지(워딩 규칙: 개명 대상은 보이는 문자열뿐).
   const [remindOn, setRemindOn] = useState(draft?.remindOn ?? !!editTemplate?.remindAt);
   const [remindAt, setRemindAt] = useState(draft?.remindAt ?? editTemplate?.remindAt ?? '');
-  const [remindInfo, setRemindInfo] = useState(false); // ⓘ 인라인 펼침
+  // ⓘ 인라인 펼침 — 어느 칸의 설명인가. 시트 안이라 InfoDot(바텀시트)을 못 써서 겹침 창 하나를 같이 쓴다(2026-11-10 ④-18).
+  const [remindInfo, setRemindInfo] = useState<'remind' | 'knowhow' | null>(null);
   // 삭제는 되돌릴 수 없어 한 번 묻는다. 확인창(Modal)을 시트(Modal) 위에 띄우지 않고 시트 아래쪽에서 묻는다(iOS · ShiftQuickSheet 와 같은 방식).
   const [delAsk, setDelAsk] = useState(false);
   const remindValid = !remindOn || /^([01]\d|2[0-3]):[0-5]\d$/.test(remindAt);
@@ -205,8 +206,6 @@ function TaskComposerBody({
     if (!q) return [] as PlaybookEntry[];
     return searchPlaybook(q, publishedEntries, { topK: 6, threshold: 0 }).candidates.map((c) => c.entry);
   }, [khQuery, publishedEntries]);
-  // 직접 검색은 기본 접힘 — '+ 노하우 검색해서 첨부'를 눌러 연다(제목 기반 자동 추천이 1차 경로).
-  const [khOpen, setKhOpen] = useState(false);
   // 할일 제목으로 자동 추천 — 제목을 적으면 비슷한 기존 노하우가 바로 뜬다(이미 선택한 건 제외).
   const recommended = useMemo(() => {
     const q = text.trim();
@@ -451,7 +450,7 @@ function TaskComposerBody({
                 // 공용 InfoDot 은 안 쓴다 — 이 화면 자체가 바텀시트(Modal)라 그 위에 Modal 을 또 여는 꼴이 된다.
                 // 대신 시트 안에 겹쳐 띄운다(아래 infoOverlay).
                 <Pressable
-                  onPress={() => setRemindInfo(true)}
+                  onPress={() => setRemindInfo('remind')}
                   accessibilityRole="button"
                   accessibilityLabel="업무 시간 설명 보기"
                   // RN-web 은 hitSlop 을 무시한다 — 상자 자체를 44 로.
@@ -521,7 +520,20 @@ function TaskComposerBody({
             )}
 
             {isOwner && !routineMode && (
-              <Field label="관련 노하우 (선택)">
+              <Field
+                label="관련 노하우 (선택)"
+                info={
+                  // 업무 시간 ⓘ 와 같은 겹침 창을 쓴다(시트 안이라 InfoDot 불가).
+                  <Pressable
+                    onPress={() => setRemindInfo('knowhow')}
+                    accessibilityRole="button"
+                    accessibilityLabel="관련 노하우 설명 보기"
+                    style={({ pressed }) => [s.infoBtn, pressed && { opacity: 0.6 }]}
+                  >
+                    <Ionicons name="information-circle-outline" size={15} color={InkColors.ink3} />
+                  </Pressable>
+                }
+              >
                 {selectedEntries.length > 0 && (
                   <View style={s.khChips}>
                     {selectedEntries.map((e) => (
@@ -550,18 +562,7 @@ function TaskComposerBody({
                     ))}
                   </View>
                 )}
-                {!khOpen && (
-                  <Pressable
-                    onPress={() => { setKhOpen(true); revealScroll(); }}
-                    style={({ pressed }) => [s.khOpenBtn, pressed && { opacity: 0.7 }]}
-                    accessibilityRole="button"
-                    accessibilityLabel="노하우 검색해서 첨부"
-                  >
-                    <Ionicons name="add" size={16} color={InkColors.ink2} />
-                    <Text style={s.khOpenText}>노하우 검색해서 첨부</Text>
-                  </Pressable>
-                )}
-                {khOpen && (
+                {/* 검색칸은 늘 보인다(2026-11-10 W3 ④-18 · 접지 않는다). autoFocus 는 두지 않는다 — 시트를 열면 커서는 제목칸이다. */}
                 <View style={SearchStyles.box}>
                   <Ionicons name="search" size={SEARCH_ICON.size} color={SEARCH_ICON.color} />
                   <TextInput
@@ -571,11 +572,9 @@ function TaskComposerBody({
                     placeholder="노하우 검색해서 첨부"
                     placeholderTextColor={InkColors.ink3}
                     style={SearchStyles.input}
-                    autoFocus
                   />
                 </View>
-                )}
-                {khOpen && khQuery.trim().length > 0 && (
+                {khQuery.trim().length > 0 && (
                   <View style={s.khResults}>
                     {publishedEntries.length === 0 ? (
                       // 노하우 0개 매장(콜드스타트) — "매치 없음"이 아니라 "아직 등록 안 됨"으로 정직하게 구분.
@@ -670,14 +669,20 @@ function TaskComposerBody({
           </View>
 
           {remindInfo && (
-            <Pressable style={s.infoOverlay} onPress={() => setRemindInfo(false)} accessibilityLabel="설명 닫기">
+            <Pressable style={s.infoOverlay} onPress={() => setRemindInfo(null)} accessibilityLabel="설명 닫기">
               <View style={s.infoNote}>
-                <Text style={s.infoText}>
-                  정한 시간이 되면 앱이 꺼져 있어도 알림이 가요.{'\n'}
-                  ‘매장 전체’ 할일이면 그 시간에 근무 중인 직원에게 가요.{'\n'}
-                  담당자를 정했으면 그 담당자에게 가요.{'\n'}
-                  근무표에 그 시간 근무자가 없으면 매장 전원에게 가요.
-                </Text>
+                {remindInfo === 'knowhow' ? (
+                  <Text style={s.infoText}>
+                    붙인 노하우는 직원 할일 카드에 같이 보여요. 직원이 바로 열어 보고 이해 확인도 할 수 있어요.
+                  </Text>
+                ) : (
+                  <Text style={s.infoText}>
+                    정한 시간이 되면 앱이 꺼져 있어도 알림이 가요.{'\n'}
+                    ‘매장 전체’ 할일이면 그 시간에 근무 중인 직원에게 가요.{'\n'}
+                    담당자를 정했으면 그 담당자에게 가요.{'\n'}
+                    근무표에 그 시간 근무자가 없으면 매장 전원에게 가요.
+                  </Text>
+                )}
                 <Text style={s.infoClose}>알겠어요</Text>
               </View>
             </Pressable>
