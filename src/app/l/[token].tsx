@@ -25,7 +25,7 @@ import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Space, screenScrollStyle } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 
-const CLOSED: EduLinkInfo = { ok: false, failed: false, placeKind: null, placeName: '', title: '', entryCount: 0, expiresAt: null };
+const CLOSED: EduLinkInfo = { ok: false, failed: false, placeKind: null, placeName: '', ownerName: '', title: '', entryCount: 0, expiresAt: null };
 
 // failed = 우리 쪽 문제(네트워크·서버). 닫힌 링크와 한 화면으로 뭉치면 장애가 "닫힌 링크"로 보인다(/q 와 같은 이유).
 type Phase = 'loading' | 'ready' | 'failed';

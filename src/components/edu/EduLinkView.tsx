@@ -75,7 +75,7 @@ export function EduLinkView({ info, entries }: { info: EduLinkInfo; entries: Edu
       {entries.length === 0 ? (
         <Appear delay={stagger(2)}>
           <View style={EmptyStyles.box}>
-            <Text style={EmptyStyles.text}>{emptyLinkText(info.placeKind)}</Text>
+            <Text style={EmptyStyles.text}>{emptyLinkText(info.placeKind, info.ownerName)}</Text>
           </View>
         </Appear>
       ) : (

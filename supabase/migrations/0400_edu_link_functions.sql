@@ -55,10 +55,13 @@ revoke all on function public.edu_link_resolve(text) from public, anon, authenti
 -- ════════════════════════════════════════════════════════════════════════════
 -- ② 손님 첫 열기
 --   place_kind = 'space' | 'store' — 화면 단어를 고르는 데 쓴다(공간 주인 / 사장님).
+--   owner_name = 공간 주인 이름(빈 링크 문구 "민수님이 아직 담은 노하우가 없어요" · 단어 사전 emptyLink · 결정 121).
+--     매장은 null(문구가 "사장님이"로 고정). 받는 사람이 보는 정보로 처리방침 제4조에 적었다(v2.5).
 --   돌려주지 않는 것: 토큰, 링크 번호, 만든 사람, 자리 번호(0347 · quiz_link_open 과 같다).
 -- ════════════════════════════════════════════════════════════════════════════
+drop function if exists public.edu_link_open(text);  -- 돌려주는 칸이 바뀌면 create or replace 로는 안 된다(라이브 전 · 옛 앱 안 씀)
 create or replace function public.edu_link_open(p_token text)
-returns table (ok boolean, place_kind text, place_name text, title text, entry_count int, expires_at timestamptz)
+returns table (ok boolean, place_kind text, place_name text, owner_name text, title text, entry_count int, expires_at timestamptz)
 language plpgsql
 volatile
 security definer
@@ -70,7 +73,7 @@ declare
 begin
   l := public.edu_link_resolve(p_token);
   if l.id is null then
-    return query select false, null::text, null::text, null::text, 0, null::timestamptz;
+    return query select false, null::text, null::text, null::text, null::text, 0, null::timestamptz;
     return;
   end if;
 
@@ -85,7 +88,12 @@ begin
      and p.brand_hidden_at is null;
 
   return query
-    select true, u.kind, u.store_name, l.title, v_n, l.expires_at
+    select true, u.kind, u.store_name,
+           case when u.kind = 'space' then
+             (select nullif(btrim(p.name), '') from public.unit_members m join public.profiles p on p.id = m.user_id
+               where m.unit_id = u.id and m.role = 'space_owner' order by m.created_at limit 1)
+           end,
+           l.title, v_n, l.expires_at
       from public.units u where u.id = l.unit_id;
 end $$;
 revoke all on function public.edu_link_open(text) from public;

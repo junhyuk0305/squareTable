@@ -4558,12 +4558,14 @@ export type EduLinkInfo = {
   failed: boolean;
   placeKind: EduPlaceKind | null;
   placeName: string;
+  /** 공간 주인 이름(빈 링크 문구용). 매장 링크는 ''. */
+  ownerName: string;
   title: string;
   entryCount: number;
   expiresAt: string | null;
 };
 export async function openEduLink(token: string): Promise<EduLinkInfo> {
-  const none: EduLinkInfo = { ok: false, failed: false, placeKind: null, placeName: '', title: '', entryCount: 0, expiresAt: null };
+  const none: EduLinkInfo = { ok: false, failed: false, placeKind: null, placeName: '', ownerName: '', title: '', entryCount: 0, expiresAt: null };
   if (!HAS_SUPABASE) return { ...none, failed: true };
   const { data, error } = await supabase.rpc('edu_link_open', { p_token: token }).single();
   if (error) {
@@ -4577,6 +4579,7 @@ export async function openEduLink(token: string): Promise<EduLinkInfo> {
     failed: false,
     placeKind: row.place_kind === 'space' || row.place_kind === 'store' ? row.place_kind : null,
     placeName: row.place_name ?? '',
+    ownerName: row.owner_name ?? '',
     title: row.title ?? '',
     entryCount: Number(row.entry_count ?? 0),
     expiresAt: row.expires_at ?? null,
