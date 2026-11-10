@@ -1708,7 +1708,7 @@ export async function updateUnknownStatus(id: string, status: UnknownQuery['stat
   return writeStrict('updateUnknownStatus', supabase.from('unknown_queries').update({ status }).eq('id', id).select('id'));
 }
 
-export async function resolveUnknown(id: string, newEntryId: string, answeredBy?: string): Promise<Decision> {
+export async function resolveUnknown(id: string, newEntryId: string, answeredBy?: string, answerKind?: 'existing'): Promise<Decision> {
   if (!HAS_SUPABASE) return 'ok';
   // 질문 해결 표시가 0행이면 알바 챗봇 학습 루프가 조용히 끊긴다 → 반드시 실제 갱신 확인(P1-6).
   // answered_by(0071): 누가 해결했나(직원 즉시해결·사장 발행 공통) — "내가 답한 질문"·크레딧용.
@@ -1718,7 +1718,8 @@ export async function resolveUnknown(id: string, newEntryId: string, answeredBy?
     'resolveUnknown',
     supabase
       .from('unknown_queries')
-      .update({ status: 'resolved_with_entry', resolved_with_entry_id: newEntryId, ...(answeredBy ? { answered_by: answeredBy } : null) })
+      // answerKind: 공간 '있는 노하우로 답하기'만 넘긴다(3판 답 방식 existing). 매장 호출부는 안 넘겨 예전 요청 그대로.
+      .update({ status: 'resolved_with_entry', resolved_with_entry_id: newEntryId, ...(answeredBy ? { answered_by: answeredBy } : null), ...(answerKind ? { answer_kind: answerKind } : null) })
       .eq('id', id)
       .neq('status', 'resolved_with_entry')
       .select('id'),

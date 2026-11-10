@@ -96,7 +96,7 @@ export default function SpaceAnswer() {
       if (!qid || busy) return;
       setPicking(false);
       setBusy(true);
-      const d = await resolveUnknown(qid, entryId, userId ?? undefined);
+      const d = await resolveUnknown(qid, entryId, userId ?? undefined, 'existing');
       setBusy(false);
       if (d === 'ok') showToast(SPACE_KNOWHOW.answerPicked, 'good');
       else if (d === 'already') showToast(placeErrorMessage('not_pending'), 'warn');

@@ -83,6 +83,14 @@ try {
   // ── 방 셋업 ───────────────────────────────────────────────
   // 기본방: create_store 는 안 만든다(클라 useRoomStore.hydrate 가 사장 첫 진입 때 만든다).
   //         그래서 여기서 **그 클라 경로와 같은 id 규칙**으로 심는다.
+  //   ★0373: 전체방이 아직 없을 때 다른 번호로 첫 전체방을 넣는 것. 색인은 이걸 못 막고 정책(wr_insert)만 막는다.
+  {
+    const FAKE0 = `wr_p5_fakefirst_${s}`;
+    const { error } = await A.from('work_rooms').insert([{ id: FAKE0, unit_id: UNIT, name: '전체', is_default: true }]);
+    const { data: made } = await admin.from('work_rooms').select('id').eq('id', FAKE0).maybeSingle();
+    M('★전체방 없는 매장에 다른 번호로 첫 전체방 만들기(0373 정책)', '직원A', '거부', !made, made ? '만들어짐' : errStr(error));
+    if (made) await admin.from('work_rooms').delete().eq('id', FAKE0);
+  }
   //   ★0373: 사장 세션으로 심는다 = 앱이 실제로 타는 경로(wr_insert)가 열려 있는지도 같이 잰다.
   const DROOM = `room_main_${UNIT}`;
   {

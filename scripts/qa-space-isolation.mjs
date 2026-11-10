@@ -173,6 +173,16 @@ ${act('A 공간 주인 보내기 → 직접 답함 · sent · 답 글 한 번', 
      from public.unknown_queries u where u.id = 'qa_uq_C_${rnd}'`,
   'ok|answered_direct/sent/true/true/-/이렇게 하세요:true')}
 ${chk('A 같은 질문 두 번 보내기 → not_pending', 'A', `select (public.reply_unknown_query('qa_uq_C_${rnd}', 'x')).uq_id || (public.reply_unknown_query('qa_uq_C_${rnd}', 'y')).uq_id`, 'err:not_pending')}
+${noWho}
+-- ★0382: 보내기와 덮어쓰기를 한 호출 안에서 차례로(검사 묶음은 잰 뒤 되돌리므로 앞 보내기 결과가 남지 않는다).
+create function pg_temp.qa_send_then_overwrite(p_id text) returns text language plpgsql as $f$
+begin
+  perform public.reply_unknown_query(p_id, '먼저 보낸 답');
+  update public.unknown_queries set status = 'resolved_with_entry', answer_kind = 'existing' where id = p_id;
+  return (select status || '/' || coalesce(answer_kind, '-') from public.unknown_queries where id = p_id);
+end $f$;
+${st('A', null, SP)}
+${chk('★A 보낸 질문을 낡은 화면이 노하우 해결로 덮어쓰기 → not_pending(0382)', 'A', `select pg_temp.qa_send_then_overwrite('qa_uq_C_${rnd}')`, 'err:not_pending')}
 ${chk('A 빈 답 글 → invalid_argument', 'A', `select (public.reply_unknown_query('qa_uq_C_${rnd}', '   ')).uq_id`, 'err:invalid_argument')}
 ${chk('A 2001자 답 글 → invalid_argument', 'A', `select (public.reply_unknown_query('qa_uq_C_${rnd}', repeat('가', 2001))).uq_id`, 'err:invalid_argument')}
 ${chk('A 없는 질문 → question_not_found', 'A', `select (public.reply_unknown_query('qa_uq_none_${rnd}', 'x')).uq_id`, 'err:question_not_found')}

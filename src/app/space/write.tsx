@@ -184,7 +184,7 @@ export default function SpaceWrite() {
   const answerWithExisting = useCallback(
     async (entryId: string) => {
       if (!questionId) return;
-      const d = await resolveUnknown(questionId, entryId, userId ?? undefined);
+      const d = await resolveUnknown(questionId, entryId, userId ?? undefined, 'existing');
       if (d === 'ok') showToast(SPACE_KNOWHOW.answerPicked, 'good');
       else if (d === 'already') showToast(placeErrorMessage('not_pending'), 'warn');
       else {
