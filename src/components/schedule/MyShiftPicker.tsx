@@ -44,8 +44,8 @@ export function MyShiftPicker({
 
   return (
     <BottomSheet visible={true} onClose={onClose} sheetStyle={{ maxHeight: '75%', paddingBottom: 8 }}>
-          <Text style={s.title}>어떤 근무를 바꿀까요?</Text>
-          <Text style={s.sub}>앞으로 2달간 내 근무예요. 바꿀 근무를 고르면 대타·맞교환을 정할 수 있어요.</Text>
+          <Text style={s.title}>바꿀 근무</Text>
+          <Text style={s.sub}>앞으로 2달간 내 근무예요. 고르면 대타·맞교환을 정할 수 있어요.</Text>
 
           <ScrollView style={s.scroll} contentContainerStyle={{ paddingBottom: 16 }} showsVerticalScrollIndicator={false}>
             {myShifts.length === 0 ? (
