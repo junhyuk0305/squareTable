@@ -472,7 +472,10 @@ insert into public.edu_links(id, unit_id, token, title, entry_ids, expires_at, c
   ('qa_el2_${rnd}', ${q(SP)}, 'qatok2_${rnd}_aaaaaaaaaaaa', 'QA 닫힘', array['qa_pb_pub_${rnd}'], now() + interval '7 days', now()),
   ('qa_el3_${rnd}', ${q(SP)}, 'qatok3_${rnd}_aaaaaaaaaaaa', 'QA 만료', array['qa_pb_pub_${rnd}'], now() - interval '1 minute', null),
   ('qa_el4_${rnd}', ${q(SP)}, 'qatok4_${rnd}_aaaaaaaaaaaa', 'QA 빈 링크', '{}', now() + interval '7 days', null),
-  ('qa_el5_${rnd}', 'qa_spd_${rnd}', 'qatok5_${rnd}_aaaaaaaaaaaa', 'QA 지운 자리', '{}', now() + interval '7 days', null);
+  ('qa_el5_${rnd}', 'qa_spd_${rnd}', 'qatok5_${rnd}_aaaaaaaaaaaa', 'QA 지운 자리', '{}', now() + interval '7 days', null),
+  ('qa_el6_${rnd}', ${q(X)}, 'qatok6_${rnd}_aaaaaaaaaaaa', 'QA 매장 링크', array['qa_pb_x_${rnd}'], now() + interval '7 days', null);
+-- A 를 지운 공간의 주인으로도 넣는다. 지운 자리라서 막히는지(남의 자리라서가 아니라) 보려고.
+insert into public.unit_members(user_id, unit_id, role) values (${q(U.A)}, 'qa_spd_${rnd}', 'space_owner');
 -- 다른 자리 노하우 번호가 이미 담겨 버린 행(옛 쓰기 길·사고 가정). 트리거를 잠시 끄고 심는다. 손님 함수가 그래도 걸러야 한다.
 set local session_replication_role = replica;
 update public.edu_links set entry_ids = entry_ids || 'qa_pb_x_${rnd}'::text where id = 'qa_el1_${rnd}';
@@ -506,6 +509,7 @@ ${[
   ['만료된 링크 → 열기 실패', '', 0, `select o.ok::text from public.edu_link_open('qatok3_${rnd}_aaaaaaaaaaaa') o`, 'ok|false'],
   ['지운 자리 링크 → 열기 실패', '', 0, `select o.ok::text from public.edu_link_open('qatok5_${rnd}_aaaaaaaaaaaa') o`, 'ok|false'],
   ['닫힘·만료·틀린 토큰 → 노하우 0행', '', 0, `select count(*)::text from (select * from public.edu_link_entries('qatok2_${rnd}_aaaaaaaaaaaa') union all select * from public.edu_link_entries('qatok3_${rnd}_aaaaaaaaaaaa') union all select * from public.edu_link_entries('nope_nope_nope_nope_nope')) s`, 'ok|0'],
+  ['매장 링크 열림 · 종류 store · 매장 노하우 1개', '', 0, `select o.ok || '/' || o.place_kind || '/' || o.entry_count from public.edu_link_open('qatok6_${rnd}_aaaaaaaaaaaa') o`, 'ok|true/store/1'],
   ['토큰 검사 함수는 손님이 못 부름', '', 0, `select (public.edu_link_resolve('qatok1_${rnd}_aaaaaaaaaaaa')).id`, 'err:permission denied'],
   ['링크 표를 손님이 못 읽음', '', 0, `select count(*)::text from public.edu_links`, 'err:permission denied'],
   ['손님 표를 손님이 못 읽음', '', 0, `select count(*)::text from public.edu_link_guests`, 'err:permission denied'],
@@ -518,11 +522,13 @@ do $d$ begin
   perform set_config('request.jwt.claims', '{"role":"anon"}', true);
   execute 'set local role anon';
   perform count(*) from public.edu_link_open('qatok1_${rnd}_aaaaaaaaaaaa');
+  perform count(*) from public.edu_link_open('qatok2_${rnd}_aaaaaaaaaaaa');  -- 닫힌 링크: 세지 않아야 한다
 exception when others then null;  -- 함수가 없으면(수정 전) 아래 검사가 0 으로 RED 가 된다
 end $d$;
 reset role;
 select set_config('request.jwt.claims', '', true);
 select 'QA|CHK|손님 열면 열람 수 1 오름¦ok|1¦ok|' || opened_count from public.edu_links where id = 'qa_el1_${rnd}';
+select 'QA|CHK|손님 닫힌 링크를 열어도 열람 수 그대로¦ok|0¦ok|' || opened_count from public.edu_links where id = 'qa_el2_${rnd}';
 
 -- 주인 길. A = 공간 주인(현재 공간) · B = 공간 멤버 겸 매장 X 직원 · D = 매장 X 사장 · C = 매장 X 매니저
 create function pg_temp.qa_close_then_open(p_link text, p_token text) returns text language plpgsql as $f$
@@ -578,10 +584,18 @@ ${[
   ['A', '만든 날부터 30일 넘게 늘리기 거절', `select public.edu_link_update('qa_el4_${rnd}', null, null, now() + interval '31 days')::text`, 'err:invalid_argument'],
   ['A', '기간 줄이기 됨', `select public.edu_link_update('qa_el4_${rnd}', null, null, now() + interval '2 days')::text`, 'ok|'],
   ['B', '공간 멤버 링크 고치기 거절', `select public.edu_link_update('qa_el4_${rnd}', 'x', null, null)::text`, 'err:not_space_owner'],
-  ['A', '주인은 지운 자리 링크를 못 닫음', `select public.edu_link_close('qa_el5_${rnd}')::text`, 'err:not_space_owner'],
   ['A', '주인 쪽 토큰 검사 함수 직접 호출 거절', `select (public.edu_link_resolve('qatok1_${rnd}_aaaaaaaaaaaa')).id`, 'err:permission denied'],
 ].map(([k, n, s, e]) => `select pg_temp.qa_chk(${q(`교육 링크 ${n}`)}, '${k}', ${q(s)}, ${q(e)});`).join('\n')}
 
+-- 지운 공간: A 는 그 공간의 주인이고 현재 공간 기록도 그 공간이다. 그래도 막혀야 한다(지운 자리라서).
+select pg_temp.qa_state(${q(U.A)}, ${q(S.A)}, null, 'qa_spd_${rnd}', null, null);
+select pg_temp.qa_chk('교육 링크 지운 공간 주인도 링크를 못 닫음', 'A', $s$select public.edu_link_close('qa_el5_${rnd}')::text$s$, 'err:not_space_owner');
+select pg_temp.qa_chk('교육 링크 지운 공간 주인도 링크를 못 만듦', 'A', $s$select id from public.edu_link_create('qa_spd_${rnd}', '', '{}', 7)$s$, 'err:not_space_owner');
+-- 대조군: 같은 사람·같은 기록에서 삭제 표시만 걷으면 열린다(위 거절이 지운 자리 때문임을 보인다).
+update public.units set deleted_at = null where id = 'qa_spd_${rnd}';
+select pg_temp.qa_chk('교육 링크 (대조) 지우기 전이면 그 주인이 링크를 닫음', 'A', $s$select public.edu_link_close('qa_el5_${rnd}')::text$s$, 'ok|');
+update public.units set deleted_at = now() where id = 'qa_spd_${rnd}';
+select pg_temp.qa_state(${q(U.A)}, ${q(S.A)}, null, ${q(SP)}, null, null);
 rollback;
 `;
 

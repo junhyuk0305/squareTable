@@ -157,6 +157,10 @@ begin
             from unnest(coalesce(p_ids, '{}')) with ordinality e(eid, ord)
            where nullif(btrim(e.eid), '') is not null
            order by e.eid, e.ord) x;
+  -- 한 링크에 200개까지. 앱이 읽기 상한(db.ts EDU_LINK_MAX_ENTRIES)을 같은 숫자로 건다. 넘으면 뒤쪽이 소리 없이 빠지므로 여기서 막는다.
+  if coalesce(array_length(v_ids, 1), 0) > 200 then
+    raise exception 'invalid_argument' using errcode = '22023';
+  end if;
   if exists (
     select 1 from unnest(v_ids) e(eid)
      where not (e.eid = any (coalesce(p_keep, '{}')))
