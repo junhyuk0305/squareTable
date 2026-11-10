@@ -38,9 +38,7 @@ export const BUSINESS_INFO = {
 // ★v2.3 = 급여 계산 기능 종료(2026-11-02 사용자 결정). 공고일 + 7일 시행(약관 제5조 제3항).
 //   값 = legal-content.mjs 의 EFFECTIVE_DATE(= ANNOUNCED_DATE + 7일). 배포일이 바뀌면 둘을 함께 고친다.
 // ★v2.4 = 데이터 보관 기준 변경(W5 · 2026-11-10 사용자 결정 · 즉시 시행). 값 = legal-content.mjs 의 EFFECTIVE_DATE(= ANNOUNCED_DATE).
-// ★v2.5 = 교육 링크 참여자·공간 추가(2026-11-10 사용자 결정). 공고 2026-11-10 · 시행 다음 날(v2.4 와 버전이 겹치지 않게).
-//   값 = legal-content.mjs 의 EFFECTIVE_DATE.
-export const TERMS_VERSION = '2026-11-11';
+export const TERMS_VERSION = '2026-11-10';
 
 /**
  * 입금 확인 약속(SLA) — 계좌이체는 사람이 통장을 보고 승인하는 구조라, 이 문장이 없으면
