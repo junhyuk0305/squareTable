@@ -61,11 +61,19 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // ★ cap 을 실어 나른다 — 유료 플랜에도 캡(매장당 3,000, 0193)이 있어서, 화면이
 //   PLANS.free.aiMonthly 를 하드코딩하면 유료 매장에 틀린 숫자를 보여준다.
 // (2026-09-13: 답변뿐 아니라 퀴즈 만들기·PDF 올리기도 같은 캡을 쓴다 → doc_extract 도 이 에러를 받는다.)
+// ★공간(2번 덩이 · 3판 11장): 402 본문에 scope:'space' 가 오면 공간 상한이다(매장 402 본문은 예전 그대로라 scope 가 없다).
+//   공간에는 결제가 없어 요금제 안내를 띄우면 안 된다 → 화면이 "더 쓰기" 입구로 가르도록 scope 를 실어 나른다.
+export type AiQuotaScope = 'store' | 'space';
 class AiQuotaError extends Error {
-  constructor(readonly cap: number, readonly used: number) { super('ai_quota_exceeded'); }
+  constructor(readonly cap: number, readonly used: number, readonly scope: AiQuotaScope = 'store') { super('ai_quota_exceeded'); }
 }
 
-async function callEdge<T>(task: Task, payload: unknown): Promise<T> {
+/** 엣지가 어느 자리로 도는지. 비우면 현재 매장(옛 요청과 같다).
+ *  unitId 에 현재 공간 번호를 넣으면 엣지가 그 번호를 서버의 현재 공간(auth_space_id)과 맞춰 보고, 같을 때만 공간으로 돈다.
+ *  다르면 매장 갈래 그대로다 — 본문 값만으로 남의 자리로 가지 못한다. */
+export type AiTarget = { unitId?: string | null };
+
+async function callEdge<T>(task: Task, payload: unknown, target?: AiTarget): Promise<T> {
   // Edge Function 은 "실제 로그인 유저"만 허용(anon 키 호출 거부 → 열린 프록시 방지).
   // apikey 는 게이트웨이용 anon, Authorization 은 로그인 세션의 access_token.
   const { data } = await supabase.auth.getSession();
@@ -90,7 +98,8 @@ async function callEdge<T>(task: Task, payload: unknown): Promise<T> {
           apikey: ANON,
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ task, payload, requestId }),
+        // 대상 자리가 없으면 본문에 싣지 않는다 = 옛 요청과 글자 그대로 같다.
+        body: JSON.stringify({ task, payload, requestId, ...(target?.unitId ? { unitId: target.unitId } : null) }),
         signal: ctrl.signal,
       });
       if (res.ok) return (await res.json()) as T;
@@ -101,8 +110,9 @@ async function callEdge<T>(task: Task, payload: unknown): Promise<T> {
         if (body?.error === 'ai_quota_exceeded') {
           // 쿼터 벽에 실제로 부딪힌 횟수는 유료 전환 판단의 직접 근거인데, 지금까지 이 분기가
           // 아무것도 남기지 않아 "몇 번 거부됐는지"를 셀 수 없었다(ai_usage_monthly 대리 관측만 가능).
-          track('ai_quota_exceeded', { task, cap: Number(body?.cap) || 0, used: Number(body?.used) || 0 });
-          throw new AiQuotaError(Number(body?.cap) || 0, Number(body?.used) || 0);
+          const scope: AiQuotaScope = body?.scope === 'space' ? 'space' : 'store';
+          track('ai_quota_exceeded', { task, cap: Number(body?.cap) || 0, used: Number(body?.used) || 0, scope });
+          throw new AiQuotaError(Number(body?.cap) || 0, Number(body?.used) || 0, scope);
         }
         throw new Error(`AI edge ${task} failed: 402`); // 쿼터 외 402 → 일반 4xx(mock 폴백 경로)
       }
@@ -125,15 +135,16 @@ async function callEdge<T>(task: Task, payload: unknown): Promise<T> {
 
 export async function generateAnswer(
   input: GenerateAnswerInput,
+  target?: AiTarget,
 ): Promise<GenerateAnswerOutput> {
   if (USE_MOCK) return mockGenerateAnswer(input);
   try {
-    return await callEdge<GenerateAnswerOutput>('answer', input);
+    return await callEdge<GenerateAnswerOutput>('answer', input, target);
   } catch (e) {
     // 쿼터 초과는 mock 폴백 금지 — 가짜 답으로 캡을 위장하면 과금층이 무의미해진다.
     // block=null → 호출부(tryGenerate)가 업그레이드 안내 후 후보/사장 라우팅으로 자연 강등.
     if (e instanceof AiQuotaError) {
-      return { block: null, grounded: false, usedSopIds: [], quotaExceeded: true, quotaCap: e.cap };
+      return { block: null, grounded: false, usedSopIds: [], quotaExceeded: true, quotaCap: e.cap, quotaScope: e.scope };
     }
     // 실호출 실패 시에도 프론트가 죽지 않게 mock으로 폴백(데모 안전망).
     // degraded=true 로 표시해 '진짜 매장 답'이 아니라는 걸 사용자에게 알린다.
@@ -160,13 +171,14 @@ export async function generateQuiz(input: QuizInput): Promise<QuizOutput> {
 
 export async function structureSquare(
   input: StructureSquareInput,
+  target?: AiTarget,
 ): Promise<StructureSquareOutput> {
   if (USE_MOCK) return mockStructureSquare(input);
   try {
-    let out = await callEdge<StructureSquareOutput>('square', input);
+    let out = await callEdge<StructureSquareOutput>('square', input, target);
     // 한글 입력인데 영어로 나오면 1회 재시도(언어 일관성 보장). 비용보다 품질 우선.
     if (out.usable !== false && squareWentEnglish(input, out)) {
-      out = await callEdge<StructureSquareOutput>('square', input);
+      out = await callEdge<StructureSquareOutput>('square', input, target);
     }
     return out;
   } catch (e) {
@@ -182,11 +194,12 @@ export async function structureSquare(
 // 재시도/실패 처리하게 한다(429 레이트리밋도 메시지로 구분 가능: "failed: 429").
 export async function structureSquareStrict(
   input: StructureSquareInput,
+  target?: AiTarget,
 ): Promise<StructureSquareOutput> {
   if (USE_MOCK) return mockStructureSquare(input); // 데모 모드는 명시적 mock(가짜임을 아는 경로)
-  let out = await callEdge<StructureSquareOutput>('square', input);
+  let out = await callEdge<StructureSquareOutput>('square', input, target);
   if (out.usable !== false && squareWentEnglish(input, out)) {
-    out = await callEdge<StructureSquareOutput>('square', input);
+    out = await callEdge<StructureSquareOutput>('square', input, target);
   }
   return out;
 }
@@ -194,12 +207,13 @@ export async function structureSquareStrict(
 // 대화형 수정 — 현재 SQUARE + 자연어 수정요청 → 부분 패치된 새 SQUARE(단일).
 export async function patchSquare(
   input: PatchSquareInput,
+  target?: AiTarget,
 ): Promise<StructureSquareOutput> {
   if (USE_MOCK) return mockPatchSquare(input);
   try {
-    let out = await callEdge<StructureSquareOutput>('patch', input);
+    let out = await callEdge<StructureSquareOutput>('patch', input, target);
     if (out.usable !== false && squareWentEnglish(input, out)) {
-      out = await callEdge<StructureSquareOutput>('patch', input);
+      out = await callEdge<StructureSquareOutput>('patch', input, target);
     }
     return out;
   } catch (e) {
@@ -212,10 +226,10 @@ export async function patchSquare(
 // 의도 게이트 — 검색 전에 "매장 질문(question) / 잡담·도메인밖(chat) / 대상불명(vague)"을 판정.
 // 실패·타임아웃 시 question 으로 fail-open — 게이트 장애가 실질 질문을 막으면 안 된다
 // (엣지 handleTriage 의 이상값 fail-open 과 동일 규칙, 클라·서버 이중 방어).
-export async function classifyQuery(input: TriageInput): Promise<TriageOutput> {
+export async function classifyQuery(input: TriageInput, target?: AiTarget): Promise<TriageOutput> {
   if (USE_MOCK) return mockClassifyQuery(input);
   try {
-    const out = await callEdge<TriageOutput>('triage', input);
+    const out = await callEdge<TriageOutput>('triage', input, target);
     return ['question', 'chat', 'vague'].includes(out?.type) ? out : { type: 'question' };
   } catch (e) {
     console.warn('[ai] classifyQuery failed (fail-open → question):', e);
@@ -226,13 +240,13 @@ export async function classifyQuery(input: TriageInput): Promise<TriageOutput> {
 // 음성 받아쓰기 — 녹음(WAV) → 텍스트. 다른 태스크와 달리 mock 폴백을 하지 않는다:
 // 가짜 문장을 입력창에 채우면 사용자가 자기가 말한 줄 알고 그대로 전송한다(무음 오염).
 // 실패는 실패로 알린다 → 호출부(VoiceInputButton)가 안내 후 타이핑으로 유도.
-export async function transcribeAudio(input: TranscribeInput): Promise<TranscribeOutput> {
+export async function transcribeAudio(input: TranscribeInput, target?: AiTarget): Promise<TranscribeOutput> {
   if (USE_MOCK) {
     // 데모 모드: 마이크는 동작하지만 STT 백엔드가 없다는 사실을 숨기지 않는다.
     return { text: '', empty: true, error: 'mock_mode' };
   }
   try {
-    const out = await callEdge<TranscribeOutput>('transcribe', input);
+    const out = await callEdge<TranscribeOutput>('transcribe', input, target);
     const text = String(out?.text ?? '').trim();
     return { text, empty: !text || out?.empty === true, ...(out?.error ? { error: out.error } : {}) };
   } catch (e) {
@@ -245,18 +259,18 @@ export async function transcribeAudio(input: TranscribeInput): Promise<Transcrib
 // 문서 텍스트 추출 — PDF → 본문 텍스트(인수인계서 입력창 주입용). transcribe 와 같은 이유로
 // mock 폴백 금지: 가짜 텍스트가 입력창에 채워지면 사장은 문서 내용인 줄 알고 그대로 정리한다.
 // 실패는 실패로 알린다 → 호출부(HandoverImport)가 안내 후 붙여넣기로 유도.
-export async function extractDocText(input: DocExtractInput): Promise<DocExtractOutput> {
+export async function extractDocText(input: DocExtractInput, target?: AiTarget): Promise<DocExtractOutput> {
   if (USE_MOCK) {
     // 데모 모드: 추출 백엔드가 없다는 사실을 숨기지 않는다.
     return { text: '', empty: true, error: 'mock_mode' };
   }
   try {
-    const out = await callEdge<DocExtractOutput>('doc_extract', input);
+    const out = await callEdge<DocExtractOutput>('doc_extract', input, target);
     const text = String(out?.text ?? '').trim();
     return { text, empty: !text || out?.empty === true, ...(out?.error ? { error: out.error } : {}) };
   } catch (e) {
     // 0193부터 PDF 도 AI 캡(쪽당 1)을 쓴다 — 한도는 연결 문제와 다음 행동이 달라 따로 돌려준다.
-    if (e instanceof AiQuotaError) return { text: '', empty: true, error: 'quota' };
+    if (e instanceof AiQuotaError) return { text: '', empty: true, error: 'quota', quotaScope: e.scope };
     console.warn('[ai] extractDocText failed:', e);
     reportError('ai.extractDocText.failed', e);
     return { text: '', empty: true, error: 'failed' };
@@ -264,10 +278,10 @@ export async function extractDocText(input: DocExtractInput): Promise<DocExtract
 }
 
 // 의도추출 — 장황한 질문에서 검색용 핵심 의도/키워드 추출. 실패 시 빈 결과(호출부가 원쿼리 유지).
-export async function extractIntent(input: IntentInput): Promise<IntentOutput> {
+export async function extractIntent(input: IntentInput, target?: AiTarget): Promise<IntentOutput> {
   if (USE_MOCK) return mockExtractIntent(input);
   try {
-    return await callEdge<IntentOutput>('intent', input);
+    return await callEdge<IntentOutput>('intent', input, target);
   } catch (e) {
     console.warn('[ai] extractIntent failed (non-fatal):', e);
     return { rewritten: '', keywords: [] };

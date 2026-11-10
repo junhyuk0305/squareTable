@@ -382,8 +382,20 @@ function docExtractPages(usage: unknown): number {
 //
 // 읽기는 호출자 JWT + RLS(자기 매장 행만)라 추가 격리 게이트 불요. 오류는 전부 fail-open —
 // 과금 인프라 장애가 파일럿 답변을 막는 게 더 큰 사고다(subscription.ts 의 fail-open 철학과 동일).
-async function aiQuotaBlocked(authz: string, units: number): Promise<{ blocked: boolean; used: number; cap: number }> {
+//
+// ★공간 갈래(2번 덩이 · 3판 11장): spaceId 가 있으면(= authUser 가 현재 공간으로 판정한 요청) 그 자리의 상태를
+//   ai_quota_status_at(p_unit, p_extra) 로 본다. 상한 숫자·무료 모드 무시는 DB(unit_ai_cap 0369) 한 곳이 정한다.
+//   공간은 **닫힌 쪽**으로 틀린다(판정 불가 = 막음): 공간 상한은 비용을 막는 유일한 장치이고(결정 137),
+//   차감(consume_ai_quota_for)은 카운터로만 쓰여 이 사전판정이 유일한 문이다. 매장 갈래는 위 fail-open 그대로다.
+async function aiQuotaBlocked(authz: string, units: number, spaceId: string | null = null): Promise<{ blocked: boolean; used: number; cap: number }> {
   const sb = userClient(authz);
+  if (spaceId) {
+    const { data, error } = await sb.rpc('ai_quota_status_at', { p_unit: spaceId, p_extra: units });
+    if (error) { console.error('ai_quota_status_at failed (space fail-closed):', error.message); return { blocked: true, used: 0, cap: 0 }; }
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return { blocked: true, used: 0, cap: 0 };
+    return { blocked: row.exceeded === true, used: row.used_count ?? 0, cap: row.cap_count ?? 0 };
+  }
   const { data, error } = await sb.rpc('ai_quota_status', { p_units: units });
   if (error) return { blocked: false, used: 0, cap: 0 }; // 판정 불가 → 통과(fail-open)
   const row = Array.isArray(data) ? data[0] : data;
@@ -403,6 +415,8 @@ function embedTextHash(text: string): string {
 
 // 노하우 1건 색인 — 텍스트를 임베딩해 playbook_embeddings 에 upsert.
 // 보안: entryId 가 내 매장 노하우인지 RLS select 로 먼저 검증(타 매장 id 스푸핑 차단).
+// ★공간: user.unitId 는 authUser 가 고른 자리다(현재 공간으로 판정된 요청이면 공간 번호). 그래서 아래
+//   `row.unit_id !== user.unitId` 하나로 "공간 요청이면 그 공간 행만 · 매장 요청이면 매장 행만"이 된다(섞어 받지 않는다).
 async function handleEmbed(payload: any, user: { unitId: string | null }, authz: string) {
   const entryId = String(payload.entryId ?? '').slice(0, 128);
   const text = fence(payload.text).slice(0, MAX_RAWTEXT_LEN);
@@ -1194,7 +1208,10 @@ async function handleDocExtract(payload: any) {
 
 // 호출자 인증: Authorization 베어러 토큰이 "실제 로그인 유저"여야 함.
 // anon 키(=공개)로는 user 가 잡히지 않아 거부 → 열린 프록시 방지.
-async function authUser(req: Request): Promise<{ id: string; unitId: string | null } | null> {
+type AuthBase = { id: string; storeUnitId: string | null; authz: string };
+type AiUser = { id: string; unitId: string | null; space: boolean };
+
+async function authUser(req: Request): Promise<AuthBase | null> {
   const authz = req.headers.get('Authorization') ?? '';
   if (!authz.toLowerCase().startsWith('bearer ')) return null;
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
@@ -1212,8 +1229,26 @@ async function authUser(req: Request): Promise<{ id: string; unitId: string | nu
   //   unit_id 가 비어 있는 본사 담당자(활성 = 라이브러리 ws_*, 0215)는 401 → 노하우 정리가 전부 mock 이었다(2026-10-02 실측).
   const { data: unitId, error: unitErr } = await sb.rpc('auth_unit_id');
   if (unitErr) console.error('authUser: auth_unit_id failed:', unitErr.message);
-  if (typeof unitId !== 'string' || !unitId) return null;
-  return { id: data.user.id, unitId };
+  return { id: data.user.id, storeUnitId: typeof unitId === 'string' && unitId ? unitId : null, authz };
+}
+
+// 요청 본문의 대상 자리(앱 client.ts AiTarget.unitId). 옛 앱은 안 보낸다 → null.
+function targetUnitOf(body: unknown): string | null {
+  const v = (body as { unitId?: unknown } | null)?.unitId;
+  return typeof v === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(v) ? v : null;
+}
+
+// 이 요청이 도는 자리. ★공간 갈래(3판 11장): 대상 자리가 오고 그것이 현재 매장이 아닐 때만 현재 공간(auth_space_id · 0368)을
+//   읽는다. 대상 = 현재 공간이면 공간으로 돈다. 그 밖(대상 없음 · 대상 = 현재 매장 · 엉뚱한 번호)은 전부 매장 갈래 그대로다 —
+//   예전과 같은 값(unitId = auth_unit_id)이 나가고, 매장이 없으면 예전처럼 null(401)이다. 본문 값만으로는 남의 자리로 못 간다.
+async function placeUser(auth: AuthBase, target: string | null): Promise<AiUser | null> {
+  if (target && target !== auth.storeUnitId) {
+    const { data: spaceId, error: spErr } = await userClient(auth.authz).rpc('auth_space_id');
+    if (spErr) console.error('placeUser: auth_space_id failed:', spErr.message);
+    if (typeof spaceId === 'string' && spaceId && spaceId === target) return { id: auth.id, unitId: spaceId, space: true };
+  }
+  if (!auth.storeUnitId) return null;
+  return { id: auth.id, unitId: auth.storeUnitId, space: false };
 }
 
 Deno.serve(async (req: Request) => {
@@ -1226,8 +1261,15 @@ Deno.serve(async (req: Request) => {
 
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
 
-  // 1) 인증 — anon 키만으로는 통과 못 함(실 로그인 유저 + 매장 소속).
-  const user = await authUser(req);
+  // 1) 인증 — anon 키만으로는 통과 못 함(실 로그인 유저 + 매장 소속 · 또는 현재 공간).
+  //    로그인 확인이 먼저다(로그인 안 한 요청은 본문을 읽지 않는다). 대상 자리가 본문에 있어 그다음에 본문을 읽는다.
+  //    본문 오류는 여기서 던지지 않고 아래 try 안에서 다시 던진다 = 예전과 같은 순서의 응답(401 → 429 → 500).
+  const auth = await authUser(req);
+  if (!auth) return json({ error: 'unauthorized' }, 401);
+  let body: any = null;
+  let bodyErr: unknown = null;
+  try { body = await req.json(); } catch (e) { bodyErr = e; }
+  const user = await placeUser(auth, targetUnitOf(body));
   if (!user) return json({ error: 'unauthorized' }, 401);
 
   // 2) 레이트리밋 — 사용자당 + 매장당 이중(남용 #15). 한 직원의 버스트가 매장 전체 예산을
@@ -1240,7 +1282,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const body = await req.json();
+    if (bodyErr) throw bodyErr;
     const task = body?.task;
     const payload = body?.payload ?? {};
     const authz = req.headers.get('Authorization') ?? '';
@@ -1259,9 +1301,12 @@ Deno.serve(async (req: Request) => {
     const unitsBefore = aiUnitsBefore(task);
     if (unitsBefore > 0) {
       try {
-        const q = await aiQuotaBlocked(authz, unitsBefore);
+        const q = await aiQuotaBlocked(authz, unitsBefore, user.space ? user.unitId : null);
         if (q.blocked) {
-          return json({ error: 'ai_quota_exceeded', used: q.used, cap: q.cap }, 402);
+          // ★공간: scope 를 붙여 앱이 매장 상한(요금제 안내)과 가른다(client.ts AiQuotaScope). 매장 본문은 글자 그대로.
+          return json(user.space
+            ? { error: 'ai_quota_exceeded', scope: 'space', used: q.used, cap: q.cap }
+            : { error: 'ai_quota_exceeded', used: q.used, cap: q.cap }, 402);
         }
       } catch (e) {
         console.error('aiQuotaBlocked failed (fail-open):', e);
@@ -1301,6 +1346,7 @@ Deno.serve(async (req: Request) => {
     if (unitsAfter > 0 && !served?.rejected && !served?.error) {
       try {
         // ★E9(0276): 클라가 직접 못 부르는 서버 전용 함수로, 매장 id·요청 키를 넘겨 차감한다.
+        //   ★공간: user.unitId 가 공간 번호면 그 공간 사용량을 깎는다. 공간에는 사장 알림을 넣지 않는다(0369 함수 안).
         const { error: cErr } = await serviceClient().rpc('consume_ai_quota_for', { p_unit: user.unitId, p_units: unitsAfter, p_request_key: requestKey });
         if (cErr) console.error('consume_ai_quota_for (post-serve) error:', cErr.message ?? cErr);
       } catch (e) {

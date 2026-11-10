@@ -24,6 +24,9 @@ import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Type } from '@/lib/theme/type';
 import type { PlaybookEntry } from '@/types';
 
+/** 공간은 매장이 만든 카테고리를 안 쓴다(렌더마다 새 배열을 만들지 않게 한 벌). */
+const NO_CUSTOMS: { label: string }[] = [];
+
 /**
  * 저장 전 확인 시트 — 노하우가 창고에 들어가기 직전의 유일한 문지기.
  *
@@ -45,6 +48,7 @@ export function PublishConfirmSheet({
   onConfirm,
   onEditExisting,
   partsEnabled = true,
+  pool,
 }: {
   visible: boolean;
   /** 저장하려는 노하우(단건 발행=1개, 분리 발행=N개). */
@@ -60,9 +64,16 @@ export function PublishConfirmSheet({
    * 저장을 통째로 막는다. 고를 수 없는 것을 보여주지 않는 편이 맞다.
    */
   partsEnabled?: boolean;
+  /**
+   * 공간(2번 덩이) — 겹침·카테고리 후보를 이 노하우 목록에서 찾는다. 공간은 매장 업종·매장 카테고리를 안 쓴다.
+   * 없으면 지금 매장 노하우(usePlaybookStore) 그대로다. 공간은 파트도 없으니 partsEnabled={false} 와 같이 넘긴다.
+   */
+  pool?: PlaybookEntry[];
 }) {
-  const allEntries = usePlaybookStore((s) => s.entries);
-  const industry = useSessionStore((s) => s.industry);
+  const storeEntries = usePlaybookStore((s) => s.entries);
+  const allEntries = pool ?? storeEntries;
+  const storeIndustry = useSessionStore((s) => s.industry);
+  const industry = pool ? undefined : storeIndustry;
 
   const [section, setSection] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -81,7 +92,8 @@ export function PublishConfirmSheet({
   }, [visible, entries, published]);
 
   // 선택지 = 표준 + 사용 중 + 매장이 만든 카테고리(0개짜리 포함 — 카테고리 편집에서 추가한 것).
-  const customs = usePlaybookStore((s) => s.customCategories);
+  const storeCustoms = usePlaybookStore((s) => s.customCategories);
+  const customs = pool ? NO_CUSTOMS : storeCustoms;
   const options = useMemo(
     () => sectionOptions(industry, [...published.map((e) => e.section), ...customs.map((c) => c.label)]),
     [industry, published, customs],

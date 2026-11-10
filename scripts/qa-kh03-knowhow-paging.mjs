@@ -24,7 +24,8 @@ const psql = (sql) => execFileSync('docker', ['exec', '-i', DB_CONTAINER, 'psql'
 
 // ── db.ts 실제 함수 본문 실행 ──
 const DB_FNS = ['fetchEntries', 'fetchOwnerKnowhowEntries', 'readAllPages'];
-function loadDbFns(supabase) {
+// _unitId = 앱이 setUnitId 로 맞춘 현재 매장(0371 이후 fetchEntries 가 이 값으로 거른다 · 기본값).
+function loadDbFns(supabase, unitId) {
   const p = path.join(root, 'src/lib/db.ts');
   const text = fs.readFileSync(p, 'utf8');
   const sf = ts.createSourceFile(p, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
@@ -33,7 +34,7 @@ function loadDbFns(supabase) {
   const js = ts.transpileModule(found.join('\n') + '\nmodule.exports = { fetchEntries, fetchOwnerKnowhowEntries };', { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const mod = { exports: {} };
   const fails = [];
-  vm.runInNewContext(js, { supabase, HAS_SUPABASE: true, readFail: (l, e) => fails.push([l, e?.message]), module: mod, exports: mod.exports });
+  vm.runInNewContext(js, { supabase, _unitId: unitId, HAS_SUPABASE: true, readFail: (l, e) => fails.push([l, e?.message]), module: mod, exports: mod.exports });
   return { ...mod.exports, fails, helpers: found.length };
 }
 
@@ -124,7 +125,7 @@ async function main() {
     const { data: one } = await client.from('playbook_entries').select('id');
     console.log('INFO 한 번 select 행 수(max_rows 실측) =', one?.length, '· 기대 전체 =', expA.length);
 
-    const fns = loadDbFns(client);
+    const fns = loadDbFns(client, `${PFX}-A`);
     const e = await fns.fetchEntries();
     check('fetchEntries: error=false', e.error === false, {});
     audit('fetchEntries', e.data, expA, `${PFX}-C`);
@@ -140,7 +141,7 @@ async function main() {
         const v = t[k]; return typeof v === 'function' ? (...a) => { const r = v.apply(t, a); return r && typeof r === 'object' && 'then' in r && k !== 'then' ? wrap(r) : r; } : v;
       } });
       const flaky = new Proxy(client, { get(t, k) { const v = t[k]; return (k === 'from' || k === 'rpc') ? (...a) => wrap(v.apply(t, a)) : v; } });
-      const f = loadDbFns(flaky);
+      const f = loadDbFns(flaky, `${PFX}-A`);
       const r = await f[name]();
       const failedOk = name === 'fetchEntries' ? (r.error === true && r.data.length === 0) : (r.error != null && r.data == null);
       check(`${name}: 중간 페이지 실패 → 실패로 반환(부분 목록 0)`, failedOk && calls >= 2, { calls, error: !!r.error, rows: r.data?.length ?? null });
@@ -149,7 +150,7 @@ async function main() {
     for (const n of BOUNDS) {
       const cn = createClient(env.SUPABASE_URL, env.EXPO_PUBLIC_SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
       await cn.auth.signInWithPassword({ email: users['n' + n], password: PW });
-      const fn = loadDbFns(cn);
+      const fn = loadDbFns(cn, `${PFX}-N${n}`);
       const en = await fn.fetchEntries(), on = await fn.fetchOwnerKnowhowEntries();
       const uniq = new Set((en.data ?? []).map((r) => r.id)).size;
       check(`경계 ${n}건: fetchEntries·owner 모두 ${n}건 · 중복 0`, !en.error && !on.error && en.data.length === n && uniq === n && (on.data ?? []).length === n, { entries: en.data?.length, uniq, owner: on.data?.length });
@@ -157,7 +158,7 @@ async function main() {
     // 다른 매장 사장(B)은 A 자료를 0건 받는다.
     const cb = createClient(env.SUPABASE_URL, env.EXPO_PUBLIC_SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
     await cb.auth.signInWithPassword({ email: users.b, password: PW });
-    const fb = loadDbFns(cb);
+    const fb = loadDbFns(cb, `${PFX}-C`);
     const eb = await fb.fetchEntries(), ob = await fb.fetchOwnerKnowhowEntries();
     const leak = [...(eb.data ?? []), ...(ob.data ?? [])].filter((r) => !String(r.id).startsWith(`${PFX}-C-`)).length;
     check('다른 매장 사장 B: A 자료 0건', leak === 0 && eb.data.length === N_C && (ob.data ?? []).length === N_C, { leak, entries: eb.data.length, owner: ob.data?.length });

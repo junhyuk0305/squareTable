@@ -16,7 +16,7 @@ import { UserBubble } from '@/components/UserBubble';
 import { Appear } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { ChatComposerBar, PlusToggleIcon } from '@/components/ChatComposerBar';
-import { structureSquare, patchSquare, type StructuredSegment, type AiFollowup } from '@/lib/ai';
+import { structureSquare, patchSquare, type StructuredSegment, type AiFollowup, type AiTarget } from '@/lib/ai';
 import { EXTRACTION_MASTER } from '@/data/extraction-master';
 import { buildPlaybookEntryFromSquare, isSquarePublishable } from '@/lib/utils/buildEntry';
 import { isJunkInput, looksLikePromptLeak, knowhowGuidanceMessage } from '@/lib/utils/knowhowInput';
@@ -25,6 +25,7 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { uploadPhoto, uploadPhotoNative } from '@/lib/db';
 import { pickImageNative } from '@/lib/media/pickImage';
 import { GENERATE_THRESHOLD } from '@/lib/ai/config';
+import { SPACE_KNOWHOW, SPACE_WORDS } from '@/lib/place/words';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 
 import { InfoDot } from '@/components/InfoDot';
@@ -76,6 +77,14 @@ export type OwnerCoachChatProps = {
   onUpdated?: (square: SquareBlock, extras: { title: string; keywords: string[] }) => void;
   /** 대화 맨 위에 얹는 읽기 블록(노하우 상세의 문서 머리말·본문 표). 스크롤과 함께 올라간다. */
   docHeader?: ReactNode;
+  /**
+   * 공간(2번 덩이 · S07) — 있으면 이 대화가 공간 것이다. 없으면 매장(지금 그대로 · 이 prop 이 없을 때의 동작은 안 바뀐다).
+   *  · 노하우 목록(비슷한 노하우 · 받아쓰기 힌트 · 최근 노하우) = entries. 매장 스토어(usePlaybookStore)를 안 읽는다.
+   *  · AI 를 부를 자리 = id(엣지가 현재 공간과 맞을 때만 공간으로 돈다 · client.ts AiTarget).
+   *  · 저장할 노하우의 자리 = id · 저자 역할 = space_owner(buildEntry spaceId).
+   *  · 사진 = 공간 폴더(id)에 올린다(db.ts uploadPhoto 의 자리 인수). 문서로 추가는 뺀다(매장 인수인계 화면이라).
+   */
+  space?: { id: string; entries: PlaybookEntry[] };
 };
 
 // 카드 말풍선이 "그 대화 시점에 어떻게 정리됐는지"를 고정하는 스냅샷.
@@ -115,6 +124,7 @@ export function OwnerCoachChat({
   editEntry,
   onUpdated,
   docHeader,
+  space,
 }: OwnerCoachChatProps) {
   const router = useRouter();
   const isEdit = !!editEntry;
@@ -135,11 +145,11 @@ export function OwnerCoachChat({
         text: uq.query_text,
         meta: `${who} · ${formatRelative(uq.asked_at)}`,
       });
-      init.push({ id: nextId(), kind: 'ai', text: '이 질문에 사장님이 평소 하시던 대로 답해 주세요. 제가 노하우로 정리할게요.' });
+      init.push({ id: nextId(), kind: 'ai', text: space ? SPACE_KNOWHOW.coachAnswerIntro : '이 질문에 사장님이 평소 하시던 대로 답해 주세요. 제가 노하우로 정리할게요.' });
     } else {
       // ★안내는 여기 한 번만 한다. 예전엔 이 말풍선 + 노란 팁 카드 + 예시 라벨이 같은 말을 세 번 했고
       //   "정리는 제가 할게요"는 **글자 그대로 두 번** 나왔다. 팁 카드를 걷고 그 내용만 흡수했다.
-      init.push({ id: nextId(), kind: 'ai', text: '직원한테 알려주듯 한 문장이면 돼요. 언제·무엇을·어떻게만 있으면 정리는 제가 할게요.' });
+      init.push({ id: nextId(), kind: 'ai', text: space ? SPACE_KNOWHOW.coachIntro : '직원한테 알려주듯 한 문장이면 돼요. 언제·무엇을·어떻게만 있으면 정리는 제가 할게요.' });
     }
     return init;
   });
@@ -176,16 +186,22 @@ export function OwnerCoachChat({
   const { pinnedRef, pinOnSize, trackPin, hideUntilPinned } = useBottomPin(scrollRef);
 
   const unitId = useSessionStore.getState().unitId;
-  const storeId = unitId || 'store_001';
+  const spaceId = space?.id;
+  const storeId = spaceId || unitId || 'store_001';
+  // 공간이면 AI 를 그 공간으로 돌린다. 매장이면 undefined = 옛 요청과 글자 그대로 같다.
+  const aiTarget = useMemo<AiTarget | undefined>(() => (spaceId ? { unitId: spaceId } : undefined), [spaceId]);
 
   // 빈 상태 스타터용 — 사장이 "실제로 알려준" 노하우 3개만.
   // 시드/데모 픽스처(source 없음)와 온보딩 팩 템플릿(is_template·needs_review)은 제외 —
   // 안 그러면 남이 만든/기본 제공 노하우를 "알려주셨어요"로 잘못 표기하게 된다.
-  const allEntries = usePlaybookStore((s) => s.entries);
+  const storeEntries = usePlaybookStore((s) => s.entries);
+  const allEntries = space ? space.entries : storeEntries;
   // ★노하우가 도착하기 전에는 입력을 열지 않는다. "비슷한 노하우가 있어요" 카드(similarEntry)는
   //   사장이 같은 내용을 또 적는 걸 **적기 전에** 막으려고 만든 것인데, entries 가 늦게 오면
   //   이미 다 적은 뒤에 나타나 기능 목적 자체가 무력화된다. 빈 상태 스타터(recent=[])도 같은 구간이다.
-  const playbookLoaded = usePlaybookStore((s) => s.loaded);
+  // 공간은 화면이 노하우를 다 읽은 뒤에 이 부품을 그린다(space.entries) → 기다릴 것이 없다.
+  const storeLoaded = usePlaybookStore((s) => s.loaded);
+  const playbookLoaded = space ? true : storeLoaded;
   const recentEntries = useMemo(
     () =>
       allEntries
@@ -272,7 +288,7 @@ export function OwnerCoachChat({
           categoryGuide: EXTRACTION_MASTER, // 단일 마스터 지침 주입(카테고리 무관). 분류는 AI가 내부 판단.
           // 인박스 답변이면 원래 질문을 넘겨 AI가 "이 답이 질문에 이미 충분한가"(완성도)를 판정.
           questionText: isInboxAnswer ? uq.query_text : undefined,
-        });
+        }, aiTarget);
         lastRawRef.current = rawText;
         setSegments(null);
 
@@ -368,7 +384,7 @@ export function OwnerCoachChat({
         setBusy(false);
       }
     },
-    [storeId, isInboxAnswer, uq.query_text, presentSingle],
+    [storeId, isInboxAnswer, uq.query_text, presentSingle, aiTarget],
   );
 
   // ── 최종 재정리(2차 AI 콜): 원문 + 꼬리질문 답변을 합쳐 깔끔히 통합 ──
@@ -395,7 +411,7 @@ export function OwnerCoachChat({
         category,
         categoryGuide: EXTRACTION_MASTER,
         skipFollowups: true,
-      });
+      }, aiTarget);
       // 첫 정리(위 268행)와 같은 고지 — 재정리도 mock 으로 떨어질 수 있는데 여기만 조용하면
       // 사장은 같은 화면에서 어떤 답이 진짜인지 구별할 수 없다.
       if (out.degraded) {
@@ -425,7 +441,7 @@ export function OwnerCoachChat({
     } finally {
       setBusy(false);
     }
-  }, [storeId, category, title, keywords, square, presentConfirm, pushMsg]);
+  }, [storeId, category, title, keywords, square, presentConfirm, pushMsg, aiTarget]);
 
   // ── 대화형 수정(patch): 현재 square + 자연어 수정요청 → 부분 패치 ──
   const runPatch = useCallback(
@@ -445,7 +461,7 @@ export function OwnerCoachChat({
             dont: square.extract.dont,
           },
           categoryGuide: EXTRACTION_MASTER,
-        });
+        }, aiTarget);
         // 척도(standard)는 patch가 다루지 않으므로 기존 값을 보존한다.
         const nextSq: SquareBlock = { ...out.square, ...(square.standard ? { standard: square.standard } : {}) };
         const nextTitle = out.title || title;
@@ -464,7 +480,7 @@ export function OwnerCoachChat({
         setBusy(false);
       }
     },
-    [storeId, square, title, category, keywords, pushMsg],
+    [storeId, square, title, category, keywords, pushMsg, aiTarget],
   );
 
   // ── 입력 전송: 상태에 따라 (1)첫 정리 (2)꼬리질문 답 (3)재정리 ──
@@ -554,7 +570,7 @@ export function OwnerCoachChat({
       return;
     }
     const entries = pending.map(({ s }) =>
-      buildPlaybookEntryFromSquare({ ...uq, presumed_category: s.category }, s.square, { title: s.title, keywords: s.keywords }),
+      buildPlaybookEntryFromSquare({ ...uq, presumed_category: s.category }, s.square, { title: s.title, keywords: s.keywords, spaceId }),
     );
     publishedRef.current = true;
     // onPublishedMany는 엔트리별 성공여부(boolean[])를 준다(레거시 boolean/void도 허용). 성공한 세그만 기록하고,
@@ -566,7 +582,7 @@ export function OwnerCoachChat({
       results.forEach((ok, k) => { if (ok) publishedSegRef.current.add(pending[k].i); });
       if (!results.every(Boolean)) publishedRef.current = false;
     });
-  }, [segments, uq, onPublishedMany, onPublished]);
+  }, [segments, uq, onPublishedMany, onPublished, spaceId]);
 
   // ── 분리 제안: 하나로 합치기(steps 결합 후 단일 흐름으로) ──
   const mergeOne = useCallback(() => {
@@ -625,13 +641,13 @@ export function OwnerCoachChat({
     const entry = buildPlaybookEntryFromSquare(
       { ...uq, presumed_category: category },
       square,
-      { title, keywords, photos },
+      { title, keywords, photos, spaceId },
     );
     // 저장 실패 시 잠금을 풀어 재시도 허용(성공 시 화면이 네비게이션하므로 잠금 유지).
     void Promise.resolve(onPublished(entry)).then((ok) => {
       if (ok === false) publishedRef.current = false;
     });
-  }, [square, uq, category, title, keywords, photos, onPublished, isEdit, onUpdated]);
+  }, [square, uq, category, title, keywords, photos, onPublished, isEdit, onUpdated, spaceId]);
 
   const startRetalk = useCallback(() => {
     setReStructure(true);
@@ -653,7 +669,7 @@ export function OwnerCoachChat({
         try {
           const asset = await pickImageNative();
           if (!asset) return; // 선택창을 닫음 — 조용히 원상태
-          const url = await uploadPhotoNative(asset);
+          const url = await uploadPhotoNative(asset, spaceId);
           if (url) setPhotos((prev) => (prev.length >= MAX_PHOTOS ? prev : [...prev, url]));
           else setError('사진을 올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
         } catch {
@@ -668,7 +684,7 @@ export function OwnerCoachChat({
       setUploadingPhoto(true);
       setError(null);
       try {
-        const url = await uploadPhoto(file);
+        const url = await uploadPhoto(file, spaceId);
         if (url) setPhotos((prev) => (prev.length >= MAX_PHOTOS ? prev : [...prev, url]));
         else setError('사진을 올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
       } catch {
@@ -677,7 +693,7 @@ export function OwnerCoachChat({
         setUploadingPhoto(false);
       }
     });
-  }, [uploadingPhoto, photos.length]);
+  }, [uploadingPhoto, photos.length, spaceId]);
 
   const removePhoto = useCallback((url: string) => {
     setPhotos((prev) => prev.filter((p) => p !== url));
@@ -809,7 +825,7 @@ export function OwnerCoachChat({
                 onPublish={handlePublish}
                 onPatch={(sq) => setSquare(sq)}
                 onTitle={setTitle}
-                publishLabel={isEdit ? '수정 저장' : isInboxAnswer ? '이 답변 보내기' : '노하우로 저장'}
+                publishLabel={isEdit ? '수정 저장' : isInboxAnswer ? (space ? SPACE_WORDS.answerKeep : '이 답변 보내기') : '노하우로 저장'}
               />
             </Appear>
           );
@@ -909,7 +925,7 @@ export function OwnerCoachChat({
             )}
             {/* 매뉴얼 올리기 — 아직 정리된 카드가 없을 때만. 카드가 뜬 뒤에 다른 화면으로 나가면
                 방금 정리한 내용이 조용히 사라진다(수정 모드는 처음부터 카드가 있어 자동으로 빠진다). */}
-            {!square && (
+            {!square && !space && (
               <CoachMenuItem
                 icon="cloud-upload-outline"
                 label="문서로 노하우 추가"
@@ -941,6 +957,7 @@ export function OwnerCoachChat({
               hints={voiceHints}
               disabled={busy}
               autoStart
+              target={aiTarget}
               onEnd={() => setVoiceOpen(false)}
               onText={(t) => setInput((prev) => appendDictation(prev, t, INPUT_MAX_LEN))}
             />

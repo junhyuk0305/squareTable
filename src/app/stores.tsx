@@ -31,6 +31,7 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { Section } from '@/components/Screen';
 import { TwoPane, Pane } from '@/components/shell/TwoPane';
 import { useStoreEntryStore } from '@/lib/store/useStoreEntryStore';
+import { SpaceEntryRow } from '@/components/place/SpaceEntryRow';
 
 // 진입 순서·타임아웃·커버는 useStoreEntryStore(+ 전역 StoreEnterCover)로 옮겼다 —
 // 상단바의 매장 칸도 같은 동작을 하기 때문이다(2026-08-08). 이 화면은 부르기만 한다.
@@ -331,6 +332,8 @@ export default function StoresHub() {
             {/* 요금제는 허브에 노출하지 않는다 — 확인·변경은 전체 계정 설정(구독 및 결제)에서. */}
           </>
         )}
+        {/* 공간(2번 덩이) 임시 입구 — 공간을 쓸 수 있는 계정에게만 한 줄. 나머지 계정에는 아무것도 안 그린다. */}
+        <SpaceEntryRow />
           </>
         )}
       </ScrollView>

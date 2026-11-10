@@ -38,6 +38,7 @@ export type GenerateAnswerOutput = {
   // 업그레이드 안내 + 후보/사장 라우팅 경로로 자연 강등한다(과금층 0062·0082).
   quotaExceeded?: boolean;
   quotaCap?: number;             // 그때 적용된 캡(무료 200 / 유료 매장당 3,000, 0193) — 화면이 숫자를 하드코딩하지 않게 서버값을 싣는다.
+  quotaScope?: 'store' | 'space'; // 어느 자리 상한인가. 'space' 면 요금제 안내 대신 공간 문구·"더 쓰기"(tiers.SPACE_AI_CAP_COPY).
 };
 
 // ── 사장님 SQUARE 정리 (원문 → 6칸 구조화) ───────────────────
@@ -156,6 +157,8 @@ export type DocExtractOutput = {
   empty: boolean;
   /** 엣지 거절 사유(unsupported_doc · doc_too_large · doc_not_accepted) · 클라 판정(quota = 월 AI 한도). 있으면 text는 비어 있다. */
   error?: string;
+  /** error='quota' 일 때 어느 자리 상한인가(GenerateAnswerOutput.quotaScope 와 같다). */
+  quotaScope?: 'store' | 'space';
 };
 
 // ── 이해확인 퀴즈 (S1 ④) — 노하우 기반 객관식 상황문제 ─────────

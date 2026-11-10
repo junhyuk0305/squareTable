@@ -19,6 +19,7 @@
 import { supabase } from '@/lib/supabase';
 import { reportError } from '@/lib/analytics/track';
 import { embedEntry } from './searchClient';
+import { currentUnitId } from '@/lib/db';
 import { USE_MOCK } from './config';
 import type { PlaybookEntry } from '@/types';
 
@@ -36,12 +37,18 @@ const backoffMs = (attempts: number) => Math.min(BACKOFF_BASE_MS * 2 ** attempts
 /** 색인 대기분을 최대 BATCH 건 재시도한다. 반환값은 {시도, 성공} — QA·계측용.
  *  @param entries 현재 매장의 노하우(스토어 보유분). 본문을 다시 받아오지 않으려고 넘겨받는다.
  *         대기 행에 대응하는 본문이 여기 없으면(초안 전환·삭제 등) 그 건은 건너뛴다. */
-export async function retryPendingEmbeddings(entries: PlaybookEntry[]): Promise<{ tried: number; ok: number }> {
-  if (USE_MOCK) return { tried: 0, ok: 0 };
+// ★0371: 색인 표 읽기는 "현재 매장 또는 현재 공간"이다. 자리 번호로 거르지 않으면 공간 대기 행이 섞여 오고,
+//   그 본문은 매장 entries 에 없으니 아래에서 대기 표시를 지워 버린다(공간 노하우가 영영 색인되지 않는다).
+export async function retryPendingEmbeddings(
+  entries: PlaybookEntry[],
+  unitId: string | null = currentUnitId(),
+): Promise<{ tried: number; ok: number }> {
+  if (USE_MOCK || !unitId) return { tried: 0, ok: 0 };
 
   const { data, error } = await supabase
     .from('playbook_embeddings')
     .select('entry_id, attempts')
+    .eq('unit_id', unitId)
     .not('next_attempt_at', 'is', null)
     .lte('next_attempt_at', new Date().toISOString())
     .order('next_attempt_at', { ascending: true })

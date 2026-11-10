@@ -18,7 +18,15 @@ import {
   updateUnitIndustry,
   switchActiveUnit,
   type MyUnitRow,
+  myKindFeatures,
+  mySpaces,
+  spaceOpenOf,
+  createSpace as rpcCreateSpace,
+  enterSpace as rpcEnterSpace,
+  type MySpace,
+  type SpaceRole,
 } from '@/lib/db';
+import { placeErrorMessage, placeErrorCode } from '@/lib/place/errors';
 import { friendlyError, isMissingRpc } from '@/lib/utils/userError';
 import { sessionReadFailAction } from './sessionReadFail';
 import { sessionBootFault } from './sessionBootFault';
@@ -110,6 +118,18 @@ type SessionState = {
   bio: string; // 한줄 소개
   phone: string; // 전화번호(전체) — 프로필 편집에서 표시·수정(뒷4자리만 아님)
 
+  // ── 공간(2번 덩이 · 0368·0374·0375) ── 매장 값(unitId·role·stores)과 **따로** 둔다. 매장 부팅은 이 값을 안 본다.
+  // ★공간에 있는 동안에도 db.ts `_unitId` 는 현재 매장 그대로다. 공간 화면은 spaceId 를 인수로 넘긴다.
+  /** 이 계정이 공간을 쓸 수 있나(my_kind_features 의 space/enter · 허용 목록 포함). null = 아직 못 읽음. */
+  spaceOpen: boolean | null;
+  /** 내 공간 목록(my_spaces). spacesLoaded = 한 번이라도 읽기를 마쳤다(실패 포함). */
+  spaces: MySpace[];
+  spacesLoaded: boolean;
+  /** 지금 들어가 있는 공간(enter_space 성공 뒤). 비어 있으면 공간 밖이다. */
+  spaceId: string;
+  spaceName: string;
+  spaceRole: SpaceRole | null;
+
   // 부팅 시 1회: 기존 세션 복원 + 프로필 로드 + auth 변화 구독
   init: () => Promise<void>;
   signInWithPassword: (email: string, pw: string) => Promise<{ error: string | null; role: Role }>;
@@ -186,6 +206,16 @@ type SessionState = {
   signOut: () => Promise<void>;
   // F2: 다른 기기의 로그인을 모두 끊는다. 지금 기기는 그대로다. 그 기기들의 푸시도 0236 세션 판정으로 멈춘다.
   signOutOthers: () => Promise<{ error: string | null }>;
+
+  // ── 공간 ──
+  /** 입구(space/enter)와 내 공간 목록을 읽는다. 계정 층(stores)과 공간 _layout 이 부른다. */
+  loadSpaces: () => Promise<{ error: string | null }>;
+  /** 공간 만들기(create_space). 자리는 안 바꾼다 → 화면이 이어서 enterSpace 를 부른다. code = PHONE_NOT_VERIFIED 등 갈래용. */
+  createSpace: (name: string) => Promise<{ error: string | null; code?: string | null; spaceId?: string }>;
+  /** 공간 들어가기(enter_space). 성공하면 spaceId·spaceName·spaceRole 이 채워진다. 매장 값은 그대로다. */
+  enterSpace: (spaceId: string) => Promise<{ error: string | null }>;
+  /** 공간에서 나온다(앱 상태만 비운다). 서버의 현재 공간 기록은 남지만 매장 읽기는 자리 번호로 거르므로 섞이지 않는다. */
+  leaveSpace: () => void;
 
   // 개발/단일기기 역할 토글 (Supabase 없을 때의 데모 폴백)
   switchTo: (role: Role) => void;
@@ -332,11 +362,17 @@ let _lastOk: { uid: string; at: number } | null = null;
 // 로그아웃 상태 — 신원·매장·역할·과금 값을 전부 비운다. 로그아웃으로 떨어지는 길(로그아웃·auth 이벤트·탈퇴·
 // 로드 실패)이 여럿이라 한 곳에 둔다. 빠진 값이 있으면 다음 계정 로그인 전까지 이전 계정 값이 남는다.
 // 매장 데이터 스토어는 tenantReset.ts 가 userId 변화를 보고 비운다.
+// 공간 값 비우기 — 로그아웃·매장 전환 실패 같은 길이 SIGNED_OUT 을 펼칠 때 같이 비워진다.
+const NO_SPACE = {
+  spaceOpen: null, spaces: [] as MySpace[], spacesLoaded: false, spaceId: '', spaceName: '', spaceRole: null,
+} satisfies Partial<SessionState>;
+
 const SIGNED_OUT: Partial<SessionState> = {
   status: 'signed_out', sessionCheck: 'ok', brandId: null, role: 'junior', isOwnerAccount: false, signupRole: null,
   unitId: '', userId: '', userName: '', storeName: '', stores: [], pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '',
   industry: '', inviteCode: '', inviteExpiresAt: '', bio: '', phone: '',
   plan: 'free', seatLocked: false, unitLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '',
+  ...NO_SPACE,
 };
 
 // M3: 호출부가 쓰는 입구. "지금 돌릴 것인가"(sessionLoadPolicy)와 합치기·측정만 하고, 읽기·판정은 loadProfile 이 한다.
@@ -653,6 +689,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   signupRole: null,
   // 브랜드 축(P2)이 붙기 전까지 항상 null. 파생 지점이 생기면 loadProfile 이 채운다.
   brandId: null,
+  ...NO_SPACE,
 
   init: async () => {
     if (!HAS_SUPABASE) {
@@ -1418,6 +1455,66 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       return { error: fail };
     }
   },
+
+  // ── 공간(2번 덩이) ── 세대(_signOutGen)·계정(userId)이 바뀌면 늦게 온 결과를 버린다(loadProfile 과 같은 규칙).
+  loadSpaces: async () => {
+    if (!HAS_SUPABASE) {
+      set({ spaceOpen: false, spaces: [], spacesLoaded: true });
+      return { error: null };
+    }
+    const uid = get().userId;
+    const gen = _signOutGen;
+    if (!uid) return { error: null };
+    const [feat, list] = await Promise.all([myKindFeatures(), mySpaces()]);
+    if (gen !== _signOutGen || get().userId !== uid) return { error: null };
+    // 입구를 못 읽으면 "못 쓴다"로 둔다(닫힌 쪽). 목록을 못 읽으면 지난 목록을 남긴다(공간이 사라진 듯 보이지 않게).
+    const open = feat.data ? spaceOpenOf(feat.data) : false;
+    const spaces = list.data ?? get().spaces;
+    const cur = get().spaceId ? spaces.find((x) => x.id === get().spaceId) : undefined;
+    set({
+      spaceOpen: open,
+      spaces,
+      spacesLoaded: true,
+      // 들어가 있던 공간이 목록에서 빠졌으면(내보내짐·삭제) 공간 밖으로 둔다.
+      ...(get().spaceId && list.data && !cur ? { spaceId: '', spaceName: '', spaceRole: null } : null),
+      ...(cur ? { spaceName: cur.name, spaceRole: cur.role } : null),
+    });
+    const err = feat.error ?? list.error;
+    return { error: err ? placeErrorMessage(err, '공간 정보를 불러오지 못했어요. 연결을 확인하고 다시 시도해 주세요.') : null };
+  },
+
+  createSpace: async (name) => {
+    const uid = get().userId;
+    const gen = _signOutGen;
+    const { data, error } = await rpcCreateSpace(name.trim());
+    if (error || !data) {
+      if (error) console.warn('[session] createSpace:', error.message);
+      return { error: placeErrorMessage(error, '공간을 만들지 못했어요. 잠시 뒤 다시 시도해 주세요.'), code: placeErrorCode(error) };
+    }
+    if (gen === _signOutGen && get().userId === uid) await get().loadSpaces();
+    return { error: null, spaceId: data.spaceId };
+  },
+
+  enterSpace: async (spaceId) => {
+    const uid = get().userId;
+    const gen = _signOutGen;
+    const { error } = await rpcEnterSpace(spaceId);
+    if (gen !== _signOutGen || get().userId !== uid) return { error: '계정이 바뀌었어요. 다시 시도해 주세요.' };
+    if (error) {
+      console.warn('[session] enterSpace:', error.message);
+      return { error: placeErrorMessage(error, '공간에 들어가지 못했어요. 잠시 뒤 다시 시도해 주세요.') };
+    }
+    // 이름·역할은 목록에서 읽는다. 방금 만든 공간이라 목록에 없으면 한 번 다시 읽는다.
+    let row = get().spaces.find((x) => x.id === spaceId);
+    if (!row) {
+      await get().loadSpaces();
+      row = get().spaces.find((x) => x.id === spaceId);
+    }
+    set({ spaceId, spaceName: row?.name ?? '', spaceRole: row?.role ?? null });
+    return { error: null };
+  },
+
+  leaveSpace: () => set({ spaceId: '', spaceName: '', spaceRole: null }),
 
   switchTo: (role) => {
     // 데모 신원으로 완전 복귀 — 데모 매장(store_001)까지 되돌린다.

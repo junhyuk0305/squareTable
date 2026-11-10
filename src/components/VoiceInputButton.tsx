@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { transcribeAudio } from '@/lib/ai';
+import { transcribeAudio, type AiTarget } from '@/lib/ai';
 // 플랫폼 구현은 Metro 가 고른다(웹=recorder.web.ts / 네이티브=recorder.ts). 여기선 구분하지 않는다.
 import {
   supportsVoice,
@@ -42,6 +42,8 @@ export type VoiceInputButtonProps = {
   autoStart?: boolean;
   /** 녹음이 끝나 idle 로 돌아왔을 때(전사·취소·실패 무관). autoStart 호출부가 버튼을 접는 데 쓴다. */
   onEnd?: () => void;
+  /** AI 가 돌 자리(공간 화면은 공간 번호 · client.ts AiTarget). 비우면 현재 매장(지금 그대로). */
+  target?: AiTarget;
 };
 
 type Phase = 'idle' | 'recording' | 'transcribing';
@@ -68,7 +70,7 @@ function mmss(ms: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
-export function VoiceInputButton({ onText, disabled, hints, surface, autoStart, onEnd }: VoiceInputButtonProps) {
+export function VoiceInputButton({ onText, disabled, hints, surface, autoStart, onEnd, target }: VoiceInputButtonProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [elapsed, setElapsed] = useState(0);
   // 언마운트 후 setState 방지 + 마이크 잔존 방지(화면을 닫아도 트랙은 반드시 놓는다).
@@ -124,7 +126,7 @@ export function VoiceInputButton({ onText, disabled, hints, surface, autoStart, 
         mimeType: rec.mimeType,
         durationMs: rec.durationMs,
         ...(hints && hints.length > 0 ? { hints } : {}),
-      });
+      }, target);
       if (!aliveRef.current) return;
       // 엣지가 명시적으로 거절한 경우(포맷·크기·데모모드)는 "안 들렸어요"로 뭉뚱그리지 않는다 —
       // 사용자가 더 크게 말해봐야 해결되지 않는 문제라 안내가 틀리면 계속 헛시도하게 된다.
@@ -147,7 +149,7 @@ export function VoiceInputButton({ onText, disabled, hints, surface, autoStart, 
       finishingRef.current = false;
       if (aliveRef.current) toIdle();
     }
-  }, [hints, onText, surface, fail, toIdle]);
+  }, [hints, onText, surface, fail, toIdle, target]);
 
   // 취소 — 사용자가 ✕ 를 눌렀거나(reason 없음), 말이 한 번도 안 잡혀 자동으로 접었을 때.
   const abort = useCallback(async (reason?: 'no_speech') => {

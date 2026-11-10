@@ -38,6 +38,7 @@ export function ScreenTitleHeader({
   onBack,
   backFallback,
   right,
+  line,
 }: {
   title: string;
   /** 'tab' = 탭 루트 헤더(높이 고정 + 매장명 줄 항상). 없으면 하위 화면 헤더. */
@@ -54,6 +55,8 @@ export function ScreenTitleHeader({
   backFallback?: Href | true;
   /** 오른쪽 끝 액션. */
   right?: ReactNode;
+  /** 매장명 줄 대신 보일 한 줄(공간 화면 = 공간 이름). 주면 매장명 줄을 그리지 않는다. */
+  line?: string;
 }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -105,7 +108,15 @@ export function ScreenTitleHeader({
         <Text style={styles.title} numberOfLines={1}>
           {title}
         </Text>
-        {(tab || storeLine) && <StoreLine />}
+        {line !== undefined ? (
+          <View style={styles.storeLine}>
+            <Text style={styles.storeName} numberOfLines={1}>
+              {line || ' '}
+            </Text>
+          </View>
+        ) : (
+          (tab || storeLine) && <StoreLine />
+        )}
       </View>
       {right ? <View style={styles.right}>{right}</View> : null}
     </View>

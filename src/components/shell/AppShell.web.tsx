@@ -63,6 +63,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 
   if (AUTH_PATHS.includes(pathname)) return phone;
+  // 공간 층(2번 덩이)은 폰 프레임 + 공간 하단 탭이다. 매니저가 공간에 들어가도 사장 웹 셸 사이드바(매장 탭)로 그리지 않는다.
+  if (pathname === '/space' || pathname.startsWith('/space/')) return phone;
 
   if (SHOW_HQ_CONSOLE && (pathname === '/hq' || pathname.startsWith('/hq/'))) {
     if (status === 'signed_in' && brandId) {

@@ -1,5 +1,6 @@
 // lib/ai/index.ts — AI 레이어 공개 진입점
 export { generateAnswer, structureSquare, structureSquareStrict, patchSquare, extractIntent, classifyQuery, transcribeAudio, extractDocText } from './client';
+export type { AiTarget, AiQuotaScope } from './client';
 export { structureDoc, type DocProgress } from './structureDoc';
 export { hybridSearch, embedEntry, buildEmbedText } from './searchClient';
 export { toSopSlice, toSopSlices } from './adapter';

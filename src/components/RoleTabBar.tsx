@@ -10,6 +10,7 @@ import { USE_NATIVE_DRIVER } from '@/lib/anim';
 import { useOwnerTodoCount } from '@/lib/hooks/useOwnerTodoCount';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useShell } from '@/components/shell/shellContext';
+import { SPACE_SCREEN } from '@/lib/place/words';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 export type Tab = { label: string; path: Href; icon: IconName; iconActive: IconName; alsoActiveFor?: Href[] };
@@ -29,7 +30,7 @@ const OWNER_KNOWHOW_TAB = '/owner/categories';
  *  - 주니어 5탭: 4번째 '출퇴근'(현장 실행). 질문하기는 노하우 탭 안 세그먼트로.
  * 맨 오른쪽은 두 역할 모두 '설정'(내 정보 관리)으로 고정한다.
  */
-const TABS: Record<'junior' | 'owner', Tab[]> = {
+const TABS: Record<'junior' | 'owner' | 'space', Tab[]> = {
   junior: [
     { label: '홈', path: '/junior/home', icon: 'home-outline', iconActive: 'home' },
     // 알바의 본업은 '묻기' — 이 탭은 KnowhowSegment(둘러보기+물어보기, 기본=물어보기)로 연결된다.
@@ -51,6 +52,13 @@ const TABS: Record<'junior' | 'owner', Tab[]> = {
     { label: '퀴즈', path: '/owner/training', icon: 'school-outline', iconActive: 'school' },
     { label: '업무 채팅', path: '/owner/work', icon: 'briefcase-outline', iconActive: 'briefcase' },
     { label: '설정', path: '/owner/settings', icon: 'settings-outline', iconActive: 'settings' },
+  ],
+  // 공간(2번 덩이) — 매장 층과 나란한 세 번째 층. 탭 넷(홈·노하우·교육·설정 · 화면지도 1-1). 배지는 아직 없다.
+  space: [
+    { label: SPACE_SCREEN.tabHome, path: '/space/home', icon: 'home-outline', iconActive: 'home' },
+    { label: SPACE_SCREEN.tabKnowhow, path: '/space/knowhow', icon: 'bulb-outline', iconActive: 'bulb' },
+    { label: SPACE_SCREEN.tabTeach, path: '/space/teach', icon: 'school-outline', iconActive: 'school' },
+    { label: SPACE_SCREEN.tabSettings, path: '/space/settings', icon: 'settings-outline', iconActive: 'settings' },
   ],
 };
 
@@ -87,12 +95,12 @@ export function goToTab(path: Href) {
 }
 
 /** 역할별 하단 탭바 (아이콘 + 라벨). 메인 화면 하단에 배치. */
-export function RoleTabBar({ role }: { role: 'junior' | 'owner' }) {
+export function RoleTabBar({ role }: { role: 'junior' | 'owner' | 'space' }) {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   // 매니저는 사장 화면(근무표 등)을 열어도 직원 탭바를 쓴다 — 사장 탭은 허용 목록 밖으로 튕기는 길뿐이다.
   const sessionRole = useSessionStore((s) => s.role);
-  const tabs = storeTabsFor(role, sessionRole);
+  const tabs = role === 'space' ? TABS.space : storeTabsFor(role, sessionRole);
   // '할 일'(답할 질문 + 검토할 제안) 배지 — 받은질문 탭이 사라진 자리를 대신하는 신호.
   //  판정 SSOT = useOwnerTodoCount. 훅은 조건부 호출이 안 되므로 junior 에서도 부르되 배지는 안 붙인다.
   const todo = useOwnerTodoCount();

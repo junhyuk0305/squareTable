@@ -18,6 +18,7 @@ import {
 } from './config';
 import { supabase } from '@/lib/supabase';
 import { reportError } from '@/lib/analytics/track';
+import type { AiTarget } from './client';
 
 const RRF_K = 60; // RRF 상수(표준값). 순위만 쓰므로 점수 스케일 불일치에 견고.
 const TOPK = 8;
@@ -40,7 +41,8 @@ type VecResponse = { candidates: VecHit[]; topSimilarity: number; unindexedIds?:
 //   **모델 퇴역 404 가 통째로 이 구멍으로 빠져나갔다** — 의미검색이 꺼져도 신호가 0이었다.
 //   실측(2026-08-25): 발행 노하우 321건 대비 색인 124건 = **197건(61%)이 미색인**이었는데
 //   그 사실을 알려주는 신호가 어디에도 없었다. 반환 계약(null=소프트)은 그대로 두고 계측만 붙인다.
-async function edgePost<T>(task: 'search' | 'embed', payload: unknown): Promise<T | null> {
+// unitId = 대상 자리(client.ts AiTarget 과 같은 계약). 비우면 본문에 안 싣는다 = 옛 요청 그대로(현재 매장).
+async function edgePost<T>(task: 'search' | 'embed', payload: unknown, unitId?: string | null): Promise<T | null> {
   if (!AI_ENDPOINT) return null; // 설정상 비활성 — 장애가 아니므로 계측 대상 아님
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
@@ -54,7 +56,7 @@ async function edgePost<T>(task: 'search' | 'embed', payload: unknown): Promise<
     const res = await fetch(AI_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ task, payload }),
+      body: JSON.stringify(unitId ? { task, payload, unitId } : { task, payload }),
       signal: ctrl.signal,
     });
     if (!res.ok) {
@@ -72,7 +74,7 @@ async function edgePost<T>(task: 'search' | 'embed', payload: unknown): Promise<
 /**
  * 하이브리드 검색. 반환 타입은 기존 SearchResult 와 동형 → useChatStore 밴드 로직 무변경.
  */
-export async function hybridSearch(query: string, entries: PlaybookEntry[]): Promise<SearchResult> {
+export async function hybridSearch(query: string, entries: PlaybookEntry[], target?: AiTarget): Promise<SearchResult> {
   // mock/오프라인 — 기존 렉시컬. 데모 '검색 중' 느낌만 약간(실호출 경로엔 인위 지연 없음).
   if (USE_MOCK) {
     await new Promise((r) => setTimeout(r, 550));
@@ -87,7 +89,7 @@ export async function hybridSearch(query: string, entries: PlaybookEntry[]): Pro
     vec = await edgePost<VecResponse>('search', {
       query,
       checkIds: lexical.candidates.map((c) => c.entry.id),
-    });
+    }, target?.unitId);
   } catch (e) {
     // 의미검색(pgvector) 다운 → 렉시컬로 조용히 열화되던 걸 계측(팀이 의미검색 장애를 볼 수 있게).
     console.warn('[search] vector path failed, lexical fallback:', e);
@@ -196,7 +198,9 @@ export async function embedEntry(e: PlaybookEntry, markPending = true): Promise<
   const payload = { entryId: e.id, text: buildEmbedText(e) };
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const res = await edgePost('embed', payload);
+      // ★공간: 노하우 자기 자리 번호를 대상으로 싣는다. 엣지는 그 번호가 현재 공간일 때만 공간으로 돌고,
+      //   매장 노하우(= 현재 매장)면 예전 판정 그대로다(엣지 authUser · 추가 조회도 없다).
+      const res = await edgePost('embed', payload, e.unit_id);
       if (res !== null) return true; // 색인 성공 — 대기 표시는 엣지가 지웠다
       // ★가장 흔한 실패 경로가 여기였다(#15): 소프트 실패(null)는 throw 를 안 하므로 아래 catch 를
       //   타지 않고, 3회를 다 돌고 **아무 것도 안 한 채 반환**했다. 그래서 미색인 노하우가 쌓여도
