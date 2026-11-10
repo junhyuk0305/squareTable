@@ -192,7 +192,9 @@ try {
     if (promoted) await admin.from('work_rooms').update({ is_default: false }).eq('id', ROOM); }
 
   // ★사용자 확정 규칙: 매니저는 **방을 만들 수 있고**, 자기가 만든(=들어가 있는) 방은
-  //   이름 변경·전체방 전환('초대'의 개념)·멤버 관리까지 할 수 있어야 한다. 여기가 막히면 고친 게 아니다.
+  //   이름 변경·멤버 관리까지 할 수 있어야 한다. 여기가 막히면 고친 게 아니다.
+  //   ★2026-11-10 사용자 결정: 전체방 전환은 0319 규칙(is_default 는 정의자 RPC 로만 · 그 RPC·화면은 없다)을 따른다.
+  //   비공개 방을 전체방으로 바꾸면 옛 대화가 매장 전원에게 열리므로 직접 update 는 막혀야 맞다(사장 포함 · 42501).
   const MYROOM = `wr_p5_mgr_${s}`;
   { const { error } = await MG.from('work_rooms').insert([{ id: MYROOM, unit_id: UNIT, name: '매니저가 만든 방', is_default: false, created_by: mId }]);
     M('방 만들기', '매니저', '허용', !error, errStr(error)); }
@@ -203,8 +205,8 @@ try {
     M('자기가 만든 방의 멤버에게 할일 배정', '매니저', '허용', !e, errStr(e)); if (!e) await del(`p5_mine_${s}`); }
   { const { error } = await MG.from('work_rooms').update({ is_default: true }).eq('id', MYROOM).select('id');
     const { data: after } = await admin.from('work_rooms').select('is_default').eq('id', MYROOM).maybeSingle();
-    M('★자기가 만든 방을 전체방으로 전환(초대 개념)', '매니저', '허용', !!after?.is_default, after?.is_default ? '전환됨' : errStr(error));
-    await admin.from('work_rooms').update({ is_default: false }).eq('id', MYROOM); }
+    M('★자기가 만든 방을 직접 update 로 전체방 전환(0319 · 정의자 RPC 로만)', '매니저', '거부', !after?.is_default, after?.is_default ? '전환됨(0319 우회)' : errStr(error));
+    if (after?.is_default) await admin.from('work_rooms').update({ is_default: false }).eq('id', MYROOM); }
   { const { data: fd } = await admin.from('work_feed').insert([{
       id: `wf_p5_mine_${s}`, unit_id: UNIT, room_id: MYROOM, feed_date: new Date().toISOString().slice(0, 10),
       data: { kind: 'message', text: '매니저 방 메시지', authorId: mId }, created_at: now }]).select('id');
