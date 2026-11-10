@@ -195,7 +195,7 @@ export function JuniorMySpace({ me }: { me: string }) {
             }}
             groups={heatGroups}
             legend={MY_HEAT_LEGEND}
-            hint="상자 하나 = 노하우 하나 · 길게 누르면 이름이 보여요"
+            hint="상자 하나가 노하우 하나예요. 길게 누르면 이름이 보이고, 누르면 그 노하우로 가요."
             onPressCell={(id) => {
               const e = entryById.get(id);
               if (e) setDetailEntry(e);

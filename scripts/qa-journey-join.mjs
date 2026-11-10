@@ -68,8 +68,10 @@ const ERR_RE = /실패|못\s?했어요|오류/;
 const errLines = (t) => (t ?? '').split('\n').map((s) => s.trim()).filter((s) => ERR_RE.test(s));
 const INVALID_MSG = '초대코드가 올바르지 않아요. 사장님께 코드를 다시 받아주세요.';
 const CLOSED_MSG = '지금은 합류 신청을 받지 않는 매장이에요. 사장님께 확인해 주세요.';
-const ADD_ROW = '[aria-label="코드로 매장 추가 — 초대코드 입력"]';
 const CODE_INPUT = 'input[maxlength="6"]';
+// 매장이 있는 직원 hub 의 '매장 추가' 섹션(2026-11-10 W3 ④-9 · 코드 입력을 접지 않는다). hub 착지 신호로 쓴다.
+const HUB_ADD = '[data-testid="hub-add-store"]';
+const HUB_ADD_READY = `!!document.querySelector(${JSON.stringify(HUB_ADD)})`;
 
 // 페이지의 fetch 를 감싸 ≥400 응답을 모은다(supabase-js 는 전역 fetch 를 부른다).
 const FETCH_SPY = `(()=>{window.__qaBad=[];const f=window.fetch;window.fetch=async(...a)=>{const r=await f(...a);try{if(r.status>=400){const u=String((a[0]&&a[0].url)||a[0]).split('?')[0];window.__qaBad.push(r.status+' '+u.slice(u.indexOf('/',8)));}}catch(e){}return r;};})()`;
@@ -185,12 +187,9 @@ async function watch(page, pred, ms, seen = new Set()) {
 /** 직원 hub 에서 코드를 넣고 '합류하기' 를 누른다(0346 전 버튼 이름 = '합류 신청'). */
 async function joinViaUi(J, code, { double = false } = {}) {
   const page = J.page;
-  if (!(await page.waitFor(`!!document.querySelector(${JSON.stringify(CODE_INPUT)}) || !!document.querySelector(${JSON.stringify(ADD_ROW)})`, 30000))) {
-    throw new Error('hub 코드 입력줄을 못 찾음');
-  }
-  if (!(await page.eval(`!!document.querySelector(${JSON.stringify(CODE_INPUT)})`))) {
-    await page.click(ADD_ROW);
-    if (!(await page.waitFor(`!!document.querySelector(${JSON.stringify(CODE_INPUT)})`, 5000))) throw new Error('코드 입력칸이 안 열림');
+  // 코드 입력칸은 매장 유무와 관계없이 늘 펼쳐져 있다(2026-11-10 ④-9). 접힌 줄을 여는 단계는 없다.
+  if (!(await page.waitFor(`!!document.querySelector(${JSON.stringify(CODE_INPUT)})`, 30000))) {
+    throw new Error('hub 코드 입력칸을 못 찾음');
   }
   await page.eval(`document.querySelector(${JSON.stringify(CODE_INPUT)}).focus()`);
   await page.send('Input.insertText', { text: code });
@@ -339,7 +338,7 @@ try {
   // ── K7-r: J 신청 → S 거절 → J 벨 '반려' 항목(0247 member_notices) → 탭 착지(/junior/hub) ──────────────
   section('K7-r. (옛 신청 심기) J 대기 → S \'거절\' → J 벨에 반려 항목 · 탭하면 직원 허브');
   const J = await openWindow('J', 9334, juniorSession, '/junior/hub');
-  await J.page.waitFor(`document.body.innerText.includes('코드로 매장 추가')`, 40000);
+  await J.page.waitFor(HUB_ADD_READY, 40000);
   {
     await seedPending(admin, jc.uid, unit); // ★0346: 화면 합류는 바로 멤버라 staff2 에게 옛 신청 대기를 심는다
     await J.reload();
@@ -373,7 +372,7 @@ try {
     await S.mark('거절');
     // 다시 신청할 수 있게 허브로 돌아간다(K5-a 가 코드 입력줄을 기다린다).
     await J.goto('/junior/hub');
-    await J.page.waitFor(`document.body.innerText.includes('코드로 매장 추가')`, 40000);
+    await J.page.waitFor(HUB_ADD_READY, 40000);
   }
 
   // ── J: 옛 신청 다시 심기(두 번 누름 검사는 즉시 합류 K8 로 옮겼다) ──────────────
@@ -580,7 +579,7 @@ try {
 
     const seen = new Set();
     await J.goto('/junior/hub');
-    await J.page.waitFor(`document.body.innerText.includes('코드로 매장 추가')`, 40000);
+    await J.page.waitFor(HUB_ADD_READY, 40000);
     const wErr = watch(J.page, () => false, 8000, seen);
     await joinViaUi(J, code2, { double: true });
     const home = await J.page.waitFor(`location.pathname==='/junior/home'`, 15000);
@@ -620,7 +619,7 @@ try {
   {
     const seen = new Set();
     await J.goto('/junior/hub');
-    await J.page.waitFor(`document.body.innerText.includes('코드로 매장 추가')`, 40000);
+    await J.page.waitFor(HUB_ADD_READY, 40000);
     const before = new Set((await J.page.text()).split('\n').map((s) => s.trim()));
     const FEEDBACK = /이미 들어가|올바르지|받지 않는|실패|못\s?했어요|오류|잠겼/;
     const w = watch(J.page, (t) => t.split('\n').some((s) => FEEDBACK.test(s) && !before.has(s.trim())), 10000, seen);

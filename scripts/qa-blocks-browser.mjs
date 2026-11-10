@@ -601,7 +601,8 @@ async function main() {
     await ph.goto(`${ORIGIN}/junior/hub`, { waitUntil: 'domcontentloaded' });
     check('B5-1 ① 진입', await wait(ph, '안녕하세요', 40000));
     await ph.waitForTimeout(2000);
-    check('B5-2 ① 코드 입력이 곧바로 보인다', await see(ph, '매장 추가하기'));
+    check('B5-2 ① 코드 입력이 곧바로 보인다(초대코드 섹션)',
+      (await ph.locator('[data-testid="hub-code-entry"] input[maxlength="6"]').count()) === 1);
     check('B5-3 ① 가짜 버튼(히어로 "코드를 받으셨나요?") 제거됨', !(await see(ph, '코드를 받으셨나요')));
     check('B5-4 ① 중복 안내("아래에 초대코드를 입력") 제거됨', !(await see(ph, '아래에 초대코드를 입력')));
     check('B5-5 ① 기능 소개 캐러셀 제거됨', !(await see(ph, '이런 걸 할 수 있어요')));
@@ -614,19 +615,22 @@ async function main() {
     await ph.reload({ waitUntil: 'domcontentloaded' });
     await ph.waitForTimeout(2500);
     check('B5-7 ② 승인 대기 카드', await see(ph, '사장님 승인 대기 중'));
-    check('B5-8 ② 대기 중엔 코드 입력을 숨긴다', !(await see(ph, '코드가 없으신가요')));
+    // 옛 판은 설명 줄 '코드가 없으신가요'로 쟀다. 그 줄은 ⓘ로 옮겨 없어졌으니(11-10) 입력칸 자체를 센다.
+    check('B5-8 ② 대기 중엔 코드 입력을 숨긴다', (await ph.locator('input[maxlength="6"]').count()) === 0);
     await shot(ph, '06-junior-hub-2-pending');
 
-    // ③ 매장 있음 — 코드 입력은 접힌 한 줄로 강등. 펼치면 아래로 열린다.
+    // ③ 매장 있음 — 코드 입력을 접지 않는다. 매장 목록 아래 '매장 추가' 섹션 + ⓘ(2026-11-10 W3 ④-9).
     const { error: apErr2 } = await owner.rpc('approve_member', { p_uid: hubId });
     if (apErr2) throw new Error('approve_member(hub): ' + apErr2.message);
     await ph.reload({ waitUntil: 'domcontentloaded' });
     await ph.waitForTimeout(2500);
     check('B5-9 ③ 매장 카드', await see(ph, 'QA블록카페'));
-    check('B5-10 ③ 코드 입력이 접혀 있다', !(await see(ph, '코드가 없으신가요')));
-    await ph.getByLabel('코드로 매장 추가 — 초대코드 입력', { exact: true }).last().dispatchEvent('click');
+    check('B5-10 ③ 코드 입력이 늘 보인다(접힌 줄 없음)',
+      (await ph.locator('[data-testid="hub-add-store"] input[maxlength="6"]').count()) === 1 &&
+      (await ph.getByLabel('코드로 매장 추가 — 초대코드 입력', { exact: true }).count()) === 0);
+    await ph.getByLabel('초대코드 설명 보기', { exact: true }).last().dispatchEvent('click');
     await ph.waitForTimeout(700);
-    check('B5-11 ③ 펼치면 코드 입력이 열린다', await see(ph, '코드가 없으신가요'));
+    check('B5-11 ③ ⓘ를 누르면 설명 시트가 뜬다', await see(ph, '설정 맨 위에 있어요'));
     await shot(ph, '07-junior-hub-3-joined');
 
     // ═══════════ B10 카드 3연속 해체 6화면 — 형태를 DOM에서 실측 ═══════════

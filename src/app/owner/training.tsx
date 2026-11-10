@@ -28,8 +28,8 @@ import { maskTail4, scoreText, takenDayLabel } from '@/lib/quiz/guestResult';
 import { Appear, stagger } from '@/components/Appear';
 import { EmptyState } from '@/components/EmptyState';
 import { BottomSheet } from '@/components/BottomSheet';
-import { Collapse } from '@/components/Collapse';
 import { SectionLabel } from '@/components/SectionLabel';
+import { InfoDot } from '@/components/InfoDot';
 import { SegmentTabs } from '@/components/SegmentTabs';
 import { AlertRow } from '@/components/blocks/AlertRow';
 import { ConfirmModal } from '@/components/ConfirmModal';
@@ -98,7 +98,6 @@ export default function OwnerTrainingScreen() {
     }, [bumpQuiz, reloadCourses, bumpSends, reloadStats]),
   );
   const [fixOpen, setFixOpen] = useState(false);
-  const [draftOpen, setDraftOpen] = useState(false);
   const [guestOpen, setGuestOpen] = useState(false);
   const [boxOpen, setBoxOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -496,23 +495,20 @@ export default function OwnerTrainingScreen() {
             {tab === 'running' ? (
             <Appear delay={stagger(3)}>
               <View style={st.actions}>
-                {/* 만들던 퀴즈 — 있을 때만(0건이면 줄째로 안 그린다).
+                {/* 만들던 퀴즈 — 있을 때만(0건이면 섹션째로 안 그린다). 접지 않고 전부 펼친다(2026-11-10 W3 ④-11 · ⓘ로 설명).
                     ★상세가 아니라 **만들기 화면**으로 이어 간다 — 상세에는 보내는 길이 없다.
                     ★줄마다 지우기: 초안은 아직 아무에게도 안 나갔고 응시도 없어 잃을 기록이 없다. */}
                 {drafts.length > 0 ? (
-                  <Pressable
-                    onPress={() => setDraftOpen((v) => !v)}
-                    style={({ pressed }) => [st.foldRow, pressed && { opacity: 0.6 }]}
-                    accessibilityRole="button"
-                    accessibilityState={{ expanded: draftOpen }}
-                    accessibilityLabel={`만들던 퀴즈 ${drafts.length}건 ${draftOpen ? '접기' : '펼치기'}`}
+                  <Section
+                    title="만들던 퀴즈"
+                    hint={`${drafts.length}건`}
+                    titleAccessory={
+                      <InfoDot
+                        title="만들던 퀴즈"
+                        body="아직 아무에게도 안 나간 퀴즈예요. 누르면 이어서 만들고, 지워도 잃는 기록이 없어요."
+                      />
+                    }
                   >
-                    <Text style={st.foldText}>만들던 퀴즈 {drafts.length}건</Text>
-                    <Ionicons name={draftOpen ? 'chevron-up' : 'chevron-down'} size={15} color={InkColors.ink3} />
-                  </Pressable>
-                ) : null}
-                {drafts.length > 0 && draftOpen ? (
-                  <Collapse>
                     <View style={st.listCard}>
                       {drafts.map((q, i) => (
                         <QuizRowView
@@ -525,7 +521,7 @@ export default function OwnerTrainingScreen() {
                         />
                       ))}
                     </View>
-                  </Collapse>
+                  </Section>
                 ) : null}
 
                 {/* 롤업 '손볼 것' — 경고에서 빠진 낡은 문항(초안·보관 = 안 나가는 중)은 사라지지 않고 여기로. */}
@@ -537,7 +533,8 @@ export default function OwnerTrainingScreen() {
                       count: fix.staleIdle.length,
                       unit: '건',
                       target: `안 나가는 중 · ${fix.staleIdle.map((x) => x.course.name).slice(0, 2).join(', ')}${fix.staleIdle.length > 2 ? ' 외' : ''}`,
-                      onPress: () => (fix.staleIdle.every((x) => x.archived) ? setBoxOpen(true) : setDraftOpen(true)),
+                      // 초안은 바로 위 '만들던 퀴즈'에 늘 펼쳐져 있다. 보관만 있을 때 보관함을 연다.
+                      onPress: () => { if (fix.staleIdle.every((x) => x.archived)) setBoxOpen(true); },
                     }]}
                   />
                 ) : null}
@@ -975,14 +972,6 @@ const st = StyleSheet.create({
   loadingText: { fontSize: 13, fontWeight: '600', color: TextColor.secondary },
   rowSubWarn: { color: BrandColors.warnText },
 
-  // 접히는 요약행 — 카드가 아니다(카드로 만들면 목록 카드 옆에서 또 하나의 카드로 읽힌다).
-  // ★회색 바탕 위에 맨몸으로 두지 않는다(2026-09-11) — 섹션이 흰 카드로 묶여야 한 덩어리로 읽힌다.
-  // 흰 면 · 선 1px · 모서리 16 · 그림자 e1 · 좌우 16 = CardStyles.rows(2026-11-02).
-  foldRow: {
-    ...CardStyles.rows,
-    flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48,
-  },
-  foldText: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
   // 좌우 여백 = 시트 머리말(SheetHead 16)과 같은 lg. 없으면 목록 카드가 시트 양끝에 붙고
   // 섹션 제목(자체 패딩 4)과 카드의 왼쪽 선이 어긋났다(2026-09-03 웹 실측 피드백). 세 시트가 같이 쓴다.
   // paddingBottom — 없으면 목록 카드 마지막 줄이 시트 바닥선에 그대로 붙는다(웹은 insets.bottom 이 0

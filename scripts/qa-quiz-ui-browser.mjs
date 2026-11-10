@@ -52,7 +52,7 @@ let chromium;
 try { ({ chromium } = await import('playwright')); }
 catch { console.error('playwright 미설치'); process.exit(2); }
 
-let pass = 0, fail = 0;
+let pass = 0, fail = 0, skipped = 0;
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  ✓', n)) : (fail++, console.log('  ✗', n, extra)); };
 
 const projectRef = new URL(URL_).hostname.split('.')[0];
@@ -303,9 +303,18 @@ async function main() {
       await settled();
       await scan('퀴즈 홈', '01-training');
 
-      if (await see('만들다 만 퀴즈')) {
-        await tapText('만들다 만 퀴즈');
-        await scan('퀴즈 홈(만들다 만 것 펼침)', '02-training-drafts');
+      // 만들던 퀴즈(2026-11-10 W3 ④-11) — 접지 않고 늘 펼친다. 시드한 'UI 실측 퀴즈'(발송 0 = 초안)가 목록에 바로 보여야 한다.
+      // ★옛 판은 '만들다 만 퀴즈' 문구를 찾아 펼쳤다. 문구가 바뀐 뒤 이 스캔이 매번 조용히 건너뛰어졌다 → 조건 대신 check 로 센다.
+      if (seeded) {
+        check('만들던 퀴즈 목록이 펼쳐져 있다', (await see('만들던 퀴즈')) && (await see('UI 실측 퀴즈')));
+        await tapLabel('만들던 퀴즈 설명 보기');
+        check('만들던 퀴즈 ⓘ 설명 시트', await wait('지워도 잃는 기록이 없어요', 10000));
+        await scan('퀴즈 홈(만들던 퀴즈 ⓘ)', '02-training-drafts');
+        await tapText('알겠어요');
+        await settle();
+      } else {
+        skipped++;
+        console.log('  - skip 만들던 퀴즈 스캔(시드 실패)');
       }
       // 보관함 — 보관한 퀴즈가 있을 때만 상단바에 선다(0건이면 진입로 자체가 없다).
       if (await see('보관함')) {
@@ -397,8 +406,10 @@ async function main() {
     if (seeded) await seeded.cleanup().catch(() => {});
   }
 
-  console.log(`\n${fail === 0 ? '✅ PASS' : '❌ FAIL'}  통과 ${pass} · 실패 ${fail}   (스크린샷: ${SHOTS})`);
-  process.exit(fail === 0 ? 0 : 1);
+  // 건너뛴 것은 통과로 세지 않는다(AGENTS.md) — skip 이 있으면 PASS 를 찍지 않는다.
+  const ok = fail === 0 && skipped === 0;
+  console.log(`\n${ok ? '✅ PASS' : '❌ FAIL'}  통과 ${pass} · 실패 ${fail} · skip ${skipped}   (스크린샷: ${SHOTS})`);
+  process.exit(ok ? 0 : 1);
 }
 
 main().catch((e) => { console.error('HARNESS ERROR:', e); process.exit(2); });
