@@ -228,7 +228,7 @@
     ]
   },
   {
-    "name": "초대코드 신청에서 사장 승인까지",
+    "name": "초대코드 즉시 합류와 옛 신청 승인",
     "query": "join_by_invite",
     "kind": "contract",
     "baseline": "join_by_invite",
@@ -242,17 +242,17 @@
         "joinByInvite: async (code) =>"
       ],
       [
-        "supabase/migrations/0325_code_lock_5min.sql",
+        "supabase/migrations/0366_space_close_store_write_paths.sql",
         "CREATE OR REPLACE FUNCTION public.join_by_invite("
       ],
       [
-        "supabase/migrations/0336_free_staff_cap_two.sql",
+        "supabase/migrations/0346_instant_join.sql",
         "create or replace function public.approve_member("
       ]
     ]
   },
   {
-    "name": "교대 승인이 근무와 예상 급여를 바꿈",
+    "name": "교대 승인이 근무표와 출퇴근 대조를 바꿈",
     "query": "approve_swap",
     "kind": "contract",
     "baseline": "approve_swap",
@@ -271,12 +271,12 @@
       ],
       [
         "src/components/TimesheetView.tsx",
-        "computePay(shiftsToPayRecords(payShifts)"
+        "reconcileSchedule(monthShifts, monthRecs)"
       ]
     ]
   },
   {
-    "name": "급여 설정 변경의 적용일 이력과 과거 계산",
+    "name": "옛 앱 급여 설정 저장 RPC와 적용일 이력",
     "query": "save_payroll_settings",
     "kind": "contract",
     "baseline": "save_payroll_settings",
@@ -286,16 +286,8 @@
     ],
     "required": [
       [
-        "src/lib/store/usePayrollStore.ts",
-        "export const usePayrollStore"
-      ],
-      [
         "supabase/migrations/0280_payroll_settings_history.sql",
         "create or replace function public.save_payroll_settings("
-      ],
-      [
-        "src/components/TimesheetView.tsx",
-        "computePay(shiftsToPayRecords(payShifts)"
       ]
     ]
   },
@@ -552,7 +544,7 @@
     ]
   },
   {
-    "name": "매니저 현재 시급과 이력 조회 권한",
+    "name": "매니저 시급과 시급 이력 조회 권한(옛 앱 서버 경계)",
     "query": "wage_rates_read",
     "kind": "contract",
     "baseline": "wage_rates_read",
@@ -572,14 +564,6 @@
       [
         "supabase/migrations/0315_manager_permissions.sql",
         "create or replace function public.auth_can_manage()"
-      ],
-      [
-        "src/lib/db.ts",
-        "export async function fetchWageRates()"
-      ],
-      [
-        "src/lib/store/usePayrollStore.ts",
-        "fetchWageRates()"
       ]
     ]
   },

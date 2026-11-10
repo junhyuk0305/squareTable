@@ -16,7 +16,7 @@
     "android",
     "ios"
   ],
-  "summary": "허브의 사장 집계와 직원 오늘 조회, 활성 매장 홈의 업무 파생을 추적했다. 허브 계정 역할과 매장 안 역할을 구분한다. 출퇴근 쓰기와 급여 계산 전체는 범위 밖이다.",
+  "summary": "허브의 사장 집계와 직원 오늘 조회, 활성 매장 홈의 업무 파생을 추적했다. 허브 계정 역할과 매장 안 역할을 구분한다. 허브 인건비 칸은 2026-11-02 급여 제거 때 뺐다. 출퇴근 쓰기는 범위 밖이다.",
   "entrypoints": [
     "/hub",
     "/owner/dashboard",
@@ -30,13 +30,13 @@
     "실행 미검증"
   ],
   "unknowns": [
-    "로컬 HEAD f03eecd의 코드 관찰이다. 원격 마이그레이션 적용 상태와 배포 앱 버전은 확인하지 않았다.",
+    "처음 기록은 로컬 HEAD f03eecd, 인건비 제거와 my_cross_summary_v2 부분은 59d15ab에서 다시 읽은 코드 관찰이다. 원격 마이그레이션 적용 상태와 배포 앱 버전은 확인하지 않았다.",
     "DB, 네트워크, AI, 브라우저 및 Android/iOS 실기기 실행은 하지 않았다.",
-    "교대 승인, 실제 출퇴근 쓰기, 급여 공식 전체 및 cross-notification RPC 전체는 이 기록에서 심층 추적하지 않았다.",
+    "교대 승인, 실제 출퇴근 쓰기 및 cross-notification RPC 전체는 이 기록에서 심층 추적하지 않았다.",
     "알림과 이해도 요약은 화면의 추가 입력이다. 관련 집계 전체의 분모와 대량 데이터 일치는 미검증이다."
   ],
   "findings": [
-    "허브 인건비와 owner_overview.labor_month는 서로 다른 계산이다. 필드명이 비슷하다는 이유로 같은 지표라고 읽으면 안 된다.",
+    "허브 인건비 계산(laborByUnit)과 칸은 2026-11-02에 뺐다. owner_labor_inputs_v2와 owner_overview.labor_month는 옛 앱 때문에 서버에 남았고 지금 앱은 둘 다 쓰지 않는다.",
     "집계 함수의 주석에 남은 24시간 설명과 달리 최신 owner_today 실행 본문은 16시간이다."
   ],
   "evidence": [
@@ -65,12 +65,6 @@
       "kind": "code"
     },
     {
-      "id": "pay",
-      "file": "src/lib/store/useHubStore.ts",
-      "symbol": "function laborByUnit(",
-      "kind": "code"
-    },
-    {
       "id": "fetch",
       "file": "src/lib/db.ts",
       "symbol": "export async function fetchOwnerToday()",
@@ -89,14 +83,8 @@
       "kind": "code"
     },
     {
-      "id": "labor-sql",
-      "file": "supabase/migrations/0299_staff_count_membership.sql",
-      "symbol": "create or replace function public.owner_labor_inputs_v2()",
-      "kind": "code"
-    },
-    {
       "id": "junior-sql",
-      "file": "supabase/migrations/0305_closed_store_hub_summary.sql",
+      "file": "supabase/migrations/0367_space_no_mixing.sql",
       "symbol": "create or replace function public.my_cross_summary_v2()",
       "kind": "code"
     },
@@ -151,7 +139,7 @@
       "type": "store",
       "name": "useHubStore 조회와 오류",
       "aliases": [],
-      "current": "5초 TTL을 사용한다. 사장 overview/today/labor를 병렬 조회하고 성공분만 갱신한다. 실패도 loaded=true이며 오류 플래그를 따로 올린다. 실패 시 TTL을 비우고 계정 epoch가 바뀐 응답은 버린다.",
+      "current": "5초 TTL을 사용한다. 사장 overview/today를 병렬 조회하고 성공분만 갱신한다. 실패도 loaded=true이며 오류 플래그를 따로 올린다. 실패 시 TTL을 비우고 계정 epoch가 바뀐 응답은 버린다.",
       "evidence": [
         "store"
       ],
@@ -177,26 +165,11 @@
       ]
     },
     {
-      "id": "labor",
-      "type": "calculation",
-      "name": "허브 예상 인건비",
-      "aliases": [],
-      "current": "0299 owner_labor_inputs_v2의 직원은 junior/manager 멤버십 기준이다. laborByUnit은 근무표와 매장 정산 기간으로 computePay 및 departedPayRows를 호출한다. owner_overview.labor_month의 출퇴근 합산 값을 화면 인건비로 그대로 쓰지 않는다.",
-      "evidence": [
-        "labor-sql",
-        "pay"
-      ],
-      "changeKinds": [
-        "contract",
-        "field"
-      ]
-    },
-    {
       "id": "junior-data",
       "type": "rpc",
       "name": "my_cross_summary_v2",
       "aliases": [],
-      "current": "0305 최신 정의는 본인 멤버십 매장의 본인 근무/시급 입력만 반환한다. 닫힌 매장의 junior/manager는 매장 행을 유지하되 근무와 급여 입력을 비우거나 0/null로 돌린다.",
+      "current": "최신 0367은 0305 본문에 공간(kind=space) 멤버십을 빼는 한 줄을 더했다. 본인 멤버십 매장의 본인 근무/시급 입력만 반환한다. 닫힌 매장의 junior/manager는 매장 행을 유지하되 숫자 칸을 비운다. 시급 칸은 옛 앱용이고 지금 앱은 쓰지 않는다.",
       "evidence": [
         "junior-sql"
       ],
@@ -210,7 +183,7 @@
       "type": "screen",
       "name": "현황 표시와 재시도",
       "aliases": [],
-      "current": "사장 현황은 여러 loaded를 함께 기다린다. overview 실패는 재시도 화면이다. 인건비 실패는 숫자 대신 실패 표시다. 직원 오늘은 마운트와 foreground 복귀 때 요약, 알림 입력, 매장 별칭을 재조회한다.",
+      "current": "사장 현황은 overview/today loaded를 함께 기다린다. overview 실패는 재시도 화면이다. 직원 오늘은 마운트와 foreground 복귀 때 요약, 알림 입력, 매장 별칭을 재조회한다.",
       "evidence": [
         "owner-view",
         "junior-view"
@@ -292,22 +265,6 @@
       "evidence": [
         "store",
         "fetch"
-      ],
-      "kinds": [
-        "contract",
-        "field"
-      ]
-    },
-    {
-      "id": "refresh-labor",
-      "from": "refresh",
-      "to": "labor",
-      "relation": "calculates-after-read",
-      "when": "인건비 입력 조회 성공",
-      "confidence": "confirmed-code",
-      "evidence": [
-        "store",
-        "pay"
       ],
       "kinds": [
         "contract",
