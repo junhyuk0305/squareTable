@@ -66,8 +66,9 @@ export type PlaybookEntry = {
   unit_id: string;
   creator_id: string;
   creator_name: string;
-  /** 작성 시점 역할 스냅샷(0101) — 저자 표기("○○ 사장님"/"○○ 매니저")용. 레거시(미저장)=null. */
-  creator_role?: 'owner' | 'manager' | null;
+  /** 작성 시점 역할 스냅샷(0101) — 저자 표기("○○ 사장님"/"○○ 매니저"/공간 주인 "○○님")용. 레거시(미저장)=null.
+   *  'space_owner' = 공간 노하우(0364 · 2번 덩이). */
+  creator_role?: 'owner' | 'manager' | 'space_owner' | null;
   category: string; // 기본 4종(Category) 키 또는 매장 커스텀 카테고리 id(0096, 수동 지정 전용)
   subcategory: string;
   title: string;

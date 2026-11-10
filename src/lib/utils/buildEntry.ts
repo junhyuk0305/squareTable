@@ -114,6 +114,8 @@ export function buildPlaybookEntryFromSquare(
     section?: string | null;
     orderIndex?: number;
     sourceId?: string;
+    /** 공간 노하우(2번 덩이)면 그 공간 번호. 없으면 현재 매장(지금 그대로). */
+    spaceId?: string;
   } = {},
 ): PlaybookEntry {
   const now = new Date().toISOString();
@@ -136,13 +138,16 @@ export function buildPlaybookEntryFromSquare(
   // 태그: 카테고리 + AI 키워드 일부
   const tags = Array.from(new Set([`#${category}`, ...keywords.slice(0, 4).map((k) => `#${k}`)])).slice(0, 6);
 
+  // 공간 노하우(2번 덩이): 자리 = 그 공간 · 저자 역할 = space_owner(0364). 세션 역할(s.role)은 매장 역할이라 공간에 쓰지 않는다.
+  const spaceId = extras.spaceId;
+
   return {
     id,
-    unit_id: s.unitId || 'store_001',
+    unit_id: spaceId || s.unitId || 'store_001',
     creator_id: s.userId || 'u_owner_001',
-    creator_name: s.userName || '사장님',
-    // 저자 역할 스냅샷(0101) — 표기 SSOT(knowhowSourceLabel)가 "사장님/매니저"를 가른다.
-    creator_role: s.role === 'manager' ? 'manager' : s.role === 'owner' ? 'owner' : null,
+    creator_name: s.userName || (spaceId ? '' : '사장님'),
+    // 저자 역할 스냅샷(0101) — 표기 SSOT(knowhowSourceLabel)가 "사장님/매니저/공간 주인"을 가른다.
+    creator_role: spaceId ? 'space_owner' : s.role === 'manager' ? 'manager' : s.role === 'owner' ? 'owner' : null,
     category,
     subcategory: uq.presumed_subcategory || '일반',
     title,

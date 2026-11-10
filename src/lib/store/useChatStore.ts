@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { ChatQuery, ResponseBlock, UnknownQuery, PlaybookEntry, SourceRef } from '@/types';
 import { inferCategoryFromQuery } from '@/lib/utils/inferCategory';
-import { generateAnswer, hybridSearch, extractIntent, classifyQuery, toSopSlices, GENERATE_THRESHOLD } from '@/lib/ai';
+import { generateAnswer, hybridSearch, extractIntent, classifyQuery, toSopSlices, GENERATE_THRESHOLD, type AiTarget } from '@/lib/ai';
 import { MAX_ACTIONS, MAX_DONTS } from '@/lib/ai/config';
 import { usePlaybookStore } from './usePlaybookStore';
 import { useUnknownQueueStore } from './useUnknownQueueStore';
@@ -13,6 +13,7 @@ import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import { showToast } from '@/lib/store/useToastStore';
 import { isServable } from '@/lib/utils/entryStatus';
 import { genId } from '@/lib/utils/id';
+import { SPACE_AI_CAP_COPY } from '@/lib/config/tiers';
 import seedData from '@/data/chat-queries.json';
 import contextPack from '@/data/context-pack.json';
 
@@ -88,19 +89,31 @@ function saveChatQuery(cq: ChatQuery): Promise<boolean> {
   return p;
 }
 
+/**
+ * 공간 주인의 연습 질문(첫 5분 · 2번 덩이). 넘기면 submit 이 이 자리의 노하우로 답하고 아무것도 저장하지 않는다.
+ *  · 노하우 = 넘긴 entries(공간 노하우 · usePlaybookStore 는 매장 노하우라 쓰지 않는다)
+ *  · AI·검색 = { unitId } 로 공간 갈래(엣지가 현재 공간과 맞을 때만 공간으로 돈다)
+ *  · 저장 안 함 = chat_queries 넣기·사용통계 재계산·사장 보내기 준비물 없음(0371 정책도 주인의 질문 넣기를 거절한다)
+ *  · 턴은 history 가 아니라 practiceHistory 에 쌓는다(매장 대화 기록과 섞이지 않게)
+ * 안 넘기면 매장 흐름 그대로다.
+ */
+export type PracticeTarget = { unitId: string; entries: PlaybookEntry[] };
+
 type ChatState = {
   history: ChatQuery[];
+  /** 공간 연습 질문 턴(저장 안 함 · 화면에만). PracticeTarget 참조. */
+  practiceHistory: ChatQuery[];
   isLoading: boolean;
   loaded: boolean;
   lastSubmittedId: string | null;
   error: string | null; // 전송 실패 시 사용자에게 보일 메시지
-  lastFailed: { text: string } | null; // '다시 시도'용 마지막 실패 입력
+  lastFailed: { text: string; practice?: PracticeTarget } | null; // '다시 시도'용 마지막 실패 입력(연습이면 그 자리째)
   // 매칭 실패 질문은 곧장 사장님 인박스에 쌓지 않는다. 등록 대기(준비된 UnknownQuery)로 보관하고
   // 알바가 '등록' 버튼을 누를 때만 인박스로 보낸다 → 오타·장난성 질문이 사장에게 그대로 가는 걸 막는다.
   pendingDeflects: Record<string, UnknownQuery>;
   deflectStatus: Record<string, 'registered' | 'declined'>;
   hydrate: (juniorId: string) => Promise<void>;
-  submit: (text: string) => Promise<void>;
+  submit: (text: string, practice?: PracticeTarget) => Promise<void>;
   /** '사장님께 보내기' — 서버 반영 성공 시에만 'registered' 표시가 남는다(#24). */
   registerToOwner: (queryId: string) => Promise<void>;
   declineDeflect: (queryId: string) => void;
@@ -114,6 +127,7 @@ type ChatState = {
 export const useChatStore = create<ChatState>((set, get) => ({
   // Supabase면 빈 채로 시작 → hydrate가 내 채팅 기록을 DB에서 당겨옴. 아니면 로컬 시드.
   history: HAS_SUPABASE ? [] : [...seed],
+  practiceHistory: [],
   isLoading: false,
   loaded: !HAS_SUPABASE,
   lastSubmittedId: null,
@@ -136,7 +150,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ history, loaded: true });
   },
 
-  submit: async (text) => {
+  submit: async (text, practice) => {
     if (!text.trim()) return;
     set({ isLoading: true, error: null });
 
@@ -150,12 +164,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const session = useSessionStore.getState();
     // 답변 corpus는 발행본만(SSOT: entryStatus.isServable) — 인수인계서 draft(검토 전)가
     // 렉시컬 검색·SERVE·SOP 근거로 새는 것을 차단(3중 방어의 2선. 1선=RLS 0064, 3선=색인).
-    const playbookEntries = usePlaybookStore.getState().entries.filter(isServable);
+    const playbookEntries = (practice ? practice.entries : usePlaybookStore.getState().entries).filter(isServable);
+    // 연습이면 AI·검색을 공간 번호로 부른다. 매장이면 undefined = 예전 요청과 글자 그대로 같다.
+    const target: AiTarget | undefined = practice ? { unitId: practice.unitId } : undefined;
+    // 답 턴을 꽂는 자리 — 연습은 practiceHistory(매장 대화 기록과 섞지 않는다).
+    const pushTurn = (cq: ChatQuery) =>
+      set((s) => (practice
+        ? { practiceHistory: [...s.practiceHistory, cq], isLoading: false, lastSubmittedId: cq.id }
+        : { history: [...s.history, cq], isLoading: false, lastSubmittedId: cq.id }));
 
     // 영속(insert) + 영속 성공 후에만 사용통계 재계산(fire-and-forget).
     // 순서 보장(리뷰 fix-1): recompute는 chat_queries를 읽으므로 행이 커밋된 뒤 돌아야 이번 질의가 집계된다.
     // insert 프로미스를 공유해 guardWrite(에러 배너)와 recompute가 같은 1회 insert에 붙는다(이중 insert 방지).
     const persistAndCount = (cq: ChatQuery, entryIds: string[]) => {
+      if (practice) return; // 연습 질문은 저장하지 않는다(미응답·홈 숫자·사용통계에 안 센다).
       const writeP = saveChatQuery(cq);
       void guardWrite(writeP, () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
       void writeP.then((ok) => { if (ok && entryIds.length) void recomputePlaybookStats(entryIds); });
@@ -171,6 +193,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       now: string,
       meta: { category: string; confidence: number; bestEntryId: string | null },
     ) => {
+      if (practice) return; // 연습에는 보내기 길이 없다(화면이 "노하우 남기기"로 잇는다).
       try {
         set((s) => ({ pendingDeflects: { ...s.pendingDeflects, [cqId]: buildDeflect(text, session.userId, session.userName, now, meta) } }));
       } catch (e) {
@@ -203,7 +226,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         response_block: block, satisfaction: null, resolved_at: now,
       };
       answered = true;
-      set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
+      pushTurn(cq);
       persistAndCount(cq, [entry.id]);
       // 저장된 답을 그대로 줬어도 "내 경우는 다르다"를 물을 길은 연다(위 prepareDeflect 주석).
       prepareDeflect(id, now, {
@@ -219,7 +242,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const tryGenerate = async (r: typeof result): Promise<boolean> => {
       if (!(r.confidence >= GENERATE_THRESHOLD && r.candidates.length > 0)) return false;
       const sops = toSopSlices(r.candidates.map((c) => c.entry));
-      const ai = await generateAnswer({ storeId: session.unitId || STORE_ID, query: text, sops });
+      const ai = await generateAnswer({ storeId: practice?.unitId ?? (session.unitId || STORE_ID), query: text, sops }, target);
       if (isStaleEpoch(epoch)) return true; // 매장이 바뀌었다 — 답을 버리고 여기서 끝낸다(true = 더 진행하지 않음)
       // 무료 플랜 월 AI답변 한도 초과 — mock 위장 없이 후보/사장 라우팅으로 강등 + 업그레이드 안내.
       if (ai.quotaExceeded) {
@@ -227,7 +250,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
           quotaNotified = true;
           // 숫자를 말하지 않는다 — 2026-09-13(0193)부터 캡은 답변 건수가 아니라 답변·퀴즈 만들기·PDF 합산
           // 단위라, 직원에게 "3,000건"이라고 하면 틀린 말이 된다. 사장에게는 80%·100% 알림이 따로 간다(0191).
-          showToast('이번 달 AI 사용량을 모두 썼어요. 사장님께 요금제 변경을 요청해 주세요.', 'warn');
+          // 공간 상한(scope 'space')은 결제가 없어 요금제 안내를 하지 않는다. 연습하는 사람 = 주인이라 주인 문구.
+          showToast(
+            ai.quotaScope === 'space' ? SPACE_AI_CAP_COPY.owner : '이번 달 AI 사용량을 모두 썼어요. 사장님께 요금제 변경을 요청해 주세요.',
+            'warn',
+          );
         }
         return false;
       }
@@ -258,7 +285,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         satisfaction: null, resolved_at: now,
       };
       answered = true;
-      set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
+      pushTurn(cq);
       persistAndCount(cq, ai.usedSopIds);
       // 예외 커버리지가 쌓이는 데이터 루프 — partial(조건 미커버)이든 아니든 1탭 에스컬은 항상 연다.
       prepareDeflect(id, now, {
@@ -275,8 +302,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     //    축으로는 잡담(0.58~0.67)과 실질 질문(0.70~0.74)이 분리 불가 → LLM 의도 분류가 방어선.
     //    chat·vague 는 검색·생성·사장 라우팅 전부 스킵(쿼터 미차감·인박스 잡음 0).
     const [triage, firstSearch] = await Promise.all([
-      classifyQuery({ query: text }),
-      hybridSearch(text, playbookEntries),
+      classifyQuery({ query: text }, target),
+      hybridSearch(text, playbookEntries, target),
     ]);
     if (isStaleEpoch(epoch)) return;
     if (triage.type === 'chat' || triage.type === 'vague') {
@@ -292,7 +319,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         satisfaction: null, resolved_at: now,
       };
       answered = true;
-      set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
+      pushTurn(cq);
       persistAndCount(cq, []);
       return;
     }
@@ -307,11 +334,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
     const verbose = text.trim().length >= 18 || wordCount >= 6;
     if (verbose) {
-      const intent = await extractIntent({ query: text });
+      const intent = await extractIntent({ query: text }, target);
       if (isStaleEpoch(epoch)) return;
       const q2 = intent.rewritten?.trim();
       if (q2 && q2 !== text.trim()) {
-        const r2 = await hybridSearch(q2, playbookEntries);
+        const r2 = await hybridSearch(q2, playbookEntries, target);
         if (isStaleEpoch(epoch)) return;
         if (r2.matched) { serveStored(r2.matched, r2.confidence); return; }
         if (await tryGenerate(r2)) return;
@@ -345,9 +372,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ...(candidateIds.length > 0 ? { candidate_entry_ids: candidateIds } : {}),
       };
       answered = true;
-      set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
+      pushTurn(cq);
       // 답변은 이미 보여줬으니 화면에선 유지하고, 영속 실패만 배너로 알린다(롤백 없음).
-      void guardWrite(saveChatQuery(cq), () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
+      if (!practice) void guardWrite(saveChatQuery(cq), () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
 
       // 곧장 enqueue 하지 않는다 — 직원이 카드에서 '사장님께 물어보기'를 눌러야 인박스로 간다.
       prepareDeflect(id, now, {
@@ -372,7 +399,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           : {
               isLoading: false,
               error: '질문을 보내지 못했어요. 잠시 후 다시 시도해 주세요.',
-              lastFailed: { text },
+              lastFailed: { text, ...(practice ? { practice } : null) },
             },
       );
     } finally {
@@ -432,10 +459,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const failed = get().lastFailed;
     if (!failed) return;
     set({ lastFailed: null });
-    await get().submit(failed.text);
+    await get().submit(failed.text, failed.practice);
   },
 
-  reset: () => set({ history: [...seed], isLoading: false, lastSubmittedId: null, error: null, lastFailed: null, pendingDeflects: {}, deflectStatus: {} }),
+  reset: () => set({ history: [...seed], practiceHistory: [], isLoading: false, lastSubmittedId: null, error: null, lastFailed: null, pendingDeflects: {}, deflectStatus: {} }),
   applyMock: (demo) =>
-    set({ history: demo ? [...seed] : [], isLoading: false, lastSubmittedId: null, loaded: true, error: null, lastFailed: null, pendingDeflects: {}, deflectStatus: {} }),
+    set({ history: demo ? [...seed] : [], practiceHistory: [], isLoading: false, lastSubmittedId: null, loaded: true, error: null, lastFailed: null, pendingDeflects: {}, deflectStatus: {} }),
 }));

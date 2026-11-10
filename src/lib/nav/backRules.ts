@@ -44,6 +44,8 @@ export function backAction(path: string, ctx: BackCtx): BackAction {
   if (STORE_TABS.includes(path)) return ctx.role === 'owner' ? '/owner/dashboard' : '/junior/home';
   if (path === SPACE_HOME) return '/stores';
   if (SPACE_TABS.includes(path)) return SPACE_HOME;
+  // 첫 5분(/space/first)은 만들기에서 replace 로 와 스택이 비어 있다 → 공간 홈으로(앱을 닫지 않게).
+  if (path === '/space/first') return SPACE_HOME;
   if (path === '/hub-growth' || path === '/stores') return '/hub';
   return 'default';
 }
