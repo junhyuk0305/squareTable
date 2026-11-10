@@ -61,6 +61,7 @@ async function listAuthUsers() {
   for (const u of units) {
     if (PROTECT_UNITS.has(u.id)) continue;
     if (u.kind === 'brand_workspace') continue;                        // 본사 작업실(0209) → 보호(시스템 계정 소유)
+    if (u.kind === 'space') continue;                                  // 공간(0362) → 보호(주인 칸이 원래 비어 있다 · 3판 5-4)
     // 활성 owner가 있고, 그 owner가 실사용자면 보호(멤버 0이어도)
     const ownerEmail = emailById.get(u.owner_id) || '';
     const ownerLive = liveProfIds.has(u.owner_id);

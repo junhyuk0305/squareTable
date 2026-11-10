@@ -75,6 +75,7 @@
     "qa:session": "node scripts/qa-session-readfail.mjs",
     "qa:session-bootstrap": "node scripts/qa-session-bootstrap.mjs --allow-remote",
     "qa:session-bootstrap:local": "node scripts/qa-session-bootstrap.mjs --local",
+    "qa:space-isolation:local": "node scripts/qa-space-isolation.mjs --local",
     "qa:session-load": "node scripts/qa-session-load.mjs --allow-remote",
     "qa:split": "node scripts/qa-knowhow-split.mjs",
     "qa:knowhow-accuracy": "node scripts/qa-knowhow-accuracy.mjs --allow-remote",
