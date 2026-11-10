@@ -4569,3 +4569,127 @@ export async function saveEssentialSections(sections: string[]): Promise<boolean
 export function currentUnitId(): string | null {
   return _unitId;
 }
+
+// ── 공간(2번 덩이) ──────────────────────────────────────────────────────────
+// 서버 약속 = 0368·0374(입구·현재 공간) · 0375 create_space · 0378 보내기 · 0379 남기기 · 0380 홈 숫자 · 0381 AI 사용량.
+// ★공간 화면은 이 블록만 부른다. 반환은 앱 타입(camelCase)이다. 오류는 {message} 원형으로 돌려주고
+//   화면 문구는 src/lib/place/errors.ts 한 곳에서 바꾼다(AGENTS ⑨).
+// ★_unitId(현재 매장)는 여기서 바꾸지 않는다. 공간 화면은 공간 번호를 인수로 넘긴다(매장 화면과 섞이지 않게).
+// 경계: 목록 RPC 는 .limit, 한 줄 RPC 는 .single/.maybeSingle 을 단다(check:select-bounds).
+
+export type SpaceRole = 'space_owner' | 'space_member';
+/** 내 공간 한 줄(my_spaces). 초대코드는 주인에게만 온다(멤버는 null). */
+export type MySpace = { id: string; name: string; role: SpaceRole; inviteCode: string | null };
+/** 기능 목록표 한 줄(my_kind_features). ('space','enter') 줄 = 이 계정이 공간을 쓸 수 있나(허용 목록 포함). */
+export type KindFeature = { kind: string; feature: string; enabled: boolean };
+/** 홈 숫자 넷(unit_question_counts · 이번 달 서울 · 같은 질문은 한 번). */
+export type QuestionCounts = { questions: number; aiAnswered: number; directAnswered: number; unanswered: number };
+/** 그 자리의 이번 달 AI 사용량(ai_quota_status_at). exceeded = 다음 1회가 상한을 넘는다. */
+export type AiQuotaStatus = { used: number; cap: number; exceeded: boolean };
+/** 보내기 답 한 줄(question_replies · 한 번 저장 · 못 고침). */
+export type QuestionReply = { uqId: string; unitId: string; body: string; authorId: string | null; createdAt: string };
+
+type ReplyRow = { uq_id: string; unit_id: string; body: string; author_id: string | null; created_at: string };
+const replyOf = (r: ReplyRow): QuestionReply => ({
+  uqId: r.uq_id, unitId: r.unit_id, body: r.body, authorId: r.author_id, createdAt: r.created_at,
+});
+
+/** 기능 목록표 전체. 공간 입구 판정은 spaceOpenOf(아래) 한 곳에서 한다. */
+export async function myKindFeatures(): Promise<DbResult<KindFeature[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('my_kind_features').limit(PAGE_LIMIT);
+  if (error) readFail('myKindFeatures', error);
+  return { data: (data as KindFeature[] | null) ?? null, error: error as DbErr };
+}
+
+/** 이 계정이 공간을 쓸 수 있나 = ('space','enter') 줄이 켜져 있다. 줄이 없으면 못 쓴다(닫힌 쪽). */
+export function spaceOpenOf(features: KindFeature[]): boolean {
+  return features.some((f) => f.kind === 'space' && f.feature === 'enter' && f.enabled === true);
+}
+
+/** 내 공간 목록(주인·멤버). 지운 공간은 서버가 뺀다. */
+export async function mySpaces(): Promise<DbResult<MySpace[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('my_spaces').limit(PAGE_LIMIT);
+  if (error) readFail('mySpaces', error);
+  const rows = (data as { id: string; name: string; role: SpaceRole; invite_code: string | null }[] | null) ?? null;
+  return { data: rows ? rows.map((r) => ({ id: r.id, name: r.name, role: r.role, inviteCode: r.invite_code })) : null, error: error as DbErr };
+}
+
+/** 공간 만들기. 현재 자리를 안 바꾼다 → 이어서 enterSpace(spaceId).
+ *  오류 = space_closed · space_name_required · invalid_argument(40자 넘음) · owner_cannot_create_space ·
+ *  space_limit_reached · PHONE_NOT_VERIFIED · not_authenticated · invite_code_busy. */
+export async function createSpace(name: string): Promise<DbResult<{ spaceId: string; inviteCode: string }>> {
+  if (!HAS_SUPABASE) return { data: null, error: { message: 'space_closed' } };
+  const { data, error } = await supabase.rpc('create_space', { p_name: name }).single();
+  const row = data as { space_id: string; invite_code: string } | null;
+  return { data: row ? { spaceId: row.space_id, inviteCode: row.invite_code } : null, error: error as DbErr };
+}
+
+/** 이 로그인 세션의 현재 공간을 바꾼다(현재 매장 기록은 안 건드린다). 오류 = space_closed · not_a_member · no_session. */
+export async function enterSpace(spaceId: string): Promise<{ error: DbErr }> {
+  if (!HAS_SUPABASE) return { error: { message: 'space_closed' } };
+  const { error } = await supabase.rpc('enter_space', { p_space: spaceId }).limit(1);
+  return { error: error as DbErr };
+}
+
+/** 홈 숫자 넷. 볼 수 있는 사람 = 그 자리 answer_direct(공간 주인). 오류 = not_space_member · not_space_owner · not_manager. */
+export async function unitQuestionCounts(unitId: string): Promise<DbResult<QuestionCounts>> {
+  if (!HAS_SUPABASE) return { data: { questions: 0, aiAnswered: 0, directAnswered: 0, unanswered: 0 }, error: null };
+  const { data, error } = await supabase.rpc('unit_question_counts', { p_unit: unitId }).single();
+  if (error) readFail('unitQuestionCounts', error);
+  const r = data as { questions: number; ai_answered: number; direct_answered: number; unanswered: number } | null;
+  return {
+    data: r ? { questions: r.questions, aiAnswered: r.ai_answered, directAnswered: r.direct_answered, unanswered: r.unanswered } : null,
+    error: error as DbErr,
+  };
+}
+
+/** 그 자리의 AI 사용량. 자리 = 현재 매장 또는 현재 공간만(아니면 forbidden). extra = 이번에 쓸 단위(기본 1회 판정). */
+export async function aiQuotaStatusAt(unitId: string, extra = 0): Promise<DbResult<AiQuotaStatus>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase.rpc('ai_quota_status_at', { p_unit: unitId, p_extra: extra }).single();
+  if (error) readFail('aiQuotaStatusAt', error);
+  const r = data as { used_count: number; cap_count: number; exceeded: boolean } | null;
+  return { data: r ? { used: r.used_count, cap: r.cap_count, exceeded: r.exceeded } : null, error: error as DbErr };
+}
+
+/** 답하기 "보내기"(공간). 질문 → 직접 답함. 답 글은 한 번 · 못 고침.
+ *  오류 = invalid_argument · question_not_found · feature_off(매장) · not_space_owner · not_pending(이미 답함). */
+export async function replyUnknownQuery(uqId: string, body: string): Promise<DbResult<QuestionReply>> {
+  if (!HAS_SUPABASE) return { data: null, error: { message: 'feature_off' } };
+  const { data, error } = await supabase.rpc('reply_unknown_query', { p_uq_id: uqId, p_body: body }).single();
+  if (error) {
+    console.warn('[db] replyUnknownQuery:', error.message);
+    if (decisionOfError(error.message) === 'failed') reportError('db.write:replyUnknownQuery', error);
+  }
+  return { data: data ? replyOf(data as ReplyRow) : null, error: error as DbErr };
+}
+
+/** 보내기 답 읽기(질문자 · 쓴 사람 · 그 자리 답할 권한). 실시간이 아니다 → 질문 상태가 answered_direct 로 바뀐 뒤 한 번 읽는다.
+ *  data=null + error=null = 아직 답이 없다. */
+export async function fetchQuestionReply(uqId: string): Promise<DbResult<QuestionReply>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase
+    .from('question_replies')
+    .select('uq_id, unit_id, body, author_id, created_at')
+    .eq('uq_id', uqId)
+    .maybeSingle();
+  if (error) readFail('fetchQuestionReply', error);
+  return { data: data ? replyOf(data as ReplyRow) : null, error: error as DbErr };
+}
+
+/** 답하기 "노하우로 남기기". 노하우 넣기 + 질문 해결을 한 트랜잭션에서(답 방식 saved). 반환 = 노하우 id.
+ *  공간은 suggestionId 없이 부른다. entry.unit_id 에 공간 번호를 넣는다(폴백 _unitId 에 기대지 않는다).
+ *  오류 = not_pending(이미 답함) · suggestion_not_found · invalid_argument · 권한 거절(RLS). */
+export async function saveUnknownAnswer(uqId: string, entry: PlaybookEntry, suggestionId: string | null = null): Promise<DbResult<string>> {
+  if (!HAS_SUPABASE) return { data: entry.id, error: null };
+  const { data, error } = await supabase
+    .rpc('save_unknown_answer', { p_uq_id: uqId, p_entry: stripNonColumns(entry), p_suggestion_id: suggestionId })
+    .single();
+  if (error) {
+    console.warn('[db] saveUnknownAnswer:', error.message);
+    if (decisionOfError(error.message) === 'failed') reportError('db.write:saveUnknownAnswer', error);
+  }
+  return { data: (data as string | null) ?? null, error: error as DbErr };
+}

@@ -25,6 +25,9 @@ const STORE_TABS = [
   '/owner/categories', '/owner/training', '/owner/work', '/owner/settings',
   '/junior/chat', '/junior/work', '/junior/attendance', '/junior/settings',
 ];
+/** 공간 탭(2번 덩이). 홈에서 뒤로 = 계정 층 매장 목록, 다른 탭에서 뒤로 = 공간 홈. */
+const SPACE_HOME = '/space/home';
+const SPACE_TABS = ['/space/knowhow', '/space/teach', '/space/settings'];
 /** 강제 화면 — 뒤로로 우회하지 못하게 OS 기본(앱 종료)에 맡긴다. */
 const FORCED = ['/complete-profile', '/downgrade'];
 
@@ -39,6 +42,8 @@ export function backAction(path: string, ctx: BackCtx): BackAction {
   if (ctx.canDismiss) return 'pop';
   if (STORE_HOMES.includes(path)) return (hubTabOf(ctx.origin ?? '') as `/${string}` | null) ?? '/stores';
   if (STORE_TABS.includes(path)) return ctx.role === 'owner' ? '/owner/dashboard' : '/junior/home';
+  if (path === SPACE_HOME) return '/stores';
+  if (SPACE_TABS.includes(path)) return SPACE_HOME;
   if (path === '/hub-growth' || path === '/stores') return '/hub';
   return 'default';
 }

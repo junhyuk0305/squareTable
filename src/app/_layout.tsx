@@ -163,6 +163,8 @@ export default function RootLayout() {
                 _layout 의 자체 Stack 이 슬라이드를 맡으므로 여기 값과 무관하다. */}
             <Stack.Screen name="junior" options={{ animation: 'none' }} />
             <Stack.Screen name="owner" options={{ animation: 'none' }} />
+            {/* 공간(2번 덩이) — 매장 층과 나란한 층. 들어갈 때 슬라이드하지 않는다(매장 진입과 같은 규칙). */}
+            <Stack.Screen name="space" options={{ animation: 'none' }} />
             <Stack.Screen name="billing" />
             {/* 토스 카드 등록창에서 돌아오는 자리(웹 전용, 0208). */}
             <Stack.Screen name="billing-card" />

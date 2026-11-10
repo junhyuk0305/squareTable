@@ -22,7 +22,7 @@ export function Screen({
   children,
 }: {
   header?: ReactNode;
-  tabBar?: 'owner' | 'junior';
+  tabBar?: 'owner' | 'junior' | 'space';
   scroll?: boolean;
   scrollRef?: Ref<ScrollView>;
   children: ReactNode;
