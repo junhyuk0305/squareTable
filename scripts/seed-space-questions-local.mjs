@@ -3,6 +3,8 @@
 // 왜 있나: 2번 덩이에는 공간에 질문을 넣을 사람이 없다(주인 질문은 연습이라 안 남고, 멤버·교육 링크는 3·4번 덩이).
 //   그래서 답하기 화면(S05 답할 질문 → S09 답하기 · 보내기 / 노하우로 남기기 / 있는 노하우로 답하기)을 폰과 웹에서 보려면
 //   로컬 DB 에 질문을 직접 심어야 한다. 서비스 권한으로 unknown_queries 에 넣는다(질문 넣기 정책은 공간 주인을 막는다 · 0371).
+//   같은 번호로 질문 기록(chat_queries · AI 가 못 찾음 = was_deflected false)도 넣는다. 실제로 AI 가 못 찾은 질문은 둘 다 남는다.
+//   홈 숫자에서 "질문"은 질문 기록을, "미응답"은 답할 질문을 센다(0380). 하나만 심으면 "질문 0 · 미응답 3"처럼 앞뒤가 안 맞는다(11-11).
 //
 // ★로컬 전용. 접속 대상이 127.0.0.1/localhost 가 아니면 멈춘다(require-local-target). --allow-remote 도 받지 않는다.
 //
@@ -86,7 +88,13 @@ async function seed(spaceId, n) {
   }));
   const { error } = await db.from('unknown_queries').insert(rows);
   if (error) throw new Error(error.message);
-  console.log(`✓ ${spaceId} 에 질문 ${rows.length}개를 심었다.`);
+  const chats = rows.map((r) => ({
+    id: r.id, unit_id: r.unit_id, junior_id: null, junior_name: r.junior_name, query_text: r.query_text, asked_at: r.asked_at,
+    was_deflected: false,
+  }));
+  const { error: cErr } = await db.from('chat_queries').insert(chats);
+  if (cErr) throw new Error(cErr.message);
+  console.log(`✓ ${spaceId} 에 질문 ${rows.length}개를 심었다(답할 질문 + 질문 기록).`);
 }
 
 async function clean(spaceId) {
@@ -97,7 +105,14 @@ async function clean(spaceId) {
     .like('id', `seedq\\_${spaceId}\\_%`)
     .select('id');
   if (error) throw new Error(error.message);
-  console.log(`✓ ${spaceId} 에서 심은 질문 ${data.length}개를 지웠다.`);
+  const { data: chats, error: cErr } = await db
+    .from('chat_queries')
+    .delete()
+    .eq('unit_id', spaceId)
+    .like('id', `seedq\\_${spaceId}\\_%`)
+    .select('id');
+  if (cErr) throw new Error(cErr.message);
+  console.log(`✓ ${spaceId} 에서 심은 질문 ${data.length}개 · 질문 기록 ${chats.length}개를 지웠다.`);
 }
 
 try {
