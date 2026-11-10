@@ -747,5 +747,167 @@ console.log('\n[4] 실세션 · 공간만 있는 계정');
   }
 }
 
+// ── 3부: 공간 삭제 · 30일 파기 · 공간 주인 탈퇴(0430) ─────────────────────────
+//   1부처럼 한 트랜잭션 안에서 심고 끝에 전부 되돌린다(흔적 0). 시간은 deleted_at 을 29일·31일 전으로 당겨 흉내 낸다.
+//   매장 파기 대조: 같은 지운 매장을 공간 삭제·파기 전과 후에 purge_deleted_store 로 부르고(그 호출은 되돌림) 결과가 같은지 본다.
+//   이 대조 줄(QA|STORE)은 마이그레이션 적용 전 실행 결과와도 비교한다(작업 기록).
+console.log('\n[5] 공간 삭제 · 30일 파기 · 공간 주인 탈퇴');
+{
+  const V = Object.fromEntries(['O', 'M', 'K', 'N', 'O2', 'M2', 'O3', 'Z'].map((k, i) => [k, `00000000-0000-4000-a${rnd.slice(0, 3)}-${rnd}${String(i).padStart(4, '0')}`]));
+  const VS = Object.fromEntries(Object.keys(V).map((k, i) => [k, `00000000-0000-4000-b${rnd.slice(0, 3)}-${rnd}${String(i).padStart(4, '0')}`]));
+  const SPA = `qa_dsa_${rnd}`, SPB = `qa_dsb_${rnd}`, SPC = `qa_dsc_${rnd}`, ST = `qa_dst_${rnd}`;
+  const OWNER = `오너${rnd}`, GUEST = `손님${rnd.slice(0, 4)}`, MARK = `mk${rnd}`;
+  const TOKEN = `qa_del_tok_${rnd}_${rnd}`;
+  const as = (who, s, keep = false, role = 'authenticated') => `pg_temp.qa_as(${who ? q(V[who]) + '::uuid' : 'null'}, ${who ? q(VS[who]) + '::uuid' : 'null'}, ${q(role)}, ${q(s)}, ${keep})`;
+  const chk = (name, expect, gotSql) => `insert into qa_out(l) select ${q(`QA|DEL|${name}¦${expect}¦`)} || (${gotSql});`;
+  const svc = (s) => `(select coalesce((${s})::text, '<null>'))`;
+  const storeSnap = (tag) => `do $s$ declare c jsonb; begin
+  begin c := public.purge_deleted_store(${q(ST)}); raise exception using errcode = 'QAOK0';
+  exception when sqlstate 'QAOK0' then null; when others then c := jsonb_build_object('err', sqlerrm); end;
+  insert into qa_out(l) values ('QA|STORE|${tag}|' || coalesce(c::text, '<null>'));
+end $s$;`;
+  const sql3 = String.raw`
+begin;
+create temp table qa_out(i serial, l text);
+create temp table qa_v(k text primary key, v bigint);
+insert into auth.users(id, instance_id, aud, role, email, raw_user_meta_data, email_confirmed_at, created_at, updated_at)
+select v.id::uuid, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'qa_spd_' || lower(v.k) || '_${rnd}@example.com',
+       jsonb_build_object('name', case when v.k = 'O' then ${q(OWNER)} else 'QA' || v.k end, 'role', 'junior', 'birth_date', '1994-03-03'), now(), now(), now()
+  from (values ${Object.entries(V).map(([k, v]) => `(${q(k)}, ${q(v)})`).join(', ')}) v(k, id);
+insert into auth.sessions(id, user_id, created_at, updated_at)
+select v.sid::uuid, v.uid::uuid, now(), now()
+  from (values ${Object.keys(V).map((k) => `(${q(VS[k])}, ${q(V[k])})`).join(', ')}) v(sid, uid);
+
+create function pg_temp.qa_as(p_uid uuid, p_sid uuid, p_role text, p_sql text, p_keep boolean) returns text language plpgsql as $f$
+declare r text;
+begin
+  begin
+    perform set_config('request.jwt.claims', case when p_uid is null then json_build_object('role', p_role)::text
+      else json_build_object('sub', p_uid, 'role', p_role, 'session_id', p_sid)::text end, true);
+    perform set_config('request.jwt.claim.sub', coalesce(p_uid::text, ''), true);
+    execute format('set local role %I', p_role);
+    execute p_sql into r;
+    if not p_keep then raise exception using errcode = 'QAOK0', message = 'qa_ok'; end if;
+    execute 'reset role';
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claim.sub', '', true);
+    return 'ok|' || coalesce(r, '<null>');
+  exception
+    when sqlstate 'QAOK0' then return 'ok|' || coalesce(r, '<null>');
+    when others then return 'err|' || left(sqlerrm, 60);
+  end;
+end $f$;
+
+-- 자리: 공간 A(주인 O · 멤버 M) · 공간 B(주인 O2 · 멤버 M2) · 공간 C(주인 O3 · 멤버 없음) · 지운 매장 ST(대조) · 매장 X 사장 K
+insert into public.unit_members(user_id, unit_id, role) values (${q(V.K)}, ${q(X)}, 'owner');
+insert into public.units(id, store_name, kind, invite_code) values
+  (${q(SPA)}, 'QA삭제공간A', 'space', upper(substr(md5(random()::text), 1, 6))), (${q(SPB)}, 'QA삭제공간B', 'space', null), (${q(SPC)}, 'QA삭제공간C', 'space', upper(substr(md5(random()::text), 1, 6)));
+-- 대조 매장 행만 트리거를 끄고 넣는다(사장 전화 인증 트리거 · 이 하니스는 매장 만들기를 재지 않는다).
+set local session_replication_role = replica;
+insert into public.units(id, store_name, kind, owner_id, industry, deleted_at)
+select ${q(ST)}, 'QA대조매장', 'store', ${q(V.Z)}, u.industry, now() - interval '1 day' from public.units u where u.id = ${q(X)};
+set local session_replication_role = origin;
+insert into public.unit_members(user_id, unit_id, role) values
+  (${q(V.O)}, ${q(SPA)}, 'space_owner'), (${q(V.M)}, ${q(SPA)}, 'space_member'),
+  (${q(V.O2)}, ${q(SPB)}, 'space_owner'), (${q(V.M2)}, ${q(SPB)}, 'space_member'), (${q(V.O3)}, ${q(SPC)}, 'space_owner');
+
+-- 공간 A 기록: 주인 노하우(제목에 주인·손님 이름) · 주인 질문 · 답할 질문 · 교육 링크 · 손님 · 손님 질문 짝
+select set_config('request.jwt.claims', json_build_object('sub', ${q(V.O)}, 'role', 'authenticated')::text, true);
+insert into public.playbook_entries(id, unit_id, category, title, status, creator_role, creator_id, creator_name) values
+  ('qa_dpe_${rnd}', ${q(SPA)}, '서비스', ${q(`${OWNER} 비법 ${GUEST} ${MARK}`)}, 'published', 'space_owner', ${q(V.O)}, ${q(OWNER)});
+insert into public.chat_queries(id, unit_id, query_text) values ('qa_dcq_o_${rnd}', ${q(SPA)}, '공간 삭제 질문');
+insert into public.unknown_queries(id, unit_id, query_text, status) values ('qa_duq_o_${rnd}', ${q(SPA)}, '공간 삭제 질문', 'pending_owner_answer');
+select set_config('request.jwt.claims', json_build_object('sub', ${q(V.Z)}, 'role', 'authenticated')::text, true);
+insert into public.playbook_entries(id, unit_id, category, title, status, creator_role) values
+  ('qa_dpe_st_${rnd}', ${q(ST)}, '서비스', '대조 매장 노하우', 'published', 'owner');
+insert into public.chat_queries(id, unit_id, query_text) values ('qa_dcq_st_${rnd}', ${q(ST)}, '대조 매장 질문');
+select set_config('request.jwt.claims', '', true);
+insert into public.edu_links(id, unit_id, token, title) values ('qa_del_el_${rnd}', ${q(SPA)}, ${q(TOKEN)}, 'QA 삭제 링크');
+insert into public.edu_link_guests(id, link_id, unit_id, name, key_hash) values ('qa_del_g_${rnd}', 'qa_del_el_${rnd}', ${q(SPA)}, ${q(GUEST)}, md5(random()::text));
+insert into public.chat_queries(id, unit_id, query_text, link_id, junior_name) values ('qa_dcq_g_${rnd}', ${q(SPA)}, '손님 질문', 'qa_del_el_${rnd}', ${q(GUEST)});
+insert into public.edu_guest_questions(cq_id, guest_id, link_id) values ('qa_dcq_g_${rnd}', 'qa_del_g_${rnd}', 'qa_del_el_${rnd}');
+insert into public.session_active_spaces(session_id, user_id, space_id) values (${q(VS.O)}, ${q(V.O)}, ${q(SPA)}), (${q(VS.M)}, ${q(V.M)}, ${q(SPA)});
+
+-- 지우기 전(전제가 서야 아래 "닫힘"이 뜻이 있다)
+${chk('전제: 주인 O 현재 공간 = A', `ok|${SPA}`, as('O', 'select coalesce(public.auth_space_id(), \'<null>\')'))}
+${chk('전제: 멤버 M 의 내 공간 1개', 'ok|1', as('M', 'select count(*)::text from public.my_spaces()'))}
+${chk('전제: 링크가 열린다', 'ok|true', `case when to_regprocedure('public.edu_link_open(text)') is null then 'skip' else ${as(null, `select ok::text from public.edu_link_open(${q(TOKEN)})`, false, 'anon')} end`)}
+${storeSnap('before')}
+
+-- 거절: 멤버 · 매장 사장 · 아무도 아닌 사람 · 없는 번호
+${chk('멤버는 못 지운다', 'err|not_space_owner', as('M', `select 'done' from public.delete_space(${q(SPA)})`))}
+${chk('매장 사장은 못 지운다', 'err|not_space_owner', as('K', `select 'done' from public.delete_space(${q(SPA)})`))}
+${chk('남은 못 지운다', 'err|not_space_owner', as('N', `select 'done' from public.delete_space(${q(SPA)})`))}
+${chk('남의 공간(B)을 주인 O 가 못 지운다', 'err|not_space_owner', as('O', `select 'done' from public.delete_space(${q(SPB)})`))}
+${chk('로그인 없이 못 지운다', 'err|permission denied for function delete_space', as(null, `select 'done' from public.delete_space(${q(SPA)})`, false, 'anon'))}
+
+-- 주인이 지운다(남긴다)
+${chk('주인 O 가 지운다', 'ok|done', as('O', `select 'done' from public.delete_space(${q(SPA)})`, true))}
+${chk('지운 표시 · 초대 코드 비움', 'true|true', svc(`select (deleted_at is not null)::text || '|' || (invite_code is null)::text from public.units where id = ${q(SPA)}`))}
+${chk('멤버 전원 나감', '0', svc(`select count(*) from public.unit_members where unit_id = ${q(SPA)}`))}
+${chk('현재 공간 기록 0', '0', svc(`select count(*) from public.session_active_spaces where space_id = ${q(SPA)}`))}
+${chk('주인 O 현재 공간 닫힘', 'ok|<null>', as('O', 'select coalesce(public.auth_space_id(), \'<null>\')'))}
+${chk('멤버 M 현재 공간 닫힘', 'ok|<null>', as('M', 'select coalesce(public.auth_space_id(), \'<null>\')'))}
+${chk('주인 O 의 내 공간 0', 'ok|0', as('O', 'select count(*)::text from public.my_spaces()'))}
+${chk('멤버 M 의 내 공간 0', 'ok|0', as('M', 'select count(*)::text from public.my_spaces()'))}
+${chk('링크 열기 닫힘', 'ok|false', `case when to_regprocedure('public.edu_link_open(text)') is null then 'skip' else ${as(null, `select ok::text from public.edu_link_open(${q(TOKEN)})`, false, 'anon')} end`)}
+${chk('링크 행도 닫힘', 'true', svc(`select (closed_at is not null)::text from public.edu_links where id = 'qa_del_el_${rnd}'`))}
+${chk('주인 O 노하우 읽기 0(공간 RLS 닫힘)', 'ok|0', as('O', `select count(*)::text from public.playbook_entries where unit_id = ${q(SPA)}`))}
+${chk('두 번 지우기 거절', 'err|not_space_owner', as('O', `select 'done' from public.delete_space(${q(SPA)})`))}
+${chk('기록은 30일까지 남음(질문 2)', '2', svc(`select count(*) from public.chat_queries where unit_id = ${q(SPA)}`))}
+
+-- 공간 주인 탈퇴
+${chk('멤버 있는 공간 주인 O2 탈퇴 거절', 'err|space_has_members', as('O2', "select 'done' from public.delete_my_account()"))}
+${chk('멤버 M2 탈퇴는 된다', 'ok|done', as('M2', "select 'done' from public.delete_my_account()", true))}
+${chk('멤버 탈퇴로 공간 B 는 안 지워진다', '<null>', svc(`select deleted_at from public.units where id = ${q(SPB)}`))}
+${chk('멤버가 탈퇴한 뒤 주인 O2 탈퇴 → 공간 B 지운 표시', 'ok|done', as('O2', "select 'done' from public.delete_my_account()", true))}
+${chk('공간 B 지운 표시', 'true', svc(`select (deleted_at is not null)::text from public.units where id = ${q(SPB)}`))}
+${chk('멤버 없는 공간 주인 O3 탈퇴', 'ok|done', as('O3', "select 'done' from public.delete_my_account()", true))}
+${chk('공간 C 지운 표시 · 초대 코드 비움 · 주인 멤버십 남김', 'true|true|1', svc(`select (deleted_at is not null)::text || '|' || (invite_code is null)::text || '|' || (select count(*) from public.unit_members m where m.unit_id = u.id) from public.units u where id = ${q(SPC)}`))}
+
+-- 29일째: 남는다
+update public.units set deleted_at = now() - interval '29 days' where id in (${q(SPA)}, ${q(SPC)});
+update public.profiles set deleted_at = now() - interval '29 days' where id = ${q(V.O3)};
+select public.purge_deleted_accounts() is not null;
+${chk('29일째 공간 A·C 남음', '2', svc(`select count(*) from public.units where id in (${q(SPA)}, ${q(SPC)}) and purged_at is null`))}
+${chk('29일째 공간 A 기록 남음(질문 2 · 링크 1 · 손님 1)', '2|1|1', svc(`select (select count(*) from public.chat_queries where unit_id = ${q(SPA)}) || '|' || (select count(*) from public.edu_links where unit_id = ${q(SPA)}) || '|' || (select count(*) from public.edu_link_guests where unit_id = ${q(SPA)})`))}
+
+-- 31일째: 파기
+insert into qa_v select 'chat', coalesce(sum(questions), 0) from public.retained_question_stats where industry = '' and source = 'chat';
+insert into qa_v select 'unknown', coalesce(sum(questions), 0) from public.retained_question_stats where industry = '' and source = 'unknown';
+update public.units set deleted_at = now() - interval '31 days' where id in (${q(SPA)}, ${q(SPC)});
+update public.profiles set deleted_at = now() - interval '31 days' where id = ${q(V.O3)};
+select public.purge_deleted_accounts() is not null;
+${chk('31일째 공간 A·C 행 없음', '0', svc(`select count(*) from public.units where id in (${q(SPA)}, ${q(SPC)})`))}
+${chk('파기 실패 기록 0', '0', svc(`select count(*) from public.retention_purge_log where counts->>'unit_id' in (${q(SPA)}, ${q(SPC)}) and (counts->>'failed')::boolean`))}
+${chk('링크·손님·손님 질문 짝 0', '0|0|0', svc(`select (select count(*) from public.edu_links where id = 'qa_del_el_${rnd}') || '|' || (select count(*) from public.edu_link_guests where id = 'qa_del_g_${rnd}') || '|' || (select count(*) from public.edu_guest_questions where cq_id = 'qa_dcq_g_${rnd}')`))}
+${chk('질문·답할 질문·노하우 0', '0|0|0', svc(`select (select count(*) from public.chat_queries where id like 'qa_dcq_%${rnd}' and id <> 'qa_dcq_st_${rnd}') || '|' || (select count(*) from public.unknown_queries where id = 'qa_duq_o_${rnd}') || '|' || (select count(*) from public.playbook_entries where id = 'qa_dpe_${rnd}')`))}
+${chk('질문 통계 생김(질문 +2 · 답할 질문 +1 · 업종 없음)', '2|1', svc(`select (select coalesce(sum(questions), 0) from public.retained_question_stats where industry = '' and source = 'chat') - (select v from qa_v where k = 'chat') || '|' || (select coalesce(sum(questions), 0) from public.retained_question_stats where industry = '' and source = 'unknown') - (select v from qa_v where k = 'unknown')`))}
+${chk('보관 노하우: 주인·손님 이름 지움', `[이름] 비법 [이름] ${MARK}`, svc(`select string_agg(title, ' / ') from public.retained_knowhow where title like ${q(`%${MARK}%`)}`))}
+${chk('탈퇴 30일 지난 공간 주인 O3 계정 파기', '0', svc(`select count(*) from auth.users where id = ${q(V.O3)}`))}
+${chk('지운 지 30일 안 된 공간 B 는 남음', '1', svc(`select count(*) from public.units where id = ${q(SPB)}`))}
+${storeSnap('after')}
+
+select l from qa_out order by i;
+rollback;
+`;
+  const r = spawnSync('docker', ['exec', '-i', DB, 'psql', '-U', 'postgres', '-v', 'ON_ERROR_STOP=1', '-tA', '-q'], { input: sql3, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  if (r.status !== 0) {
+    check('3부 셋업', false, (r.stderr || '').split('\n').filter((l) => /ERROR|DETAIL|CONTEXT|LINE/.test(l)).slice(0, 8).join(' | '));
+  } else {
+    const ls = r.stdout.split(/\r?\n/).filter((l) => l.startsWith('QA|'));
+    for (const l of ls.filter((l) => l.startsWith('QA|DEL|'))) {
+      const [name, expect, got] = l.slice(7).split('¦');
+      if (got === 'skip') { skipped(name, '교육 링크 함수(0400)가 이 DB 에 없음'); continue; }
+      calls++; if (got.startsWith('err|')) rejected++;
+      check(name, got === expect, got === expect ? '' : `기대 ${expect} · 실제 ${got}`);
+    }
+    const snap = (t) => ls.find((l) => l.startsWith(`QA|STORE|${t}|`))?.slice(`QA|STORE|${t}|`.length);
+    const b = snap('before'), a = snap('after');
+    check('지운 매장 파기 결과가 공간 삭제·파기 전후로 같다', !!b && b === a && !b.includes('"err"'), b === a ? '' : `전 ${b} · 후 ${a}`);
+    console.log(`  · 매장 파기 결과(마이그레이션 전후 비교용): ${b}`);
+  }
+}
+
 console.log(`\n최종: ${fail === 0 ? 'PASS' : 'FAIL'} · 통과 ${pass} · 실패 ${fail} · skip ${skip} · 부른 수 ${calls} · 거절 ${rejected} · AI 호출 0회`);
 process.exit(fail === 0 ? 0 : 1);
