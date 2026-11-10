@@ -4958,3 +4958,40 @@ export async function fetchSpaceMembers(spaceId: string): Promise<DbResult<Space
   if (r.error) return { data: null, error: r.error };
   return { data: (r.data ?? []).map((x) => ({ userId: x.user_id, name: x.name, role: x.role, joinedAt: x.joined_at })), error: null };
 }
+
+// ── 매장과 연결하기(0490 · 공간·매장 통합 5번 덩이) ─────────────────────
+// 오류 코드 → 문구 = src/lib/place/errors.ts(placeErrorMessage). 화면은 5번 화면 작업에서 붙는다.
+
+/** 공간 주인이 자기 공간 노하우를 내가 직원·매니저인 매장에 제안한다. 노하우마다 제안 1행 · 받는 매장 사장 알림 1회(서버 발송). */
+export async function proposeToStore(
+  spaceId: string,
+  storeId: string,
+  entryIds: string[],
+): Promise<{ data: { entry_id: string; suggestion_id: string }[]; error: DbErr }> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase
+    .rpc('propose_to_store', { p_space: spaceId, p_store: storeId, p_entry_ids: entryIds })
+    .limit(50); // 서버가 50개 넘게 고르면 거절한다(invalid_argument)
+  if (error) {
+    console.warn('[db] proposeToStore:', error.message);
+    reportError('db.write:proposeToStore', error);
+    return { data: [], error };
+  }
+  return { data: (data ?? []) as { entry_id: string; suggestion_id: string }[], error: null };
+}
+
+/** 현재 매장 사장·매니저가 공간에서 온 대기 제안을 승인한다 → 매장 사본(발행·색인 대기). 반려는 지금처럼 reviewSuggestion.
+ *  source_photos = 공간 원본 사진 경로(사본에는 아직 안 옮겨짐 · 0490 머리말 "남긴 것"). */
+export async function approveSpaceProposal(
+  suggestionId: string,
+): Promise<{ data: { entry_id: string; source_photos: string[] } | null; error: DbErr }> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase.rpc('approve_space_proposal', { p_id: suggestionId }).limit(1); // 승인 1건 = 1행
+  if (error) {
+    console.warn('[db] approveSpaceProposal:', error.message);
+    reportError('db.write:approveSpaceProposal', error);
+    return { data: null, error };
+  }
+  const row = Array.isArray(data) ? data[0] : null;
+  return { data: (row ?? null) as { entry_id: string; source_photos: string[] } | null, error: null };
+}

@@ -24,6 +24,16 @@ const MESSAGES: Record<string, string> = {
   invalid_argument: '빈 칸이 있어요. 다시 적어 주세요.',
   not_manager: '사장님이나 매니저만 할 수 있어요.',
   forbidden: '지금 있는 곳의 정보만 볼 수 있어요. 화면을 새로고침해 주세요.',
+  // ── 매장과 연결하기(0490 · 5번 덩이) ──
+  // feature_off · not_space_owner · suggestion_not_found · invalid_argument · not_manager 는 위 문구를 같이 쓴다.
+  not_store_member: '매장에 합류하면 여기서 노하우를 보낼 수 있어요.',
+  store_not_accepting: '지금은 이 매장에 보낼 수 없어요.',
+  no_entries: '보낼 노하우를 하나 이상 골라 주세요.',
+  entry_not_found: '노하우를 찾을 수 없어요. 화면을 새로고침해 주세요.',
+  already_proposed: '이미 보낸 노하우예요. 사장님 승인을 기다리고 있어요.',
+  suggestion_not_pending: '이미 처리한 제안이에요.',
+  too_many_entries: '한 번에 50개까지 보낼 수 있어요.',
+  not_authenticated: '다시 로그인해 주세요.',
 };
 
 const FALLBACK = '잠시 뒤 다시 시도해 주세요.';

@@ -18,6 +18,7 @@
 // 실행: npm run qa:space-isolation:local
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
+import { runStoreLinkChecks } from './lib/qa-space-store-link.mjs';
 
 if (!process.argv.includes('--local')) { console.error('중단: 로컬 전용 하니스다(--local)'); process.exit(2); }
 const DB = process.env.QA_DB_CONTAINER || 'supabase_db_SquareTable';
@@ -968,6 +969,8 @@ console.log('\n[3] 속도 · auth_member_unit_id 1,000회 (3번 중 가장 빠�
     check(`지금 ${nw}ms · 0303 정의 ${od}ms · 값 ${val}`, Number(nw) <= Math.max(Number(od) * 2, Number(od) + 20) && val === X);
   }
 }
+
+runStoreLinkChecks({ DB, check }); // 5번 덩이 매장과 연결하기(0490) · 별도 모듈
 
 // ── 2부: 실세션(PostgREST) ──────────────────────────────────────────────────
 console.log('\n[4] 실세션 · 공간만 있는 계정');

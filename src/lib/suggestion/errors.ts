@@ -8,6 +8,8 @@ const MESSAGES: Record<string, string> = {
   not_pending: '사장님이 이미 처리한 제안이에요. 이제 바꿀 수 없어요.',
   forbidden: '내가 보낸 제안만 바꿀 수 있어요.',
   invalid_argument: '제안 내용을 적어 주세요.',
+  // 0490: 공간에서 보낸 노하우 제안은 보낸 때 내용으로 간다. 고치려면 취소하고 다시 보낸다.
+  from_space_locked: '공간에서 보낸 노하우는 고칠 수 없어요. 취소하고 다시 보내 주세요.',
 };
 
 export function suggestionErrorMessage(err: DbErr, fallback = '잠시 뒤 다시 시도해 주세요.'): string {
