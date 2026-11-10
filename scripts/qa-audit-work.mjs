@@ -277,14 +277,14 @@ console.log('\n[D7] 근무표를 쓰는 매장은 그 시각 근무자에게만,
   }
 }
 
-console.log('\n[D8] 고정 공지는 피드 90일 창과 6개월 파기에서 빠진다');
+console.log('\n[D8] 고정 공지는 피드 90일 창에서 빠진다 · ★0360(W5): 피드는 6개월 파기 자체가 없다(매장 삭제 30일 뒤에만)');
 {
   const g = lastDef('purge_retention_global');
-  check('★6개월 파기 크론(purge_retention_global)이 고정 공지를 남긴다',
-    /delete from public\.work_feed where created_at < v_6mo\s+and coalesce\(data->>'pinned', ''\) <> 'true'/.test(g.body), g.file);
+  check('★크론(purge_retention_global)이 피드를 지우지 않는다(0360 · 고정 여부와 무관)',
+    !!g.body && !/delete from public\.work_feed/.test(g.body), g.file);
   const o = lastDef('purge_old_records');
-  check('★사장 기회 정리(purge_old_records)도 고정 공지를 남긴다',
-    /delete from public\.work_feed where unit_id = v_unit and created_at < v_cutoff\s+and coalesce\(data->>'pinned', ''\) <> 'true'/.test(o.body), o.file);
+  check('★사장 기회 정리(purge_old_records)도 피드를 지우지 않는다(0360)',
+    !!o.body && !/delete from public\.work_feed/.test(o.body), o.file);
   const db = strip(read('src/lib/db.ts'));
   const ff = (db.match(/export async function fetchFeed\(\)[\s\S]*?\n\}\n/) || [''])[0];
   check('★fetchFeed 가 고정 공지를 기간·상한과 무관하게 따로 읽어 합친다',
@@ -298,7 +298,7 @@ console.log('\n[D8] 고정 공지는 피드 90일 창과 6개월 파기에서 �
 select public.purge_retention_global();
 select 'R=' || id from public.work_feed where id like 'qa_f8%' order by id;\n`;
     const r = psql(`${IDS}${F}rollback;\n`);
-    check('★7개월 된 고정 공지는 남고, 고정 아님·고정 푼 공지는 지운다', rows(r).join(',') === 'R=qa_f8p', tail(r));
+    check('★7개월 된 공지는 고정 여부와 무관하게 전부 남는다(0360)', rows(r).join(',') === 'R=qa_f8o,R=qa_f8p,R=qa_f8u', tail(r));
   }
 }
 

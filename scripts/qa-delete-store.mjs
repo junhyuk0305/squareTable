@@ -56,13 +56,21 @@ async function main() {
   const { data: aStill } = await admin.from('units').select('id').eq('id', A).maybeSingle();
   check('A 매장 여전히 존재(유출/파괴 없음)', !!aStill);
 
-  // 2) O가 A 삭제 → 성공, 목록 1개(B), A 노하우 cascade 삭제
+  // 2) O가 A 삭제 → 성공, 목록 1개(B). ★0358(W5): 소프트 삭제 — 기록은 30일 남고 사장도 못 본다(파기는 qa-store-retention [4])
   const { error: dErr } = await O.c.rpc('delete_store', { p_unit_id: A });
   check('O→delete_store(A) 성공', !dErr, dErr?.message ?? '');
   const { data: units } = await O.c.rpc('my_units');
   check('삭제 후 내 매장 1개(B)', (units?.length ?? 0) === 1 && units?.[0]?.unit_id === B, `n=${units?.length}`);
   const { count: khLeft } = await admin.from('playbook_entries').select('id', { count: 'exact', head: true }).eq('unit_id', A);
-  check('A 노하우 cascade 삭제(0건)', (khLeft ?? -1) === 0, `left=${khLeft}`);
+  check('★A 노하우는 남는다(소프트 삭제 · 30일 뒤 파기)', (khLeft ?? -1) === 1, `left=${khLeft}`);
+  const { data: aRow } = await admin.from('units').select('deleted_at').eq('id', A).maybeSingle();
+  check('★A 매장 행에 deleted_at 이 찍힌다', !!aRow?.deleted_at, JSON.stringify(aRow));
+  const { data: oSees } = await O.c.from('playbook_entries').select('id').eq('unit_id', A);
+  check('★사장도 지운 매장 A 의 노하우를 못 읽는다', (oSees ?? []).length === 0, `rows=${(oSees ?? []).length}`);
+  const { error: reErr } = await O.c.rpc('reopen_store', { p_unit: A });
+  check('★지운 매장 A 는 다시 열 수 없다(not_owner)', /not_owner/.test(reErr?.message ?? ''), reErr?.message ?? '(열림!)');
+  const { error: twice } = await O.c.rpc('delete_store', { p_unit_id: A });
+  check('★같은 매장을 두 번 지울 수 없다(not_owner)', /not_owner/.test(twice?.message ?? ''), twice?.message ?? '(두 번 지움!)');
 
   // 3) 마지막 매장 삭제 금지
   const { error: lastErr } = await O.c.rpc('delete_store', { p_unit_id: B });

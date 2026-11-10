@@ -30,6 +30,11 @@ const trg = (sql.match(/create or replace function public\.queue_unit_photos_on_
 check('★매장 행이 지워지면 그 매장 폴더 사진을 대기열에 넣는다',
   /storage\.objects/.test(trg) && /'playbook-photos'/.test(trg) && /split_part\(o\.name, '\/', 1\) = old\.id/.test(trg));
 check('트리거가 units 삭제 뒤에 돈다', /after delete on public\.units[\s\S]*?execute function public\.queue_unit_photos_on_delete\(\)/.test(sql));
+// ★0361(W5): 매장 삭제 30일 파기는 근로기록 때문에 units 행을 남길 수 있다(파기 표시) → 트리거가 안 돈다.
+//   파기 함수가 같은 술어로 직접 대기열에 넣어야 한다. 최고 번호 정의만 본다.
+const pds = ((sql.match(/create or replace function public\.purge_deleted_store\(p_unit text\)[\s\S]*?\$\$;/g) || ['']).pop());
+check('★매장 삭제 30일 파기(purge_deleted_store)가 행을 남겨도 그 매장 폴더 사진을 대기열에 넣는다',
+  /insert into public\.photo_purge_queue\(path\)/.test(pds) && /'playbook-photos'/.test(pds) && /split_part\(o\.name, '\/', 1\) = p_unit/.test(pds));
 const due = (sql.match(/create or replace function public\.photo_purge_due\([\s\S]*?\$\$;/) || [''])[0];
 check('★살아 있는 노하우·제안이 아직 가리키는 사진은 지우지 않는다(본사 사본은 작업실 폴더를 가리킨다)',
   /playbook_entries/.test(due) && /playbook_suggestions/.test(due));

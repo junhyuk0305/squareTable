@@ -257,6 +257,8 @@ console.log('\n[4] 0246 정의자 함수 전수 — 대상 표를 읽는데 표�
     purge_old_records: '보관 기한 삭제 — 표시와 무관하게 나이로 지운다',
     purge_retention_global: '보관 기한 삭제 — 표시와 무관하게 나이로 지운다',
     recompute_playbook_stats: '노하우 사용 통계(개인 기록이 아니다)',
+    purge_deleted_store: '0361 지운 매장 30일 파기 — 표시와 무관하게 그 매장 행을 전부 다룬다(근로기록은 남긴다)',
+    relabel_withdrawn_author: '0359 탈퇴한 사람 이름 고쳐 쓰기 — 표시와 무관하게 그 사람 행 전부',
   };
   const re = `\\m(public\\.)?(${TENURE_TABLES.join('|')})\\M`;
   const out = psql(`select p.proname from pg_proc p
@@ -316,10 +318,10 @@ console.log('\n[5] 0247 member_notices · retention_purge_log · 스윕·크론 
     check(`${fn}: anon 실행 불가 · authenticated 실행 가능(옛 앱)`,
       psql(`select not has_function_privilege('anon', 'public.${fn}', 'execute') and has_function_privilege('authenticated', 'public.${fn}', 'execute')`) === 't');
   }
-  // 크론은 pg_cron 이 있을 때만 등록된다(로컬 도커에는 없다). 있으면 dry-run(true)으로 등록돼 있어야 한다(P4-8 전까지).
+  // 크론은 pg_cron 이 있을 때만 등록된다(로컬 도커에는 없다). ★0360(W5): 연습 모드 해제 — (false) 로 등록돼 있어야 한다.
   if (psql(`select exists (select 1 from pg_extension where extname = 'pg_cron')`) === 't') {
     const cmd = psql(`select coalesce((select command from cron.job where jobname = 'purge-former-tenures'), '')`);
-    check('크론 purge-former-tenures = purge_expired_tenures(true)', /purge_expired_tenures\(true\)/.test(cmd), cmd || '잡 없음');
+    check('크론 purge-former-tenures = purge_expired_tenures(false)', /purge_expired_tenures\(false\)/.test(cmd), cmd || '잡 없음');
   } else {
     console.log('  SKIP 크론 등록 확인(pg_cron 없음 · 로컬 도커)');
   }

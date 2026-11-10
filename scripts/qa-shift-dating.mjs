@@ -499,7 +499,8 @@ try {
       date: addDays(T, -14), template_id: B1, status: 'approved', accepted_by: K.id, note: '' });
     const d = await O.c.rpc('delete_store', { p_unit_id: sb.unit_id });
     const left = (await admin.from('shift_templates').select('id').eq('unit_id', sb.unit_id)).data ?? [];
-    check('9-1 ★delete_store 성공 + 근무표 cascade 정리', !d.error && left.length === 0, d.error?.message ?? `left=${left.length}`);
+    // ★0358(W5): 매장 삭제 = 소프트 삭제. 근무표는 30일 파기(근로기록이면 퇴사일 3년)까지 남는다 — 파기는 qa-store-retention [4].
+    check('9-1 ★delete_store 성공(지난 반복 근무 있음) · 근무표는 소프트 삭제로 남는다', !d.error && left.length === 1, d.error?.message ?? `left=${left.length}`);
 
     const lv = await K.c.rpc('leave_store');
     check('9-2 ★직원 leave_store 성공(지난 반복 근무 있음)', !lv.error, lv.error?.message);

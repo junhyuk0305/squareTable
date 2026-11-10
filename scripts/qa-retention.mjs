@@ -14,8 +14,10 @@
 //       스스로 나가기·다시 열기도 같은 정리 함수(close_member_tenure)를 지난다. 다른 매장 tenure id 는 거부한다.
 //       2026-11-02 급여 기능을 빼며 시급을 "보여 주는" 단언(1-3 · 3-7 · 3-8 마지막 시급 · 5-8~5-10 시급 이력 · 5-12)은 뺐다.
 //       옛 앱이 계속 시급을 쓰므로 시급을 "비우고 숨기고 지우는" 단언(5-1 · 5-5 · 8-8)은 DB 축소 때까지 남긴다(처리방침 v2.3 파기 약속).
-//   [8] 0247 3년 보존 크론(purge_expired_tenures) — dry-run 은 개수만 센다. 실제 실행은 퇴직 3년+1일 지난 것만 지우고
-//       다시 돌리면 0 이다. 처리방침 개정 전까지 6개월 지난 스냅샷 이름·끝4자리를 비운다. 실행마다 retention_purge_log.
+//   [8] 0247 3년 보존 크론(purge_expired_tenures) — dry-run 은 개수만 센다. 실제 실행은 퇴직 3년+1일 지난 근로기록만 지우고
+//       다시 돌리면 0 이다. ★0360(W5): AI 질문·모르는 질문은 지우지 않는다(매장 기록 · 매장 삭제 30일 뒤에만).
+//       스냅샷 이름·끝4자리는 퇴사일 3년에 비운다(6개월 → 3년). 남는 질문이 가리키는 재직 기간은 지우지 않고 이름만 비운다.
+//       실행마다 retention_purge_log.
 //
 // ★로컬 전용: 실행할 때마다 계정을 가입시킨다. 라이브에서 돌리면 고정 계정 규칙 위반이라 URL 이 로컬이 아니면 멈춘다.
 // 실행: node scripts/qa-retention.mjs   자가정리(계정·매장·OTP 시드).
@@ -355,14 +357,14 @@ try {
 
   // ═══════ 8. 0247 — 3년 보존 크론 purge_expired_tenures(p_dry_run default true) ═══════
   //   근로기준법 제42조 · 시행령 제22조: 퇴직일부터 3년. dry-run 은 개수만 센다(크론은 7일 동안 dry-run 으로 돈다 · P4-8).
-  //   실제 실행은 3년 + 1일 지난 것만 지우고, 다시 돌리면 0 이다. 처리방침 개정 전까지는 6개월 지난 스냅샷 이름·끝4자리를 비운다.
-  console.log('\n[8] 0247 purge_expired_tenures — dry-run 은 세기만 · 실제는 3년+1일만 · 다시 돌리면 0 · 6개월 스냅샷 비움');
+  //   실제 실행은 3년 + 1일 지난 근로기록만 지우고, 다시 돌리면 0 이다. ★0360: 질문은 남기고 스냅샷은 3년에 비운다.
+  console.log('\n[8] 0247·0360 purge_expired_tenures — dry-run 은 세기만 · 실제는 3년+1일 근로기록만 · 질문은 남김 · 다시 돌리면 0 · 스냅샷 3년');
   {
     const D = 24 * H;
     const Y3 = 3 * 365.25 * D;
     const rid = () => crypto.randomUUID();
     const X = rid(), Y = rid(), Z = rid(), F = rid(), W = rid(), G = rid();
-    const T = { x: rid(), y1: rid(), y2: rid(), z: rid() };
+    const T = { x: rid(), y1: rid(), y2: rid(), z: rid(), q: rid() };
     const oldDay = kstDate(now - Y3 - 40 * D);
     const setup = [
       // X: 3년+1일 전에 나간 사람(지금 멤버 아님) — 표시 안 된 행이 전부 지워진다.
@@ -375,12 +377,15 @@ try {
       // 작성자 칸은 INSERT 트리거(stamp_author)가 auth.uid() 로 덮는다(service_role 이면 null) → 넣은 뒤 고친다.
       ['X 질문 작성자', admin.from('chat_queries').update({ junior_id: X }).eq('id', `ret_px_c_${s}`)],
       ['X 모르는 질문 작성자', admin.from('unknown_queries').update({ junior_id: X }).eq('id', `ret_px_u_${s}`)],
+      // Q(★0360): 3년+1일 전에 닫힌 기간인데 남는 질문이 그 기간을 가리킨다(재입사 표시) — 기간 행은 남고 이름·끝4자리만 비운다.
+      ['Q 기간', admin.from('member_tenures').insert({ id: T.q, unit_id: UNIT, user_id: rid(), joined_at: iso(now - Y3 - 200 * D), left_at: iso(now - Y3 - D), left_reason: 'left', name_snapshot: 'Q이름', phone_last4: '7777' })],
+      ['Q 질문', admin.from('chat_queries').insert({ id: `ret_pq_c_${s}`, unit_id: UNIT, junior_name: 'Q이름', query_text: '재입사 전 질문', archived_tenure_id: T.q })],
       // Y: 재입사자 — 3년+1일 전에 닫힌 첫 기간(표시된 행)과 1년 전에 닫힌 둘째 기간(표시 안 된 행).
       ['Y 첫 기간', admin.from('member_tenures').insert({ id: T.y1, unit_id: UNIT, user_id: Y, joined_at: iso(now - Y3 - 300 * D), left_at: iso(now - Y3 - D), left_reason: 'removed', name_snapshot: 'Y이름' })],
       ['Y 둘째 기간', admin.from('member_tenures').insert({ id: T.y2, unit_id: UNIT, user_id: Y, joined_at: iso(now - 600 * D), left_at: iso(now - 365 * D), left_reason: 'left', name_snapshot: 'Y이름' })],
       ['Y 옛 출퇴근(표시)', admin.from('attendance').insert({ id: `ret_py_a1_${s}`, unit_id: UNIT, staff_id: Y, date: oldDay, work_minutes: 60, archived_tenure_id: T.y1 })],
       ['Y 둘째 출퇴근', admin.from('attendance').insert({ id: `ret_py_a2_${s}`, unit_id: UNIT, staff_id: Y, date: kstDate(now - 400 * D), work_minutes: 60 })],
-      // Z: 3년-1일 전에 나간 사람 — 남는다. 스냅샷은 6개월이 지났으니 비운다(실제 실행에서만).
+      // Z: 3년-1일 전에 나간 사람 — 남는다. ★0360: 스냅샷도 3년이 안 됐으니 남는다.
       ['Z 기간', admin.from('member_tenures').insert({ id: T.z, unit_id: UNIT, user_id: Z, joined_at: iso(now - Y3 - 100 * D), left_at: iso(now - Y3 + D), left_reason: 'left', name_snapshot: 'Z이름', phone_last4: '3333' })],
       ['Z 출퇴근', admin.from('attendance').insert({ id: `ret_pz_a_${s}`, unit_id: UNIT, staff_id: Z, date: oldDay, work_minutes: 60 })],
       // former_staff: F 는 3년+1일(지움) · W 는 3년-1일(남기고 이름·끝4자리를 비움)
@@ -399,6 +404,7 @@ try {
       xWage: len(await rows(admin.from('wages').select('staff_id').eq('unit_id', UNIT).eq('staff_id', X))),
       xRate: len(await rows(admin.from('wage_rates').select('staff_id').eq('unit_id', UNIT).eq('staff_id', X))),
       xChat: await ex('chat_queries', 'id', `ret_px_c_${s}`), xUq: await ex('unknown_queries', 'id', `ret_px_u_${s}`),
+      tq: await ex('member_tenures', 'id', T.q), qChat: await ex('chat_queries', 'id', `ret_pq_c_${s}`),
       tx: await ex('member_tenures', 'id', T.x), ty1: await ex('member_tenures', 'id', T.y1), ty2: await ex('member_tenures', 'id', T.y2), tz: await ex('member_tenures', 'id', T.z),
       yA1: await ex('attendance', 'id', `ret_py_a1_${s}`), yA2: await ex('attendance', 'id', `ret_py_a2_${s}`), zA: await ex('attendance', 'id', `ret_pz_a_${s}`),
       f: len(await rows(admin.from('former_staff').select('staff_id').eq('staff_id', F))),
@@ -431,8 +437,12 @@ try {
     const real = await admin.rpc('purge_expired_tenures', { p_dry_run: false });
     check('8-7 실제 실행 성공(FK 순서 오류 없음)', !real.error && real.data?.dry_run === false, real.error?.message ?? JSON.stringify(real.data));
     const a = await snap();
-    check('8-8 ★3년+1일 지난 사람(X)의 출퇴근 · 근무 · 시급 · 시급 이력 · 질문 · 모르는 질문 · 재직 기간을 지운다',
-      a.xAtt === 0 && a.xSh === 0 && a.xWage === 0 && a.xRate === 0 && a.xChat === 0 && a.xUq === 0 && a.tx === 0, JSON.stringify(a));
+    check('8-8 ★3년+1일 지난 사람(X)의 출퇴근 · 근무 · 시급 · 시급 이력 · 재직 기간을 지운다',
+      a.xAtt === 0 && a.xSh === 0 && a.xWage === 0 && a.xRate === 0 && a.tx === 0, JSON.stringify(a));
+    check('8-8b ★0360: X 의 AI 질문 · 모르는 질문은 남는다(매장이 살아 있는 동안 매장 기록)', a.xChat === 1 && a.xUq === 1, JSON.stringify(a));
+    const q2 = (await admin.from('member_tenures').select('name_snapshot, phone_last4').eq('id', T.q).maybeSingle()).data;
+    check('8-8c ★0360: 남는 질문이 가리키는 3년 지난 기간은 남고(FK 로 정리가 막히지 않는다) 이름 · 끝4자리만 비운다',
+      a.tq === 1 && a.qChat === 1 && q2?.name_snapshot === null && q2?.phone_last4 === null, JSON.stringify([a.tq, a.qChat, q2]));
     check('8-9 ★재입사자(Y)의 3년+1일 지난 첫 기간과 그 표시된 행을 지운다', a.ty1 === 0 && a.yA1 === 0, JSON.stringify(a));
     check('8-10 ★Y 의 둘째 기간(1년 전)과 그 기록은 남는다', a.ty2 === 1 && a.yA2 === 1, JSON.stringify(a));
     check('8-11 ★3년-1일(Z)은 남는다', a.tz === 1 && a.zA === 1, JSON.stringify(a));
@@ -441,8 +451,8 @@ try {
     check('8-14 동의 기록은 계정이 없고 5년이 넘은 것만 지운다', a.conG === 0 && a.conO === 1, JSON.stringify(a));
     const z2 = (await admin.from('member_tenures').select('name_snapshot, phone_last4').eq('id', T.z).maybeSingle()).data;
     const w2 = (await admin.from('former_staff').select('name, phone_last4').eq('staff_id', W).maybeSingle()).data;
-    check('8-15 ★6개월 지난 스냅샷 이름 · 끝4자리를 비운다(처리방침 개정 전 · 정책 M6)', z2?.name_snapshot === null && z2?.phone_last4 === null
-      && w2?.name === null && w2?.phone_last4 === null, JSON.stringify([z2, w2]));
+    check('8-15 ★0360: 3년이 안 된 스냅샷 이름 · 끝4자리는 남긴다(퇴사일 3년 · 처리방침 v2.4)', z2?.name_snapshot === 'Z이름' && z2?.phone_last4 === '3333'
+      && w2?.name === 'W이름' && w2?.phone_last4 === '6666', JSON.stringify([z2, w2]));
 
     const again = await admin.rpc('purge_expired_tenures', { p_dry_run: false });
     const nonzero = Object.entries(again.data ?? {}).filter(([k, v]) => typeof v === 'number' && v !== 0);
