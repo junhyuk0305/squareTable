@@ -8,7 +8,8 @@
 //      → 이유 문구 + [직원 관리로 가기]. 서버 차단은 아직 켜지 않는다.
 //   J8 매장 삭제 확인창이 남은 이용 기간을 말하지 않았다. 돌려주지 않는 매장에 약속하면 안 된다(정책 M2).
 //      → delete_store_preview.returns_slot 이 true 일 때만 기간 문장. 성공 토스트는 delete_store 반환값으로 고른다.
-//   ⛔웹은 매장 삭제 확인창·토스트를 글자 그대로 둔다(토스 동결 · 보수적 판단).
+//   2026-11-10 토스 동결 해제: 웹도 앱과 같은 확인창·토스트를 쓰고 미리보기를 부른다.
+//   확인창 문장은 처리방침 v2.4(매장 삭제 30일 뒤 개인 기록 파기 · 노하우·문항 글과 익명 통계는 남김 · 되돌릴 수 없음)를 따른다.
 // 실행: node scripts/qa-store-copy.mjs   (Node 22.18+ — .ts 를 타입만 벗겨 읽는다)
 import { readFileSync } from 'node:fs';
 import { register } from 'node:module';
@@ -49,9 +50,11 @@ const J4 = '기록(출퇴근·근무 기록·노하우·채팅)은 그대로예�
 const J5 = '직원이 있으면 탈퇴할 수 없어요. 직원 관리에서 먼저 내보내 주세요.';
 const J8 = (md) => `이 매장의 이용 기간(${md}까지)은 새 매장을 만들 때 쓸 수 있어요. 이용 중인 매장 수와 요금은 그대로예요.`;
 const DEL_FAIL = '탈퇴 처리에 실패했어요. 잠시 후 다시 시도해 주세요.';
-// ⛔지금 확인창·토스트 문구(웹은 이대로 둔다).
-// 2026-11-02 급여 기능을 빼며 '근무·급여'를 '근무 기록'으로 바꿨다.
-const OLD_CONFIRM = (name) => `“${name}”의 노하우·근무 기록 등 모든 데이터가 영구 삭제돼요. 되돌릴 수 없어요.`;
+// v2.4 매장 파기 문장(사장 탈퇴 확인창과 같은 정본 STORE_PURGE_TEXT).
+const STORE_PURGE = '질문·채팅·퀴즈 기록은 30일 뒤 지워요. 근무 기록은 법에 따라 3년 보관한 뒤 지워요. 노하우와 퀴즈 문항의 글, 통계는 어느 매장의 누구인지 알 수 없게 바꿔 남겨요.';
+const BASE_CONFIRM = (name) => `“${name}” 매장은 삭제하면 되돌릴 수 없어요. ${STORE_PURGE}`;
+// 2026-11-10 전 문구. "모든 데이터가 영구 삭제"는 v2.4(노하우·문항 글과 통계는 남김)와 다르다. 다시 나오면 안 된다.
+const PRE_V24_CONFIRM = (name) => `“${name}”의 노하우·근무 기록 등 모든 데이터가 영구 삭제돼요. 되돌릴 수 없어요.`;
 const OLD_TOAST = '매장을 삭제했어요.';
 const BACK_TOAST = '매장을 삭제했어요. 새 매장 1곳을 열 수 있어요.';
 
@@ -122,20 +125,25 @@ console.log('\n■ J8 — 매장 삭제 확인창은 돌려주는 매장에만 �
   const conf = (a) => (fn(deleteStoreConfirmText) ? deleteStoreConfirmText(a) : '(함수 없음)');
   const name = '코홀트 강남점';
   const back = { returns_slot: true, paid_until: '2026-11-15T14:59:59+00:00' };
-  for (const os of ['ios', 'android']) {
+  check('STORE_PURGE_TEXT = v2.4 파기 문장', mod.STORE_PURGE_TEXT === STORE_PURGE, show(mod.STORE_PURGE_TEXT));
+  for (const os of ['ios', 'android', 'web']) {
     const t = conf({ storeName: name, preview: back, os });
-    check(`${os} · 돌려줌 → 기간 문장(KST 11월 15일)`, t.includes(J8('11월 15일')) && t.includes(OLD_CONFIRM(name)), show(t));
+    check(`${os} · 돌려줌 → v2.4 문장 + 기간 문장(KST 11월 15일)`, t === `${BASE_CONFIRM(name)}\n\n${J8('11월 15일')}`, show(t));
   }
   const late = conf({ storeName: name, preview: { returns_slot: true, paid_until: '2026-11-15T15:30:00Z' }, os: 'ios' });
   check('UTC 15:30 은 KST 다음 날(11월 16일)', late.includes(J8('11월 16일')), show(late));
   const none = conf({ storeName: name, preview: { returns_slot: false, paid_until: null }, os: 'ios' });
-  check('돌려주지 않음 → 지금 문구만', none === OLD_CONFIRM(name), show(none));
+  check('돌려주지 않음 → v2.4 문장만', none === BASE_CONFIRM(name), show(none));
   const failed = conf({ storeName: name, preview: null, os: 'android' });
-  check('미리보기를 못 읽음(null) → 약속하지 않는다', failed === OLD_CONFIRM(name), show(failed));
+  check('미리보기를 못 읽음(null) → 약속하지 않는다', failed === BASE_CONFIRM(name), show(failed));
   const noDate = conf({ storeName: name, preview: { returns_slot: true, paid_until: null }, os: 'ios' });
-  check('날짜가 없으면 약속하지 않는다', noDate === OLD_CONFIRM(name), show(noDate));
-  const web = conf({ storeName: name, preview: back, os: 'web' });
-  check('⛔웹은 지금 문구 그대로(동결)', web === OLD_CONFIRM(name), show(web));
+  check('날짜가 없으면 약속하지 않는다', noDate === BASE_CONFIRM(name), show(noDate));
+  const webNone = conf({ storeName: name, preview: null, os: 'web' });
+  check('★웹 · 미리보기 없음 → 앱과 같은 v2.4 문장', webNone === BASE_CONFIRM(name), show(webNone));
+  check('★옛 "모든 데이터가 영구 삭제" 문구가 어디서도 나오지 않는다',
+    [none, failed, noDate, webNone].every((t) => !t.includes('영구 삭제') && t !== PRE_V24_CONFIRM(name)));
+  check('★v2.4 요점: 30일 뒤 · 되돌릴 수 없음 · 노하우·문항 글과 통계는 남김',
+    webNone.includes('30일 뒤 지워요') && webNone.includes('되돌릴 수 없어요') && webNone.includes('노하우와 퀴즈 문항의 글, 통계는') && webNone.includes('남겨요'), show(webNone));
   const t = conf({ storeName: name, preview: back, os: 'ios' });
   check('대시·문장 잇는 중간점·결제 채널 말이 없다', !STYLE.test(t) && !CHANNEL.test(t), show(t));
 }
@@ -147,7 +155,8 @@ console.log('\n■ J8 — 성공 토스트는 delete_store 반환값으로 고�
   check('안드 · returned_slot true → 새 매장 문장', toast({ result: { returned_slot: true, paid_until: '2026-11-15T14:59:59Z' }, os: 'android' }) === BACK_TOAST);
   check('returned_slot false → 지금 토스트', toast({ result: { returned_slot: false, paid_until: null }, os: 'ios' }) === OLD_TOAST);
   check('반환값 없음(옛 서버 void) → 지금 토스트', toast({ result: null, os: 'android' }) === OLD_TOAST);
-  check('⛔웹은 지금 토스트 그대로', toast({ result: { returned_slot: true, paid_until: null }, os: 'web' }) === OLD_TOAST);
+  check('★웹 · returned_slot true → 앱과 같은 새 매장 문장', toast({ result: { returned_slot: true, paid_until: null }, os: 'web' }) === BACK_TOAST);
+  check('웹 · returned_slot false → 지금 토스트', toast({ result: { returned_slot: false, paid_until: null }, os: 'web' }) === OLD_TOAST);
 }
 
 console.log('\n■ 연결 — 데이터 계층과 화면');
@@ -158,7 +167,8 @@ console.log('\n■ 연결 — 데이터 계층과 화면');
   const cfg = strip(read('src/app/owner/store-config.tsx'));
   check('store-config 가 deleteStoreConfirmText 를 쓴다', /deleteStoreConfirmText\(/.test(cfg));
   check('store-config 가 deleteStoreToast 를 쓴다', /deleteStoreToast\(/.test(cfg));
-  check('store-config 가 웹에서는 미리보기를 부르지 않는다', /Platform\.OS !== 'web'[\s\S]{0,200}?fetchDeleteStorePreview/.test(cfg));
+  const onDel = (cfg.match(/const onDelete = async[\s\S]*?\n  \};/) || [''])[0];
+  check('★store-config 가 웹에서도 미리보기를 부른다(웹을 거르는 분기가 없다)', /fetchDeleteStorePreview\(/.test(onDel) && !/Platform\.OS/.test(onDel), show(onDel.slice(0, 120)));
 }
 
 console.log(`\n결과: ${pass} PASS / ${fail} FAIL`);

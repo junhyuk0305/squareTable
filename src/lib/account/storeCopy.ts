@@ -2,7 +2,7 @@
 // 읽는 곳: owner/previous-stores(다시 열기 창) · useSessionStore.deleteAccount · account-settings(탈퇴 실패 창) · owner/store-config(매장 삭제 창·토스트).
 //
 // 2026-10-04 마스터 계획 P3-10 (J4 · J5 · J8).
-// ⛔웹의 매장 삭제 확인창·토스트는 토스 심사 동결(~10-16) 동안 글자 그대로 둔다(보수적 판단 · 사용자 확인 대기).
+// 웹의 매장 삭제 확인창·토스트 동결(토스 심사)은 2026-11-10 해제했다. 웹도 앱과 같은 문구를 쓴다.
 import { friendlyError, isMissingRpc } from '@/lib/utils/userError';
 
 /** J4 — 0235 부터 다시 열어도 출퇴근·업무 기록이 남는다. 직원 소속만 정리한다. 이용권 문장은 그대로 둔다. */
@@ -55,19 +55,26 @@ function kstMonthDay(iso: string): string | null {
 }
 
 /**
- * J8 — 매장 삭제 확인 문구. 서버가 실제로 몫을 돌려주는 매장(returns_slot)에만 기간 문장을 붙인다(정책 M2).
- * ⛔웹은 지금 문구 그대로다.
+ * 매장 데이터 파기 문장(처리방침 v2.4 제3조 · 약관 제8조 제3항). 매장 삭제 확인창과 사장 탈퇴 확인창이 같이 쓴다.
+ * 매장 삭제·사장 탈퇴 30일 뒤 개인 기록을 지우고, 노하우·퀴즈 문항의 글과 익명 통계는 남긴다.
  */
-export function deleteStoreConfirmText(v: { storeName: string; preview: DeleteStorePreview | null; os: string }): string {
-  const base = `“${v.storeName}”의 노하우·근무 기록 등 모든 데이터가 영구 삭제돼요. 되돌릴 수 없어요.`;
-  if (v.os === 'web' || !v.preview?.returns_slot || !v.preview.paid_until) return base;
+export const STORE_PURGE_TEXT =
+  '질문·채팅·퀴즈 기록은 30일 뒤 지워요. 근무 기록은 법에 따라 3년 보관한 뒤 지워요. 노하우와 퀴즈 문항의 글, 통계는 어느 매장의 누구인지 알 수 없게 바꿔 남겨요.';
+
+/**
+ * J8 — 매장 삭제 확인 문구. 서버가 실제로 몫을 돌려주는 매장(returns_slot)에만 기간 문장을 붙인다(정책 M2).
+ * 웹도 같은 문구다(2026-11-10 동결 해제).
+ */
+export function deleteStoreConfirmText(v: { storeName: string; preview: DeleteStorePreview | null }): string {
+  const base = `“${v.storeName}” 매장은 삭제하면 되돌릴 수 없어요. ${STORE_PURGE_TEXT}`;
+  if (!v.preview?.returns_slot || !v.preview.paid_until) return base;
   const md = kstMonthDay(v.preview.paid_until);
   if (!md) return base;
   return `${base}\n\n이 매장의 이용 기간(${md}까지)은 새 매장을 만들 때 쓸 수 있어요. 이용 중인 매장 수와 요금은 그대로예요.`;
 }
 
-/** J8 — 매장 삭제 성공 토스트. delete_store 가 몫을 돌려줬을 때만 새 매장 문장을 붙인다. ⛔웹은 지금 문구 그대로다. */
-export function deleteStoreToast(v: { result: DeleteStoreResult | null; os: string }): string {
-  if (v.os !== 'web' && v.result?.returned_slot === true) return '매장을 삭제했어요. 새 매장 1곳을 열 수 있어요.';
+/** J8 — 매장 삭제 성공 토스트. delete_store 가 몫을 돌려줬을 때만 새 매장 문장을 붙인다. 웹도 같다(2026-11-10 동결 해제). */
+export function deleteStoreToast(v: { result: DeleteStoreResult | null }): string {
+  if (v.result?.returned_slot === true) return '매장을 삭제했어요. 새 매장 1곳을 열 수 있어요.';
   return '매장을 삭제했어요.';
 }

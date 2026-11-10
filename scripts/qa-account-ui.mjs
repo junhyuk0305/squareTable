@@ -7,7 +7,8 @@
 //   Q14 비밀번호를 바꿀 때 현재 비밀번호를 안 물었다 → 현재 비밀번호 칸 · 서버 대조(0253) · 다른 기기 로그아웃 안 함.
 //   Q18 비밀번호 찾기에서 역할을 잘못 고르면 "계정 없음"만 나왔다 → 엣지의 other_role 로 맞는 역할을 알려 준다.
 //   Q31 탈퇴 안내 "복구할 수 없어요" ↔ 실제 30일 보관(정책 검토 M4 문구) · 직원은 3년 보관 문장.
-//   Q33 탈퇴 창의 이용권 안내를 플랫폼이 아니라 실제 구독으로 가른다(앱만). ⛔웹 탈퇴 창 문구는 토스 동결로 글자 그대로.
+//   Q33 탈퇴 창의 이용권 안내를 플랫폼이 아니라 실제 구독으로 가른다.
+//   2026-11-10 토스 동결 해제: 웹 탈퇴 창도 앱과 같은 문장이다(처리방침 v2.4). 웹은 산 기기의 스토어를 가리킨다.
 //   J11 사장 계정과 직원 계정은 따로 만든다는 안내(가입·비밀번호 찾기).
 // 실행: node scripts/qa-account-ui.mjs   (Node 22.18+ — .ts 를 타입만 벗겨 읽는다)
 import { readFileSync } from 'node:fs';
@@ -30,6 +31,7 @@ const load = async (p) => {
   }
 };
 const copy = await load('../src/lib/account/copy.ts');
+const { STORE_PURGE_TEXT } = await load('../src/lib/account/storeCopy.ts');
 const otpMod = await load('../src/lib/otp.ts');
 const { cancelPathText } = await load('../src/lib/iap/cancelPath.ts');
 
@@ -57,15 +59,28 @@ const confirmText = (a) => (fn(deleteConfirmText) ? deleteConfirmText(a) : '(함
 
 const M4 = '계정 정보는 30일 뒤 지워요. 법으로 보관해야 하는 기록(근로·결제)은 정해진 기간만 따로 보관한 뒤 지워요.';
 const STAFF_3Y = '출퇴근 기록은 법에 따라 매장에 3년 보관돼요.'; // 2026-11-02 급여 기능을 빼며 '시급'을 뺐다
+const NO_RESTORE = '탈퇴한 계정은 되돌릴 수 없어요.'; // v2.4 탈퇴 계정 복구 없음
+const STAFF_KEPT ='매장에 남긴 질문·채팅·퀴즈 기록은 "탈퇴한 직원"으로 매장에 남아요.';
 const OTHER_DEVICE = '이 이용권은 다른 기기에서 샀어요. 산 기기의 스토어에서 해지해 주세요.';
-// ⛔토스 동결(~10-16): 지금 웹 탈퇴 창 문구. 웹에서는 SHOW_IAP=false 라 이용권 문장이 없다.
-const WEB_OWNER = '계정과 매장 데이터(노하우·직원·근무 기록)가 모두 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?';
-const WEB_STAFF = '계정과 내 기록(질문·출퇴근)이 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?';
+// v2.4 매장 파기 문장(매장 삭제 확인창과 같은 정본 · 처리방침 제3조 · 약관 제8조 제3항).
+const STORE_PURGE = '질문·채팅·퀴즈 기록은 30일 뒤 지워요. 근무 기록은 법에 따라 3년 보관한 뒤 지워요. 노하우와 퀴즈 문항의 글, 통계는 어느 매장의 누구인지 알 수 없게 바꿔 남겨요.';
+// 2026-11-10 동결 해제 전 웹 문구. 웹에서 다시 나오면 안 된다(v2.4 와 다르다).
+const OLD_WEB_OWNER = '계정과 매장 데이터(노하우·직원·근무 기록)가 모두 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?';
+const OLD_WEB_STAFF = '계정과 내 기록(질문·출퇴근)이 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?';
+const WEB_PATH = '이용권을 산 기기의 스토어 구독 메뉴';
 
 console.log('\n■ Q33 — 탈퇴 창 이용권 안내는 실제 구독으로 가른다(deleteNotice)');
 {
-  check('웹은 안내가 없다(동결 · 지금 웹 문구 그대로)', notice({ iapPlatform: 'appstore', os: 'web' }) === null, show(notice({ iapPlatform: 'appstore', os: 'web' })));
-  check('앱 · 구독 없음 → 안내 없음', notice({ iapPlatform: null, os: 'ios' }) === null && notice({ iapPlatform: null, os: 'android' }) === null);
+  check('구독 없음 → 안내 없음(웹 포함)', notice({ iapPlatform: null, os: 'ios' }) === null && notice({ iapPlatform: null, os: 'android' }) === null && notice({ iapPlatform: null, os: 'web' }) === null);
+  const WEB_NOTICE = `앱에서 산 이용권은 탈퇴해도 해지되지 않아요. ${WEB_PATH}에서 먼저 해지해 주세요.`;
+  const webA = notice({ iapPlatform: 'appstore', os: 'web' });
+  const webP = notice({ iapPlatform: 'play', os: 'web' });
+  const webU = notice({ iapPlatform: undefined, os: 'web' });
+  check('★웹 · App Store 구독 → 산 기기의 스토어에서 해지', webA === WEB_NOTICE, show(webA));
+  check('★웹 · Play 구독 → 같은 문장', webP === WEB_NOTICE, show(webP));
+  check('웹 · 구독을 못 읽음(undefined) → 같은 문장(보수적)', webU === WEB_NOTICE, show(webU));
+  check('웹 해지 경로 = cancelPathText(web)', fn(cancelPathText) && cancelPathText('web') === WEB_PATH, show(fn(cancelPathText) ? cancelPathText('web') : null));
+  check('웹 문구에 대시·중간점·채널 말이 없다', typeof webA === 'string' && !STYLE.test(webA) && !CHANNEL.test(webA), show(webA));
   const ios = notice({ iapPlatform: 'appstore', os: 'ios' });
   check('iOS · App Store 구독 → 해지 경로를 말한다', typeof ios === 'string' && fn(cancelPathText) && ios.includes(cancelPathText('ios')) && ios.includes('탈퇴해도 해지되지 않아요'), show(ios));
   const and = notice({ iapPlatform: 'play', os: 'android' });
@@ -89,17 +104,29 @@ console.log('\n■ Q31 — 탈퇴 확인 문구(deleteConfirmText)');
   const staff = confirmText({ ownerAccount: false, notice: null, os: 'android' });
   check('사장 앱 문구에 M4 문장이 있다', typeof owner === 'string' && owner.includes(M4), show(owner));
   check('직원 앱 문구에 M4 문장이 있다', typeof staff === 'string' && staff.includes(M4), show(staff));
-  check('★앱 문구에 "복구할 수 없어요"가 없다(실제는 30일 보관)', typeof owner === 'string' && !owner.includes('복구할 수 없') && typeof staff === 'string' && !staff.includes('복구할 수 없'));
+  // v2.4(2026-11-10): 탈퇴 계정은 복구 없음 → 이제는 "되돌릴 수 없어요"를 맨 앞에 말해야 한다.
+  check('★사장·직원 문구가 "탈퇴한 계정은 되돌릴 수 없어요."로 시작한다', typeof owner === 'string' && owner.startsWith(NO_RESTORE) && typeof staff === 'string' && staff.startsWith(NO_RESTORE), show(owner));
   // 사장 매장은 탈퇴 때 감춰지고(0237 soft delete) 30일 뒤 근무 기록까지 파기된다(0053 purge cascade).
-  check('★사장 매장 데이터 문장이 30일 뒤 지운다고 말한다("함께" 즉시처럼 읽히지 않게)', typeof owner === 'string' && owner.includes('매장 데이터(노하우·직원·근무 기록)는 30일 뒤 지워요.') && !owner.includes('함께 지워요'), show(owner));
+  check('★사장 매장 문장 = v2.4 파기 문장(30일 뒤 · 노하우·문항 글과 통계는 익명으로 남김)', typeof owner === 'string' && owner.includes(STORE_PURGE) && !owner.includes('함께 지워요'), show(owner));
+  check('사장 매장 문장 = 매장 삭제 확인창과 같은 정본(STORE_PURGE_TEXT)', STORE_PURGE_TEXT === STORE_PURGE, show(STORE_PURGE_TEXT));
+  check('직원 문구에는 매장 파기 문장이 없다', typeof staff === 'string' && !staff.includes(STORE_PURGE), show(staff));
   check('직원에게만 3년 보관 문장',typeof staff === 'string' && staff.includes(STAFF_3Y) && typeof owner === 'string' && !owner.includes(STAFF_3Y));
+  // v2.4(W5 · 2026-11-10): 직원 탈퇴 = 매장 기록은 "탈퇴한 직원"으로 남는다(처리방침 제3조 · 약관 제19조 제4항).
+  check('★직원에게만 매장 기록이 "탈퇴한 직원"으로 남는다는 문장', typeof staff === 'string' && staff.includes(STAFF_KEPT) && typeof owner === 'string' && !owner.includes(STAFF_KEPT), show(staff));
   check('30일 동안 같은 이메일 재가입 불가를 말한다', typeof owner === 'string' && owner.includes('30일 동안은 같은 이메일로 다시 가입할 수 없어요.'));
   const withNotice = confirmText({ ownerAccount: true, notice: notice({ iapPlatform: 'appstore', os: 'ios' }), os: 'ios' });
   check('이용권 안내를 넣고 "정말 탈퇴하시겠어요?"로 끝난다', typeof withNotice === 'string' && withNotice.includes('탈퇴해도 해지되지 않아요') && withNotice.endsWith('정말 탈퇴하시겠어요?'), show(withNotice));
   check('앱 문구에 대시·중간점이 없다', [owner, staff, withNotice].every((s) => typeof s === 'string' && !STYLE.test(s)));
-  check('⛔웹 사장 문구는 글자 그대로(동결)', confirmText({ ownerAccount: true, notice: null, os: 'web' }) === WEB_OWNER, show(confirmText({ ownerAccount: true, notice: null, os: 'web' })));
-  check('⛔웹 직원 문구는 글자 그대로(동결)', confirmText({ ownerAccount: false, notice: null, os: 'web' }) === WEB_STAFF, show(confirmText({ ownerAccount: false, notice: null, os: 'web' })));
-  check('⛔웹은 안내가 들어와도 문구가 그대로', confirmText({ ownerAccount: true, notice: 'x', os: 'web' }) === WEB_OWNER);
+  // 2026-11-10 토스 동결 해제: 문구 함수는 플랫폼을 받지 않는다. 웹도 위 앱 문장을 그대로 쓴다.
+  const WANT_OWNER = `${NO_RESTORE} ${STORE_PURGE} ${M4} 30일 동안은 같은 이메일로 다시 가입할 수 없어요. 정말 탈퇴하시겠어요?`;
+  const WANT_STAFF = `${NO_RESTORE} ${M4} ${STAFF_3Y} ${STAFF_KEPT} 30일 동안은 같은 이메일로 다시 가입할 수 없어요. 정말 탈퇴하시겠어요?`;
+  check('★사장 문구 전체 = v2.4 문장 순서 그대로', owner === WANT_OWNER, show(owner));
+  check('★직원 문구 전체 = v2.4 문장 순서 그대로', staff === WANT_STAFF, show(staff));
+  check('★웹 사장 문구 = 앱 사장 문구(os 가 들어와도 같다)', confirmText({ ownerAccount: true, notice: null, os: 'web' }) === WANT_OWNER, show(confirmText({ ownerAccount: true, notice: null, os: 'web' })));
+  check('★웹 직원 문구 = 앱 직원 문구', confirmText({ ownerAccount: false, notice: null, os: 'web' }) === WANT_STAFF, show(confirmText({ ownerAccount: false, notice: null, os: 'web' })));
+  check('★옛 웹 문구("내 기록 삭제·복구할 수 없어요")가 다시 나오지 않는다', ![true, false].some((o) => [OLD_WEB_OWNER, OLD_WEB_STAFF].includes(confirmText({ ownerAccount: o, notice: null, os: 'web' }))));
+  const webWith = confirmText({ ownerAccount: true, notice: notice({ iapPlatform: 'appstore', os: 'web' }), os: 'web' });
+  check('웹도 이용권 안내를 넣고 "정말 탈퇴하시겠어요?"로 끝난다', typeof webWith === 'string' && webWith.includes(`${WEB_PATH}에서 먼저 해지해 주세요.`) && webWith.endsWith('정말 탈퇴하시겠어요?'), show(webWith));
   check('탈퇴 계정 로그인 문구', DELETED_LOGIN_TEXT === '탈퇴 처리된 계정이에요. 30일 뒤 완전히 지워지고, 그 뒤엔 같은 이메일로 다시 가입할 수 있어요.', show(DELETED_LOGIN_TEXT));
   check('가입 이메일 중복 문구(탈퇴 여부를 따로 말하지 않는다)', EMAIL_TAKEN_TEXT === '이미 가입된 이메일이에요. 로그인해 주세요. 탈퇴했다면 30일 뒤 다시 가입할 수 있어요.', show(EMAIL_TAKEN_TEXT));
 }
@@ -202,6 +229,8 @@ console.log('\n■ 화면 배선');
 
   const settings = strip(read('src/app/account-settings.tsx'));
   check('Q33 탈퇴 창이 deleteNotice · deleteConfirmText 를 쓴다', /deleteNotice\(/.test(settings) && /deleteConfirmText\(/.test(settings) && /fetchMyIapSubscription\(/.test(settings));
+  const onDel = (settings.match(/const onDelete = async[\s\S]*?\n  \};/) || [''])[0];
+  check('★웹에서도 구독을 읽는다(웹을 거르는 분기가 없다)', onDel.includes('fetchMyIapSubscription(') && !/Platform\.OS\s*!==\s*'web'/.test(onDel), show(onDel.slice(0, 120)));
   check('탈퇴 창에 SHOW_IAP 플랫폼 분기가 남지 않았다', !/SHOW_IAP\s*\?/.test(settings));
 
   const signup = strip(read('src/app/signup.tsx'));

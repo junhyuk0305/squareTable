@@ -5,7 +5,7 @@
 //   안드 사장은 기기 설정에서 구독을 찾지 못한다. 해지는 Play 스토어 앱에서 한다.
 //   네 곳이 같은 문구를 따로 적고 있었다: IapPurchasePanel 토스트·자동갱신 고지, 탈퇴 확인창, 약관 요약.
 //   → cancelPathText(os) 하나를 store-policy 의 CANCEL_PATH_TEXT 로 내보내고 네 곳이 그 값을 쓴다.
-// ⛔토스 심사 동결(~10-16): 웹 문구는 글자 하나까지 그대로다(/terms).
+// 2026-11-10 토스 동결 해제: 웹은 산 기기를 모르니 "이용권을 산 기기의 스토어 구독 메뉴"로 말한다(/terms 요약 포함).
 // 실행: node scripts/qa-cancel-path.mjs   (Node 22.18+ — .ts 를 타입만 벗겨 읽는다)
 import { readFileSync } from 'node:fs';
 
@@ -23,6 +23,7 @@ const text = (os) => (typeof cancelPathText === 'function' ? cancelPathText(os) 
 
 const OLD = '기기 설정의 구독 목록';
 const ANDROID = 'Play 스토어 앱의 결제 및 정기 결제 > 정기 결제';
+const WEB = '이용권을 산 기기의 스토어 구독 메뉴';
 
 console.log('\n■ N-1 — OS별 해지 경로');
 {
@@ -38,14 +39,15 @@ console.log('\n■ N-1 — OS별 해지 경로');
 }
 {
   const r = text('web');
-  check('★웹 문구 = 지금 문구 그대로(토스 동결)', r === OLD, show(r));
+  check('★웹 문구 = 산 기기의 스토어(동결 해제)', r === WEB, show(r));
+  check('웹 문구가 iOS 기기 설정 경로를 말하지 않는다', typeof r === 'string' && !r.includes('기기 설정'), show(r));
 }
 {
   const all = ['ios', 'android', 'web'].map(text);
   check('세 문구 모두 채널 말이 없다(3.1.1)', all.every((s) => typeof s === 'string' && !/카드|웹에서|토스/.test(s)), show(all));
 }
 
-console.log('\n■ 네 곳이 CANCEL_PATH_TEXT 를 쓰고, 웹에서는 지금 문장이 그대로 나온다');
+console.log('\n■ 네 곳이 CANCEL_PATH_TEXT 를 쓰고, 웹에서는 산 기기의 스토어 문장이 나온다');
 // 주석을 걷어 낸 코드만 본다.
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 const read = (p) => {
@@ -63,25 +65,25 @@ const read = (p) => {
     /export const CANCEL_PATH_TEXT = cancelPathText\(Platform\.OS\);/.test(src),
   );
 }
-// [파일, 코드 안 템플릿 조각, 지금(웹) 문장]
+// [파일, 코드 안 템플릿 조각, 웹 문장]
 // 관리 창 실패 안내는 토스트가 아니라 고지창이다 — 아래 별도 블록에서 본다.
 const SITES = [
   [
     'src/components/IapPurchasePanel.tsx',
     '매달 자동으로 갱신돼요. 해지하시기 전까지 계속돼요. 해지는 ${CANCEL_PATH_TEXT}에서 하실 수 있어요.',
-    '매달 자동으로 갱신돼요. 해지하시기 전까지 계속돼요. 해지는 기기 설정의 구독 목록에서 하실 수 있어요.',
+    '매달 자동으로 갱신돼요. 해지하시기 전까지 계속돼요. 해지는 이용권을 산 기기의 스토어 구독 메뉴에서 하실 수 있어요.',
   ],
   [
     'src/app/terms.tsx',
     '해지하시기 전까지 갱신일마다 자동으로 결제됩니다. 해지는 ${CANCEL_PATH_TEXT}에서 언제든지 하실 수 있습니다. 회사는',
-    '해지하시기 전까지 갱신일마다 자동으로 결제됩니다. 해지는 기기 설정의 구독 목록에서 언제든지 하실 수 있습니다. 회사는',
+    '해지하시기 전까지 갱신일마다 자동으로 결제됩니다. 해지는 이용권을 산 기기의 스토어 구독 메뉴에서 언제든지 하실 수 있습니다. 회사는',
   ],
 ];
-for (const [file, tpl, oldSentence] of SITES) {
+for (const [file, tpl, webSentence] of SITES) {
   const src = read(file);
   const label = tpl.slice(0, 18);
   check(`${file} — "${label}…" 가 CANCEL_PATH_TEXT 를 쓴다`, src.includes(tpl));
-  check(`${file} — "${label}…" 웹 값 대입 = 지금 문장`, tpl.replace('${CANCEL_PATH_TEXT}', text('web')) === oldSentence);
+  check(`${file} — "${label}…" 웹 값 대입 = 웹 문장`, tpl.replace('${CANCEL_PATH_TEXT}', text('web')) === webSentence);
 }
 for (const file of new Set(SITES.map(([f]) => f))) {
   const src = strip(read(file));
@@ -113,8 +115,8 @@ console.log('\n■ 관리 창 실패 안내는 잘리지 않는 고지창으로 
   check('notifyAction 을 utils/confirm 에서 읽는다', /import \{[^}]*\bnotifyAction\b[^}]*\} from '@\/lib\/utils\/confirm'/.test(src));
   const joined = `${TITLE}. ${'${CANCEL_PATH_TEXT}에서 하실 수 있어요.'.replace('${CANCEL_PATH_TEXT}', text('web'))}`;
   check(
-    '제목 + 본문 웹 값 = 지금 문장(글자 그대로)',
-    joined === '구독 관리 창을 열지 못했어요. 기기 설정의 구독 목록에서 하실 수 있어요.',
+    '제목 + 본문 웹 값 = 웹 문장',
+    joined === '구독 관리 창을 열지 못했어요. 이용권을 산 기기의 스토어 구독 메뉴에서 하실 수 있어요.',
     show(joined),
   );
 }
