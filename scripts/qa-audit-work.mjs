@@ -385,10 +385,12 @@ console.log('\n[10-07 결정 3] 채팅 "모두 읽음"이 auth_unit_id 를 행�
   else {
     const r = psql(`${IDS}
 set local session_replication_role = replica;
-insert into public.work_rooms (id, unit_id, name, is_default) values ('qa_r_open', 'store_001', 'QA 열린 방', true), ('qa_r_priv', 'store_001', 'QA 비공개 방', false);
+-- 0373: 매장마다 전체방 하나(부분 유일 색인) → 열린 방은 정해진 번호의 전체방을 쓴다(이미 있으면 그대로).
+insert into public.work_rooms (id, unit_id, name, is_default) values ('room_main_store_001', 'store_001', '전체', true) on conflict (id) do nothing;
+insert into public.work_rooms (id, unit_id, name, is_default) values ('qa_r_priv', 'store_001', 'QA 비공개 방', false);
 insert into public.work_feed (id, unit_id, feed_date, data, room_id) values
-  ('qa_mr_1', 'store_001', current_setting('qa.day'), '{}', 'qa_r_open'),
-  ('qa_mr_2', 'store_001', current_setting('qa.day'), '{}', 'qa_r_open'),
+  ('qa_mr_1', 'store_001', current_setting('qa.day'), '{}', 'room_main_store_001'),
+  ('qa_mr_2', 'store_001', current_setting('qa.day'), '{}', 'room_main_store_001'),
   ('qa_mr_3', 'store_001', current_setting('qa.day'), '{}', null),
   ('qa_mr_4', 'store_001', current_setting('qa.day'), '{}', 'qa_r_priv');
 set local session_replication_role = origin;

@@ -83,10 +83,15 @@ try {
   // ── 방 셋업 ───────────────────────────────────────────────
   // 기본방: create_store 는 안 만든다(클라 useRoomStore.hydrate 가 사장 첫 진입 때 만든다).
   //         그래서 여기서 **그 클라 경로와 같은 id 규칙**으로 심는다.
+  //   ★0373: 사장 세션으로 심는다 = 앱이 실제로 타는 경로(wr_insert)가 열려 있는지도 같이 잰다.
   const DROOM = `room_main_${UNIT}`;
   {
-    const { error } = await admin.from('work_rooms').insert([{ id: DROOM, unit_id: UNIT, name: '전체', is_default: true, created_by: oId }]);
-    if (error) throw new Error('기본방 시드: ' + error.message);
+    const { error } = await O.from('work_rooms').insert([{ id: DROOM, unit_id: UNIT, name: '전체', is_default: true, created_by: oId }]);
+    M('정해진 번호로 전체방 만들기(앱 첫 진입 경로)', '사장', '허용', !error, errStr(error));
+    if (error) {
+      const { error: e2 } = await admin.from('work_rooms').insert([{ id: DROOM, unit_id: UNIT, name: '전체', is_default: true, created_by: oId }]);
+      if (e2) throw new Error('기본방 시드: ' + e2.message);
+    }
   }
   const ROOM = `wr_p5_${s}`;
   await admin.from('work_rooms').insert([{ id: ROOM, unit_id: UNIT, name: 'P5비밀방', is_default: false, created_by: oId }]);
@@ -190,6 +195,16 @@ try {
     if (promoted) { const r = await cnt(B, 'work_feed', 'room_id', ROOM); leak = `승격 후 B가 ${r.n}행 읽음`; }
     M('★안 들어간 방을 is_default=true 로 승격', '매니저', '거부', !promoted, promoted ? `승격됨 · ${leak}` : errStr(e));
     if (promoted) await admin.from('work_rooms').update({ is_default: false }).eq('id', ROOM); }
+
+  // ★0373: 매장마다 전체방은 하나(카카오톡 원리 · 11-10). 다른 번호로 is_default=true 방을 넣으면
+  //   전원에게 보이고 지울 수도 없는 두 번째 전체방이 생긴다. 직원·매니저 모두 거부여야 한다.
+  for (const [c, who, tag] of [[A, '직원A', 'a'], [MG, '매니저', 'm']]) {
+    const FAKE = `wr_p5_fakedef_${tag}_${s}`;
+    const { error } = await c.from('work_rooms').insert([{ id: FAKE, unit_id: UNIT, name: '전체', is_default: true }]);
+    const { data: made } = await admin.from('work_rooms').select('id').eq('id', FAKE).maybeSingle();
+    M('★다른 번호로 두 번째 전체방 만들기(0373)', who, '거부', !made, made ? '만들어짐' : errStr(error));
+    if (made) await admin.from('work_rooms').delete().eq('id', FAKE);
+  }
 
   // ★사용자 확정 규칙: 매니저는 **방을 만들 수 있고**, 자기가 만든(=들어가 있는) 방은
   //   이름 변경·멤버 관리까지 할 수 있어야 한다. 여기가 막히면 고친 게 아니다.
