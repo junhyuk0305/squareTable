@@ -815,6 +815,9 @@ begin
   perform public.edu_link_update(p_link, '고친 제목', p_ids, null);
   return (select title || '/' || array_to_string(entry_ids, ',') from public.edu_links where id = p_link);
 end $f$;
+-- 매니저 C 가 무료 직원 한도(2명)에 걸려 좌석이 잠기지 않게 무료 모드를 켠다(트랜잭션 끝에 되돌아간다).
+--   앞 블록(2번 덩이 F · ai_quota_status_at)이 무료 모드를 끈 채로 끝난다. 이 블록은 링크 권한만 본다(2026-11-11 통합 머지에서 발견).
+insert into public.app_config(key, value) values ('billing_free_mode', 'true') on conflict (key) do update set value = excluded.value;
 select pg_temp.qa_state(${q(U.A)}, ${q(S.A)}, null, ${q(SP)}, null, null);
 select pg_temp.qa_state(${q(U.B)}, ${q(S.B)}, ${q(X)}, ${q(SP)}, null, null);
 select pg_temp.qa_state(${q(U.D)}, ${q(S.D)}, ${q(X)}, null, null, null);
