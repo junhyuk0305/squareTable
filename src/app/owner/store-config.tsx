@@ -13,7 +13,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { confirmAction } from '@/lib/utils/confirm';
 import { fetchDeleteStorePreview, fetchUnitBizNo, saveUnitBizNo } from '@/lib/db';
-import { deleteStoreConfirmText, deleteStoreToast, type DeleteStorePreview } from '@/lib/account/storeCopy';
+import { deleteStoreConfirmText, deleteStoreToast } from '@/lib/account/storeCopy';
 import { maskHHMM } from '@/lib/utils/attendance';
 import { formatBizNo, isValidBizNo } from '@/lib/utils/bizno';
 import { friendlyError } from '@/lib/utils/userError';
@@ -99,22 +99,18 @@ function StoreConfigForm() {
   // 0093: 매장 삭제 = 사장 전용(잠금 영역). 매니저에겐 위험 구역 자체를 비노출.
   const isOwner = useSessionStore((s) => s.role) === 'owner';
   const [deleting, setDeleting] = useState(false);
-  const [checking, setChecking] = useState(false); // 삭제 미리보기를 읽는 동안(앱만) 버튼을 잠근다
+  const [checking, setChecking] = useState(false); // 삭제 미리보기를 읽는 동안 버튼을 잠근다
 
   const onDelete = async () => {
     const unitId = useSessionStore.getState().unitId;
     // J8: 서버가 남은 몫을 돌려주는 매장에만 기간 문장을 붙인다(delete_store_preview · 정책 M2).
-    //   못 읽으면 null → 약속하지 않는다. ⛔웹은 미리보기를 부르지 않고 지금 문구 그대로 둔다(토스 동결).
-    let preview: DeleteStorePreview | null = null;
-    if (Platform.OS !== 'web') {
-      setChecking(true);
-      const { data } = await fetchDeleteStorePreview(unitId);
-      setChecking(false);
-      preview = data;
-    }
+    //   못 읽으면 null → 약속하지 않는다. 웹도 앱과 같이 부른다(토스 동결 2026-11-10 해제).
+    setChecking(true);
+    const { data: preview } = await fetchDeleteStorePreview(unitId);
+    setChecking(false);
     const ok = await confirmAction(
       '이 매장을 삭제할까요?',
-      deleteStoreConfirmText({ storeName, preview, os: Platform.OS }),
+      deleteStoreConfirmText({ storeName, preview }),
       '삭제',
       { destructive: true, icon: 'trash-outline' },
     );
@@ -123,7 +119,7 @@ function StoreConfigForm() {
     const { error, result } = await deleteStore(unitId);
     setDeleting(false);
     if (error) return showToast(error, 'warn');
-    showToast(deleteStoreToast({ result: result ?? null, os: Platform.OS }));
+    showToast(deleteStoreToast({ result: result ?? null }));
     router.replace('/owner/dashboard');
   };
 

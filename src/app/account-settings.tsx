@@ -101,18 +101,14 @@ export default function AccountSettings() {
   const onDelete = async () => {
     // ★앱에서 산 구독은 스토어가 청구한다. 탈퇴(delete_my_account)는 그 구독을 끊지 못하므로 해지할 곳을 말한다.
     //   Q33: 플랫폼이 아니라 실제 구독(iap_subscriptions.platform)으로 가른다. 못 읽으면 undefined → 같은 기기 안내.
-    //   ⛔웹은 deleteNotice·deleteConfirmText 가 지금 문구를 그대로 돌려준다(토스 동결). 웹에서는 구독을 읽지도 않는다.
-    let iapPlatform: string | null | undefined = null;
-    if (Platform.OS !== 'web') {
-      const { data, error } = await fetchMyIapSubscription();
-      iapPlatform = error ? undefined : (data?.platform ?? null);
-    }
+    //   웹도 같이 읽는다(토스 동결 2026-11-10 해제). 웹 카드 자동결제는 탈퇴하면 서버가 멈추므로 따로 묻지 않는다.
+    const sub = await fetchMyIapSubscription();
+    const iapPlatform: string | null | undefined = sub.error ? undefined : (sub.data?.platform ?? null);
     const ok = await confirmAction(
       '회원탈퇴',
       deleteConfirmText({
         ownerAccount: isOwnerAccount,
         notice: deleteNotice({ iapPlatform, os: Platform.OS }),
-        os: Platform.OS,
       }),
       '탈퇴하기',
       { destructive: true, icon: 'trash-outline' },
