@@ -1403,12 +1403,13 @@ export async function setMemberRoleDb(uid: string, role: 'manager' | 'junior'): 
 
 // ── 초대코드 재발급(남용 #31) ──────────────────────────────
 // 새 6자리 코드(만료 없음 · 0282 C6). 유출/교체용. 성공 시 새 코드 반환(세션·화면 갱신용).
-export async function rotateInviteCode(): Promise<{ inviteCode: string; expiresAt: string } | null> {
+// 실패하면 { error: 원문 } — 화면이 friendlyError 로 문구를 고른다(★0356 invite_code_busy).
+export async function rotateInviteCode(): Promise<{ inviteCode: string; expiresAt: string } | { error: string } | null> {
   if (!HAS_SUPABASE) return null;
   const { data, error } = await supabase.rpc('rotate_invite_code');
   if (error) {
     console.warn('[db] rotateInviteCode:', error.message); reportError('db:rotateInviteCode', error);
-    return null;
+    return { error: error.message };
   }
   const row = Array.isArray(data) ? data[0] : data;
   if (!row?.invite_code) return null;

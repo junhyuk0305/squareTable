@@ -13,6 +13,7 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { Appear, stagger } from '@/components/Appear';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { friendlyError } from '@/lib/utils/userError';
 import { showToast } from '@/lib/store/useToastStore';
 import { fetchMyPreviousUnits, fetchReopenKeepsRecords, rpcReopenStore, type PreviousUnitRow } from '@/lib/db';
 import { reopenStoreMessage } from '@/lib/account/storeCopy';
@@ -65,7 +66,7 @@ export default function PreviousStores() {
         return showToast('매장을 더 열려면 먼저 이용권을 늘려 주세요.', undefined, { label: '이용권 보기', onPress: () => router.push('/billing') });
       }
       if (/not_locked/.test(error.message)) return showToast('이 매장은 이미 열려 있어요.');
-      return showToast('매장을 다시 열지 못했어요. 잠시 후 다시 시도해 주세요.');
+      return showToast(friendlyError(error.message, '매장을 다시 열지 못했어요. 잠시 후 다시 시도해 주세요.'));
     }
     showToast(`${target.store_name}을 다시 열었어요. 직원 초대코드가 새로 발급됐어요.`);
     setTarget(null);
