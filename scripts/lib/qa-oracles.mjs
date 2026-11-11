@@ -231,8 +231,9 @@ export function r5(text) {
   const d = [];
   const zero = text.match(/(?<![\d,.])0\s?(개|건|명)(?![\d])/g);
   if (zero) d.push(`"0개류" ${zero.length}건: ${ctx(text, /(?<![\d,.])0\s?(개|건|명)(?![\d])/).join(' | ')}`);
-  const alba = text.match(/알바/g);
-  if (alba) d.push(`"알바" ${alba.length}건: ${ctx(text, /알바/).join(' | ')}`);
+  // 정본 태그라인 "알바·직원 교육 AI" 한 구절만 예외(voice-rules.json W-알바 allow 와 같다 · 2026-11-05). 그 밖의 "알바"는 실패.
+  const alba = text.match(/알바(?!·직원 교육 AI)/g);
+  if (alba) d.push(`"알바" ${alba.length}건: ${ctx(text, /알바(?!·직원 교육 AI)/).join(' | ')}`);
   const bang = text.match(/[!！]/g);
   if (bang) d.push(`느낌표 ${bang.length}건: ${ctx(text, /[!！]/).join(' | ')}`);
   const emo = [...text.matchAll(/\p{Extended_Pictographic}/gu)].map((m) => m[0]).filter((ch) => !EMOJI_ALLOW.has(ch));
