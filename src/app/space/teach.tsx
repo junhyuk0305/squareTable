@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,7 +10,8 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { formatRelative } from '@/components/coach/coachUtils';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { fetchUnknownQueue } from '@/lib/db';
+import { fetchUnknownQueue, subscribeUnknownQueue } from '@/lib/db';
+import { subscribeDebounced } from '@/lib/store/realtimeSync';
 import { SPACE_KNOWHOW, SPACE_SCREEN, SPACE_WORDS } from '@/lib/place/words';
 import { InkColors, TextColor } from '@/lib/theme/colors';
 import { CardStyles } from '@/lib/theme/card';
@@ -23,7 +24,8 @@ import type { UnknownQuery } from '@/types';
  * S05 공간 교육 탭(주인) — "답할 질문" 목록(대기 중 · 가장 오래 기다린 것부터). 행 → 답하기(S09).
  * 비면 "노하우 쓰기" 버튼(노하우가 늘면 AI 가 먼저 답한다). 교육 링크 칸(+ 새 교육 링크 · 링크 행)은 3번 덩이다.
  * 읽기 = fetchUnknownQueue(공간 번호). 매장 질문 스토어(useUnknownQueueStore)를 안 쓴다(매장 큐·앱 푸시와 섞이지 않게).
- * 탭에 돌아올 때마다 다시 읽는다(답한 질문이 바로 빠지게 · 공간 질문 실시간 구독은 아직 없다).
+ * 탭에 돌아올 때마다 다시 읽는다(답한 질문이 바로 빠지게).
+ * ★night-1111 g5: 새 질문·다른 기기에서 답한 질문도 실시간으로 맞춘다(subscribeUnknownQueue(공간 번호) · 300ms 묶음).
  */
 export default function SpaceTeach() {
   const router = useRouter();
@@ -45,6 +47,11 @@ export default function SpaceTeach() {
       void load();
     }, [load]),
   );
+
+  useEffect(() => {
+    if (!spaceId) return;
+    return subscribeDebounced((cb) => subscribeUnknownQueue(cb, spaceId), () => void load(), 300, 'space_teach');
+  }, [spaceId, load]);
 
   return (
     <Screen header={<ScreenTitleHeader variant="tab" title={SPACE_SCREEN.tabTeach} line={spaceName} />} tabBar="space">

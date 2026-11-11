@@ -24,6 +24,7 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { confirmAction } from '@/lib/utils/confirm';
 import { suggestionErrorMessage } from '@/lib/suggestion/errors';
 import { SUGGESTION_STATUS_CHIP, SUGGESTION_STATUS_LABEL } from '@/lib/suggestion/labels';
+import { CONNECT } from '@/lib/place/words';
 import type { PlaybookSuggestion } from '@/types';
 
 /** 제안 본문 최소 글자 — 보낼 때와 고칠 때 같은 기준. */
@@ -322,11 +323,15 @@ export default function JuniorSuggestScreen() {
                     </View>
                   </View>
                 )}
+                {/* 공간에서 보낸 노하우(from_space)는 고칠 수 없다(0490 가드 from_space_locked) → 안내 + 취소만. */}
+                {s.status === 'pending' && s.kind === 'from_space' && <Text style={styles.hint}>{CONNECT.noEdit}</Text>}
                 {s.status === 'pending' && editingId !== s.id && (
                   <View style={styles.mineActions}>
+                    {s.kind !== 'from_space' && (
                     <Pressable onPress={() => startEdit(s)} disabled={rowBusy === s.id} style={({ pressed }) => [ButtonStyles.inlineHit, pressed && { opacity: 0.6 }]}>
                       <Text style={styles.mineActionText}>수정</Text>
                     </Pressable>
+                    )}
                     <Pressable onPress={() => void withdrawOne(s.id)} disabled={rowBusy === s.id} style={({ pressed }) => [ButtonStyles.inlineHit, pressed && { opacity: 0.6 }]}>
                       <Text style={[styles.mineActionText, styles.mineActionDanger]}>제안 취소</Text>
                     </Pressable>

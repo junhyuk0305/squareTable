@@ -5,7 +5,7 @@ import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import type { PlaybookSuggestion } from '@/types';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { editSuggestion, fetchSuggestions, insertSuggestion, reviewSuggestion, subscribeSuggestions, withdrawSuggestion } from '@/lib/db';
+import { approveSpaceProposal, copyProposalPhotos, editSuggestion, fetchSuggestions, insertSuggestion, reviewSuggestion, subscribeSuggestions, withdrawSuggestion } from '@/lib/db';
 import type { DbErr } from '@/lib/db';
 import { optimisticAdd, optimisticPatch } from '@/lib/store/crudHelpers';
 import { genId } from '@/lib/utils/id';
@@ -53,6 +53,10 @@ const seed: PlaybookSuggestion[] = [
   },
 ];
 
+/** 결과 알림 본문. 공간에서 온 노하우는 제목(제안 본문은 제목·상황·순서를 이은 긴 글이다) · 그 밖은 제안 본문. */
+const resultBody = (s: PlaybookSuggestion): string =>
+  s.kind === 'from_space' && typeof s.source_snapshot?.title === 'string' ? s.source_snapshot.title : s.text;
+
 type State = {
   suggestions: PlaybookSuggestion[];
   /** true = 조회 **시도가 끝남**(성공·실패 무관). 실패 여부는 loadError 로 본다. */
@@ -68,6 +72,9 @@ type State = {
    *  노하우는 이미 저장돼 있어, 사장이 다시 승인하면 **같은 노하우가 2건**이 된다. */
   approve: (id: string, resultingEntryId?: string) => Promise<boolean>;
   reject: (id: string, note?: string) => Promise<boolean>;
+  /** 공간에서 온 노하우(from_space) 승인(0490 approve_space_proposal → 0581 사진 복사 엣지 → 결과 알림).
+   *  error = 승인 자체가 실패(문구는 placeErrorMessage). photoFailed = 노하우는 남았고 사진만 못 옮겼다. skipped = 원본이 없어 뺀 사진 수. */
+  approveFromSpace: (id: string) => Promise<{ error: DbErr; skipped: number; photoFailed: boolean }>;
   /** 내 대기 제안 취소. null = 성공(목록에서 뺀다). 오류는 suggestionErrorMessage 로 문구를 고른다. */
   withdraw: (id: string) => Promise<DbErr>;
   /** 내 대기 제안 본문 고치기. null = 성공(목록의 본문을 바꾼다). */
@@ -145,8 +152,38 @@ export const useSuggestionStore = create<State>((set, get) => ({
     const before = get().suggestions.find((x) => x.id === id);
     const result = optimisticPatch(set, get, 'suggestions', id, patch, () => reviewSuggestion(id, patch), '반려 처리에 실패했어요.');
     // 반려 사유는 알림 본문에 싣지 않는다. 직원은 '내가 보낸 제안'에서 사유를 본다(D12).
-    void result.then((ok) => { if (ok && before) notifyUserSuggestionResult(before.proposer_id, false, before.text); });
+    void result.then((ok) => { if (ok && before) notifyUserSuggestionResult(before.proposer_id, false, resultBody(before)); });
     return result;
+  },
+
+  // 공간에서 온 노하우 승인. 낙관적으로 바꾸지 않는다(사본을 서버가 만든다 · 실패하면 다시 읽어 지금 상태를 보인다).
+  //   순서 = 승인 → 사진 복사(원본 사진이 있을 때만) → 보낸 사람에게 결과 알림. 사진 실패는 승인을 되돌리지 않는다(결정 9).
+  //   알림 본문은 노하우 제목이다(제안 본문은 제목·상황·순서를 이은 긴 글이라 알림에 싣지 않는다).
+  approveFromSpace: async (id) => {
+    const before = get().suggestions.find((x) => x.id === id);
+    const r = await approveSpaceProposal(id);
+    if (r.error || !r.data) {
+      void get().hydrate();
+      return { error: r.error ?? { message: 'suggestion_not_found' }, skipped: 0, photoFailed: false };
+    }
+    const entryId = r.data.entry_id;
+    const s = useSessionStore.getState();
+    set((st) => ({
+      suggestions: st.suggestions.map((x) =>
+        x.id === id
+          ? { ...x, status: 'approved' as const, resulting_entry_id: entryId, reviewed_by: s.userId, reviewed_at: new Date().toISOString() }
+          : x,
+      ),
+    }));
+    let skipped = 0;
+    let photoFailed = false;
+    if ((r.data.source_photos ?? []).length > 0) {
+      const c = await copyProposalPhotos(id);
+      if (c.error || !c.data) photoFailed = true;
+      else skipped = c.data.skipped;
+    }
+    if (before) notifyUserSuggestionResult(before.proposer_id, true, resultBody(before));
+    return { error: null, skipped, photoFailed };
   },
 
   // 낙관적으로 바꾸지 않는다. 서버가 not_pending 으로 막으면 사장이 이미 처리한 것이라 되돌릴 값이 없다.

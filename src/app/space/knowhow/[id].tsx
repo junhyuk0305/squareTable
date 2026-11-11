@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,8 +11,8 @@ import { LoadErrorState } from '@/components/LoadErrorState';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { confirmAction } from '@/lib/utils/confirm';
-import { archiveEntry, fetchEntries } from '@/lib/db';
-import { SPACE_KNOWHOW } from '@/lib/place/words';
+import { archiveEntry, connectStoreOpen, fetchEntries } from '@/lib/db';
+import { CONNECT, SPACE_KNOWHOW } from '@/lib/place/words';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { CardStyles } from '@/lib/theme/card';
 import { ButtonStyles, ButtonTextStyles, TouchSize } from '@/lib/theme/button';
@@ -26,7 +26,8 @@ const LIST = '/space/knowhow';
  * S08 공간 노하우 상세(주인) — 읽기 · [고치기] → 쓰기(S07 ?edit=) · 헤더 휴지통 = 지우기.
  * 지우기 = confirmAction 한 번 → archive_knowhow(0376 · 공간 행은 auth_can(공간, 'write_knowhow')). 되살리기 없음.
  * 읽기는 목록과 같은 fetchEntries(공간 번호)에서 찾는다(이 공간 것이 아니면 "찾을 수 없어요").
- * "매장에 보내기"(S12)는 5번 덩이다.
+ * [매장에 보내기] → S12(이 노하우를 골라 둔 채 · ?entry=). my_connect_store_open 이 참이고 발행본일 때만 그린다(night-1111 g5).
+ *   주 버튼은 [고치기] 하나 그대로 · 보내기는 보조 버튼이다.
  */
 export default function SpaceKnowhowDetail() {
   const router = useRouter();
@@ -35,6 +36,17 @@ export default function SpaceKnowhowDetail() {
   const [entry, setEntry] = useState<PlaybookEntry | null | undefined>(undefined); // undefined = 읽는 중 · null = 없음
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void connectStoreOpen().then((r) => {
+      if (alive) setConnectOpen(r.data === true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const load = useCallback(async () => {
     if (!spaceId || !id) return;
@@ -136,6 +148,16 @@ export default function SpaceKnowhowDetail() {
           >
             <Text style={styles.primaryText}>{SPACE_KNOWHOW.edit}</Text>
           </Pressable>
+          {connectOpen && entry.status === 'published' ? (
+            <Pressable
+              onPress={() => router.push({ pathname: '/space/connect', params: { entry: entry.id } })}
+              accessibilityRole="button"
+              accessibilityLabel={CONNECT.sendToStore}
+              style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
+            >
+              <Text style={styles.secondaryText}>{CONNECT.sendToStore}</Text>
+            </Pressable>
+          ) : null}
         </>
       )}
     </Screen>
@@ -154,4 +176,6 @@ const styles = StyleSheet.create({
   stepText: { flex: 1 },
   primary: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
   primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  secondary: { ...ButtonStyles.primary, borderWidth: 1, borderColor: InkColors.lineStrong, backgroundColor: InkColors.bg },
+  secondaryText: { ...ButtonTextStyles.primary, color: InkColors.ink },
 });
