@@ -87,6 +87,7 @@
     "qa:training": "node scripts/qa-training.mjs --allow-remote",
     "qa:quiz-schedule": "node scripts/qa-quiz-schedule.mjs --allow-remote",
     "qa:pairing": "node scripts/qa-pairing.mjs",
+    "qa:pack-draft": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/qa-pack-draft.mjs",
     "qa:quiz-grading": "node scripts/qa-quiz-grading.mjs --allow-remote",
     "qa:quiz-contract": "node scripts/qa-quiz-contract.mjs --allow-remote",
     "qa:quiz-contract:local": "node scripts/qa-quiz-contract.mjs --local",
