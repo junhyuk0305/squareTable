@@ -332,6 +332,7 @@ export const OWNER_FIRST = {
   writeOwn: '직접 답 쓰기',
   finish: '끝내기',
   backToHub: '현황으로 돌아가기',
+  loading: '불러오고 있어요…',
 } as const;
 
 /** 매니저가 직원 화면(노하우 탭 내 활동)에서 질문에 새 답을 남길 때(결정 145 · 바로 노하우). */

@@ -81,3 +81,9 @@ export function packDraftFrom<T extends PackItem>(
   if (second && top.score - second.score < minMargin) return null;
   return top;
 }
+
+/** [고치기] 때 코치 입력칸에 채울 글 = 팩 원문(제목 · 상황 · 할 일). 사장이 매장 방식으로 고쳐 보낸다. */
+export function packDraftSeed(item: Pick<PlaybookEntry, 'title' | 'square'>): string {
+  const steps = item.square?.action?.steps ?? [];
+  return [item.title, item.square?.situation ?? '', ...steps].map((x) => x.trim()).filter(Boolean).join('\n');
+}
