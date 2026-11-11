@@ -15,7 +15,8 @@ import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { assignedTodayCount } from '@/lib/utils/crossStoreNotifs';
 import { roleNoun } from '@/lib/utils/roles';
 import { todayStr } from '@/lib/utils/attendance';
-import { fetchOwnerOverview, fetchMyLockedUnits, fetchMyCanAddStore, type MyUnitRow, type OwnerOverviewRow } from '@/lib/db';
+import { fetchOwnerOverview, fetchMyLockedUnits, fetchMyCanAddStore, fetchMyEduLinks, type MyEduLink, type MyUnitRow, type OwnerOverviewRow } from '@/lib/db';
+import { autoClaimEduGuests } from '@/lib/edu/autoClaim';
 import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Type } from '@/lib/theme/type';
 import { Radius } from '@/lib/theme/elevation';
@@ -33,7 +34,7 @@ import { TwoPane, Pane } from '@/components/shell/TwoPane';
 import { useStoreEntryStore } from '@/lib/store/useStoreEntryStore';
 import { SpaceTabPanel } from '@/components/place/SpaceTabPanel';
 import { SegmentTabs } from '@/components/SegmentTabs';
-import { SPACE_MEMBERS } from '@/lib/place/words';
+import { LINK_IN_APP, SPACE_MEMBERS, SPACE_WORDS } from '@/lib/place/words';
 
 // 진입 순서·타임아웃·커버는 useStoreEntryStore(+ 전역 StoreEnterCover)로 옮겼다 —
 // 상단바의 매장 칸도 같은 동작을 하기 때문이다(2026-08-08). 이 화면은 부르기만 한다.
@@ -131,6 +132,22 @@ export default function StoresHub() {
   useEffect(() => {
     if (userId) void loadSpaces();
   }, [userId, loadSpaces, fgTick]);
+
+  // 받은 교육 링크(S16 입구 · 사용자 결정 3) — 이 기기에서 손님으로 보낸 질문을 먼저 옮기고(autoClaim) 목록을 읽는다.
+  //   [공간] 칸 여부와 무관하다. 링크가 없으면(지금 거의 전부 · 옛 서버) 묶음이 없다 = 지금 화면 그대로.
+  const [myLinks, setMyLinks] = useState<(MyEduLink & { days: number })[]>([]);
+  useEffect(() => {
+    let alive = true;
+    if (!userId) return;
+    void (async () => {
+      await autoClaimEduGuests(userId);
+      const { data } = await fetchMyEduLinks();
+      // 남은 날은 읽은 순간에 센다(그리는 동안 시계를 읽지 않는다).
+      const now = Date.now();
+      if (alive && data) setMyLinks(data.map((l) => ({ ...l, days: Math.floor((new Date(l.expiresAt).getTime() - now) / 86400000) })));
+    })();
+    return () => { alive = false; };
+  }, [userId, fgTick]);
 
   const hydrateCross = useCrossNotifStore((s) => s.hydrate);
   useEffect(() => {
@@ -366,6 +383,33 @@ export default function StoresHub() {
         )}
           </>
         )}
+
+        {/* 받은 교육 링크 — 링크가 있을 때만. 누르면 앱 안 링크 화면(S16). 닫힌 링크는 서버가 목록에서 뺀다. */}
+        {myLinks.length > 0 && (tab === 'space' || ready) ? (
+          <Appear delay={stagger(2)}>
+            <Section title={LINK_IN_APP.listTitle}>
+              <View style={styles.linkCard}>
+                {myLinks.map((l, i) => (
+                  <Pressable
+                    key={l.linkId}
+                    onPress={() => router.push({ pathname: '/link/[id]', params: { id: l.linkId } })}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${l.title || SPACE_WORDS.link} · ${l.placeName}`}
+                    style={({ pressed }) => [styles.linkRow, i > 0 && styles.linkLine, pressed && styles.pressed]}
+                  >
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={styles.storeName} numberOfLines={1}>{l.title || SPACE_WORDS.link}</Text>
+                      <Text style={styles.storeMeta} numberOfLines={1}>
+                        {`${l.placeName} · ${LINK_IN_APP.daysLeft(l.days)}`}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={InkColors.ink3} />
+                  </Pressable>
+                ))}
+              </View>
+            </Section>
+          </Appear>
+        ) : null}
       </ScrollView>
       {/* 허브 2탭 [현황/오늘 · 매장] — 매장 앱에 들어가면 사라진다(2레이어 경계). */}
       <HubTabBar role={isOwner ? 'owner' : 'junior'} />
@@ -415,6 +459,10 @@ const styles = StyleSheet.create({
     backgroundColor: BrandColors.yellowSoft, borderWidth: 1, borderColor: BrandColors.gold,
     paddingHorizontal: 8, paddingVertical: 1, borderRadius: Radius.pill, overflow: 'hidden',
   },
+
+  linkCard: { ...CardStyles.rows },
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingVertical: Space.md },
+  linkLine: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: InkColors.line },
 
   addCard: {
     flexDirection: 'row',

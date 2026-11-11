@@ -59,9 +59,13 @@ function aiRows(a: EduAnswer): KnowhowRow[] {
   return rows;
 }
 
-export function EduAsk({ token, place, ownerName }: { token: string; place: EduPlace | null; ownerName: string }) {
+/**
+ * me = 앱 안 링크 화면(S16 · /link/[id])이 넘기는 로그인한 사람의 열쇠(0552 edu_link_me_key · 이름 = 받은 이름).
+ *   넘기면 이름 칸이 없고 기기 저장소를 읽거나 쓰지 않는다(계정이 바뀐 기기에 남의 열쇠가 남지 않게). 웹 손님 화면은 넘기지 않는다.
+ */
+export function EduAsk({ token, place, ownerName, me }: { token: string; place: EduPlace | null; ownerName: string; me?: EduGuest }) {
   const owner = eduOwnerWord(place, ownerName);
-  const [guest, setGuest] = useState<EduGuest | null>(null);
+  const [guest, setGuest] = useState<EduGuest | null>(me ?? null);
   const [name, setName] = useState('');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -85,13 +89,13 @@ export function EduAsk({ token, place, ownerName }: { token: string; place: EduP
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const g = await loadEduGuest(token);
+      const g = me ?? (await loadEduGuest(token));
       if (!alive || !g) return;
       setGuest(g);
       await refresh(g);
     })();
     return () => { alive = false; };
-  }, [token, refresh]);
+  }, [token, refresh, me]);
 
   const sendToOwner = useCallback(async (g: EduGuest, cqId: string, unhelpful: boolean) => {
     setSendingId(cqId);
@@ -114,7 +118,7 @@ export function EduAsk({ token, place, ownerName }: { token: string; place: EduP
       return;
     }
     const g: EduGuest = r.data.guestKey ? { key: r.data.guestKey, name: nm } : (guest as EduGuest);
-    if (r.data.guestKey) { await saveEduGuest(token, g); setGuest(g); }
+    if (r.data.guestKey && !me) { await saveEduGuest(token, g); setGuest(g); }
     setText('');
     setBusy(false);
     if (r.data.sent) setCapNote(true);
@@ -130,7 +134,7 @@ export function EduAsk({ token, place, ownerName }: { token: string; place: EduP
       await sendEduLinkQuestion(token, g.key, r.data.cqId, false);
     }
     await refresh(g);
-  }, [text, name, guest, busy, token, refresh]);
+  }, [text, name, guest, busy, token, refresh, me]);
 
   const submitReport = useCallback(async () => {
     if (!guest || !reportFor) return;

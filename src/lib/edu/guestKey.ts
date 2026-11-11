@@ -33,3 +33,27 @@ export async function saveEduGuest(token: string, guest: EduGuest): Promise<void
     // 저장 못 하면 이번 화면에서만 기억한다(위 머리말).
   }
 }
+
+const PREFIX = 'sqt.eduGuest.v1:';
+
+/** 이 기기에 둔 손님 열쇠 전부(가입 뒤 자동 옮기기 · autoClaim.ts). 저장소를 못 읽으면 빈 목록. */
+export async function listEduGuestKeys(): Promise<string[]> {
+  try {
+    const names = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith(PREFIX));
+    if (names.length === 0) return [];
+    const pairs = await AsyncStorage.multiGet(names);
+    const keys: string[] = [];
+    for (const [, raw] of pairs) {
+      if (!raw) continue;
+      try {
+        const v = JSON.parse(raw) as Partial<EduGuest>;
+        if (typeof v.key === 'string' && v.key) keys.push(v.key);
+      } catch {
+        // 깨진 값은 건너뛴다.
+      }
+    }
+    return keys;
+  } catch {
+    return [];
+  }
+}

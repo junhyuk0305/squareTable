@@ -12,7 +12,7 @@
  * 루트 _layout 에 인증 가드가 없어 따로 빼 줄 것이 없다(/q 와 같다). 웹 배포는 vercel.json 의 `/(.*)` → app.html 이 받는다.
  */
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,9 +21,12 @@ import { Appear } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { EduAsk } from '@/components/edu/EduAsk';
 import { EduLinkView } from '@/components/edu/EduLinkView';
+import { HandoffCode } from '@/components/edu/HandoffCode';
 import { openEduLink, fetchEduLinkEntries, type EduLinkEntry, type EduLinkInfo } from '@/lib/db';
+import { autoClaimEduGuests } from '@/lib/edu/autoClaim';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
-import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { Gap, Space, screenScrollStyle } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 
 const CLOSED: EduLinkInfo = { ok: false, failed: false, placeKind: null, placeName: '', ownerName: '', title: '', entryCount: 0, expiresAt: null };
@@ -40,6 +43,14 @@ export default function EduLinkScreen() {
   const [entries, setEntries] = useState<EduLinkEntry[]>([]);
   // 개발 모드 StrictMode 가 이펙트를 두 번 돌려도 열람 수가 두 번 오르지 않게 토큰당 한 번만 연다.
   const openedFor = useRef<string | null>(null);
+
+  // 이 브라우저에 로그인 세션이 있으면(가입하고 돌아옴) 이 기기에서 보낸 질문을 그 계정으로 옮긴다(사용자 결정 3).
+  //   열쇠가 없거나 이미 옮겼으면 아무 일도 없다. 화면은 지금처럼 손님 열쇠로 돈다.
+  const userId = useSessionStore((s) => s.userId);
+  const signedIn = useSessionStore((s) => s.status === 'signed_in');
+  useEffect(() => {
+    if (signedIn && userId) void autoClaimEduGuests(userId);
+  }, [signedIn, userId]);
 
   useEffect(() => {
     if (!tk || openedFor.current === tk) return;
@@ -78,7 +89,13 @@ export default function EduLinkScreen() {
           <EduLinkView
             info={info}
             entries={entries}
-            askSlot={<EduAsk token={tk} place={info.placeKind} ownerName={info.ownerName} />}
+            askSlot={
+              <View style={st.askStack}>
+                <EduAsk token={tk} place={info.placeKind} ownerName={info.ownerName} />
+                {/* 이어받기 코드(사용자 결정 3) — 웹에서만. 앱 안에서는 /link/[id] 가 같은 일을 한다. */}
+                {Platform.OS === 'web' ? <HandoffCode token={tk} /> : null}
+              </View>
+            }
           />
         </ScrollView>
       )}
@@ -91,6 +108,7 @@ const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Surface.screen },
   scroll: { ...screenScrollStyle, paddingBottom: Space.xxl },
   fill: { flex: 1 },
+  askStack: { gap: Gap.group },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.md, paddingHorizontal: Space.xl },
   centerText: { ...Type.body, fontWeight: '600', color: InkColors.ink2, textAlign: 'center', lineHeight: 23 },
 });
