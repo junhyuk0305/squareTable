@@ -80,3 +80,10 @@ export function placeErrorCode(err: DbErr | null | undefined): string | null {
   const code = (err?.message ?? '').split(/[\s:]/)[0];
   return code || null;
 }
+
+// night-1111 sb
+// 매장과 연결하기(0490 가드 · 0581 사진 복사). MESSAGES 에 덧붙인다(모듈이 읽힐 때 한 번).
+Object.assign(MESSAGES, {
+  from_space_locked: '공간에서 온 노하우는 고칠 수 없어요. 취소하고 다시 보내 주세요.',
+  photo_copy_failed: '사진은 옮기지 못했어요. 노하우는 남겼어요.',
+});

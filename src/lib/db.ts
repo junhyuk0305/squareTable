@@ -5144,3 +5144,54 @@ async function fetchSpaceRequestNotices(): Promise<JoinNotice[]> {
     })),
   );
 }
+
+// night-1111 sb
+// ── 매장과 연결하기 스위치 · 공간 제안 사진 복사(0580 · 0581 · 엣지 knowhow-photo-copy) ──────────
+
+/** 매장과 연결하기가 나에게 열렸는지(0580 my_connect_store_open = (space,connect_store) 켜짐 또는 허용 목록).
+ *  S04 줄·S08 버튼을 그릴지 정한다. 못 읽으면 false(그리지 않는다 = 지금 화면). */
+export async function connectStoreOpen(): Promise<DbResult<boolean>> {
+  if (!HAS_SUPABASE) return { data: false, error: null };
+  const { data, error } = await supabase.rpc('my_connect_store_open');
+  if (error) readFail('connectStoreOpen', error);
+  return { data: error ? false : data === true, error: error as DbErr };
+}
+
+const PHOTO_COPY_ENDPOINT = process.env.EXPO_PUBLIC_SUPABASE_URL
+  ? `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/knowhow-photo-copy`
+  : '';
+
+/**
+ * 공간 제안을 승인한 뒤 부른다(approveSpaceProposal 성공 뒤). 서버가 승인자 권한·제안 경로를 검증하고
+ * 원본 사진을 매장 폴더로 복사해 사본 노하우에 적는다. 원본이 없어진 장은 skipped 로 센다. 두 번 불러도 한 번만 적힌다.
+ * 실패 = error.message 'photo_copy_failed'(화면 = placeErrorMessage · "사진은 옮기지 못했어요. 노하우는 남겼어요.").
+ * ★raw fetch 로 부른다(supabase.functions.invoke 의 x-client-info 헤더가 CORS 프리플라이트를 깬다 · lib/push/notify.ts).
+ */
+export async function copyProposalPhotos(suggestionId: string): Promise<DbResult<{ photos: string[]; skipped: number }>> {
+  if (!HAS_SUPABASE || !PHOTO_COPY_ENDPOINT) return { data: { photos: [], skipped: 0 }, error: null };
+  const fail = (detail: string): DbResult<{ photos: string[]; skipped: number }> => {
+    reportError('db.edge:copyProposalPhotos', detail);
+    return { data: null, error: { message: 'photo_copy_failed' } };
+  };
+  const { data: sess } = await supabase.auth.getSession();
+  const token = sess.session?.access_token;
+  if (!token) return fail('no session');
+  try {
+    const res = await fetch(PHOTO_COPY_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ suggestionId }),
+    });
+    if (!res.ok) return fail(`status ${res.status}`);
+    const body = (await res.json().catch(() => null)) as { photos?: unknown; skipped?: unknown } | null;
+    const photos = Array.isArray(body?.photos) ? body.photos.filter((p): p is string => typeof p === 'string') : [];
+    const skipped = typeof body?.skipped === 'number' ? body.skipped : 0;
+    return { data: { photos, skipped }, error: null };
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : 'network');
+  }
+}
