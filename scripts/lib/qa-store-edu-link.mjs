@@ -160,7 +160,7 @@ ${val('알림 제목·본문(줄바꿈 정리)·경로', `select title || '|' ||
 ${call('사장 벨(my_units_notif_data uq)에 손님 질문', 'O', 'authenticated', `select count(*)::text from public.my_units_notif_data() d where d.unit_id = ${q(X1)} and d.source = 'uq' and d.payload->>'link_id' = {V:lm:1}`, 'ok|1')}
 ${call('사장 미응답 숫자에 들어옴', 'O', 'authenticated', `select unanswered::text from public.owner_question_counts() where unit_id = ${q(X1)}`, 'ok|1')}
 ${call('직원 J 벨에도 도와줄 질문으로 보임(파생 · 푸시 아님)', 'J', 'authenticated', `select count(*)::text from public.my_units_notif_data() d where d.unit_id = ${q(X1)} and d.source = 'uq' and d.payload->>'link_id' = {V:lm:1}`, 'ok|1')}
-${call('손님 AI 예약 = 그 매장 자리(ai_quota_reserve · 손님 요청 키 · 엣지와 같은 호출)', null, 'service_role', `select r.allowed::text from public.ai_quota_reserve(${q(X1)}, 1, 'edu:' || {V:g1:2}) r`, 'ok|true')}
+${call('손님 AI 예약 = 그 매장 자리(ai_quota_reserve · 손님 요청 키 · 엣지와 같은 호출)', null, 'service_role', `select r.allowed::text from public.ai_quota_reserve(${q(X1)}, 1, 'edu:' || {V:g1:2}, true) r`, 'ok|true')}
 ${val('매장 AI 한도에서 깎임(이번 달 사용량 1)', `select coalesce((select used from public.ai_usage_monthly where unit_id = ${q(X1)} and month = to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM')), 0)::text`, '1')}
 delete from public.unit_members where unit_id = ${q(X1)} and user_id = ${q(U.M)};
 ${call('만든 사람 M 이 나간 뒤 손님 묻기', null, 'anon', ask(V('lm', 2), '하늘', '마감 정산은요'), 'ok|gk_*', 'g2')}

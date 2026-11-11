@@ -386,9 +386,14 @@ function docExtractPages(usage: unknown): number {
 //   매장 = fail-open(통과 · 사후 차감) — 과금 인프라 장애가 파일럿 답변을 막는 게 더 큰 사고다(subscription.ts 와 같은 철학).
 //   공간 = 닫힌 쪽(402) — 공간 상한은 비용을 막는 유일한 장치다(결정 137 · R5).
 type QuotaReserve = { ok: true; allowed: boolean; used: number; cap: number } | { ok: false };
-async function aiQuotaReserve(unitId: string, units: number, requestKey: string | null): Promise<QuotaReserve> {
+// ★0556: guest = 교육 링크 손님 갈래. 참이면 DB 가 무료 모드를 무시하고 자리의 월 한도를 본다(매장 링크도 · 결정 4).
+async function aiQuotaReserve(unitId: string, units: number, requestKey: string | null, guest = false): Promise<QuotaReserve> {
   try {
-    const { data, error } = await serviceClient().rpc('ai_quota_reserve', { p_unit: unitId, p_units: units, p_request_key: requestKey });
+    //   본 갈래는 p_guest 를 안 싣는다(기본값 false · DB 가 0556 전이어도 본 갈래 호출 모양이 같다).
+    const args = guest
+      ? { p_unit: unitId, p_units: units, p_request_key: requestKey, p_guest: true }
+      : { p_unit: unitId, p_units: units, p_request_key: requestKey };
+    const { data, error } = await serviceClient().rpc('ai_quota_reserve', args);
     if (error) { console.error('ai_quota_reserve failed:', error.message); return { ok: false }; }
     const row = Array.isArray(data) ? data[0] : data;
     if (!row) return { ok: false };
@@ -1259,7 +1264,7 @@ async function handleGuestAnswer(body: any, json: (b: unknown, s?: number) => Re
     // ★0554: 차례를 잡은 뒤 그 자리 한도를 원자적으로 예약한다(ai_context 의 exceeded 는 미리 보기). 허용 아니면 차례를 풀고 402.
     //   예약 호출이 실패해도 닫힌 쪽(402)이다 — 손님 갈래는 로그인이 없어 열린 쪽으로 틀리면 비용을 막을 길이 없다.
     const quotaKey = `edu:${cqId}`;
-    const rv = await aiQuotaReserve(row.unit_id, 1, quotaKey);
+    const rv = await aiQuotaReserve(row.unit_id, 1, quotaKey, true);   // ★0556: 손님 = 무료 모드에도 월 한도
     if (!rv.ok || !rv.allowed) {
       await release();
       release = null;

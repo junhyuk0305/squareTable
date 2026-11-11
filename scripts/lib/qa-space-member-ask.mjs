@@ -300,6 +300,9 @@ update public.app_config set value = 'false' where key = 'billing_free_mode';
 ${call('R4 대조: 무료 모드 꺼진 매장 · 다 참 → 안 됨', null, 'service_role', `select allowed || '/' || cap_count from public.ai_quota_reserve(${q(X)}, 1, null)`, 'ok|false/200')}
 update public.app_config set value = 'true' where key = 'billing_free_mode';
 ${call('R4 무료 모드 매장 → 늘 됨', null, 'service_role', `select allowed::text from public.ai_quota_reserve(${q(X)}, 1, null)`, 'ok|true')}
+${call('0556 무료 모드여도 매장 링크 손님은 매장 월 한도를 봄(다 참 → 안 됨)', null, 'service_role', `select allowed || '/' || cap_count from public.ai_quota_reserve(${q(X)}, 1, 'edu:qa_ma_g_${rnd}', true)`, 'ok|false/200')}
+${val('0556 손님 미리 보기(_edu_ai_exceeded)도 무료 모드 매장 다 참 = 막음', `select public._edu_ai_exceeded(${q(X)}, 1)::text`, 'true')}
+${val('0556 손님 막힘은 사용량을 안 올림', `select used from public.ai_usage_monthly where unit_id = ${q(X)} and month = ${M_}`, '201')}
 update public.ai_usage_monthly set used = 300 where unit_id = ${q(SQ)} and month = ${M_};
 ${call('R4 무료 모드여도 공간은 상한을 봄(300 → 안 됨)', null, 'service_role', `select allowed::text from public.ai_quota_reserve(${q(SQ)}, 1, null)`, 'ok|false')}
 rollback;
