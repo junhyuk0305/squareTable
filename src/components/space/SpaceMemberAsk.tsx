@@ -94,6 +94,7 @@ export function SpaceMemberAsk({
     setQuestions(r.data ?? []);
   }, [spaceId]);
 
+  // 내 질문은 열 때와 새 착지(?uqId= · 이 화면에 있는 채로 답 알림을 눌렀다)마다 다시 읽는다.
   useEffect(() => {
     let alive = true;
     void fetchMySpaceQuestions(spaceId).then((r) => {
@@ -101,6 +102,13 @@ export function SpaceMemberAsk({
       setLoadFailed(!!r.error);
       if (!r.error) setQuestions(r.data ?? []);
     });
+    return () => {
+      alive = false;
+    };
+  }, [spaceId, focusUq]);
+
+  useEffect(() => {
+    let alive = true;
     void fetchSpaceMembers(spaceId).then(({ data }) => {
       if (!alive) return;
       const o = (data ?? []).find((m) => m.role === 'space_owner');
