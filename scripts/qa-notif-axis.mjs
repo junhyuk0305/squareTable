@@ -83,6 +83,20 @@ const ownIds = own.map((r) => r.id);
 check('⑥ 사장: 공지·배정은 여전히 안 온다(회귀)', !ownIds.some((i) => i.startsWith('notice_') || i.startsWith('assign_')), ownIds.join(','));
 check('⑥ 사장: 직원 제안 2건 모두 검토함에(자기 것 아님)', ownIds.includes('s_sg_mine') && ownIds.includes('s_sg_other'));
 
+// ── ② 예외: 공간에서 온 노하우(from_space)는 보낸 매니저 본인 검토함에도 뜬다(night-1111 g5 · 결정 193) ──
+{
+  const { isPendingSuggestionToReview } = await import(pathToFileURL(join(ROOT, 'src/lib/utils/notifications.ts')).href);
+  const fs = { id: 'sg_fs_mine', unit_id: 'u1', kind: 'from_space', proposer_id: ME, proposer_name: '박지원', text: '내 공간 노하우', status: 'pending', created_at: iso(5) };
+  const fsDone = { ...fs, id: 'sg_fs_done', status: 'approved' };
+  check('② 예외: 내가 보낸 from_space 대기 제안은 내 검토함에 뜬다', isPendingSuggestionToReview(fs, ME) === true);
+  check('② 예외: 처리된 from_space 는 안 뜬다', isPendingSuggestionToReview(fsDone, ME) === false);
+  check('② 그대로: 내가 올린 improve·new 대기 제안은 안 뜬다', isPendingSuggestionToReview(suggestions[0], ME) === false
+    && isPendingSuggestionToReview({ ...suggestions[0], kind: 'new' }, ME) === false);
+  const ownMine = buildOwnerNotifications({ ...ownerArgs, userId: ME, suggestions: [...suggestions, fs] }).map((r) => r.id);
+  check('② 예외: 관리 화면 목록(사장 축 · 나 = 보낸 사람)에 from_space 행이 있고 improve 행은 없다',
+    ownMine.includes('s_sg_fs_mine') && !ownMine.includes('s_sg_mine'), ownMine.join(','));
+}
+
 // ── 논리 점검 D11 (2026-10-06) ───────────────────────────────────────────
 {
   const { buildJuniorNotifications, juniorUnreadCount, ownerUnreadCount, unreadMentionIds } =

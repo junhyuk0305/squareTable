@@ -552,9 +552,11 @@ export const isPendingQuestion = (u: UnknownQuery): boolean => u.status === 'pen
 export const isPendingSuggestion = (s: PlaybookSuggestion): boolean => s.status === 'pending';
 /** **내가 검토해야 할** 제안 = 검토 대기 중이면서 내가 올린 게 아닌 것.
  *  직원이 매니저로 승격되면 승격 전에 올린 제안이 자기 결재함으로 이월돼, 자기 제안을 자기가
- *  승인하는 표면이 생겼다(2026-08-08 실측: 박지원 매니저 화면). 제안자는 결과만 받는다. */
+ *  승인하는 표면이 생겼다(2026-08-08 실측: 박지원 매니저 화면). 제안자는 결과만 받는다.
+ *  ★예외(night-1111 g5 · 결정 193): 공간에서 온 노하우(from_space)는 보낸 매니저 본인에게도 뜬다.
+ *   매니저의 새 답은 원래 승인 없이 바로 노하우라, 자기 공간 노하우를 자기 매장에 승인해도 된다(서버 approve_space_proposal 도 막지 않는다). */
 export const isPendingSuggestionToReview = (s: PlaybookSuggestion, me?: string): boolean =>
-  isPendingSuggestion(s) && (!me || s.proposer_id !== me);
+  isPendingSuggestion(s) && (!me || s.kind === 'from_space' || s.proposer_id !== me);
 /** 직원이 수락해 사장 승인만 남은 교대. */
 export const isSwapAwaitingApproval = (r: SwapRequest): boolean => r.status === 'accepted';
 /** 검토가 끝난 입금 신고(승인/반려) — 반려 사유 전달 축(0083 reject_reason).

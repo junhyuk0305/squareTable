@@ -304,3 +304,39 @@ export const SPACE_MEMBERS = {
   // 탈퇴 창(0430 space_has_members)
   toSettings: '공간 설정으로 가기',
 } as const;
+
+// night-1111 g5
+/**
+ * 매장과 연결하기(S12 · 공간 주인) · 사장 제안함의 공간 제안(M04) · 직원 "내 제안"의 공간 행.
+ * 화면 제목은 SPACE_WORDS.connectStore, 매장이 없을 때 버튼은 SPACE_WORDS.enterCode 를 쓴다.
+ * connectNoStore 는 words.ts 앞 절 주석대로 5번 덩이가 넣는다(정본 = 화면지도 단어사전 · 끝 덧붙이기라 여기 둔다).
+ */
+export const CONNECT = {
+  // S04 줄 · S08 버튼
+  rowHint: '내 노하우를 일하는 매장 사장님께 보내요',
+  sendToStore: '매장에 보내기',
+  // S12
+  pickStore: '어느 매장에 보낼까요?',
+  pickEntries: '보낼 노하우를 골라 주세요',
+  pickedCount: (n: number) => `${n}개 고름`,
+  pickMax: '한 번에 50개까지 고를 수 있어요.',
+  noEntriesTitle: '보낼 노하우가 없어요',
+  noEntriesBody: '노하우를 먼저 남기면 여기서 고를 수 있어요.',
+  noStoreTitle: '보낼 매장이 없어요',
+  connectNoStore: '매장에 합류하면 여기서 노하우를 보낼 수 있어요.',
+  send: '사장님께 보내기',
+  sending: '보내고 있어요…',
+  sent: (n: number) => `사장님께 노하우 ${n}개를 보냈어요. 승인되면 매장 노하우가 돼요.`,
+  loading: '노하우를 불러오고 있어요…',
+  loadFail: '노하우를 불러오지 못했어요.',
+  // M04 사장 제안함
+  fromSpaceTag: '공간에서 온 노하우',
+  sentBy: (name: string) => (name.trim() ? `${name.trim()}님이 보냈어요` : '공간에서 보냈어요'),
+  approve: '승인',
+  reject: '반려',
+  approved: '매장 노하우로 남겼어요.',
+  photosSkipped: (n: number) => `사진 ${n}장은 원본이 없어 빼고 남겼어요.`,
+  handledKind: '공간',
+  // 직원 "내 제안"
+  noEdit: '공간에서 보낸 노하우는 고칠 수 없어요. 취소하고 다시 보내 주세요.',
+} as const;
