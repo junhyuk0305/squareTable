@@ -321,9 +321,10 @@ export const CONNECT = {
   pickedCount: (n: number) => `${n}개 고름`,
   pickMax: '한 번에 50개까지 고를 수 있어요.',
   noEntriesTitle: '보낼 노하우가 없어요',
-  noEntriesBody: '노하우를 먼저 남기면 여기서 고를 수 있어요.',
+  noEntriesBody: '노하우를 먼저 남겨 주세요.',
   noStoreTitle: '보낼 매장이 없어요',
-  connectNoStore: '매장에 합류하면 여기서 노하우를 보낼 수 있어요.',
+  // 사전 원문("매장에 합류하면 …")은 앞절 규칙(voice S4)에 걸려 결론부터로 바꿨다(가결정 · 기록_g5).
+  connectNoStore: '노하우는 내가 일하는 매장에만 보낼 수 있어요. 초대코드로 먼저 합류해 주세요.',
   send: '사장님께 보내기',
   sending: '보내고 있어요…',
   sent: (n: number) => `사장님께 노하우 ${n}개를 보냈어요. 승인되면 매장 노하우가 돼요.`,
