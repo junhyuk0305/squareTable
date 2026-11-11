@@ -36,12 +36,12 @@ export function reopenStoreMessage(keepsRecords: boolean | null): string {
 /** J5 — 열린 소유 매장에 직원이 있으면 서버가 owner_has_staff 로 막는다(서버 차단은 P7-1 · 빌드 B 승인 뒤). */
 export const OWNER_HAS_STAFF_TEXT = '직원이 있으면 탈퇴할 수 없어요. 직원 관리에서 먼저 내보내 주세요.';
 
-/** J5 — 탈퇴 실패 원문을 화면 문구로. toStaff 면 탈퇴 창에 [직원 관리로 가기]를 둔다. */
-export function deleteAccountError(raw: string | null | undefined): { text: string; toStaff: boolean } {
-  if (raw && /owner_has_staff/.test(raw)) return { text: OWNER_HAS_STAFF_TEXT, toStaff: true };
-  // 0430: 멤버가 남은 공간의 주인. 직원 관리로 보내지 않는다(공간을 먼저 지우는 길은 4번 덩이 화면).
-  if (raw && /space_has_members/.test(raw)) return { text: placeErrorMessage({ message: raw }), toStaff: false };
-  return { text: friendlyError(raw, '탈퇴 처리에 실패했어요. 잠시 후 다시 시도해 주세요.'), toStaff: false };
+/** J5 — 탈퇴 실패 원문을 화면 문구로. toStaff 면 탈퇴 창에 [직원 관리로 가기], toSpace 면 [공간 설정으로 가기]를 둔다. */
+export function deleteAccountError(raw: string | null | undefined): { text: string; toStaff: boolean; toSpace: boolean } {
+  if (raw && /owner_has_staff/.test(raw)) return { text: OWNER_HAS_STAFF_TEXT, toStaff: true, toSpace: false };
+  // 0430: 멤버가 남은 공간의 주인. 직원 관리로 보내지 않고 공간 설정(공간 지우기)으로 보낸다(4번 덩이 화면).
+  if (raw && /space_has_members/.test(raw)) return { text: placeErrorMessage({ message: raw }), toStaff: false, toSpace: true };
+  return { text: friendlyError(raw, '탈퇴 처리에 실패했어요. 잠시 후 다시 시도해 주세요.'), toStaff: false, toSpace: false };
 }
 
 /** delete_store_preview(0235) 반환값. 읽지 못하면 null 로 둔다(돌려준다고 약속하지 않는다). */

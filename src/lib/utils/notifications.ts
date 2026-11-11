@@ -15,7 +15,7 @@ import { fmtDateKo, fmtRange } from '@/lib/utils/schedule';
 import { PLANS } from '@/lib/config/tiers';
 import { SHOW_BILLING } from '@/lib/config/store-policy';
 // 제목·주소는 레지스트리가 정한다(P1 · 벨·푸시·엣지·탭이 같은 표). 여기서는 어느 행이 알림인지(술어)만 판정한다.
-import { NOTIF, taskRoute as registryTaskRoute } from '@/lib/notif/registry';
+import { NOTIF, spaceRequestRoute, taskRoute as registryTaskRoute } from '@/lib/notif/registry';
 import { routeForRole } from '@/lib/utils/roles';
 import type { QuizAssignment, TrainingCourse as TrainingCourseRow } from '@/lib/quiz/types';
 import { assignmentState, openQuizzes, type QuizAssignmentState } from '@/lib/quiz/progress';
@@ -33,7 +33,9 @@ export type JuniorNotifKind =
   // 매니저 지정·해제(0315 member_notices role_changed) — 서버가 넣은 문구 그대로.
   | 'role'
   // 내보내짐(0317 · 0247 member_notices removed) — 계정 단위 축(합류 결과와 같은 갈래).
-  | 'member_removed';
+  | 'member_removed'
+  // ★0460 공간(4번 덩이) — 멤버 요청이 옴(N7 · 공간 주인) · 멤버 요청이 수락됨(N8). 계정 단위 축(합류 결과와 같은 갈래).
+  | 'space_join_request' | 'space_join_approved';
 /** 주소는 레지스트리(NOTIF[kind].route)가 만든다 — 문자열 리터럴 유니온을 여기서 다시 적지 않는다. */
 export type JuniorNotifRoute = string;
 
@@ -398,6 +400,31 @@ function roleNoticeRow(n: ScheduleNotice, ackAt?: string | null): JuniorNotif {
 export function buildJoinNotifRows(joinNotices: JoinNotice[], joinAckAt: string | null): JuniorNotif[] {
   const out: JuniorNotif[] = [];
   for (const n of joinNotices) {
+    // ★0460 공간(4번 덩이) — N7 대기 요청(파생) · N8 수락. 매장 승인(approved)과 다른 종류 값이라 아래 매장 갈래로 떨어지지 않게 먼저 거른다.
+    if (n.kind === 'space_join_request') {
+      out.push({
+        id: `space_join_request_${n.id}`,
+        kind: 'space_join_request',
+        title: NOTIF.space_join_request.title(n.body || '새 멤버'),
+        body: n.store_name || '공간',
+        at: n.created_at,
+        unread: isAfterAck(n.created_at, joinAckAt),
+        route: n.actor_id ? spaceRequestRoute(n.unit_id, n.actor_id) : NOTIF.space_join_request.route('junior', n.unit_id),
+      });
+      continue;
+    }
+    if (n.kind === 'join_approved') {
+      out.push({
+        id: `space_join_approved_${n.id}`,
+        kind: 'space_join_approved',
+        title: NOTIF.space_join_approved.title(n.store_name || '공간'),
+        body: n.body,
+        at: n.created_at,
+        unread: isAfterAck(n.created_at, joinAckAt),
+        route: NOTIF.space_join_approved.route('junior', n.unit_id),
+      });
+      continue;
+    }
     if (n.kind === 'removed') {
       out.push({
         id: `member_removed_${n.id}`,

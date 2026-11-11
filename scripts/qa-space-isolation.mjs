@@ -1197,7 +1197,8 @@ console.log('\n[6] 공간 합류 · 멤버 요청 · 수락과 거절 · 내보�
   const as = (who, s, keep = false, role = 'authenticated') => `pg_temp.qa_as(${who ? q(V[who]) + '::uuid' : 'null'}, ${who ? q(VS[who]) + '::uuid' : 'null'}, ${q(role)}, ${q(s)}, ${keep})`;
   const chk = (name, expect, gotSql) => `insert into qa_out(l) select ${q(`QA|MEM|${name}¦${expect}¦`)} || (${gotSql});`;
   const svc = (s) => `(select coalesce((${s})::text, '<null>'))`;
-  const join = (who, code, keep = true) => as(who, `select count(*)::text from public.join_space_by_code(${q(code)})`, keep);
+  // 0461: 돌려주는 칸 status(joined · requested · store_code). 0행 = '<none>'(없는 코드).
+  const join = (who, code, keep = true) => as(who, `select coalesce(string_agg(status, ','), '<none>') from public.join_space_by_code(${q(code)})`, keep);
   const req = (who, tok, keep = true) => as(who, `select (public.request_space_join(${q(tok)}) is not null)::text`, keep);
   // 요청 번호는 클라가 못 읽는 표에 있다. 관리자 권한으로 먼저 꺼내 호출 글에 넣는다(표가 없으면 null · 수정 전 RED 용).
   const decide = (who, of, accept) => `pg_temp.qa_as(${q(V[who])}::uuid, ${q(VS[who])}::uuid, 'authenticated', format('select ''done'' from public.decide_space_join_request(%L, ${accept})', pg_temp.qa_req_id(${q(V[of])}::uuid)), true)`;
@@ -1237,6 +1238,14 @@ begin
     when others then return 'err|' || left(sqlerrm, 60);
   end;
 end $f$;
+-- 0461 내보낸 사람 표시 수(표가 없으면 -1 · 수정 전 RED 를 항목마다 보려고 동적 SQL).
+create function pg_temp.qa_removed(p_space text, p_uid uuid) returns int language plpgsql as $f$
+declare r int;
+begin
+  execute 'select count(*)::int from public.space_member_removals where space_id = $1 and user_id = $2' into r using p_space, p_uid;
+  return r;
+exception when others then return -1;
+end $f$;
 create function pg_temp.qa_req_id(p_uid uuid) returns uuid language plpgsql as $f$
 declare r uuid;
 begin
@@ -1267,17 +1276,18 @@ create temp table qa_before as select id, role, active_unit_id, unit_id from pub
 ${chk('로그인 없이 합류 거절', 'err|permission denied for function join_space_by_code', as(null, `select count(*)::text from public.join_space_by_code(${q(C6)})`, false, 'anon'))}
 ${chk('입구 닫힌 계정 거절', 'err|space_closed', join('G', C6, false))}
 ${chk('전화 인증 전 거절', 'err|PHONE_NOT_VERIFIED', join('H', C6, false))}
-${chk('틀린 코드 0행', 'ok|0', join('Q', 'ZZZZZ9', false))}
-${chk('매장 X 코드로 공간 합류 0행', 'ok|0', `pg_temp.qa_as(${q(V.Q)}::uuid, ${q(VS.Q)}::uuid, 'authenticated', format('select count(*)::text from public.join_space_by_code(%L)', (select invite_code from public.units where id = ${q(X)})), false)`)}
+${chk('틀린 코드 0행', 'ok|<none>', join('Q', 'ZZZZZ9', false))}
+${chk('매장 X 코드는 매장 갈래로 알려 줌(0461 · 공간 멤버 안 됨)', 'ok|store_code|<null>', `pg_temp.qa_as(${q(V.Q)}::uuid, ${q(VS.Q)}::uuid, 'authenticated', format('select string_agg(status, '','') || ''|'' || coalesce(max(space_id), ''<null>'') from public.join_space_by_code(%L)', (select invite_code from public.units where id = ${q(X)})), true)`)}
+${chk('매장 코드는 틀린 시도로 안 셈(0461)', '0', svc(`select count(*) from public.join_attempts where uid = ${q(V.Q)} and not ok`))}
 ${chk('지운 공간 코드 거절(코드가 남아 있어도)', 'err|space_not_accepting', join('Q', C6D, false))}
-${chk('맞는 코드(소문자로 쳐도) 합류 됨', 'ok|1', join('Q', C6.toLowerCase()))}
+${chk('맞는 코드(소문자로 쳐도) 합류 됨', 'ok|joined', join('Q', C6.toLowerCase()))}
 ${chk('합류한 사람 = 공간 멤버', 'space_member', svc(`select role from public.unit_members where unit_id = ${q(S6)} and user_id = ${q(V.Q)}`))}
 ${chk('같은 사람 다시 합류 거절', 'err|already_member', join('Q', C6, false))}
 ${chk('주인이 자기 코드 넣기 거절', 'err|already_member', join('P', C6, false))}
-${chk('사장 계정도 남의 공간 합류 됨', 'ok|1', join('T', C6))}
+${chk('사장 계정도 남의 공간 합류 됨', 'ok|joined', join('T', C6))}
 ${chk('사장 계정 역할·현재 매장 그대로', 'true', svc(`select (p.role, p.active_unit_id, p.unit_id) is not distinct from (b.role, b.active_unit_id, b.unit_id) and p.role = 'owner' from public.profiles p, qa_before b where p.id = b.id`))}
 ${chk('사장 계정 현재 매장이 공간으로 안 바뀜', `ok|${X}`, as('T', `select coalesce(public.auth_member_unit_id(), '<null>')`))}
-${[1, 2, 3, 4, 5].map((n) => chk(`틀린 코드 ${n}번째 0행(기록 남김)`, 'ok|0', join('L', 'ZZZZZ8'))).join('\n')}
+${[1, 2, 3, 4, 5].map((n) => chk(`틀린 코드 ${n}번째 0행(기록 남김)`, 'ok|<none>', join('L', 'ZZZZZ8'))).join('\n')}
 ${chk('틀린 코드 5번이면 맞는 코드도 잠김(매장 합류와 같은 잠금)', 'err|too_many_attempts', join('L', C6, false))}
 
 -- 링크로 온 사람의 멤버 요청
@@ -1335,6 +1345,34 @@ ${chk('내보낸 뒤 R 현재 공간 기록 0', '0', svc(`select count(*) from p
 ${chk('내보낸 뒤 R 현재 공간 비움', 'ok|<null>', as('R', `select coalesce(public.auth_space_id(), '<null>')`))}
 ${chk('내보낸 뒤 R 공간 노하우 읽기 0', 'ok|0', as('R', `select count(*)::text from public.playbook_entries where unit_id = ${q(S6)}`))}
 ${chk('내보낸 뒤 R 공간 들어가기 거절', 'err|not_a_member', as('R', `select public.enter_space(${q(S6)})::text`))}
+
+-- 내보낸 사람의 다시 들어오기(0461 · 사용자 결정: 같은 코드로 바로 못 들어온다 · 멤버 요청 → 주인 수락)
+${chk('내보낸 사람 표시 1', '1', svc(`select pg_temp.qa_removed(${q(S6)}, ${q(V.R)}::uuid)`))}
+${chk('클라는 내보낸 사람 표를 못 읽음', 'err|permission denied for table space_member_removals', as('P', 'select count(*)::text from public.space_member_removals'))}
+${chk('내보낸 R 이 코드 넣기 = 30분 대기 안이면 거절(방금 수락된 요청)', 'err|request_cooldown', join('R', C6, false))}
+update public.space_join_requests set created_at = now() - interval '31 minutes' where space_id = ${q(S6)} and user_id = ${q(V.R)};
+${chk('내보낸 R 이 코드 넣기 = 바로 멤버 아님 · 요청 됨', 'ok|requested', join('R', C6))}
+${chk('코드 넣은 뒤에도 R 은 멤버 아님', '0', svc(`select count(*) from public.unit_members where unit_id = ${q(S6)} and user_id = ${q(V.R)}`))}
+${chk('코드로 만든 요청이 주인 목록에(R 한 줄 · 입구가 닫혀 못 받은 R3 는 따로 대기)', 'ok|1', as('P', `select count(*) filter (where name = 'QA멤버R')::text from public.space_pending_requests(${q(S6)})`))}
+${chk('코드로 만든 요청도 주인에게 합류 신청 알림(같은 경로 · 링크 요청 1 + 코드 요청 1)', `2|/space/settings?space=${S6}&member=${V.R}`, svc(`select count(*) || '|' || max(url) from public.member_notices where user_id = ${q(V.P)} and kind = 'join_request' and unit_id = ${q(S6)} and actor_id = ${q(V.R)}`))}
+${chk('같은 코드 다시 넣기 = 이미 신청함', 'err|already_pending', join('R', C6, false))}
+${chk('맞는 코드라 틀린 시도로 안 셈', '0', svc(`select count(*) from public.join_attempts where uid = ${q(V.R)} and not ok`))}
+${chk('주인이 코드 요청 수락', 'ok|done', decide('P', 'R', true))}
+${chk('수락하면 R 다시 멤버', 'space_member', svc(`select role from public.unit_members where unit_id = ${q(S6)} and user_id = ${q(V.R)}`))}
+${chk('수락하면 내보낸 사람 표시 지움', '0', svc(`select pg_temp.qa_removed(${q(S6)}, ${q(V.R)}::uuid)`))}
+${chk('R 이 스스로 나감', 'ok|done', as('R', `select 'done' from public.leave_space(${q(S6)})`, true))}
+${chk('스스로 나간 사람은 표시 없음', '0', svc(`select pg_temp.qa_removed(${q(S6)}, ${q(V.R)}::uuid)`))}
+${chk('스스로 나간 R 은 코드로 바로 다시 멤버', 'ok|joined', join('R', C6))}
+${chk('주인이 R 을 다시 내보냄', 'ok|done', as('P', `select 'done' from public.space_remove_member(${q(S6)}, ${q(V.R)})`, true))}
+update public.space_join_requests set created_at = now() - interval '31 minutes' where space_id = ${q(S6)} and user_id = ${q(V.R)};
+${chk('다시 내보낸 R 이 코드로 요청 됨', 'ok|requested', join('R', C6))}
+${chk('주인이 코드 요청 거절', 'ok|done', decide('P', 'R', false))}
+${chk('거절해도 표시 그대로 · 멤버 아님', '1|0', svc(`select pg_temp.qa_removed(${q(S6)}, ${q(V.R)}::uuid) || '|' || (select count(*) from public.unit_members where unit_id = ${q(S6)} and user_id = ${q(V.R)})`))}
+update public.space_join_requests set created_at = now() - interval '31 minutes' where space_id = ${q(S6)} and user_id = ${q(V.R)};
+${chk('거절 뒤 31분이면 코드로 다시 요청 됨(바로 멤버 아님)', 'ok|requested', join('R', C6, false))}
+${chk('내보낸 사람이 매장 코드 넣기 = 매장 갈래', 'ok|store_code', `pg_temp.qa_as(${q(V.R)}::uuid, ${q(VS.R)}::uuid, 'authenticated', format('select string_agg(status, '','') from public.join_space_by_code(%L)', (select invite_code from public.units where id = ${q(X)})), false)`)}
+${chk('내보낸 사람도 지운 공간 코드는 거절', 'err|space_not_accepting', join('R', C6D, false))}
+${chk('(대조) 내보낸 적 없는 R2 는 코드로 바로 멤버', 'ok|joined', join('R2', C6, false))}
 
 -- 나가기
 ${chk('Q 가 공간에 들어감', 'ok|', as('Q', `select public.enter_space(${q(S6)})::text`, true))}

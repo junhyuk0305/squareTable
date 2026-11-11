@@ -4244,14 +4244,17 @@ export async function fetchJoinNotices(): Promise<ReadResult<JoinNotice[]>> {
   const { data, error } = await supabase
     .from('member_notices')
     .select('id, unit_id, kind, store_name, body, created_at')
-    .in('kind', ['approved', 'rejected', 'removed']) // removed = 0317 내보내짐(푸시가 오는 알림은 목록에도)
+    // removed = 0317 내보내짐(푸시가 오는 알림은 목록에도) · join_approved = 0460 공간 멤버 요청 수락(N8 · 옛 앱은 이 값을 안 읽는다)
+    .in('kind', ['approved', 'rejected', 'removed', 'join_approved'])
     .order('created_at', { ascending: false })
     .limit(20);
   if (error) {
     readFail('fetchJoinNotices', error);
     return { data: [], error: true };
   }
-  return { data: (data ?? []) as JoinNotice[], error: false };
+  // N7 공간 멤버 요청은 대기 요청 행에서 파생한다(처리된 요청이 벨에 남지 않게 · 알림사건 3-8). 못 읽으면 그 줄만 빠진다.
+  const reqs = await fetchSpaceRequestNotices();
+  return { data: [...((data ?? []) as JoinNotice[]), ...reqs], error: false };
 }
 
 /** join_history_rows(0345) 한 행 → JoinDone. 매장 벨·허브가 이 하나를 쓴다. */
@@ -4907,14 +4910,17 @@ async function spaceRpc<T>(fn: string, args: Record<string, unknown>, tag: strin
   return { data: data as T, error: null };
 }
 
-/** 초대코드로 바로 멤버. data null + error null = 없는 코드(매장 코드 포함 · 서버가 틀린 시도로 센다).
- *  코드 = space_closed · PHONE_NOT_VERIFIED · too_many_attempts · space_not_accepting · already_member. */
-export async function joinSpaceByCode(code: string): Promise<DbResult<{ spaceId: string; spaceName: string }>> {
+/** 초대코드 결과(0461). joined = 바로 멤버 · requested = 내보낸 사람이라 멤버 요청이 만들어짐 · store_code = 매장 코드(매장 합류로 다시 보낸다). */
+export type SpaceCodeStatus = 'joined' | 'requested' | 'store_code';
+
+/** 초대코드. data null + error null = 없는 코드(서버가 틀린 시도로 센다). 매장 코드는 status store_code(세지 않는다).
+ *  코드 = space_closed · PHONE_NOT_VERIFIED · too_many_attempts · space_not_accepting · already_member · already_pending · request_cooldown. */
+export async function joinSpaceByCode(code: string): Promise<DbResult<{ spaceId: string; spaceName: string; status: SpaceCodeStatus }>> {
   if (!HAS_SUPABASE) return { data: null, error: null };
   const r = await spaceRpc<any[]>('join_space_by_code', { p_code: code }, 'joinSpaceByCode');
   if (r.error) return { data: null, error: r.error };
   const row = r.data?.[0];
-  return { data: row ? { spaceId: row.space_id, spaceName: row.space_name } : null, error: null };
+  return { data: row ? { spaceId: row.space_id ?? '', spaceName: row.space_name ?? '', status: row.status ?? 'joined' } : null, error: null }; // 0461 전 서버(칸 없음)에서 행이 오면 바로 멤버가 된 것
 }
 
 /** 링크로 온 사람의 멤버 요청. 코드 = space_closed · PHONE_NOT_VERIFIED · link_closed · feature_off · already_member · already_pending · request_cooldown. */
@@ -4996,4 +5002,28 @@ export async function approveSpaceProposal(
   }
   const row = Array.isArray(data) ? data[0] : null;
   return { data: (row ?? null) as { entry_id: string; source_photos: string[] } | null, error: null };
+}
+
+// ── 공간 삭제 · 공간 벨(4번 덩이 화면) ─────────────────────────────────────
+
+/** 공간 지우기(0430). 공간 주인만. 멤버가 한 번에 나가고 초대코드가 비고 링크가 닫힌다. 되살리기 없음 · 30일 뒤 파기.
+ *  코드 = not_authenticated · not_space_owner. */
+export async function deleteSpace(spaceId: string): Promise<DbResult<true>> {
+  if (!HAS_SUPABASE) return { data: true, error: null };
+  const r = await spaceRpc<null>('delete_space', { p_space: spaceId }, 'deleteSpace');
+  return r.error ? { data: null, error: r.error } : { data: true, error: null };
+}
+
+/** N7 공간 멤버 요청 → 계정 벨 행(JoinNotice 모양). 내가 주인인 공간의 대기 요청에서 파생한다.
+ *  id = 요청 번호(벨 id `space_join_request_<요청 번호>` · 같은 요청은 한 줄). 못 읽으면 빈 배열(그 줄만 빠진다). */
+async function fetchSpaceRequestNotices(): Promise<JoinNotice[]> {
+  const { data: spaces } = await mySpaces();
+  const owned = (spaces ?? []).filter((s) => s.role === 'space_owner');
+  const lists = await Promise.all(owned.map(async (s) => ({ s, r: await fetchSpaceJoinRequests(s.id) })));
+  return lists.flatMap(({ s, r }) =>
+    (r.data ?? []).map((x) => ({
+      id: x.requestId, unit_id: s.id, kind: 'space_join_request' as const, store_name: s.name,
+      body: x.name, created_at: x.requestedAt, actor_id: x.userId,
+    })),
+  );
 }

@@ -23,6 +23,7 @@ import { Section } from '@/components/Screen';
 import { PricingTable } from '@/components/PricingTable';
 import { SHOW_BILLING, showIapSurface, showPaymentSurface } from '@/lib/config/store-policy';
 import { deleteConfirmText, deleteNotice } from '@/lib/account/copy';
+import { SPACE_MEMBERS } from '@/lib/place/words';
 import { TextScaleModal } from '@/components/settings/TextScaleModal';
 import { ContactModal } from '@/components/ContactModal';
 
@@ -115,12 +116,22 @@ export default function AccountSettings() {
     );
     if (!ok) return;
     setBusy(true);
-    const { error, toStaff } = await deleteAccount();
+    const { error, toStaff, toSpace } = await deleteAccount();
     setBusy(false);
     // J5: 직원이 있어 막혔으면 갈 곳을 준다(서버 차단은 P7-1 뒤에 켜진다 · 그 전엔 이 분기가 오지 않는다).
     if (error && toStaff) {
       if (await confirmAction('탈퇴 실패', error, '직원 관리로 가기', { icon: 'people-outline', cancelLabel: '닫기' })) {
         router.push('/owner/staff');
+      }
+      return;
+    }
+    // 0430: 멤버가 남은 공간의 주인 → 공간 설정의 [공간 지우기]로 보낸다(공간 _layout 이 ?space= 로 그 공간에 먼저 들어간다).
+    if (error && toSpace) {
+      if (await confirmAction('탈퇴 실패', error, SPACE_MEMBERS.toSettings, { icon: 'library-outline', cancelLabel: '닫기' })) {
+        const s = useSessionStore.getState();
+        await s.loadSpaces();
+        const own = useSessionStore.getState().spaces.find((x) => x.role === 'space_owner');
+        router.push(own ? { pathname: '/space/settings', params: { space: own.id } } : '/stores');
       }
       return;
     }

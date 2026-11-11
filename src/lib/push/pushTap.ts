@@ -15,6 +15,8 @@ export type PushTapPlan =
 // 푸시가 여는 앱 안 경로의 첫 칸 — 레지스트리(NOTIF 의 route 전부 + 서버만 싣는 것)에서 온다.
 const APP_ROOTS = PUSH_ROUTE_ROOTS;
 // 매장 화면만 매장을 바꾼다. /stores · /billing 같은 계정 화면은 지금 매장에서 연다.
+// 공간 화면(/space · 0460 N7·N8)도 매장을 바꾸지 않는다. 엣지가 unitId = 공간 번호를 실어도 매장 전환을 부르지 않고
+//   그 경로를 연다. 공간에 들어가는 일은 공간 _layout 이 경로(?space= · /space/joined/<번호>)로 한다(서버가 공간 전환을 거절한다).
 const STORE_ROOTS = ['owner', 'junior'];
 
 function firstSegment(path: string): string {

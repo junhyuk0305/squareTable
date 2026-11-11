@@ -18,6 +18,9 @@ import { Wordmark } from '@/components/Wordmark';
 import { Appear, stagger } from '@/components/Appear';
 import { PhoneVerifyBlock } from '@/components/PhoneVerifyBlock';
 import { INVITE_CODE_LEN, normalizeInviteCode } from '@/lib/utils/validation';
+import { showToast } from '@/lib/store/useToastStore';
+import { notifyAction } from '@/lib/utils/confirm';
+import { SPACE_MEMBERS } from '@/lib/place/words';
 
 const CODE_LEN = INVITE_CODE_LEN;
 
@@ -30,7 +33,8 @@ export default function JuniorHub() {
   const userName = useSessionStore((s) => s.userName);
   const unitId = useSessionStore((s) => s.unitId);
   const storeName = useSessionStore((s) => s.storeName);
-  const joinByInvite = useSessionStore((s) => s.joinByInvite);
+  // S19(4번 덩이): 칸 하나로 공간 코드와 매장 코드를 받는다. 공간 입구가 닫힌 계정은 joinByInvite 그대로다.
+  const joinByCode = useSessionStore((s) => s.joinByCode);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
   const pendingStoreName = useSessionStore((s) => s.pendingStoreName);
   const cancelJoinRequest = useSessionStore((s) => s.cancelJoinRequest);
@@ -78,8 +82,21 @@ export default function JuniorHub() {
     }
     setBusy(true);
     setErr(null);
-    const { error, pending, code: failCode } = await joinByInvite(code.trim());
+    const res = await joinByCode(code.trim());
     setBusy(false);
+    // 공간 코드 갈래(0461) — 바로 멤버면 그 공간(S17)으로 · 내보낸 사람이면 합류 신청이 들어갔다고 알린다.
+    if (res.kind === 'space_joined') {
+      setCode('');
+      showToast(SPACE_MEMBERS.joinedToast(res.spaceName), 'good');
+      router.replace({ pathname: '/space/joined/[id]', params: { id: res.spaceId } });
+      return;
+    }
+    if (res.kind === 'space_requested') {
+      setCode('');
+      void notifyAction(SPACE_MEMBERS.requestedTitle, SPACE_MEMBERS.requestedBody, '확인', { icon: 'time-outline' });
+      return;
+    }
+    const { error, pending, code: failCode } = res.kind === 'space_error' ? { error: res.error, pending: false, code: res.code ?? undefined } : res;
     // 전화 미인증이면 화면을 떠나지 않고 그 자리에서 인증 단계를 연다(막다른 화면 금지).
     if (failCode === 'PHONE_NOT_VERIFIED') setNeedPhone(true);
     if (error) {
