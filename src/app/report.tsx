@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, Redirect, useRouter } from 'expo-router';
+import { Stack, Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -21,6 +21,7 @@ import {
   reportErrorMessage,
 } from '@/lib/report/form';
 import { honorific } from '@/lib/utils/roles';
+import { SPACE_WORDS } from '@/lib/place/words';
 import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space, screenScrollStyle } from '@/lib/theme/layout';
@@ -50,11 +51,25 @@ export default function ReportScreen() {
 function ReportBody() {
   const router = useRouter();
   const stores = useSessionStore((s) => s.stores);
+  // ★야간 g4a(결정 11): 공간 AI 답 아래 입구 = /report?unit=<공간>&ai=1. 내가 그 공간에 있으면 그 공간으로 고정하고 "AI 답변" 갈래를 연다.
+  //   인자가 없으면 지금 화면 그대로다(설정 > 신고하기). 공간 목록을 아직 안 읽었으면 한 번 읽는다(딥링크로 바로 열 때).
+  const params = useLocalSearchParams<{ unit?: string; ai?: string }>();
+  const unitParam = typeof params.unit === 'string' ? params.unit : '';
+  const spaces = useSessionStore((s) => s.spaces);
+  const spacesLoaded = useSessionStore((s) => s.spacesLoaded);
+  const loadSpaces = useSessionStore((s) => s.loadSpaces);
+  useEffect(() => {
+    if (unitParam && !spacesLoaded) void loadSpaces();
+  }, [unitParam, spacesLoaded, loadSpaces]);
+  const fixedSpace = unitParam ? spaces.find((x) => x.id === unitParam) : undefined;
+  const waitSpace = !!unitParam && !spacesLoaded;
   const [picked, setPicked] = useState('');
   // 고른 매장이 목록에서 사라지면(나가기·전환) 활성 매장으로 돌아간다.
-  const unitId = stores.some((s) => s.unit_id === picked)
-    ? picked
-    : ((stores.find((s) => s.is_active) ?? stores[0])?.unit_id ?? '');
+  const unitId = fixedSpace
+    ? fixedSpace.id
+    : stores.some((s) => s.unit_id === picked)
+      ? picked
+      : ((stores.find((s) => s.is_active) ?? stores[0])?.unit_id ?? '');
 
   // 대상 목록은 매장마다 다르다. 응답에 어느 매장·몇 번째 요청인지 붙여 두고, 지금 매장과 맞을 때만 쓴다
   // (늦게 온 옛 매장 응답이 새 매장 목록 자리에 들어가지 않는다).
@@ -66,7 +81,7 @@ function ReportBody() {
   const [picks, setPicks] = useState<string | null>(null);
   // 고른 사람이 지금 매장 목록에 없으면(매장을 바꿨다) 안 고른 것으로 본다.
   const targetId = targets?.some((t) => t.user_id === picks) ? picks : null;
-  const [ai, setAi] = useState(false);
+  const [ai, setAi] = useState(params.ai === '1');
   const [category, setCategory] = useState<string | null>(null);
   const [body, setBody] = useState('');
   const [day, setDay] = useState<number | null>(null);
@@ -109,7 +124,9 @@ function ReportBody() {
   };
 
   let content: React.ReactNode;
-  if (stores.length === 0) {
+  if (waitSpace) {
+    return <ScreenLoading label="신고할 사람을 불러오고 있어요…" />;
+  } else if (!fixedSpace && stores.length === 0) {
     content = (
       <View style={styles.card}>
         <Text style={styles.body}>{REPORT_NO_STORE_TEXT}</Text>
@@ -147,7 +164,14 @@ function ReportBody() {
       <View style={styles.card}>
         <Text style={styles.body}>신고 내용은 운영팀만 봐요.</Text>
 
-        {stores.length > 1 && (
+        {fixedSpace ? (
+          <>
+            <Text style={styles.label}>{SPACE_WORDS.place}</Text>
+            <Text style={styles.body}>{fixedSpace.name}</Text>
+          </>
+        ) : null}
+
+        {!fixedSpace && stores.length > 1 && (
           <>
             <Text style={styles.label}>매장</Text>
             <View style={styles.chipWrap}>

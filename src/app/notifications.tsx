@@ -1,16 +1,20 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForegroundRefresh } from '@/lib/app/useForegroundRefresh';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, Redirect } from 'expo-router';
+import { Stack, Redirect, useRouter, type Href } from 'expo-router';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
+import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
+import { showToast } from '@/lib/store/useToastStore';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
+import { accountAckAt, MAX_NOTIFS } from '@/lib/utils/notifications';
+import { buildSpaceNotifRows } from '@/lib/utils/spaceNotifications';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useStoreDisplay } from '@/components/StoreHeaderTitle';
-import { NotificationList, ALL_KIND_UI } from '@/components/NotificationList';
+import { NotificationList, ALL_KIND_UI, type NotifRow } from '@/components/NotificationList';
 import { MarkAllReadButton } from '@/components/MarkAllReadButton';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -22,7 +26,17 @@ import { screenScrollStyle } from '@/lib/theme/layout';
  * 한 리스트에(매장 점·이름 칩). 데이터·판정·탭 동작(전환 후 이동·읽음처리)은 useCrossNotifRows SSOT.
  * 매장 안 벨(/junior·/owner notifications)은 그 매장 알림 — 여기는 전 매장 병합이라는 점만 다르다.
  */
+/** 공간 줄 아이콘 — 같은 대상의 매장 줄과 같은 모양을 쓴다(질문 · 답 온 질문 · 구성원에서 빠짐). */
+const KIND_UI = {
+  ...ALL_KIND_UI,
+  space_question: ALL_KIND_UI.question,
+  space_q_answered: ALL_KIND_UI.q_answered,
+  link_q_answered: ALL_KIND_UI.q_answered,
+  space_deleted: ALL_KIND_UI.member_removed,
+};
+
 export default function HubNotificationsScreen() {
+  const router = useRouter();
   const status = useSessionStore((s) => s.status);
   const hydrateCross = useCrossNotifStore((s) => s.hydrate);
   const crossLoaded = useCrossNotifStore((s) => s.loaded);
@@ -38,7 +52,33 @@ export default function HubNotificationsScreen() {
     void hydrateCross();
   });
   // '모두 읽기' = 내 매장 전부 ack(결정 3 · 훅이 매장 벨과 같은 ackNotifs 를 매장마다 부른다).
-  const { listRows, openRow, hasUnread, markAll } = useCrossNotifRows();
+  const { listRows, openRow, hasUnread: storeUnread, markAll } = useCrossNotifRows();
+  // ★야간 g4a 공간 줄(my_space_notif_data) — 매장 줄과 같은 목록에 시간순으로 섞는다. 읽음 기준은 계정 단위 축(accountAckAt).
+  //   누르면 매장 전환 없이 그 주소로 간다(공간 _layout 이 그 공간에 먼저 들어간다 · /link 는 앱 안 링크).
+  const spaceRaw = useCrossNotifStore((s) => s.spaceRows);
+  const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
+  const ackNotifs = useMemberPrefsStore((s) => s.ackNotifs);
+  const sessionStores = useSessionStore((s) => s.stores);
+  const spaceRows = useMemo(() => buildSpaceNotifRows(spaceRaw, accountAckAt(ackByUnit)), [spaceRaw, ackByUnit]);
+  const rows = useMemo(
+    () => [...listRows, ...spaceRows].sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_NOTIFS),
+    [listRows, spaceRows],
+  );
+  const spaceIds = useMemo(() => new Set(spaceRows.map((r) => r.id)), [spaceRows]);
+  const hasUnread = storeUnread || spaceRows.some((r) => r.unread);
+  const onPress = (r: NotifRow) => {
+    if (spaceIds.has(r.id)) {
+      if (r.route) router.push(r.route as Href);
+      return;
+    }
+    void openRow(r);
+  };
+  // 매장 줄이 안 읽음이면 지금 '모두 읽기' 그대로. 공간 줄만 남았으면 같은 ack(내 매장 전부)로 지운다(계정 단위 축 = 최대 ack).
+  const onMarkAll = () => {
+    if (storeUnread) return markAll();
+    for (const s of sessionStores) void ackNotifs(s.unit_id);
+    showToast('모두 읽음 처리했어요', 'good');
+  };
   // ⛔`&&` 안에서 훅을 부르지 않는다 — 훅을 각각 받은 뒤 AND 한다.
   const ready = crossLoaded && prefsLoaded;
 
@@ -52,16 +92,16 @@ export default function HubNotificationsScreen() {
         options={{ headerShown: false, title: '알림' }}
       />
       {/* 전체 읽음 버튼 = 매장 벨과 같은 부품(MarkAllReadButton) · 같은 자리(제목 상단바 오른쪽 끝). */}
-      <ScreenTitleHeader title="알림" backFallback right={ready && hasUnread ? <MarkAllReadButton onPress={markAll} /> : undefined} />
+      <ScreenTitleHeader title="알림" backFallback right={ready && hasUnread ? <MarkAllReadButton onPress={onMarkAll} /> : undefined} />
       {!ready ? (
         <ScreenLoading label="알림을 불러오고 있어요…" />
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <Appear delay={stagger(0)}>
             <NotificationList
-              rows={listRows}
-              kindUI={ALL_KIND_UI}
-              onPress={(r) => void openRow(r)}
+              rows={rows}
+              kindUI={KIND_UI}
+              onPress={onPress}
               // 게이트가 로드 전을 대신 막는다 — 여기는 **진짜 빈 상태**만 말한다
               // (로드 중을 빈 상태로 위장하지 않는다. 로드 실패는 db.ts readFail 배너가 표면화).
               empty={{

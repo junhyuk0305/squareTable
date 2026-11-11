@@ -304,3 +304,23 @@ export const SPACE_MEMBERS = {
   // 탈퇴 창(0430 space_has_members)
   toSettings: '공간 설정으로 가기',
 } as const;
+
+// night-1111 g4a
+/**
+ * S17 멤버 묻기(사용자 결정 11-11 밤 6 · 결정 146·150) · 앱 안 신고 입구(결정 11).
+ * {owner} = 공간 주인 호칭. 보낸 뒤·답한 뒤·AI 다 씀 문구는 SPACE_WORDS(askSent · answeredBy · aiCapAsker)와 EDU_ASK(notFoundConfirm · sendToOwner)를 같이 쓴다.
+ */
+export const SPACE_ASK = {
+  ask: '질문하기',
+  askFail: '답을 찾지 못했어요. 연결을 확인하고 다시 물어봐 주세요.',
+  sentNote: (owner: string) => `${owner}께 질문을 보냈어요. 답이 오면 알려 드려요.`,
+  /** "보낼까요?"의 그만두기 버튼(대상을 밝힌다 · voice 버튼 규칙). 계약 초안 "괜찮아요"를 다듬었다. */
+  keep: '보내지 않기',
+  servedFrom: (owner: string) => `${owner}이 남긴 노하우예요`,
+  generatedNote: 'AI가 공간 노하우를 모아 정리했어요.',
+  reportEntry: '답이 이상하면 신고하기',
+  waiting: '답 기다림',
+  answerOpen: '답 보기',
+  answerClose: '답 접기',
+  sendFail: '질문을 보내지 못했어요. 연결을 확인하고 다시 보내 주세요.',
+} as const;
