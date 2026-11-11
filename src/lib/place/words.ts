@@ -304,3 +304,14 @@ export const SPACE_MEMBERS = {
   // 탈퇴 창(0430 space_has_members)
   toSettings: '공간 설정으로 가기',
 } as const;
+
+// night-1111 s2
+// 7번 매장 교육 링크(M06 · 0555). 입구 = 노하우 탭 위 "교육 링크" 줄. 화면(g7)이 이 키로 쓴다. 다듬으면 g7 기록에 적는다.
+export const STORE_LINK = {
+  rowTitle: '교육 링크',
+  rowHint: '링크로 매장 노하우를 보여 주고 질문을 받아요',
+  openCount: (n: number) => `열린 링크 ${n}개`,
+  emptyLink: '사장님이 아직 담은 노하우가 없어요. 궁금한 걸 물어보세요.',
+  aiCapAsker: '이번 달 AI 답은 다 썼어요. 사장님께 바로 보냈어요.',
+  pickNoBrand: '본사 노하우는 링크에 담을 수 없어요.',
+} as const;

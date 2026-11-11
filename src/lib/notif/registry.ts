@@ -90,6 +90,7 @@ export const NOTIF = {
   // 사장: 답할 질문(coach?uqId= · 홈 히어로와 같은 입구). 직원: 도와줄 수 있는 질문(물어보기 탭 · 내 공간).
   // ★공간 링크 질문(N2 · 0401): 같은 제목을 서버가 member_notices 'question' 으로 공간 주인에게 보낸다(앱은 안 쏜다).
   //   경로 = /space/answer/<답할 질문>?space=<공간>(서버가 적는다 · 공간 쪽은 아래 space_question 줄). ★0550 질문마다(10분 1회 지움).
+  // ★매장 링크 질문(N3 · 0555): 서버가 같은 제목으로 링크 만든 사장·매니저 한 명에게(나갔으면 사장 전원) 보낸다. 경로 = 이 줄의 사장 경로.
   question: {
     title: (actor) => `${actor}님의 질문`,
     route: (s, id) => (s === 'owner' ? `/owner/coach${id ? `?uqId=${enc(id)}` : ''}` : `/junior/chat${id ? `?uqId=${enc(id)}` : ''}`),

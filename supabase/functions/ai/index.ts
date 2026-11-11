@@ -1245,7 +1245,13 @@ async function handleGuestAnswer(body: any, json: (b: unknown, s?: number) => Re
       | undefined;
     // 0줄 = 닫힌 링크 · 남의 열쇠 · 이미 답한(보낸) 질문. 화면은 답 받기로 지금 상태를 다시 읽는다.
     if (!row) return json({ state: 'skip' });
-    if (row.exceeded) return json({ error: 'ai_quota_exceeded', scope: 'space' }, 402);
+    // ★0555(7번): 402 본문 scope = 그 링크 자리 종류('space' · 'store'). 매장 링크는 매장 한도(요금제)에서 깎인다.
+    //   자리 번호는 ai_context 가 토큰에서 뽑은 것이라 본문 값을 믿지 않는다. 못 읽으면 'space'(예전 값 · 손님 화면은 같은 문구).
+    const quotaScope = async (): Promise<'space' | 'store'> => {
+      const { data: u } = await svc.from('units').select('kind').eq('id', row.unit_id).maybeSingle();
+      return (u as { kind?: string } | null)?.kind === 'store' ? 'store' : 'space';
+    };
+    if (row.exceeded) return json({ error: 'ai_quota_exceeded', scope: await quotaScope() }, 402);
     release = async () => {
       const { error: rErr } = await svc.rpc('edu_link_ai_release', { p_token: token, p_key: key, p_cq: cqId });
       if (rErr) console.error('edu_link_ai_release failed:', rErr.message);
@@ -1257,7 +1263,7 @@ async function handleGuestAnswer(body: any, json: (b: unknown, s?: number) => Re
     if (!rv.ok || !rv.allowed) {
       await release();
       release = null;
-      return json({ error: 'ai_quota_exceeded', scope: 'space' }, 402);
+      return json({ error: 'ai_quota_exceeded', scope: await quotaScope() }, 402);
     }
     refund = async () => { await aiQuotaRefund(row.unit_id, 1, quotaKey); };
 

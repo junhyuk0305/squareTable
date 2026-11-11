@@ -174,7 +174,9 @@ try {
     //   계정 단위 허브 행(buildJoinNotifRows)으로 셋 다 받는다. N7 = 대기 요청 파생 행 · N8 = fetchJoinNotices 가 join_approved 를 읽는다.
     'mn:join_request': { owner: 'hub:space_join_request', manager: 'hub:space_join_request', junior: 'hub:space_join_request' },
     'mn:join_approved': { owner: 'hub:space_join_approved', manager: 'hub:space_join_approved', junior: 'hub:space_join_approved' },
-    'mn:question': {}, // ★0401 공간 링크 질문(N2 · edu_link_send) · ★0551 멤버 질문(space_question_send) → 공간 주인. 공간 역할은 이 표의 ROLES 밖이다. 벨은 답할 질문 목록에서 파생(레지스트리 space_question)
+    // ★0401 공간 링크 질문(N2 · edu_link_send) · ★0551 멤버 질문(space_question_send) → 공간 주인. 공간 역할은 이 표의 ROLES 밖이다. 벨은 답할 질문 목록에서 파생(레지스트리 space_question)
+    // ★0555 매장 링크 질문(N3 · _edu_link_escalate 매장 갈래) → 링크 만든 사장·매니저 한 명(나갔으면 사장 전원). 벨 = 답할 질문 파생 행 'question'
+    'mn:question': { owner: 'question', manager: 'question' },
     // ── 서버 크론 발송(그 밖) ──
     'cron:owner_alerts': { owner: 'src:const raw of alerts' }, // 0191 · ownerRows 가 owner_alerts 행을 그대로 그린다
     'cron:task_reminders': { manager: 'assign', junior: 'assign' }, // 배정된 할일 시각 — 배정 행

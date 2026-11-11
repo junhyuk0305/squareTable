@@ -5271,3 +5271,35 @@ export async function eduLinkMeKey(linkId: string): Promise<DbResult<{ token: st
   const row = r.data?.[0];
   return row ? { data: { token: row.token, key: row.key, name: row.name ?? '' }, error: null } : { data: null, error: { message: 'link_closed' } };
 }
+
+// night-1111 s2
+// 7번 매장 교육 링크(0555). 화면(g7)이 노하우 탭 위 "교육 링크" 줄과 만들기 고르기 목록에 쓴다.
+
+/** 교육 링크 스위치('store'|'space','edu_links'). 서버가 계정 판정(허용 목록 또는 edu_links+edu_guest)을 이미 적용한 값이다.
+ *  켜진 계정만 매장 노하우 탭 위 "교육 링크" 줄을 그린다. 줄이 없으면 꺼짐(지금 화면). */
+export function eduLinksOpenOf(features: KindFeature[], kind: 'store' | 'space'): boolean {
+  return features.some((f) => f.kind === kind && f.feature === 'edu_links' && f.enabled === true);
+}
+
+/** 매장 링크에 담을 수 있는 노하우 — fetchEduLinkPickEntries 조건 + 본사 노하우(사본) 빼기(서버 _edu_link_check_entries 와 같은 조건 · 0555). */
+export async function fetchStoreEduLinkPickEntries(unitId: string): Promise<DbResult<EduLinkPickEntry[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase
+    .from('playbook_entries')
+    .select('id, title, status')
+    .eq('unit_id', unitId)
+    .in('status', ['draft', 'published'])
+    .is('archived_at', null)
+    .is('brand_hidden_at', null)
+    .is('brand_entry_id', null)
+    .order('created_at', { ascending: false })
+    .limit(PAGE_LIMIT);
+  if (error) {
+    readFail('fetchStoreEduLinkPickEntries', error);
+    return { data: null, error: error as DbErr };
+  }
+  return {
+    data: ((data as any[]) ?? []).map((r) => ({ id: r.id, title: r.title ?? '', status: r.status ?? '' })),
+    error: null,
+  };
+}
