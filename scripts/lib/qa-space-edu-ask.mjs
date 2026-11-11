@@ -3,8 +3,8 @@
 //
 // 무엇을 증명하나: 손님 함수는 토큰이 곧 열쇠다(틀린·닫힌·만료·지운 자리·기능 꺼진 링크 = link_closed) · 손님 열쇠 없이는
 //   남의 질문·답을 못 읽는다(같은 링크 다른 손님도) · 로그인한 브라우저도 손님으로 돈다 · 보내기 전에는 주인 목록에 안 뜬다 ·
-//   보내면 답할 질문 1개 + 주인 알림 1개(10분에 한 번) · 주인 답(보내기 답 글 · 노하우)이 손님에게 돌아온다 ·
-//   AI 재료에 이름이 없다 · 질문 하나에 AI 한 번 · AI 를 다 쓰면 바로 보낸다 · 빈도 제한 · 신고 · 앱 안 신고가 공간에서도 된다.
+//   보내면 답할 질문 1개 + 주인 알림 1개(★0550 질문마다 · 줄바꿈·제어문자 정리 · 길이 상한) · 주인 답(보내기 답 글 · 노하우)이 손님에게 돌아온다 ·
+//   AI 재료에 이름이 없다 · 질문 하나에 AI 한 번 · AI 를 다 쓰면 바로 보낸다 · ★0550 빈도 제한 없음 · 신고 · 앱 안 신고가 공간에서도 된다.
 // 방식: 한 트랜잭션 안에서 계정·공간·매장·링크를 심고 끝에 rollback 한다 = 공유 로컬 DB 흔적 0(데모 매장을 안 쓴다).
 //   호출은 역할(anon · authenticated · service_role)과 JWT 클레임을 흉내 낸다. 앞 호출이 돌려준 열쇠·질문 번호는
 //   서비스 권한 임시 표에 담아 {K:이름} {C:이름} {U:이름} 자리에 채운다.
@@ -176,7 +176,7 @@ ${val('만족도 down 남김', `select coalesce(satisfaction, '-') from public.c
 ${val('주인 알림 1개(주인만 · 멤버 안 감) · 제목 · 경로', `select string_agg(user_id::text || '/' || kind || '/' || title || '/' || (url = '/space/answer/' || {U:g1} || '?space=' || ${q(SP)}), ',') from public.member_notices where unit_id = ${q(SP)}`, `${U.O}/question/지은님의 질문/true`)}
 ${call('두 번 눌러도 한 번', null, 'anon', `select public.edu_link_send(${q(TK)}, {K:g1}, {C:g1}, false)::text`, 'ok|false')}
 ${call('못 찾음 → 보내기(하늘)', 'Z', 'authenticated', `select public.edu_link_send(${q(TK)}, {K:g2}, {C:g2}, false)::text`, 'ok|true')}
-${val('답할 질문 2 · 알림은 10분에 한 번(그대로 1)', `select (select count(*) from public.unknown_queries where unit_id = ${q(SP)}) || '/' || (select count(*) from public.member_notices where unit_id = ${q(SP)} and kind = 'question')`, '2/1')}
+${val('답할 질문 2 · 알림은 질문마다(★0550 · 2)', `select (select count(*) from public.unknown_queries where unit_id = ${q(SP)}) || '/' || (select count(*) from public.member_notices where unit_id = ${q(SP)} and kind = 'question')`, '2/2')}
 ${val('하늘 질문도 계정 칸 비움(로그인 Z)', `select coalesce(junior_id, '-') || '/' || junior_name from public.unknown_queries where id = {U:g2}`, '-/하늘')}
 ${call('지은 = 기다림 상태', null, 'anon', `select state from public.edu_link_answers(${q(TK)}, {K:g1}) where cq_id = {C:g1}`, 'ok|waiting')}
 ${call('공간 멤버는 손님 질문을 못 읽음', 'M', 'authenticated', `select count(*) from public.unknown_queries where unit_id = ${q(SP)}`, 'ok|0')}
@@ -212,21 +212,26 @@ ${call('앱 안 신고: 공간 대상 목록', 'M', 'authenticated', `select str
 ${call('앱 안 신고: 매장은 그대로(사장)', 'D', 'authenticated', `select (public.submit_user_report(${q(X)}, null, 'ai_answer', 'AI 답이 이상해요', null) is not null)::text`, 'ok|true')}
 ${val('매장 신고 행 = owner', `select string_agg(reporter_role, ',') from public.user_reports where unit_id = ${q(X)}`, 'owner')}
 
--- ── 빈도 제한 ──
-${call('제한 링크 첫 질문', null, 'anon', ask(TK2, 'null', '바다', '첫 질문'), 'ok|gk_*', 'g3')}
+-- ── ★0550 빈도 제한 없음(결정 4 · 예전: 손님 10분 10개 · 링크 10분 30개) ──
+${call('링크 첫 질문', null, 'anon', ask(TK2, 'null', '바다', '첫 질문'), 'ok|gk_*', 'g3')}
 insert into public.chat_queries(id, unit_id, junior_name, query_text, link_id)
   select 'qa_eacq_g' || g || '_${rnd}', ${q(SP)}, '바다', '채움 ' || g, 'qa_eal7_${rnd}' from generate_series(1, 9) g;
 insert into public.edu_guest_questions(cq_id, guest_id, link_id)
   select 'qa_eacq_g' || g || '_${rnd}', x.id, 'qa_eal7_${rnd}'
     from generate_series(1, 9) g, public.edu_link_guests x where x.link_id = 'qa_eal7_${rnd}';   -- 손님이 없으면(마이그레이션 전) 0행
-${call('손님 하나 10분 10개 넘으면 거절', null, 'anon', ask(TK2, K_('g3'), null, '열한 번째'), 'err:too_many_questions')}
-${call('같은 링크의 다른 손님은 됨', null, 'anon', ask(TK2, 'null', '구름', '다른 사람 질문'), 'ok|gk_*')}
+${call('손님 하나 10분 11번째도 됨', null, 'anon', ask(TK2, K_('g3'), null, '열한 번째'), 'ok|-|*')}
+${call('같은 링크의 다른 손님도 됨', null, 'anon', ask(TK2, 'null', '구름', '다른 사람 질문'), 'ok|gk_*')}
 insert into public.chat_queries(id, unit_id, junior_name, query_text, link_id)
   select 'qa_eacq_l' || g || '_${rnd}', ${q(SP)}, '여럿', '채움 ' || g, 'qa_eal8_${rnd}' from generate_series(1, 30) g;
-${call('링크 하나 10분 30개 넘으면 새 손님도 거절', null, 'anon', ask(TK3, 'null', '새사람', '서른한 번째'), 'err:too_many_questions')}
-${val('제한에 걸린 새 손님은 안 남음', `select count(*) from public.edu_link_guests where link_id = 'qa_eal8_${rnd}'`, '0')}
-update public.chat_queries set asked_at = now() - interval '11 minutes' where link_id = 'qa_eal8_${rnd}';
-${call('10분 지나면 다시 됨', null, 'anon', ask(TK3, 'null', '새사람', '다시 질문'), 'ok|gk_*')}
+${call('링크 하나 10분 31번째 새 손님도 됨', null, 'anon', ask(TK3, 'null', '새사람', '서른한 번째'), 'ok|gk_*')}
+${val('새 손님이 남음', `select count(*) from public.edu_link_guests where link_id = 'qa_eal8_${rnd}'`, '1')}
+
+-- ── ★0550 푸시 글 정리(결정 5) — 줄바꿈·탭·줄 구분자·제어문자 → 빈칸 · 이름 20자 · 본문 120자 ──
+${call('줄바꿈 든 이름으로 묻기', null, 'anon', ask(TK2, 'null', '줄\n바꿈', '첫 줄\n\n둘째\t줄' + String.fromCharCode(8232) + '셋째' + String.fromCharCode(7) + '줄 ' + '가'.repeat(200)), 'ok|gk_*', 'g4')}
+${call('보내기 → 주인 알림', null, 'anon', `select public.edu_link_send(${q(TK2)}, {K:g4}, {C:g4}, false)::text`, 'ok|true')}
+${val('알림 제목 = 정리한 이름', `select title from public.member_notices where url like '%' || {U:g4} || '%'`, '줄 바꿈님의 질문')}
+${val('알림 본문 = 한 줄 · 120자 · 말줄임 · 앞부분 그대로', `select (body !~ '[[:cntrl:]]')::text || '/' || char_length(body) || '/' || right(body, 1) || '/' || left(body, 13) from public.member_notices where url like '%' || {U:g4} || '%'`, 'true/120/…/첫 줄 둘째 줄 셋째 줄')}
+${val('질문 글 자체는 그대로(주인 답하기 화면은 원문)', `select (query_text ~ E'\\n')::text from public.unknown_queries where id = {U:g4}`, 'true')}
 
 -- ── 닫거나 지우면 전부 끊김 ──
 ${call('주인이 링크 닫기', 'O', 'authenticated', `select public.edu_link_close(${q(L1)})::text`, 'ok|')}

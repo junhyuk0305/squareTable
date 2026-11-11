@@ -773,7 +773,7 @@ ${[
   ['만료된 링크 → 열기 실패', '', 0, `select o.ok::text from public.edu_link_open('qatok3_${rnd}_aaaaaaaaaaaa') o`, 'ok|false'],
   ['지운 자리 링크 → 열기 실패', '', 0, `select o.ok::text from public.edu_link_open('qatok5_${rnd}_aaaaaaaaaaaa') o`, 'ok|false'],
   ['닫힘·만료·틀린 토큰 → 노하우 0행', '', 0, `select count(*)::text from (select * from public.edu_link_entries('qatok2_${rnd}_aaaaaaaaaaaa') union all select * from public.edu_link_entries('qatok3_${rnd}_aaaaaaaaaaaa') union all select * from public.edu_link_entries('nope_nope_nope_nope_nope')) s`, 'ok|0'],
-  ['매장 링크 열림 · 종류 store · 매장 노하우 1개 · 주인 이름 없음', '', 0, `select o.ok || '/' || o.place_kind || '/' || o.entry_count || '/' || coalesce(o.owner_name, '-') from public.edu_link_open('qatok6_${rnd}_aaaaaaaaaaaa') o`, 'ok|true/store/1/-'],
+  ['매장 링크(기능 줄 꺼짐 · ★0550 판정 한 곳 _edu_link_live) → 열기 실패', '', 0, `select o.ok::text from public.edu_link_open('qatok6_${rnd}_aaaaaaaaaaaa') o`, 'ok|false'],
   ['공간 링크 열기에 공간 주인 이름(A)', '', 0, `select coalesce(o.owner_name, '-') from public.edu_link_open('qatok4_${rnd}_aaaaaaaaaaaa') o`, 'ok|QAA'],
   ['토큰 검사 함수는 손님이 못 부름', '', 0, `select (public.edu_link_resolve('qatok1_${rnd}_aaaaaaaaaaaa')).id`, 'err:permission denied'],
   ['링크 표를 손님이 못 읽음', '', 0, `select count(*)::text from public.edu_links`, 'err:permission denied'],
@@ -1297,7 +1297,7 @@ ${chk('틀린 코드 5번이면 맞는 코드도 잠김(매장 합류와 같은 
 -- 링크로 온 사람의 멤버 요청
 ${chk('닫힌 링크로 요청 거절', 'err|link_closed', req('R', TKC, false))}
 ${chk('없는 토큰으로 요청 거절', 'err|link_closed', req('R', `nope_${rnd}_${rnd}_xx`, false))}
-${chk('매장 링크로 요청 거절', 'err|feature_off', req('R', TKX, false))}
+${chk('매장 링크로 요청 거절(★0550 기능 꺼진 링크 = 닫힌 링크)', 'err|link_closed', req('R', TKX, false))}
 ${chk('입구 닫힌 계정 요청 거절', 'err|space_closed', req('G', TK, false))}
 ${chk('이미 멤버는 요청 거절', 'err|already_member', req('Q', TK, false))}
 ${chk('요청 됨', 'ok|true', req('R', TK))}
