@@ -80,3 +80,10 @@ export function placeErrorCode(err: DbErr | null | undefined): string | null {
   const code = (err?.message ?? '').split(/[\s:]/)[0];
   return code || null;
 }
+
+// night-1111 s1
+// 멤버 묻기(0551) · 이어받기(0552). MESSAGES 표는 위에 있다. 두 서버 줄이 이 파일 끝에 덧붙이므로 합칠 때 둘 다 살린다.
+Object.assign(MESSAGES, {
+  practice_only: '공간 주인의 질문은 연습이라 저장하지 않아요.',
+  handoff_busy: '잠시 뒤 다시 눌러 주세요.',
+} satisfies Record<string, string>);

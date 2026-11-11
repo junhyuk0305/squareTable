@@ -23,7 +23,7 @@ import { QUIZ_FORMATS } from './quizFormats.ts';
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-// AI 사용량 차감(consume_ai_quota_for, 0276)만 쓴다 — 그 함수는 클라에 닫혀 있다(E9).
+// AI 사용량 예약·돌려주기·차감(ai_quota_reserve · ai_quota_refund 0554 · consume_ai_quota_for 0276)과 손님 링크 함수만 쓴다 — 전부 클라에 닫혀 있다(E9).
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 // ⚠️ 2026-07-10: gemini-2.5-flash-lite 퇴역(404 "no longer available")으로 생성 전 경로가 죽었었다
 //   — 클라 mock 폴백(degraded)이 장애를 가려 조용히 열화됨. 후속 안정판으로 교체.
@@ -340,7 +340,7 @@ function userClient(authz: string) {
   });
 }
 
-// 서비스 키 클라(RLS 우회) — AI 사용량 차감 한 곳에서만 쓴다. 매장 id 는 authUser 가 JWT 로 판정한 값이다.
+// 서비스 키 클라(RLS 우회) — AI 사용량 예약·차감과 손님 링크 함수에서만 쓴다. 매장 id 는 authUser 가 JWT 로 판정한 값이다.
 function serviceClient() {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 }
@@ -373,34 +373,38 @@ function docExtractPages(usage: unknown): number {
   return Math.min(Math.max(Math.round(pageTokens / PDF_TOKENS_PER_PAGE), 1), 60);
 }
 
-// 쿼터 사전판정(비차감). 카운트는 "성공 서빙된 뒤" consume_ai_quota_for(0276) 로만 올린다 —
-// LLM 5xx/타임아웃에 대한 클라 재시도가 같은 요청을 이중차감하는 것을 막는다(실패는 공짜).
+// ★0554 쿼터 예약(원자적 · 야간 s1 · 사용자 결정 11-11 밤 10). 예전에는 "비차감 사전판정(ai_quota_status ·
+//   ai_quota_status_at) → 모델 → 사후 차감(consume_ai_quota_for)"이라 그 사이 틈으로 남은 양 1 에 동시 요청 여럿이 통과했다.
+//   이제 모델을 부르기 전에 ai_quota_reserve 한 번으로 판정과 차감을 같이 한다((자리 · 달) 잠금 안 · DB 한 곳).
+//   모델을 안 불렀거나 실패하면(rejected · error · throw) ai_quota_refund 로 돌려준다 → "실패는 공짜" 규칙은 그대로다.
+//   요청 키 재시도 규칙(0302 · 두 번째 한 번만 무료)과 사장 80%·100% 알림은 DB 가 consume_ai_quota_for 로 그대로 돌린다.
 //
-// ★ 판정 규칙을 여기서 재구현하지 않는다. ai_quota_status(p_units)(0193) 하나만 부른다.
-//   이전에는 캡 숫자(300)와 "유료=무제한" 규칙을 엣지가 자기 상수로 들고 있어서 DB 정본과
-//   어긋났다. 플랜별 캡·월 경계(KST)·free_mode 우회는 전부 DB 함수의 책임이다.
+// ★ 판정 규칙을 여기서 재구현하지 않는다. 플랜별 캡·월 경계(KST)·free_mode 우회는 전부 DB 함수(unit_ai_cap 0369)의 책임이다.
+//   서비스 키로 부르지만 자리 번호는 placeUser(JWT) 가 정한 값만 넘긴다(본문 값을 안 믿는다).
 //
-// 읽기는 호출자 JWT + RLS(자기 매장 행만)라 추가 격리 게이트 불요. 오류는 전부 fail-open —
-// 과금 인프라 장애가 파일럿 답변을 막는 게 더 큰 사고다(subscription.ts 의 fail-open 철학과 동일).
-//
-// ★공간 갈래(2번 덩이 · 3판 11장): spaceId 가 있으면(= authUser 가 현재 공간으로 판정한 요청) 그 자리의 상태를
-//   ai_quota_status_at(p_unit, p_extra) 로 본다. 상한 숫자·무료 모드 무시는 DB(unit_ai_cap 0369) 한 곳이 정한다.
-//   공간은 **닫힌 쪽**으로 틀린다(판정 불가 = 막음): 공간 상한은 비용을 막는 유일한 장치이고(결정 137),
-//   차감(consume_ai_quota_for)은 카운터로만 쓰여 이 사전판정이 유일한 문이다. 매장 갈래는 위 fail-open 그대로다.
-async function aiQuotaBlocked(authz: string, units: number, spaceId: string | null = null): Promise<{ blocked: boolean; used: number; cap: number }> {
-  const sb = userClient(authz);
-  if (spaceId) {
-    const { data, error } = await sb.rpc('ai_quota_status_at', { p_unit: spaceId, p_extra: units });
-    if (error) { console.error('ai_quota_status_at failed (space fail-closed):', error.message); return { blocked: true, used: 0, cap: 0 }; }
+// 예약 호출 자체가 실패하면(인프라 · 옛 DB 에 함수 없음):
+//   매장 = fail-open(통과 · 사후 차감) — 과금 인프라 장애가 파일럿 답변을 막는 게 더 큰 사고다(subscription.ts 와 같은 철학).
+//   공간 = 닫힌 쪽(402) — 공간 상한은 비용을 막는 유일한 장치다(결정 137 · R5).
+type QuotaReserve = { ok: true; allowed: boolean; used: number; cap: number } | { ok: false };
+async function aiQuotaReserve(unitId: string, units: number, requestKey: string | null): Promise<QuotaReserve> {
+  try {
+    const { data, error } = await serviceClient().rpc('ai_quota_reserve', { p_unit: unitId, p_units: units, p_request_key: requestKey });
+    if (error) { console.error('ai_quota_reserve failed:', error.message); return { ok: false }; }
     const row = Array.isArray(data) ? data[0] : data;
-    if (!row) return { blocked: true, used: 0, cap: 0 };
-    return { blocked: row.exceeded === true, used: row.used_count ?? 0, cap: row.cap_count ?? 0 };
+    if (!row) return { ok: false };
+    return { ok: true, allowed: row.allowed === true, used: row.used_count ?? 0, cap: row.cap_count ?? 0 };
+  } catch (e) {
+    console.error('ai_quota_reserve threw:', e);
+    return { ok: false };
   }
-  const { data, error } = await sb.rpc('ai_quota_status', { p_units: units });
-  if (error) return { blocked: false, used: 0, cap: 0 }; // 판정 불가 → 통과(fail-open)
-  const row = Array.isArray(data) ? data[0] : data;
-  if (!row) return { blocked: false, used: 0, cap: 0 };
-  return { blocked: row.exceeded === true, used: row.used_count ?? 0, cap: row.cap_count ?? 0 };
+}
+async function aiQuotaRefund(unitId: string, units: number, requestKey: string | null): Promise<void> {
+  try {
+    const { error } = await serviceClient().rpc('ai_quota_refund', { p_unit: unitId, p_units: units, p_request_key: requestKey });
+    if (error) console.error('ai_quota_refund failed:', error.message);
+  } catch (e) {
+    console.error('ai_quota_refund threw:', e);
+  }
 }
 
 // 색인 텍스트 지문(djb2). ★정본은 src/lib/ai/embedText.ts 의 embedTextHash 다 —
@@ -1213,8 +1217,9 @@ async function handleDocExtract(payload: any) {
 // ★손님 이름은 AI 로 안 보낸다(처리방침 v2.5). edu_link_ai_context 가 이름을 아예 주지 않는다. 보내는 것 = 질문 글 + 노하우.
 // 질문 하나 = AI 한 번: ai_context 는 아직 AI 가 안 본 질문의 차례를 원자적으로 잡고 준다(동시 호출은 하나만 받는다).
 //   답을 적으면(못 찾음도) 다시 못 부른다. 모델 오류·시간 초과면 edu_link_ai_release 로 차례를 푼다(못 찾음으로 굳히지 않는다).
-// 차감 = 그 자리 사용량(공간 상한 · unit_ai_cap). 사전판정은 ai_context 의 exceeded(닫힌 쪽) 하나다. 요청 키 = 질문 번호.
-// 레이트리밋 = 링크(토큰)당 분당 RATE_PER_MIN. 링크별 질문 빈도 제한(10분 30개)은 DB 가 먼저 건다.
+// 차감 = 그 자리 사용량(공간 상한 · unit_ai_cap). ★0554: 차례를 잡은 뒤 ai_quota_reserve 로 예약(닫힌 쪽) · 모델 실패·거절이면 돌려준다.
+//   ai_context 의 exceeded 는 미리 보기다. 요청 키 = 질문 번호.
+// 레이트리밋 = 링크(토큰)당 분당 RATE_PER_MIN(연타 방지). ★0550: DB 의 질문 빈도 제한(10분 30개)은 지웠다(결정 4).
 const GUEST_TASK = 'edu_link_answer';
 const GUEST_ID_RE = /^[A-Za-z0-9_-]{20,100}$/;
 
@@ -1229,6 +1234,9 @@ async function handleGuestAnswer(body: any, json: (b: unknown, s?: number) => Re
   const svc = serviceClient();
   // 차례를 잡은 뒤 어디서 던지든 차례를 푼다(release 는 pending 일 때만 바꿔 결과가 적힌 뒤 불려도 무해하다).
   let release: (() => Promise<void>) | null = null;
+  // ★0554: 예약한 한도를 돌려준다(모델을 안 불렀거나 실패한 요청). 한 번만 부른다.
+  let refund: (() => Promise<void>) | null = null;
+  const giveBack = async () => { const f = refund; refund = null; if (f) await f(); };
   try {
     const { data, error } = await svc.rpc('edu_link_ai_context', { p_token: token, p_key: key, p_cq: cqId });
     if (error) { console.error('edu_link_ai_context failed:', error.message); return json({ error: 'internal_error' }, 500); }
@@ -1242,6 +1250,16 @@ async function handleGuestAnswer(body: any, json: (b: unknown, s?: number) => Re
       const { error: rErr } = await svc.rpc('edu_link_ai_release', { p_token: token, p_key: key, p_cq: cqId });
       if (rErr) console.error('edu_link_ai_release failed:', rErr.message);
     };
+    // ★0554: 차례를 잡은 뒤 그 자리 한도를 원자적으로 예약한다(ai_context 의 exceeded 는 미리 보기). 허용 아니면 차례를 풀고 402.
+    //   예약 호출이 실패해도 닫힌 쪽(402)이다 — 손님 갈래는 로그인이 없어 열린 쪽으로 틀리면 비용을 막을 길이 없다.
+    const quotaKey = `edu:${cqId}`;
+    const rv = await aiQuotaReserve(row.unit_id, 1, quotaKey);
+    if (!rv.ok || !rv.allowed) {
+      await release();
+      release = null;
+      return json({ error: 'ai_quota_exceeded', scope: 'space' }, 402);
+    }
+    refund = async () => { await aiQuotaRefund(row.unit_id, 1, quotaKey); };
 
     const writeResult = async (ids: string[] | null, block: unknown) => {
       const { error: wErr } = await svc.rpc('edu_link_ai_result', {
@@ -1251,7 +1269,7 @@ async function handleGuestAnswer(body: any, json: (b: unknown, s?: number) => Re
     };
 
     const entries = Array.isArray(row.entries) ? row.entries : [];
-    if (entries.length === 0) { await writeResult(null, null); return json({ grounded: false }); }
+    if (entries.length === 0) { await writeResult(null, null); await giveBack(); return json({ grounded: false }); }   // 모델 안 부름 → 돌려줌
 
     // 노하우가 많으면 링크 범위 벡터 검색으로 줄인다(색인 없는 노하우는 빠진다 · 결과가 없거나 검색이 실패하면 앞쪽 12개).
     let picked = entries.slice(0, MAX_SOPS);
@@ -1284,6 +1302,7 @@ async function handleGuestAnswer(body: any, json: (b: unknown, s?: number) => Re
     // 모델이 실패했으면(검증·답 생성 실패) 차례만 풀고 끝낸다. 잡음 입력(junk_input)은 "못 찾음"으로 적는다.
     if (ai.error || (ai.rejected && ai.rejected !== 'junk_input')) {
       await release?.();
+      await giveBack();
       return json({ error: 'ai_failed' }, 503);
     }
     const grounded = ai.grounded === true && !!ai.block && Array.isArray(ai.usedSopIds) && ai.usedSopIds.length > 0;
@@ -1292,15 +1311,13 @@ async function handleGuestAnswer(body: any, json: (b: unknown, s?: number) => Re
       : null;
     await writeResult(grounded ? ai.usedSopIds : null, block);
 
-    // 모델을 불렀으면 센다(거절·실패는 안 센다 · 아래 본 갈래와 같은 규칙).
-    if (!ai.rejected) {
-      const { error: cErr } = await svc.rpc('consume_ai_quota_for', { p_unit: row.unit_id, p_units: 1, p_request_key: `edu:${cqId}` });
-      if (cErr) console.error('consume_ai_quota_for (guest) error:', cErr.message ?? cErr);
-    }
+    // 거절(잡음 입력)은 안 센다(아래 본 갈래와 같은 규칙) → 예약을 돌려준다. ★0554: 사후 차감 줄은 지웠다(예약이 이미 셌다).
+    if (ai.rejected) await giveBack();
     return json({ grounded, block });
   } catch (e) {
     console.error('guest answer error:', e);
     if (release) { try { await release(); } catch { /* 2분 뒤 다시 잡을 수 있다 */ } }
+    await giveBack();
     return json({ error: 'internal_error' }, 500);
   }
 }
@@ -1384,6 +1401,9 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'rate_limited' }, 429);
   }
 
+  // ★0554: 예약한 단위(모델을 안 불렀거나 실패하면 돌려준다). 바깥 catch 도 돌려주게 try 밖에 둔다.
+  let reservedUnits = 0;
+  let reservedKey: string | null = null;
   try {
     if (bodyErr) throw bodyErr;
     const task = body?.task;
@@ -1394,25 +1414,30 @@ Deno.serve(async (req: Request) => {
     const rid = typeof body?.requestId === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(body.requestId) ? body.requestId : null;
     const requestKey = rid ? `${user.id}:${rid}` : null;
 
-    // 3) AI 월 쿼터(0193) — 가중치 표 AI_UNITS 의 단위가 0보다 큰 태스크만. 진입 시엔 "비차감 사전판정"
-    //    (남은 양 < 필요 단위면 402), 차감은 성공 서빙 후(아래)로 미룬다.
-    //    ⚠️ 쿼터 인프라 장애는 fail-open: 과금 로직이 파일럿 답변을 막는 게 더 큰 사고
-    //    (subscription.ts 의 fail-open 철학과 동일). 로그만 남기고 통과시킨다.
+    // 3) AI 월 쿼터(0193) — 가중치 표 AI_UNITS 의 단위가 0보다 큰 태스크만.
+    //    ★0554: 진입 때 ai_quota_reserve 로 판정과 차감을 한 번에 한다(남은 양 < 필요 단위면 402 · 확인과 차감 사이 틈 없음).
+    //    모델을 안 불렀거나 실패하면 아래에서 돌려준다. doc_extract 는 1 단위를 예약하고 실제 쪽수로 맞춘다.
+    //    ⚠️ 예약 호출 자체가 실패하면 매장 = fail-open(통과 · 사후 차감 · subscription.ts 와 같은 철학) · 공간 = 402(닫힌 쪽 · 결정 137).
     //    (2026-09-13 전환: 종전엔 답변만 차감했고 quiz_item·doc_extract 는 '제작·입력 수단'이라 비차감이었다.
     //     원가가 퀴즈 최대 20원·PDF 최대 135원이라 캡 밖에 두면 무료 매장이 원가를 무한히 쓸 수 있어 합산으로 바꿨다.)
     //    ★사장 에스컬레이션(직원 질문 → 사장 1탭)은 이 함수를 부르지 않는다 — 클라가 질문 행만 쓴다(캡 미적용, 2026-07-21).
     const unitsBefore = aiUnitsBefore(task);
-    if (unitsBefore > 0) {
-      try {
-        const q = await aiQuotaBlocked(authz, unitsBefore, user.space ? user.unitId : null);
-        if (q.blocked) {
-          // ★공간: scope 를 붙여 앱이 매장 상한(요금제 안내)과 가른다(client.ts AiQuotaScope). 매장 본문은 글자 그대로.
-          return json(user.space
-            ? { error: 'ai_quota_exceeded', scope: 'space', used: q.used, cap: q.cap }
-            : { error: 'ai_quota_exceeded', used: q.used, cap: q.cap }, 402);
-        }
-      } catch (e) {
-        console.error('aiQuotaBlocked failed (fail-open):', e);
+    let postCharge = false;   // 예약을 못 한 매장 요청(fail-open) = 예전처럼 사후 차감
+    if (unitsBefore > 0 && user.unitId) {
+      const rv = await aiQuotaReserve(user.unitId, unitsBefore, requestKey);
+      if (rv.ok && !rv.allowed) {
+        // ★공간: scope 를 붙여 앱이 매장 상한(요금제 안내)과 가른다(client.ts AiQuotaScope). 매장 본문은 글자 그대로.
+        return json(user.space
+          ? { error: 'ai_quota_exceeded', scope: 'space', used: rv.used, cap: rv.cap }
+          : { error: 'ai_quota_exceeded', used: rv.used, cap: rv.cap }, 402);
+      }
+      if (!rv.ok) {
+        if (user.space) return json({ error: 'ai_quota_exceeded', scope: 'space', used: 0, cap: 0 }, 402);   // R5 닫힌 쪽
+        console.error('ai_quota_reserve unavailable (store fail-open · post-serve charge)');
+        postCharge = true;
+      } else {
+        reservedUnits = unitsBefore;
+        reservedKey = requestKey;
       }
     }
 
@@ -1438,27 +1463,40 @@ Deno.serve(async (req: Request) => {
                         ? await handleQuizItem(payload)
                         : await handleAnswer(payload);
 
-    // 실제로 서빙된 경우에만 월 카운터 증가(consume_ai_quota(p_units), 0193 — 여기선 카운터로만 쓰고
-    // allowed 판정은 위 사전판정이 담당). 실패(throw)·정크 거절은 미차감 → 재시도 이중차감 없음.
+    // 실제로 서빙된 경우에만 센다. 실패(throw)·정크 거절은 미차감 → 재시도 이중차감 없음.
     // 응답 전에 await(엣지 런타임이 응답 후 백그라운드 작업을 보장하지 않음). 실패는 관대(undercount 허용).
     // ★rejected·error 가 붙은 결과는 종류를 가리지 않고 미차감 — "모델을 안 불렀으면 안 받는다"가 규칙이고,
     //   거절 사유를 여기에 하나씩 나열하면 새 사유가 생길 때마다 조용히 과금되는 구멍이 난다.
     //   (doc_extract 의 형식 거부·용량 초과·업스트림 거부는 error 로 돌아온다.)
+    // ★0554: 예약했으면 미차감 = 돌려주기(ai_quota_refund). doc_extract 는 1 을 예약했으니 실제 쪽수 - 1 만 더 센다(0쪽 = 돌려주기).
+    //   더 세는 몫의 요청 키는 따로 둔다(`<키>:pages`) — 같은 키를 쓰면 0302 규칙이 "두 번째 = 무료 재시도"로 본다.
     const served = result as { rejected?: string; error?: string; usage?: unknown };
     const unitsAfter = task === 'doc_extract' ? docExtractPages(served?.usage) : unitsBefore;
-    if (unitsAfter > 0 && !served?.rejected && !served?.error) {
-      try {
-        // ★E9(0276): 클라가 직접 못 부르는 서버 전용 함수로, 매장 id·요청 키를 넘겨 차감한다.
-        //   ★공간: user.unitId 가 공간 번호면 그 공간 사용량을 깎는다. 공간에는 사장 알림을 넣지 않는다(0369 함수 안).
+    const servedOk = !served?.rejected && !served?.error;
+    try {
+      if (reservedUnits > 0) {
+        if (!servedOk || unitsAfter <= 0) {
+          await aiQuotaRefund(user.unitId!, reservedUnits, reservedKey);
+        } else if (unitsAfter > reservedUnits) {
+          const { error: cErr } = await serviceClient().rpc('consume_ai_quota_for', {
+            p_unit: user.unitId, p_units: unitsAfter - reservedUnits, p_request_key: reservedKey ? `${reservedKey}:pages` : null,
+          });
+          if (cErr) console.error('consume_ai_quota_for (extra pages) error:', cErr.message ?? cErr);
+        }
+        reservedUnits = 0;
+      } else if (postCharge && unitsAfter > 0 && servedOk) {
+        // ★E9(0276): 클라가 직접 못 부르는 서버 전용 함수로, 매장 id·요청 키를 넘겨 차감한다(예약을 못 한 매장 요청만).
         const { error: cErr } = await serviceClient().rpc('consume_ai_quota_for', { p_unit: user.unitId, p_units: unitsAfter, p_request_key: requestKey });
         if (cErr) console.error('consume_ai_quota_for (post-serve) error:', cErr.message ?? cErr);
-      } catch (e) {
-        console.error('consume_ai_quota_for (post-serve) failed:', e);
       }
+    } catch (e) {
+      console.error('ai quota settle failed:', e);
     }
     return json(result);
   } catch (e) {
     console.error('ai handler error:', e);          // 상세는 로그만
+    // ★0554: 모델이 던졌으면 예약을 돌려준다(실패는 공짜).
+    if (reservedUnits > 0 && user.unitId) await aiQuotaRefund(user.unitId, reservedUnits, reservedKey);
     return json({ error: 'internal_error' }, 500);  // 클라엔 일반 메시지
   }
 });

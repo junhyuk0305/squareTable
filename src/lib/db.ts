@@ -5144,3 +5144,130 @@ async function fetchSpaceRequestNotices(): Promise<JoinNotice[]> {
     })),
   );
 }
+
+// night-1111 s1
+// ── 공간 멤버 묻기 · 공간 벨 · 교육 링크 이어받기(0551 · 0552 · 야간 s1) ─────────────────────
+// 오류 코드 → 문구 = src/lib/place/errors.ts(placeErrorMessage). 읽기는 서버가 50개로 묶는다(spaceRpc 한 곳 · check:select-bounds).
+
+/** 멤버가 공간 주인에게 보낸다("보낼까요?" 확인 뒤 · 결정 146). data = 답할 질문 번호(같은 글이 대기 중이면 그 번호 · 두 번 눌러도 한 번).
+ *  코드 = not_authenticated · not_space_member · practice_only(주인이 부름) · invalid_argument(1~2000자). */
+export async function spaceQuestionSend(spaceId: string, text: string): Promise<DbResult<string>> {
+  if (!HAS_SUPABASE) return { data: null, error: { message: 'no_backend' } };
+  return spaceRpc<string>('space_question_send', { p_space: spaceId, p_text: text }, 'spaceQuestionSend');
+}
+
+/** 내가 그 공간에 물은 질문 한 줄(결정 150 · 남의 질문은 안 온다). state: answered = 노하우·보내기 답 · waiting = 그 밖. */
+export type SpaceMyQuestion = {
+  uqId: string;
+  queryText: string;
+  askedAt: string;
+  state: 'answered' | 'waiting';
+  replyBody: string | null;
+  entryId: string | null;
+  entryTitle: string | null;
+  entrySquare: import('@/types').SquareBlock | null;
+  answeredAt: string | null;
+  answererName: string | null;
+};
+/** 내 질문 최근 50(서버 상한). 코드 = not_space_member. */
+export async function fetchMySpaceQuestions(spaceId: string): Promise<DbResult<SpaceMyQuestion[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const r = await spaceRpc<any[]>('space_my_questions', { p_space: spaceId }, 'fetchMySpaceQuestions');
+  if (r.error) return { data: null, error: r.error };
+  return {
+    data: (r.data ?? []).map((x) => ({
+      uqId: x.uq_id,
+      queryText: x.query_text ?? '',
+      askedAt: x.asked_at,
+      state: x.state === 'answered' ? 'answered' : 'waiting',
+      replyBody: x.reply_body ?? null,
+      entryId: x.entry_id ?? null,
+      entryTitle: x.entry_title ?? null,
+      entrySquare: x.entry_square ?? null,
+      answeredAt: x.answered_at ?? null,
+      answererName: x.answerer_name ?? null,
+    })),
+    error: null,
+  };
+}
+
+/** 공간 벨 공급 한 줄(my_space_notif_data · 역 ⑩). source 별 payload 모양은 0551 머리말 ④.
+ *  space_question = 내가 주인인 공간의 대기 질문 · space_answered = 내 질문에 온 답 · link_answered = 옮겨 받은 링크 질문의 답 · space_deleted = 공간 삭제. */
+export type SpaceNotifSource = 'space_question' | 'space_answered' | 'link_answered' | 'space_deleted';
+export type SpaceNotifRow = { unitId: string; source: SpaceNotifSource; payload: Record<string, any> };
+/** 로그인 없으면 0행. 못 읽으면 error(그 줄만 빠지게 화면이 고른다). */
+export async function fetchMySpaceNotifData(): Promise<DbResult<SpaceNotifRow[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const r = await spaceRpc<any[]>('my_space_notif_data', {}, 'fetchMySpaceNotifData');
+  if (r.error) return { data: null, error: r.error };
+  return { data: (r.data ?? []).map((x) => ({ unitId: x.unit_id, source: x.source, payload: x.payload ?? {} })), error: null };
+}
+
+/** 링크 화면(웹 · 로그인 없이)에서 이어받기 코드 받기. 6자 · 10분 · 한 번. key = 그 브라우저의 손님 열쇠(없으면 null · 물은 적 없는 사람).
+ *  코드 = link_closed · handoff_busy. ★코드·토큰·열쇠는 계측에 싣지 않는다. */
+export async function eduLinkHandoffCode(token: string, key: string | null): Promise<DbResult<{ code: string; expiresAt: string }>> {
+  if (!HAS_SUPABASE) return { data: null, error: { message: 'no_backend' } };
+  const r = await spaceRpc<any[]>('edu_link_handoff_code', { p_token: token, p_key: key }, 'eduLinkHandoffCode');
+  if (r.error) return { data: null, error: r.error };
+  const row = r.data?.[0];
+  return row ? { data: { code: row.code, expiresAt: row.expires_at }, error: null } : { data: null, error: { message: 'link_closed' } };
+}
+
+/** 이어받기 코드 넣기(앱 · 지금 초대코드 칸). status:
+ *   claimed = 그 링크를 옮겨 받음(S16 으로 연다) · not_link_code = 살아 있는 초대코드(지금 합류 흐름으로 이어서) ·
+ *   invalid_code = 어느 코드에도 없음(서버가 틀린 시도 한 번을 이미 셌다 → 합류 함수를 더 부르지 않고 지금 문구).
+ *  코드 = not_authenticated · PHONE_NOT_VERIFIED · too_many_attempts · link_closed. */
+export type EduLinkClaimStatus = 'claimed' | 'not_link_code' | 'invalid_code';
+export async function claimEduLinkCode(code: string): Promise<DbResult<{ status: EduLinkClaimStatus; linkId: string | null; placeKind: 'space' | 'store' | null; title: string | null }>> {
+  if (!HAS_SUPABASE) return { data: null, error: { message: 'no_backend' } };
+  const r = await spaceRpc<any[]>('edu_link_claim_code', { p_code: code }, 'claimEduLinkCode');
+  if (r.error) return { data: null, error: r.error };
+  const row = r.data?.[0];
+  if (!row) return { data: null, error: { message: 'invalid_code' } };
+  return { data: { status: row.status, linkId: row.link_id ?? null, placeKind: row.place_kind ?? null, title: row.title ?? null }, error: null };
+}
+
+/** 웹 가입 직후 자동 옮기기(그 브라우저의 손님 열쇠). data null = 열쇠가 틀리거나 링크가 닫힘(조용히 넘어간다).
+ *  claimed = 내 계정에 옮겨짐(이미 나였어도 true) · false = 남이 이미 옮겨 갔다. */
+export async function claimEduLinkGuest(key: string): Promise<DbResult<{ linkId: string; claimed: boolean }>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const r = await spaceRpc<any[]>('edu_link_claim_guest', { p_key: key }, 'claimEduLinkGuest');
+  if (r.error) return { data: null, error: r.error };
+  const row = r.data?.[0];
+  return { data: row ? { linkId: row.link_id, claimed: row.claimed === true } : null, error: null };
+}
+
+/** 내가 받은 링크(S16 목록) 한 줄. 살아 있는 링크만 온다(닫히면 빠진다 · 결정 153). token 으로 지금 손님 함수를 쓴다. */
+export type MyEduLink = {
+  linkId: string;
+  token: string;
+  placeKind: 'space' | 'store';
+  placeName: string;
+  ownerName: string | null;
+  title: string;
+  entryCount: number;
+  expiresAt: string;
+};
+/** 최근 50(서버 상한). */
+export async function fetchMyEduLinks(): Promise<DbResult<MyEduLink[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const r = await spaceRpc<any[]>('my_edu_links', {}, 'fetchMyEduLinks');
+  if (r.error) return { data: null, error: r.error };
+  return {
+    data: (r.data ?? []).map((x) => ({
+      linkId: x.link_id, token: x.token, placeKind: x.place_kind, placeName: x.place_name ?? '',
+      ownerName: x.owner_name ?? null, title: x.title ?? '', entryCount: x.entry_count ?? 0, expiresAt: x.expires_at,
+    })),
+    error: null,
+  };
+}
+
+/** 앱 안 링크 열쇠(기기별 · 한 번만 원문). 이 열쇠로 askEduLink · sendEduLinkQuestion · fetchEduLinkAnswers · reportEduLink 와
+ *  엣지 edu_link_answer 를 그대로 쓴다. 코드 = link_closed(없음·닫힘·내 것 아님 하나) · not_authenticated. */
+export async function eduLinkMeKey(linkId: string): Promise<DbResult<{ token: string; key: string; name: string }>> {
+  if (!HAS_SUPABASE) return { data: null, error: { message: 'no_backend' } };
+  const r = await spaceRpc<any[]>('edu_link_me_key', { p_link: linkId }, 'eduLinkMeKey');
+  if (r.error) return { data: null, error: r.error };
+  const row = r.data?.[0];
+  return row ? { data: { token: row.token, key: row.key, name: row.name ?? '' }, error: null } : { data: null, error: { message: 'link_closed' } };
+}

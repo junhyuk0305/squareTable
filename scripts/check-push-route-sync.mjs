@@ -161,7 +161,11 @@ try {
     'mn:join_full': { owner: 'join_full' }, // ★0346 인원 초과(report_join_full) → 사장
     'mn:suggestion': { owner: 'suggestion' }, // ★0490 매장과 연결하기 제안(propose_to_store) → 받는 매장 사장
     'mn:owner_deleted': {}, // 넣는 곳이 없다(0247 close_member_tenure 는 알림 없음)
-    'mn:question_answered': {}, // 넣는 곳이 없다(답 알림은 앱 q_answered 푸시)
+    // ★0551 넣는 곳 = 트리거 trg_uq_answer_notice(공간 멤버 질문 · 옮겨 받은 링크 질문의 답 → 질문한 사람). 매장 앱 안 질문은 앱 q_answered 푸시 그대로.
+    //   받는 사람은 공간 멤버·링크로 온 사람이라 이 표의 ROLES(매장 역할) 밖이다. 벨 = my_space_notif_data(space_answered · link_answered)
+    //   → 레지스트리 space_q_answered · link_q_answered(공간 벨 행은 g4a 새 파일 spaceNotifications.ts 가 그린다).
+    'mn:question_answered': {},
+    'mn:space_deleted': {}, // ★0553 delete_space → 주인이 아닌 멤버. 공간 역할은 ROLES 밖 · 벨 = my_space_notif_data(space_deleted) → 레지스트리 space_deleted
     'mn:swap_confirmed': { manager: 'schedule', junior: 'schedule' },
     'mn:shift_time_result': { manager: 'schedule', junior: 'schedule' },
     'mn:shift_changed': { manager: 'schedule', junior: 'schedule' },
@@ -170,7 +174,7 @@ try {
     //   계정 단위 허브 행(buildJoinNotifRows)으로 셋 다 받는다. N7 = 대기 요청 파생 행 · N8 = fetchJoinNotices 가 join_approved 를 읽는다.
     'mn:join_request': { owner: 'hub:space_join_request', manager: 'hub:space_join_request', junior: 'hub:space_join_request' },
     'mn:join_approved': { owner: 'hub:space_join_approved', manager: 'hub:space_join_approved', junior: 'hub:space_join_approved' },
-    'mn:question': {}, // ★0401 공간 링크 질문(N2 · edu_link_send) → 공간 주인. 공간 역할은 이 표의 ROLES 밖이다. 벨은 답할 질문 목록에서 파생
+    'mn:question': {}, // ★0401 공간 링크 질문(N2 · edu_link_send) · ★0551 멤버 질문(space_question_send) → 공간 주인. 공간 역할은 이 표의 ROLES 밖이다. 벨은 답할 질문 목록에서 파생(레지스트리 space_question)
     // ── 서버 크론 발송(그 밖) ──
     'cron:owner_alerts': { owner: 'src:const raw of alerts' }, // 0191 · ownerRows 가 owner_alerts 행을 그대로 그린다
     'cron:task_reminders': { manager: 'assign', junior: 'assign' }, // 배정된 할일 시각 — 배정 행

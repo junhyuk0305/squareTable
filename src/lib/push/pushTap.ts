@@ -17,6 +17,8 @@ const APP_ROOTS = PUSH_ROUTE_ROOTS;
 // 매장 화면만 매장을 바꾼다. /stores · /billing 같은 계정 화면은 지금 매장에서 연다.
 // 공간 화면(/space · 0460 N7·N8)도 매장을 바꾸지 않는다. 엣지가 unitId = 공간 번호를 실어도 매장 전환을 부르지 않고
 //   그 경로를 연다. 공간에 들어가는 일은 공간 _layout 이 경로(?space= · /space/joined/<번호>)로 한다(서버가 공간 전환을 거절한다).
+// ★0551 앱 안 링크(/link · S16)도 매장을 바꾸지 않는다. 엣지가 unitId = 그 링크의 자리(매장일 수도 있다)를 실어도
+//   받는 사람은 그 자리 멤버가 아니다(링크로 온 사람). 첫 칸 link 는 PUSH_ROUTE_ROOTS(레지스트리 link_q_answered)에서 온다.
 const STORE_ROOTS = ['owner', 'junior'];
 
 function firstSegment(path: string): string {

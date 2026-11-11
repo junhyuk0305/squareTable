@@ -44,6 +44,18 @@ const schedule = (s: NotifSurface) => (s === 'owner' ? '/owner/schedule' : '/jun
 export const spaceRequestRoute = (spaceId: string, memberId: string) =>
   `/space/settings?space=${enc(spaceId)}&member=${enc(memberId)}` as const;
 
+/** ★0551 공간 질문 하나(답하기 화면) — 서버 member_notices.url(0550 손님 · 0551 멤버)과 같은 모양. */
+export const spaceQuestionRoute = (spaceId: string, uqId: string) =>
+  `/space/answer/${enc(uqId)}?space=${enc(spaceId)}` as const;
+
+/** ★0551 공간 멤버가 받은 답(S17 그 질문) — 서버 트리거 trg_uq_answer_notice url 과 같은 모양. */
+export const spaceAnsweredRoute = (spaceId: string, uqId: string) =>
+  `/space/joined/${enc(spaceId)}?uqId=${enc(uqId)}` as const;
+
+/** ★0551 옮겨 받은 링크 질문의 답(S16 앱 안 링크) — 서버 트리거 url 과 같은 모양. 링크 번호(토큰 아님). */
+export const linkAnsweredRoute = (linkId: string, uqId: string) =>
+  `/link/${enc(linkId)}?uqId=${enc(uqId)}` as const;
+
 /** 할일 하나를 가리키는 업무 화면 주소 — `?view=todo&task=<id>`. WorkBoard 가 할일 탭을 열고 그 할일로 스크롤한다. */
 export const taskRoute = (base: '/junior/work' | '/owner/work', templateId: string) =>
   `${base}?view=todo&task=${enc(templateId)}` as const;
@@ -77,7 +89,7 @@ export const NOTIF = {
   // ── 질문·노하우 ──
   // 사장: 답할 질문(coach?uqId= · 홈 히어로와 같은 입구). 직원: 도와줄 수 있는 질문(물어보기 탭 · 내 공간).
   // ★공간 링크 질문(N2 · 0401): 같은 제목을 서버가 member_notices 'question' 으로 공간 주인에게 보낸다(앱은 안 쏜다).
-  //   경로 = /space/answer/<답할 질문>?space=<공간>(서버가 적는다 · 공간 화면 세트는 4번 덩이 pushTapPlan). 같은 공간 10분에 한 번.
+  //   경로 = /space/answer/<답할 질문>?space=<공간>(서버가 적는다 · 공간 쪽은 아래 space_question 줄). ★0550 질문마다(10분 1회 지움).
   question: {
     title: (actor) => `${actor}님의 질문`,
     route: (s, id) => (s === 'owner' ? `/owner/coach${id ? `?uqId=${enc(id)}` : ''}` : `/junior/chat${id ? `?uqId=${enc(id)}` : ''}`),
@@ -150,6 +162,35 @@ export const NOTIF = {
     title: (space) => `${space} 합류가 승인됐어요`,
     route: (_s, id) => `/space/joined/${enc(id)}`,
     badgeUnit: '합류 결과',
+  },
+  // ★0550·0551 공간 질문 → 공간 주인(손님 링크 질문 · 멤버 질문 둘 다 · 질문마다). 푸시는 서버 크론(member_notices 'question')이 보낸다.
+  //   벨 행은 대기 질문에서 파생한다(my_space_notif_data source space_question · 답하면 사라진다). id = 답할 질문 번호.
+  //   공간 번호까지 넣으려면 spaceQuestionRoute(서버 url 과 같은 모양).
+  space_question: {
+    title: (actor) => `${actor}님의 질문`,
+    route: (_s, id) => (id ? `/space/answer/${enc(id)}` : '/space/home'),
+    badgeUnit: '공간 답할 질문',
+  },
+  // ★0551 N4 공간 멤버 질문에 답 → 그 멤버(서버 트리거 · member_notices 'question_answered'). 벨 = source space_answered.
+  //   그 공간 참여 화면(S17)의 그 질문. 두 번호가 있어야 하므로 화면은 spaceAnsweredRoute 를 쓴다. id 만 있으면 공간 목록.
+  space_q_answered: {
+    title: (actor) => `${actor}님이 내 질문에 답했어요`,
+    route: (_s, id) => (id ? `/space/joined/${enc(id)}` : '/stores'),
+    badgeUnit: '답 온 공간 질문',
+  },
+  // ★0551 N4 옮겨 받은 링크 질문에 답 → 그 계정(서버 트리거). 벨 = source link_answered. 앱 안 링크(S16 · /link/<링크 번호>).
+  //   착지에 질문 번호까지 = linkAnsweredRoute. 링크가 닫히면 벨에서도 빠진다(결정 153).
+  link_q_answered: {
+    title: (actor) => `${actor}님이 내 질문에 답했어요`,
+    route: (_s, id) => (id ? `/link/${enc(id)}` : '/stores'),
+    badgeUnit: '답 온 링크 질문',
+  },
+  // ★0553 공간 삭제 → 주인이 아닌 멤버(서버 delete_space · member_notices 'space_deleted'). 벨 = source space_deleted.
+  //   문구는 서버가 넣은 그대로(엣지가 제목 앞에 공간 이름). 그 공간은 없으니 매장·공간 목록으로.
+  space_deleted: {
+    title: (space) => `${space} 공간이 지워졌어요`,
+    route: (_s) => '/stores',
+    badgeUnit: '공간 알림',
   },
   // ★0346 직원 즉시 합류(사장 승인 폐지) — 원천은 서버가 넣는 member_notices(member_joined · 사장 멤버십에게만 · actor_id = 합류한 직원).
   //   푸시는 서버 크론(sweepMemberNotices)이 보낸다(앱은 쏘지 않는다 → pushTag 없음). 문구는 서버가 넣은 그대로.
