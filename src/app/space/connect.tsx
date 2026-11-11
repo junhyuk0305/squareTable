@@ -118,6 +118,8 @@ export default function SpaceConnect() {
                 onPress={() => setStore(s.unit_id)}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: on }}
+                // RN-web 은 radio 의 accessibilityState.checked 를 aria-checked 로 옮기지 않는다(11-12 실측) → 웹 읽기 프로그램용으로 직접 단다.
+                aria-checked={on}
                 accessibilityLabel={s.store_name}
                 style={({ pressed }) => [styles.row, i > 0 && styles.rowLine, pressed && styles.pressed]}
               >
