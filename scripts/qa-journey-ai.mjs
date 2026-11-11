@@ -160,7 +160,7 @@ const t=document.body.innerText;const after=t.slice(t.lastIndexOf(Q)+Q.length);
 const labels=[...document.querySelectorAll('[aria-label]')].filter(e=>b.compareDocumentPosition(e)&4).map(e=>e.getAttribute('aria-label'));
 const inp=document.querySelector(${JSON.stringify(J_INPUT)});
 return {found:true,after,labels,inputReady:!!inp&&!inp.readOnly&&!inp.disabled};})()`;
-const ANSWER_MARKERS = ['원문 보기', '참고한 노하우', '사장님께 보낼까요?', '혹시 이거 찾으세요?', '보내지 않았어요', '사장님께 보냈어요'];
+const ANSWER_MARKERS = ['원문 보기', '참고한 노하우', '사장님께 보낼까요?', '혹시 이거 찾으세요?', '보내지 않았어요', '사장님께 보냈어요', '사장님께 질문을 보냈어요', '사장님이 답했어요'];  // 6번 덩이: 보낸 뒤 한 문장(notFoundAsk) · 답이 온 뒤
 
 /** 말풍선 뒤에서 글자가 정확히 같은 잎 요소에 표시를 달고 좌표로 누른다. */
 async function clickTextAfter(page, q, text, tag) {
@@ -223,7 +223,7 @@ const head200 = (s) => JSON.stringify((s ?? '').replace(/\n+/g, ' ⏎ ').slice(0
 
 // ── S 화면 헬퍼 ───────────────────────────────────────────────────
 const heroValue = async (S) => {
-  const v = await S.page.eval(`(document.body.innerText.match(/답 기다리는 질문\\n([^\\n]+)/)||[])[1]||null`);
+  const v = await S.page.eval(`(document.body.innerText.match(/(?:답 기다리는 질문|미응답)\\n([^\\n]+)/)||[])[1]||null`);
   if (v == null) return null;
   if (v.includes('없어요')) return 0;
   const m = v.match(/(\d+)건/);
@@ -248,7 +248,7 @@ async function stable(fn, ms = 2500) {
 /** 사장 네 자리를 차례로 읽는다(홈 → 노하우 탭 → 알림). 끝나면 홈으로 돌아온다. */
 async function ownerFour(S, label) {
   await S.page.goto('/owner/dashboard');
-  await S.page.waitFor(`document.body.innerText.includes('답 기다리는 질문')`, 40000);
+  await S.page.waitFor(`/답 기다리는 질문|미응답/.test(document.body.innerText)`, 40000);
   const hero = await stable(() => heroValue(S));
   const badge = await stable(() => tabBadge(S));
   await transition(S, 'S', `${label} 홈`);
@@ -262,7 +262,7 @@ async function ownerFour(S, label) {
   const bell = await stable(() => bellQuestionItems(S), 3000);
   await transition(S, 'S', `${label} 알림`);
   await S.page.goto('/owner/dashboard');
-  await S.page.waitFor(`document.body.innerText.includes('답 기다리는 질문')`, 40000);
+  await S.page.waitFor(`/답 기다리는 질문|미응답/.test(document.body.innerText)`, 40000);
   await sleep(1500);
   return { hero, badge, seg, bell };
 }
@@ -303,7 +303,7 @@ try {
   const wins = () => [J, S];
   await Promise.all([J.page.goto('/junior/chat'), S.page.goto('/owner/dashboard')]);
   const jReady = await J.page.waitFor(`!!document.querySelector(${JSON.stringify(J_INPUT)})`, 60000);
-  const sReady = await S.page.waitFor(`document.body.innerText.includes('답 기다리는 질문')`, 60000);
+  const sReady = await S.page.waitFor(`/답 기다리는 질문|미응답/.test(document.body.innerText)`, 60000);
   check('준비: J 물어보기 입력창 · S 홈 히어로가 뜬다', jReady && sReady, `J=${jReady} S=${sReady}`);
   if (!jReady || !sReady) throw new Error('화면 준비 실패');
   await transition(J, 'J', '물어보기 진입');
@@ -376,9 +376,9 @@ try {
     const clicked = await clickTextAfter(J.page, Q2, btn, 'qa-jr-register');
     tSent = Date.now();
     check(`3 '${btn}' 버튼(카드 안 · 입력창 전송 버튼과 다른 것)을 찾아 누른다`, clicked);
-    const okText = await J.page.waitFor(`(()=>{const t=document.body.innerText;const a=t.slice(t.lastIndexOf(${JSON.stringify(Q2)}));return a.includes('사장님께 보냈어요')||a.includes('사장님께 전달했어요');})()`, 15000);
+    const okText = await J.page.waitFor(`(()=>{const t=document.body.innerText;const a=t.slice(t.lastIndexOf(${JSON.stringify(Q2)}));return a.includes('사장님께 보냈어요')||a.includes('사장님께 질문을 보냈어요')||a.includes('사장님께 전달했어요');})()`, 15000);
     const after3 = (await J.page.eval(turnExpr(Q2)))?.after ?? '';
-    const which = after3.includes('사장님께 전달했어요') ? "'사장님께 전달했어요'" : after3.includes('사장님께 보냈어요') ? "'사장님께 보냈어요'(DeflectCard 문구)" : '없음';
+    const which = after3.includes('사장님께 전달했어요') ? "'사장님께 전달했어요'" : (after3.includes('사장님께 보냈어요') || after3.includes('사장님께 질문을 보냈어요')) ? "'사장님께 (질문을) 보냈어요'(DeflectCard 문구)" : '없음';
     log(`보낸 뒤 문구 = ${which}`);
     check("3 보낸 뒤 '사장님께 보냈어요/전달했어요' 문구가 뜬다", okText);
     const errText = /못했어요|실패했어요/.test(after3);

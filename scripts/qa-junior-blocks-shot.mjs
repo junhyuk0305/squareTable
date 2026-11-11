@@ -85,7 +85,7 @@ const shots = [
   { name: '6-1_hub-growth', url: '/hub-growth', must: '성장' },
   { name: '6-2_hub-today', url: '/hub', must: '오늘' },
   { name: '6-3_attendance', url: '/junior/attendance', must: '출근' },
-  { name: '6-4_myspace', url: '/junior/chat', must: '물어보기', click: '내 공간' },
+  { name: '6-4_myspace', url: '/junior/chat', must: '물어보기', click: '내 활동' },
 ];
 
 for (const s of shots) {

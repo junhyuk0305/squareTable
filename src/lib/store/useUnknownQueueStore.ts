@@ -4,7 +4,8 @@ import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import type { UnknownQuery, PlaybookSuggestion, PlaybookEntry } from '@/types';
 import seedData from '@/data/unknown-queries.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchUnknownQueue, fetchPendingQuestionCount, insertUnknown, bumpUnknownSimilar, resolveUnknown, answerUnknownQuery, subscribeUnknownQueue } from '@/lib/db';
+import { fetchUnknownQueue, fetchPendingQuestionCount, insertUnknown, bumpUnknownSimilar, resolveUnknown, answerUnknownQuery, answerUnknownQueryBySuggestion, subscribeUnknownQueue } from '@/lib/db';
+import { friendlyError } from '@/lib/utils/userError';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { blockedText, type Decision } from '@/lib/decision';
 import { notifyStoreQuestion, notifyUserQuestionAnswered } from '@/lib/push/notify';
@@ -26,7 +27,8 @@ type UnknownQueueState = {
   enqueue: (uq: UnknownQuery) => Promise<boolean>;
   resolve: (uqId: string, newEntryId: string) => Promise<boolean>;
   /** 새 노하우로 답하기(사장 coach 발행) — 저장 + 해결을 서버 한 트랜잭션에서(0311). already = 다른 기기가 먼저 답했다(노하우 안 만듦). */
-  answer: (uqId: string, entry: PlaybookEntry) => Promise<Decision>;
+  /** suggestionId 를 주면 그 직원 제안을 승인하며 남긴다(0379 · 답 쓴 사람 = 제안한 직원 · 승인한 사람 = 나). */
+  answer: (uqId: string, entry: PlaybookEntry, suggestionId?: string | null) => Promise<Decision>;
   getPending: () => UnknownQuery[];
   getById: (id: string) => UnknownQuery | undefined;
   reset: () => void;
@@ -50,7 +52,10 @@ export function answerableQuestions(
     suggestions.filter((s) => s.status === 'pending' && s.source_uq_id).map((s) => s.source_uq_id),
   );
   return queue.filter(
-    (u) => u.status === 'pending_owner_answer' && u.junior_id !== me && !claimed.has(u.id),
+    // ★0520 승인 대기 판정은 서버 계산 칸 in_review(uq_in_review) 하나다. 직원은 제안 읽기 정책상 자기 제안만 보여서
+    //   claimed 로만 거르면 제안한 사람 화면에서만 빠지고 다른 직원 목록·배지·벨에 남았다(결함).
+    //   claimed 는 "방금 내가 올린 제안"이 질문 목록을 다시 읽기 전에도 바로 빠지게 남겨 둔다(서버 판정의 부분집합).
+    (u) => u.status === 'pending_owner_answer' && u.junior_id !== me && u.in_review !== true && !claimed.has(u.id),
   );
 }
 
@@ -141,10 +146,14 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
   },
   // 새 노하우로 답하기 — resolve 와 같은 후처리(큐 갱신 · 질문자 알림)인데 저장과 해결이 서버 한 트랜잭션이다(0311).
   // 낙관적 갱신을 하지 않는다: 노하우 행이 아직 없는 상태에서 질문을 '해결'로 그리면 already 때 되돌릴 것이 둘이 된다.
-  answer: async (uqId, entry) => {
+  answer: async (uqId, entry, suggestionId) => {
     const before = get().queue.find((u) => u.id === uqId);
     const answeredBy = useSessionStore.getState().userId || undefined;
-    const { decision } = await answerUnknownQuery(uqId, entry);
+    const { decision, code } = suggestionId
+      ? await answerUnknownQueryBySuggestion(uqId, entry, suggestionId)
+      : await answerUnknownQuery(uqId, entry);
+    // ★0520 승인 길의 suggestion_not_found(그 사이 제안이 취소·반려됨)는 사실대로 말한다. 그 밖의 failed 는 호출부 문구.
+    if (code === 'suggestion_not_found') useSyncStore.getState().noteError(friendlyError(code, '제안을 찾을 수 없어요.'));
     // already = 다른 기기·동료가 먼저 답했다 → 오류 아님. 서버 상태로 다시 읽고 알림은 보내지 않는다(먼저 답한 쪽이 보냈다).
     if (decision === 'already') { void get().hydrate(); return decision; }
     if (decision !== 'ok') return decision;

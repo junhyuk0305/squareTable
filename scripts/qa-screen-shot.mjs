@@ -5,7 +5,7 @@
 //
 // 실행:
 //   node scripts/qa-screen-shot.mjs --as owner --url /owner/work --name work
-//   node scripts/qa-screen-shot.mjs --as junior --url /junior/chat --name myspace --click "내 공간"
+//   node scripts/qa-screen-shot.mjs --as junior --url /junior/chat --name myspace --click "내 활동"
 //   node scripts/qa-screen-shot.mjs --as owner --url /owner/categories?seg=todo --name todo --out qa-shots/sweep
 // 옵션: --as owner|manager|junior (김영자 / 박지원 / 이수민 · 비번 공통 pilot1234)
 //       --click "정확한 글자"  (RN-web Pressable 은 role 이 없어 텍스트 노드로 잡는다. 여러 번 가능)

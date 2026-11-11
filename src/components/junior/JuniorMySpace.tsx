@@ -25,6 +25,7 @@ import { Radius, Elevation } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Layout, Space } from '@/lib/theme/layout';
 import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery } from '@/types';
+import { STORE_WORDS } from '@/lib/place/words';
 
 /**
  * 히트맵 범례 — **직원 축**(§7-8 표의 세 번째 열). 색은 "내가 아는가" 하나뿐이고, 사장 축의
@@ -173,7 +174,7 @@ export function JuniorMySpace({ me }: { me: string }) {
   if (!ready) {
     return (
       <View style={s.flex}>
-        <ScreenLoading label="내 공간을 불러오고 있어요…" />
+        <ScreenLoading label={`${STORE_WORDS.myActivity}을 불러오고 있어요…`} />
       </View>
     );
   }

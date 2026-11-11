@@ -31,7 +31,7 @@ export type ChatTurnProps = {
   onRegister: () => void;
   onDecline: () => void;
   resolveCategory: (entryId: string) => string;
-  findUQ: (queryText: string) => { presumed_category: string; ai_general_answer: string; similar_queries_count?: number } | undefined;
+  findUQ: (queryText: string) => { presumed_category: string; ai_general_answer: string; similar_queries_count?: number; status?: string; resolved_with_entry_id?: string } | undefined;
   /** 방금 들어온 턴만 등장 애니메이션을 태운다 — 과거 히스토리 전체가 매 마운트마다 재생되는 것 방지. */
   animateIn?: boolean;
   /** 알림(?uqId=)이 가리키는 턴 — 답변 카드 테두리를 강조한다(공지 패널·명부의 focus 와 같은 테두리). */
@@ -78,8 +78,15 @@ export function ChatTurn({
     const uq = findUQ(query.query_text);
     const general = uq?.ai_general_answer;
     const similar = uq?.similar_queries_count;
-    return { general, similar };
+    // ★6번 덩이: 보낸 질문이 노하우로 해결되면(사장 답 · 직원 답 승인) 그 노하우. 옛 카드는 상태를 "보냈나"로만 봐서
+    //   승인 뒤에도 "보냈어요"로 남았다. 판정은 질문 행의 상태(서버) 그대로다.
+    const answerId = uq?.status === 'resolved_with_entry' ? uq.resolved_with_entry_id : undefined;
+    return { general, similar, answerId };
   }, [block, findUQ, query.query_text]);
+  const answerEntry = useMemo(
+    () => (deflectMeta?.answerId ? allEntries.find((e) => e.id === deflectMeta.answerId) : undefined),
+    [deflectMeta, allEntries],
+  );
 
   // 방금 제출한 턴만 Appear로 등장, 나머지(과거 히스토리)는 정적 View — 매 마운트 전체 재생 방지.
   const AssistantWrap = animateIn ? Appear : View;
@@ -225,9 +232,10 @@ export function ChatTurn({
             <DeflectCard
               aiGeneralAnswer={deflectMeta.general}
               similarCount={deflectMeta.similar}
-              status={deflectState}
+              status={deflectState === 'registered' && deflectMeta.answerId ? 'answered' : deflectState}
               onRegister={onRegister}
               onDecline={onDecline}
+              onOpenAnswer={answerEntry ? () => setDetailEntry(answerEntry) : undefined}
             />
           )
         )}

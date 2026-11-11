@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SegmentTabs, type SegmentItem } from './SegmentTabs';
 import type { Role } from '@/types';
+import { STORE_WORDS } from '@/lib/place/words';
 
 export type KnowhowSegmentKey = 'browse' | 'ask' | 'mine';
 
@@ -23,7 +24,7 @@ export type KnowhowSegmentProps = {
 const LABELS: Record<KnowhowSegmentKey, string> = {
   browse: '노하우',
   ask: '물어보기',
-  mine: '내 공간',
+  mine: STORE_WORDS.myActivity, // 옛 '내 공간'(6번 덩이 · 새 "공간"과 이름이 겹쳐 바꿨다)
 };
 
 /**

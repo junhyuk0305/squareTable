@@ -226,7 +226,7 @@ try {
   // 현황 화면의 '답 기다리는 질문' 행 → OwnerStatusView 의 BottomSheet(종류가 2개 이상일 때).
   const opened = await po.evaluate(() => {
     const leaf = [...document.querySelectorAll('div,span')].find(
-      (e) => !e.children.length && (e.textContent ?? '').trim() === '답 기다리는 질문',
+      (e) => !e.children.length && ['답 기다리는 질문', '미응답'].includes((e.textContent ?? '').trim()), // 6번 덩이 숫자 줄(스위치 켜짐)도
     );
     const btn = leaf?.closest('[role="button"]') ?? leaf?.parentElement?.closest('[role="button"]');
     if (!btn) return false;

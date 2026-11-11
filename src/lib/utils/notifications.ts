@@ -242,7 +242,8 @@ export function buildJuniorNotifications(args: {
     out.push({
       id: `qa_${u.id}`,
       kind: 'q_answered',
-      title: NOTIF.q_answered.title(nameOf(u.answered_by as string)),
+      // ★0520 이름 = 답 쓴 사람(answer_author_id · 0379). 승인으로 해결되면 승인한 사장이 아니라 제안한 직원이다(푸시 제목과 같은 사람).
+      title: NOTIF.q_answered.title(nameOf((u.answer_author_id ?? u.answered_by) as string)),
       body: u.query_text,
       at: u.asked_at,
       unread: isAfterAck(u.asked_at, ackAt),
@@ -517,8 +518,9 @@ export type OwnerNotif = {
 };
 
 // ── 공유 술어(뱃지·목록 동일 규칙) ──
-/** 아직 사장이 답 안 한 받은질문. */
-export const isPendingQuestion = (u: UnknownQuery): boolean => u.status === 'pending_owner_answer';
+/** 아직 사장이 답 안 한 받은질문. ★0520 승인 대기(in_review · 서버 계산 칸)는 뺀다 — 그 일은 검토 대기 제안 줄로 한 번 온다
+ *  (미응답 숫자 · 허브 벨과 같은 정의 · 같은 사실 한 번). */
+export const isPendingQuestion = (u: UnknownQuery): boolean => u.status === 'pending_owner_answer' && u.in_review !== true;
 /** 검토 대기 중인 직원 제안. */
 export const isPendingSuggestion = (s: PlaybookSuggestion): boolean => s.status === 'pending';
 /** **내가 검토해야 할** 제안 = 검토 대기 중이면서 내가 올린 게 아닌 것.

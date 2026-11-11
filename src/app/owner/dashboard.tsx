@@ -20,6 +20,9 @@ import { InviteBlock } from '@/components/owner/InviteBlock';
 import { SEED_TEMPLATES } from '@/data/seed-templates';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { useOwnerDashboardData } from '@/lib/hooks/useOwnerDashboardData';
+import { useStoreAskFirst } from '@/lib/hooks/useStoreAskFirst';
+import { unitQuestionCounts } from '@/lib/db';
+import { STORE_WORDS } from '@/lib/place/words';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
@@ -40,8 +43,9 @@ export default function OwnerDashboardScreen() {
     loaded,
     entriesCount,
     needsReviewCount,
-    pending,
-    heroQuery,
+    pending: pendingAll,
+    heroQuery: heroAll,
+    heroUnanswered,
     todayTasks,
     duty,
     dutyPlanned,
@@ -52,6 +56,28 @@ export default function OwnerDashboardScreen() {
     behindStaff,
     scheduleEmpty,
   } = useOwnerDashboardData();
+
+  // ★6번 덩이(스위치 store/ask_first): 히어로 라벨 = "미응답" · 수 = 서버 unit_question_counts.unanswered
+  //   (기간 없이 지금 대기 전부 − 승인 대기 · 허브 숫자 줄과 같은 정의). 꺼지면 옛 "답 기다리는 질문"(대기 전부) 그대로.
+  //   수는 대기열이 바뀔 때(pendingAll) 다시 읽는다. 못 읽으면 옛 수로 떨어진다(없는 수를 지어내지 않는다).
+  const askFirst = useStoreAskFirst();
+  const unitId = useSessionStore((s) => s.unitId);
+  const [unanswered, setUnanswered] = useState<number | null>(null);
+  const [unansweredLoaded, setUnansweredLoaded] = useState(false);
+  useEffect(() => {
+    if (!askFirst || !unitId) return;
+    let alive = true;
+    void unitQuestionCounts(unitId).then(({ data }) => {
+      if (!alive) return;
+      setUnanswered(data ? data.unanswered : null);
+      setUnansweredLoaded(true);
+    });
+    return () => { alive = false; };
+  }, [askFirst, unitId, pendingAll]);
+  const useNew = !!askFirst && unanswered !== null;
+  const pending = useNew ? unanswered : pendingAll;
+  const heroQuery = useNew ? heroUnanswered : heroAll;
+  const heroLabel = useNew ? STORE_WORDS.statPending : '답 기다리는 질문';
 
   /**
    * '오늘' 카드 머리줄 — "이수민 07:00 · 박지원 12:00 · 1명 예정".
@@ -269,7 +295,8 @@ export default function OwnerDashboardScreen() {
       {/* 상단바·탭바는 게이트 밖 — 화면 골격은 즉시 서고 본문만 기다린다.
           본문을 마운트하지 않는 것이 핵심이다: 도착 전에 그리면 '다음 행동' 한 줄의 라벨과 목적지가
           나중에 통째로 바뀐다(교대 승인 → 제안 검토처럼). */}
-      {!loaded ? (
+      {/* ★6번 덩이: 스위치를 다 읽고, 켜졌으면 미응답 수까지 와야 그린다(옛 라벨이 먼저 떴다 바뀌지 않게). */}
+      {!loaded || askFirst === null || (askFirst && !!unitId && !unansweredLoaded) ? (
         <ScreenLoading label="매장 현황을 불러오고 있어요…" />
       ) : (
       <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -283,7 +310,7 @@ export default function OwnerDashboardScreen() {
           <View ref={hubRef}>
           {/* 로딩 중 '—' 중립 표기는 걷어냈다 — 게이트가 그 일을 대신한다(본문 자체가 도착 뒤에 마운트된다). */}
           <HeroSubNav
-            label="답 기다리는 질문"
+            label={heroLabel}
             value={pending > 0 ? `${pending}건` : '없어요'}
             caption={
               heroQuery
