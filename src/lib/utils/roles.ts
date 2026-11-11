@@ -44,6 +44,8 @@ export const MANAGER_OWNER_ROUTES = [
   '/owner/quiz-new',
   '/owner/quiz-list',
   '/owner/quiz',
+  // 7번 매장 교육 링크(결정 134 · 사장·매니저만 만든다 · 서버 auth_can('manage_links')). 화면은 g7 이 넣는다.
+  '/owner/edu-link',
 ] as const;
 export const managerMayOpen = (pathname: string): boolean =>
   MANAGER_OWNER_ROUTES.some((p) => pathname === p || pathname.startsWith(`${p}/`));

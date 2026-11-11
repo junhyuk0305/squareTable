@@ -25,7 +25,9 @@ import { Radius, Elevation } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Layout, Space } from '@/lib/theme/layout';
 import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery } from '@/types';
-import { STORE_WORDS } from '@/lib/place/words';
+import { STORE_WORDS, ANSWER_LIVE } from '@/lib/place/words';
+import { answerGoesLive } from '@/lib/utils/answerPolicy';
+import { buildDirectUq, buildPlaybookEntryFromSquare } from '@/lib/utils/buildEntry';
 
 /**
  * 히트맵 범례 — **직원 축**(§7-8 표의 세 번째 열). 색은 "내가 아는가" 하나뿐이고, 사장 축의
@@ -48,6 +50,9 @@ const MY_HEAT_LEGEND: HeatLegend = {
 export function JuniorMySpace({ me }: { me: string }) {
   const queue = useUnknownQueueStore((s) => s.queue);
   const resolveUq = useUnknownQueueStore((s) => s.resolve);
+  const answerUq = useUnknownQueueStore((s) => s.answer);
+  // 결정 145: 매니저가 이 화면에서 답해도 바로 노하우다(판정 = answerPolicy 한 곳).
+  const live = answerGoesLive(useSessionStore((s) => s.role));
   const suggestions = useSuggestionStore((s) => s.suggestions);
   const submitSuggestion = useSuggestionStore((s) => s.submit);
   const history = useChatStore((s) => s.history);
@@ -149,6 +154,19 @@ export function JuniorMySpace({ me }: { me: string }) {
   };
   const onNewAnswer = async (uqId: string, text: string) => {
     setAnswerFor(null);
+    if (live) {
+      // 사장 코치 화면과 같은 길 = 노하우 저장 + 질문 해결 한 트랜잭션(0311 answer_unknown_query · 질문자 알림 포함).
+      const uq = queue.find((u) => u.id === uqId) ?? buildDirectUq('Know-how', text);
+      const entry = buildPlaybookEntryFromSquare(uq, {
+        situation: text, quagmire: '', uncover: '',
+        action: { steps: [] }, result: { before: '', after: '', metric: '' }, extract: { do: '', dont: '' },
+      }, { title: uq.query_text });
+      const d = await answerUq(uqId, entry);
+      if (d === 'ok') showToast(ANSWER_LIVE.saved, 'good');
+      else if (d === 'already') showToast(ANSWER_LIVE.already, 'info');
+      else showToast(ANSWER_LIVE.saveFail, 'warn');
+      return;
+    }
     const ok = await submitSuggestion({ kind: 'new', text, sourceUqId: uqId });
     if (ok) showToast('사장님이 승인하면 노하우에 추가돼요', 'good');
   };
@@ -366,6 +384,7 @@ export function JuniorMySpace({ me }: { me: string }) {
           entries={publishedEntries}
           onResolve={onResolveWith}
           onNewAnswer={onNewAnswer}
+          live={live}
           onClose={() => setAnswerFor(null)}
         />
       )}
@@ -430,12 +449,15 @@ function AnswerSheet({
   entries,
   onResolve,
   onNewAnswer,
+  live = false,
   onClose,
 }: {
   uq: UnknownQuery;
   entries: PlaybookEntry[];
   onResolve: (uqId: string, entryId: string) => void;
   onNewAnswer: (uqId: string, text: string) => void;
+  /** 매니저 = 새 답이 바로 노하우(결정 145). 안내·버튼 문구만 바뀐다. */
+  live?: boolean;
   onClose: () => void;
 }) {
   const [q, setQ] = useState('');
@@ -479,15 +501,15 @@ function AnswerSheet({
 
         <Text style={s.sheetLabel}>찾는 답이 없으면 — 새로 남기기</Text>
         <TextInput value={line} onChangeText={setLine} placeholder="한 줄로 답을 적어주세요" placeholderTextColor={InkColors.ink3} style={[s.inp, s.inpMulti]} multiline />
-        <Text style={s.sheetHint}>사장님이 승인하면 노하우에 추가돼 다음 사람이 바로 봐요.</Text>
+        <Text style={s.sheetHint}>{live ? ANSWER_LIVE.hint : '사장님이 승인하면 노하우에 추가돼 다음 사람이 바로 봐요.'}</Text>
         <Pressable
           onPress={() => onNewAnswer(uq.id, line.trim())}
           disabled={!line.trim()}
           style={({ pressed }) => [s.cta, !line.trim() && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}
           accessibilityRole="button"
-          accessibilityLabel="사장님께 답 보내기"
+          accessibilityLabel={live ? ANSWER_LIVE.button : '사장님께 답 보내기'}
         >
-          <Text style={s.ctaText}>사장님께 답 보내기</Text>
+          <Text style={s.ctaText}>{live ? ANSWER_LIVE.button : '사장님께 답 보내기'}</Text>
         </Pressable>
       </ScrollView>
     </BottomSheet>

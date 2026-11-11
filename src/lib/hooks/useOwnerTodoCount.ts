@@ -13,8 +13,9 @@ import type { PlaybookSuggestion, UnknownQuery } from '@/types';
  * 거른다 — 같은 조건을 다시 쓰면 배지와 목록이 조용히 어긋난다.
  */
 
-/** 사장이 답해야 하는 질문 = 아직 대기 중인 미답질문. */
-export const isTodoQuestion = (u: UnknownQuery) => u.status === 'pending_owner_answer';
+/** 사장이 답해야 하는 질문 = 아직 대기 중이고 승인 대기(in_review · 직원이 답을 올려 둔 것)가 아닌 미답질문.
+ *  승인 대기 질문은 제안함(검토할 제안)에서 다룬다. 같은 질문이 두 줄에 같이 세어지지 않는다(0520 벨과 같은 판정). */
+export const isTodoQuestion = (u: UnknownQuery) => u.status === 'pending_owner_answer' && u.in_review !== true;
 
 /** 검토해야 하는 제안 = 아직 승인·반려하지 않았고 **내가 올린 게 아닌** 것.
  *  판정 본체는 알림 축과 같은 함수(notifications.isPendingSuggestionToReview) — 배지·목록·알림이
