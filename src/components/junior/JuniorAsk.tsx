@@ -18,6 +18,9 @@ import { ChatComposerBar, PlusToggleIcon } from '@/components/ChatComposerBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { ChatTurn } from '@/components/junior/ChatTurn';
 import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
+import { useStoreAskFirst } from '@/lib/hooks/useStoreAskFirst';
+import { EntryDetailModal } from '@/components/EntryDetailModal';
+import { STORE_WORDS } from '@/lib/place/words';
 
 import { isBrandHidden } from '@/lib/brand/copy';
 import { useChatStore } from '@/lib/store/useChatStore';
@@ -27,7 +30,7 @@ import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { InkColors, TextColor } from '@/lib/theme/colors';
 import { Type } from '@/lib/theme/type';
 
-import type { Category } from '@/types';
+import type { Category, PlaybookEntry } from '@/types';
 
 import { styles } from './askStyles';
 
@@ -98,8 +101,17 @@ export function JuniorAsk({ suggestEntry = true, seed, focusId }: { suggestEntry
   );
   // 칩 문구 = 노하우 제목 그대로. 문장을 지어내면 원문과 어긋나 매칭이 빗나간다.
   const pool = useMemo(() => askable.map((e) => e.title).filter(Boolean), [askable]);
-  // 빈 상태: 풀 앞쪽 몇 개(첫인상).
-  const emptySuggestions = useMemo(() => pool.slice(0, EMPTY_SUGGEST_COUNT), [pool]);
+  // ★6번 덩이(스위치 store/ask_first · 묻는 칸 위): 대화가 없을 때 입력칸을 위로 올리고 그 아래 "먼저 읽어 보세요" +
+  //   노하우 목록 첫 항목(추천 순서 1번)을 둔다. 대화가 시작되면 지금처럼 입력바가 아래로 간다(두 번째부터 묻는 칸이 주인).
+  //   스위치가 꺼지면 옛 배치 그대로다. 매니저 화면(owner/ask)도 이 부품을 써서 같이 바뀐다.
+  const askFirst = useStoreAskFirst();
+  const firstEntry = askFirst ? askable[0] : undefined;
+  const [readEntry, setReadEntry] = useState<PlaybookEntry | undefined>(undefined);
+  // 빈 상태: 풀 앞쪽 몇 개(첫인상). 첫 항목을 "먼저 읽어 보세요"로 따로 보이면 칩은 그다음부터(같은 것 두 번 금지).
+  const emptySuggestions = useMemo(
+    () => pool.slice(firstEntry ? 1 : 0, (firstEntry ? 1 : 0) + EMPTY_SUGGEST_COUNT),
+    [pool, firstEntry],
+  );
   const unknownQueue = useUnknownQueueStore((s) => s.queue);
   // 실제로 사장에게 등록된 질문 문장 집합 — 재기동 후 '보냈음' 표시의 **유일한 근거**(#25).
   // enqueue 의 중복 판정과 같은 잣대(trim 비교)를 쓴다 — 두 곳이 다르면 표시와 실제가 또 어긋난다.
@@ -191,7 +203,63 @@ export function JuniorAsk({ suggestEntry = true, seed, focusId }: { suggestEntry
   // 지난 대화와 노하우가 **둘 다** 와야 본문을 그린다. 하나라도 기다리면
   //  ① 기존 대화가 있는 사람도 "무엇이든 물어보세요" 빈 화면을 먼저 보고
   //  ② "우리 매장 노하우 0개를 보고 답해요"라고 아직 안 온 것을 없는 것처럼 말한다.
-  const ready = historyLoaded && entriesLoaded;
+  const ready = historyLoaded && entriesLoaded && askFirst !== null;
+  // 묻는 칸을 위에 둘 때 = 스위치 켜짐 + 대화 없음 + 답 기다리는 중 아님.
+  const composerTop = !!askFirst && ready && history.length === 0 && !isLoading;
+
+  // 입력바 — 떠 있는 알약. ＋ · 입력칸 · 보내기 = 업무 채팅 입력바와 같은 구성(2026-09-03). 위·아래 두 자리가 같은 것을 쓴다.
+  const composer = (
+    <ChatComposerBar>
+      {suggestEntry && (
+        <Pressable
+          onPress={() => setMenu((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={menu ? '추가 메뉴 닫기' : '추가 메뉴 열기'}
+          style={({ pressed }) => [styles.plus, pressed && { opacity: 0.85 }]}
+        >
+          <PlusToggleIcon open={menu} color={InkColors.bubbleText} />
+        </Pressable>
+      )}
+      <TextInput
+        value={input}
+        onChangeText={setInput}
+        placeholder="궁금한 걸 물어보세요"
+        placeholderTextColor={InkColors.ink3}
+        style={styles.input}
+        editable={!isLoading}
+        maxLength={500}
+        returnKeyType="send"
+        onSubmitEditing={() => handleSend()}
+        blurOnSubmit={false}
+      />
+      <Pressable
+        onPress={() => handleSend()}
+        disabled={!canSend}
+        accessibilityRole="button"
+        accessibilityLabel="질문 보내기"
+        style={({ pressed }) => [styles.send, !canSend && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}
+      >
+        <Ionicons name="arrow-up" size={20} color={InkColors.ink} />
+      </Pressable>
+    </ChatComposerBar>
+  );
+  // ＋ 메뉴 항목 — 업무 채팅(WorkChat)과 같은 형태. 항목은 '노하우 제안' 하나다. 아래 자리 = 입력바 위에 뜸 · 위 자리 = 입력칸 바로 아래.
+  const menuItem = (
+    <Pressable
+      onPress={() => { setMenu(false); router.push('/junior/suggest'); }}
+      accessibilityRole="button"
+      accessibilityLabel="노하우 제안"
+      style={({ pressed }) => [styles.mi, pressed && { backgroundColor: InkColors.paper }]}
+    >
+      <View style={styles.miIc}>
+        <Ionicons name="bulb-outline" size={16} color={InkColors.ink} />
+      </View>
+      <View>
+        <Text style={styles.miLabel}>노하우 제안</Text>
+        <Text style={styles.miSub}>사장님 확인 뒤 매장 노하우가 돼요</Text>
+      </View>
+    </Pressable>
+  );
 
   return (
     // 키보드 회피는 공용 KeyboardShift — 헤더·세그먼트 아래에 놓여도 창 기준 오프셋을 스스로 잰다.
@@ -228,6 +296,26 @@ export function JuniorAsk({ suggestEntry = true, seed, focusId }: { suggestEntry
             <Text style={styles.emptySub}>
               매장 노하우를 바로 찾아드려요. 없으면 사장님께 대신 여쭤볼게요.
             </Text>
+            {composerTop && (
+              <>
+                <View style={styles.composerTop}>{composer}</View>
+                {menu && <Appear style={styles.menuInline}>{menuItem}</Appear>}
+                {firstEntry && (
+                  <View style={styles.firstRead}>
+                    <Text style={styles.groundingText}>{STORE_WORDS.firstRead}</Text>
+                    <Pressable
+                      onPress={() => setReadEntry(firstEntry)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${firstEntry.title} 읽기`}
+                      style={({ pressed }) => [styles.suggest, pressed && { opacity: 0.7 }]}
+                    >
+                      <Text style={styles.suggestText}>{firstEntry.title}</Text>
+                      <Ionicons name="chevron-forward" size={Type.body.fontSize} color={InkColors.ink3} />
+                    </Pressable>
+                  </View>
+                )}
+              </>
+            )}
             {/* ★노하우가 하나도 없으면 안내도 칩도 그리지 않는다 — 빈 칩·가짜 예시를 누르면
                 "물어봐도 답이 없다"가 첫 인상이 된다. 이때는 위 두 줄만 남는다. */}
             {emptySuggestions.length > 0 && (
@@ -330,63 +418,17 @@ export function JuniorAsk({ suggestEntry = true, seed, focusId }: { suggestEntry
         </View>
       )}
 
-      {/* ＋ 메뉴 — 업무 채팅(WorkChat)과 같은 형태·같은 위치. 항목은 '노하우 제안' 하나다. */}
-      {menu && (
+      {/* ＋ 메뉴 — 업무 채팅(WorkChat)과 같은 형태·같은 위치. 묻는 칸이 위에 있을 때는 그 아래에 붙는다(위 빈 상태 안). */}
+      {menu && !composerTop && (
         <>
           <Pressable style={styles.menuBackdrop} onPress={() => setMenu(false)} accessibilityLabel="메뉴 닫기" />
-          <Appear style={styles.menu}>
-            <Pressable
-              onPress={() => { setMenu(false); router.push('/junior/suggest'); }}
-              accessibilityRole="button"
-              accessibilityLabel="노하우 제안"
-              style={({ pressed }) => [styles.mi, pressed && { backgroundColor: InkColors.paper }]}
-            >
-              <View style={styles.miIc}>
-                <Ionicons name="bulb-outline" size={16} color={InkColors.ink} />
-              </View>
-              <View>
-                <Text style={styles.miLabel}>노하우 제안</Text>
-                <Text style={styles.miSub}>사장님 확인 뒤 매장 노하우가 돼요</Text>
-              </View>
-            </Pressable>
-          </Appear>
+          <Appear style={styles.menu}>{menuItem}</Appear>
         </>
       )}
 
-      {/* 입력바 — 떠 있는 알약. ＋ · 입력칸 · 보내기 = 업무 채팅 입력바와 같은 구성(2026-09-03). */}
-      <ChatComposerBar>
-        {suggestEntry && (
-          <Pressable
-            onPress={() => setMenu((v) => !v)}
-            accessibilityRole="button"
-            accessibilityLabel={menu ? '추가 메뉴 닫기' : '추가 메뉴 열기'}
-            style={({ pressed }) => [styles.plus, pressed && { opacity: 0.85 }]}
-          >
-            <PlusToggleIcon open={menu} color={InkColors.bubbleText} />
-          </Pressable>
-        )}
-        <TextInput
-          value={input}
-          onChangeText={setInput}
-          placeholder="궁금한 걸 물어보세요"
-          placeholderTextColor={InkColors.ink3}
-          style={styles.input}
-          editable={!isLoading}
-          maxLength={500}
-          returnKeyType="send"
-          onSubmitEditing={() => handleSend()}
-          blurOnSubmit={false}
-        />
-        <Pressable
-          onPress={() => handleSend()}
-          disabled={!canSend}
-          accessibilityRole="button"
-          accessibilityLabel="질문 보내기"
-          style={({ pressed }) => [styles.send, !canSend && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}
-        >
-          <Ionicons name="arrow-up" size={20} color={InkColors.ink} />
-        </Pressable>
-      </ChatComposerBar>
+      {/* 입력바 — 묻는 칸이 위로 간 동안(대화 없음 · 스위치 켜짐)에는 아래에 또 그리지 않는다. */}
+      {!composerTop && composer}
+      <EntryDetailModal entry={readEntry} visible={!!readEntry} onClose={() => setReadEntry(undefined)} />
     </KeyboardShift>
   );
 }

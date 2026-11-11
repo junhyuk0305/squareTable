@@ -225,3 +225,23 @@ export function eduOwnerWord(place: EduPlace | null, owner?: string): string {
   const name = owner?.trim();
   return name ? ownerName(name) : '공간 주인님';
 }
+
+/**
+ * 매장 칸(6번 덩이) — 정본 사전 3장의 매장 열. 지금 매장 화면 중 6번이 바꾼 곳만 여기서 가져온다.
+ * 키 이름은 SPACE_WORDS 와 같다. 매장에는 "승인 대기"가 있다(공간에는 승인이 없다).
+ */
+export const STORE_WORDS = {
+  firstRead: '먼저 읽어 보세요',
+  notFoundAsk: '우리 매장 노하우에 아직 없어요. 사장님께 질문을 보냈어요. 답이 오면 알려 드려요.',
+  askSent: '사장님께 질문을 보냈어요',
+  answeredBy: '사장님이 답했어요',
+  answerOpen: '답 보기',
+  statQuestions: '질문',
+  statAi: 'AI 답변',
+  statDirect: '직접 답변',
+  statPending: '미응답',
+  statPeriod: '이번 달',
+  statApproval: '승인 대기',
+  /** 직원 노하우 탭 세 번째 칸(옛 "내 공간" · 새 "공간"과 이름이 겹쳐 바꿨다). */
+  myActivity: '내 활동',
+} as const;

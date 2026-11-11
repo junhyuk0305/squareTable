@@ -20,6 +20,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { createClient } from '@supabase/supabase-js';
 import { runStoreLinkChecks } from './lib/qa-space-store-link.mjs';
 import { runEduAskChecks } from './lib/qa-space-edu-ask.mjs';
+import { runStoreAskChecks } from './lib/qa-store-ask-counts.mjs';
 
 if (!process.argv.includes('--local')) { console.error('중단: 로컬 전용 하니스다(--local)'); process.exit(2); }
 const DB = process.env.QA_DB_CONTAINER || 'supabase_db_SquareTable';
@@ -91,7 +92,7 @@ ${chk('F 목록 밖 → my_kind_features 공간 입구 꺼짐', 'F', `select ena
 ${tryq(`insert into public.space_entry_allowlist(user_id, note) values (${q(U.F)}, 'qa'), (${q(U.G)}, 'qa'), (${q(U.D)}, 'qa')`)}
 ${chk('F 목록 안 → my_kind_features 공간 입구 켜짐', 'F', `select enabled::text from public.my_kind_features() where kind = 'space' and feature = 'enter'`, 'ok|true')}
 ${chk('E 목록 밖 → 공간 입구 그대로 꺼짐', 'E', `select enabled::text from public.my_kind_features() where kind = 'space' and feature = 'enter'`, 'ok|false')}
-${chk('F 목록 안 → 매장 줄은 표 그대로', 'F', `select count(*)::text from public.my_kind_features() f join public.unit_kind_features k using (kind, feature) where f.kind = 'store' and f.enabled is distinct from k.enabled`, 'ok|0')}
+${chk('F 목록 안 → 매장 줄은 표 그대로(ask_first 는 같은 허용 목록을 본다 · 0520 · [7] 에서 잰다)', 'F', `select count(*)::text from public.my_kind_features() f join public.unit_kind_features k using (kind, feature) where f.kind = 'store' and f.feature <> 'ask_first' and f.enabled is distinct from k.enabled`, 'ok|0')}
 ${chk('F 전화 인증 전 → create_space 거절', 'F', `select count(*)::text from public.create_space('QA새공간')`, 'err:PHONE_NOT_VERIFIED')}
 update public.profiles set created_at = '2020-01-01' where id in (${q(U.F)}, ${q(U.G)}, ${q(U.D)});
 update public.profiles set role = 'owner' where id = ${q(U.G)};
@@ -260,7 +261,7 @@ insert into public.unknown_queries(id, unit_id, query_text, status, asked_at) va
 insert into public.playbook_suggestions(id, unit_id, kind, proposer_id, text, status, source_uq_id) values
   ('qa_ps_n7_${rnd}', ${q(SPQ)}, 'new', ${q(U.B)}, '제안', 'pending', 'qa_uq_n7_${rnd}');
 ${st('A', null, SPQ)}
-${chk('A 공간 주인 홈 숫자 넷(질문 3 · AI 2 · 직접 2 · 미응답 1)', 'A', `select questions || '/' || ai_answered || '/' || direct_answered || '/' || unanswered from public.unit_question_counts('${SPQ}')`, 'ok|3/2/2/1')}
+${chk('A 공간 주인 홈 숫자 넷(질문 3 · AI 2 · 직접 2 · 미응답 2 = 지난달 대기 듦 · 0520)', 'A', `select questions || '/' || ai_answered || '/' || direct_answered || '/' || unanswered from public.unit_question_counts('${SPQ}')`, 'ok|3/2/2/2')}
 ${st('A', null, SP)}
 ${chk('A 현재 공간이 다른 공간이면 → not_space_member', 'A', `select questions::text from public.unit_question_counts('${SPQ}')`, 'err:not_space_member')}
 ${chk('A 공간에서 매장 X 숫자 → not_manager', 'A', `select questions::text from public.unit_question_counts('${X}')`, 'err:not_manager')}
@@ -1366,6 +1367,8 @@ rollback;
     }
   }
 }
+
+runStoreAskChecks({ DB, check }); // 6번 덩이 매장 묻기 먼저(0520) · 별도 모듈
 
 console.log(`\n최종: ${fail === 0 ? 'PASS' : 'FAIL'} · 통과 ${pass} · 실패 ${fail} · skip ${skip} · 부른 수 ${calls} · 거절 ${rejected} · AI 호출 0회`);
 process.exit(fail === 0 ? 0 : 1);

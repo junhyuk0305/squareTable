@@ -547,7 +547,8 @@ async function main() {
     await po.goto(`${ORIGIN}/hub`, { waitUntil: 'domcontentloaded' });
     check('B7-0 허브 진입', await wait(po, '현황', 40000));
     await po.waitForTimeout(3000);
-    check('B7-1 AlertRow — 답 기다리는 질문(맨 위로 승격)', await see(po, '답 기다리는 질문'));
+    // 6번 덩이: 스위치(store/ask_first)가 켜진 계정은 같은 자리가 숫자 줄(미응답 큰 칸 + 승인 대기)이다.
+    check('B7-1 맨 위 — 답 기다리는 질문(옛 경고행) 또는 미응답 숫자 줄', (await see(po, '답 기다리는 질문')) || ((await see(po, '미응답')) && (await see(po, '승인 대기'))));
     check('B7-2 옛 "받은질문" 행은 확인 필요에서 빠졌다', !(await see(po, '받은질문')));
     // 2026-08-27(0a687a1): MiniStats 2칸(근무중·예정)을 '오늘 근무' 한 칸으로 합쳤다. 근무 중 인원은 아랫줄에 나온다
     //   (OwnerStatusView.tsx gridItems 'today' · "지금 N명 근무중" 또는 "지금은 출근 전이에요").

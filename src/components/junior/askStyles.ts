@@ -128,6 +128,10 @@ export const styles = StyleSheet.create({
   send: { width: 44, height: 44, borderRadius: Radius.pill, backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep, alignItems: 'center', justifyContent: 'center' },
 
   // ＋ 메뉴 — WorkChat 의 menu/mi 와 같은 값. bottom 은 입력바 실높이(COMPOSER_BAR_H)를 따른다.
+  // 묻는 칸이 위에 있을 때(6번 덩이 · 스위치 store/ask_first). 알약 바깥 여백은 빈 상태 좌우 여백과 겹치니 지운다.
+  composerTop: { marginHorizontal: -Space.md },
+  menuInline: { alignSelf: 'flex-start', backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: Space.xs, width: 220, ...Elevation.e3 },
+  firstRead: { gap: Gap.inline, marginTop: Space.sm },
   menuBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   menu: { position: 'absolute', left: Space.md, bottom: COMPOSER_BAR_H(44) + 4, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 6, width: 220, ...Elevation.e3 },
   mi: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 11, borderRadius: Radius.sm },

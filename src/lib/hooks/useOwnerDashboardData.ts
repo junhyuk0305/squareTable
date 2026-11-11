@@ -67,6 +67,8 @@ export type OwnerDashboardData = {
   pending: number;
   /** 사장 홈 히어로 = 가장 오래 기다린 미답변 질문 1건. 받은질문 화면의 hero와 **같은 1건**(sortByUrgency SSOT). */
   heroQuery?: UnknownQuery;
+  /** 6번 덩이(스위치 store/ask_first): 승인 대기(서버 계산 칸 in_review)를 뺀 미응답 중 가장 급한 1건. */
+  heroUnanswered?: UnknownQuery;
   /** 사장이 아직 답 안 한 직원 제안 건수 — 홈 '다음 행동' 2순위. */
   pendingSuggestions: number;
   /** 퀴즈에서 오답이 몰린 노하우 수 — 3순위. 판정 기준(표본 5·오답률 40%)의 SSOT는 useQuizBoard. */
@@ -220,6 +222,7 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   // 홈 히어로 1건 — 받은질문 화면과 같은 정렬을 쓴다(sortByUrgency = 판정 SSOT).
   // 두 화면이 다른 질문을 가리키면 "가장 오래 기다린 질문"이라는 말이 거짓이 된다.
   const heroQuery = useMemo(() => sortByUrgency(pendingList)[0], [pendingList]);
+  const heroUnanswered = useMemo(() => sortByUrgency(pendingList.filter((u) => u.in_review !== true))[0], [pendingList]);
 
   // 미검증(needs_review) 노하우 — 템플릿/업종팩 fork 등 사장이 아직 우리 매장 기준으로 안 다듬은 것.
   // 0보다 크면 대시보드 최상단 배너로 먼저 노출(검증 유도).
@@ -280,6 +283,7 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     pendingShiftTimes,
     pending,
     heroQuery,
+    heroUnanswered,
     pendingSuggestions,
     missedKnowhowCount,
     behindStaff,

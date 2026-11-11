@@ -247,6 +247,10 @@ export type UnknownQuery = {
   resolved_with_entry_id?: string;
   /** S1 ③(D4) 이 질문을 해결한 사람(직원이 기존 노하우로 즉시 해결 시 기록, 0071). */
   answered_by?: string;
+  /** 답 쓴 사람(0379). 승인으로 해결되면 제안한 직원이다. 비면 answered_by 를 쓴다. */
+  answer_author_id?: string | null;
+  /** 승인 대기(서버 계산 칸 uq_in_review · 0520). 이 질문에 대기 중인 답 제안이 있다. 화면은 다시 계산하지 않는다. */
+  in_review?: boolean | null;
 };
 
 // ── RAG 결과 (lib/rag.ts 출력과 호환) ───────────────

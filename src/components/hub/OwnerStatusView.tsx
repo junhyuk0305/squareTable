@@ -4,7 +4,7 @@
 //  3) 매장 비교 표: 손 필요 순 기본·헤더 탭 정렬(★이 블록만 multi 게이팅, 매장 1곳=단일 요약)
 //  4) 이번달: AI 사용(무료 캡 대비 표기)
 // 원칙: 전부 매장 단위(개인별 지표 산출 금지) · 허브는 읽기·이동까지(실행 UI 없음).
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -27,7 +27,11 @@ import { AlertRow } from '@/components/blocks/AlertRow';
 import { BrandInviteCard } from '@/components/owner/BrandInviteCard';
 import { ProgressPill } from '@/components/blocks/ProgressPill';
 import { StackBar } from '@/components/blocks/StackBar';
-import { StatCardGrid, type StatCardItem } from '@/components/blocks/StatCardGrid';
+import { StatCard, StatCardGrid, type StatCardItem } from '@/components/blocks/StatCardGrid';
+import { NumberRow, type NumberRowWords } from '@/components/place/NumberRow';
+import { fetchOwnerQuestionCounts, type OwnerQuestionCounts } from '@/lib/db';
+import { useStoreAskFirst } from '@/lib/hooks/useStoreAskFirst';
+import { STORE_WORDS } from '@/lib/place/words';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { Appear, stagger } from '@/components/Appear';
@@ -45,6 +49,15 @@ type SortKey = 'pending_q' | 'working' | 'uncovered';
  * ⚠️ 고정 height 금지: 글자 배율이 커지면 상자가 터진다(재발 이력). 최소값만 잡고 내용이 넘치면 늘어난다.
  */
 const LOADING_MIN_HEIGHT = 360;
+
+/** 숫자 줄 라벨(매장 칸 · 단어 사전 한 곳). */
+const NUMBER_WORDS: NumberRowWords = {
+  questions: STORE_WORDS.statQuestions,
+  ai: STORE_WORDS.statAi,
+  direct: STORE_WORDS.statDirect,
+  pending: STORE_WORDS.statPending,
+  period: STORE_WORDS.statPeriod,
+};
 
 export function OwnerStatusView({ header }: { header: ReactNode }) {
   const overview = useHubStore((s) => s.overview);
@@ -70,6 +83,23 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
   // 현재 플랜의 월 AI 사용량 캡(무료 200 / 유료 매장당 3,000, 0193). null 이면 캡 없음 = 분모를 그리지 않는다.
   const aiCap = PLANS[plan].aiMonthly;
 
+  // ── 숫자 줄(6번 덩이 · 스위치 store/ask_first 가 켜진 계정만) — 질문 · AI 답변 · 직접 답변 · 미응답 + 승인 대기.
+  //    숫자는 서버 owner_question_counts 한 곳(미응답에서 승인 대기를 뺀 정의 · 공간은 안 셈). 꺼지면 아래 옛 경고행 그대로.
+  //    못 읽으면 숫자 줄 대신 옛 경고행으로 떨어진다(0건 위장 금지 · 본문 overview 는 유효하다).
+  const askFirst = useStoreAskFirst();
+  const [askCounts, setAskCounts] = useState<OwnerQuestionCounts[] | null>(null);
+  const [askLoaded, setAskLoaded] = useState(false);
+  const loadAskCounts = useCallback(
+    () => fetchOwnerQuestionCounts().then(({ data }) => { setAskCounts(data); setAskLoaded(true); }),
+    [],
+  );
+  useEffect(() => {
+    if (!askFirst) return;
+    let alive = true;
+    void fetchOwnerQuestionCounts().then(({ data }) => { if (alive) { setAskCounts(data); setAskLoaded(true); } });
+    return () => { alive = false; };
+  }, [askFirst]);
+
   useEffect(() => {
     void hydrateOwner();
     void hydrateCross();
@@ -83,6 +113,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
     void hydrateCross();
     void hydratePrefs();
     void hydrateKnowhowStats();
+    if (askFirst) void loadAskCounts();
   });
 
   const [sortKey, setSortKey] = useState<SortKey>('pending_q');
@@ -158,7 +189,8 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
   //   되지 않는다(#6). 예전엔 넷 다 "실패하면 loaded 를 안 올림" 계약이라 **하나만 실패해도
   //   사장이 로그인 직후 착지하는 이 화면이 영원히 "매장 현황을 불러오고 있어요…"** 였고,
   //   마운트 1회 fetch 라 재시도 버튼도 트리거도 없었다.
-  if (!ownerLoaded || !todayLoaded || !crossLoaded || !prefsLoaded || !knowhowStatsLoaded) {
+  // ★6번 덩이: 스위치를 다 읽고(askFirst !== null) 켜졌으면 숫자 줄까지 와야 그린다 — 옛 경고행이 먼저 떴다 바뀌지 않게.
+  if (!ownerLoaded || !todayLoaded || !crossLoaded || !prefsLoaded || !knowhowStatsLoaded || askFirst === null || (askFirst && !askLoaded)) {
     return (
       <View style={styles.loading}>
         <ScreenLoading label="매장 현황을 불러오고 있어요…" />
@@ -263,12 +295,28 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       label: '점검할 노하우',
       value: inbox.needsReview > 0 ? inbox.needsReview : '없어요',
       unit: inbox.needsReview > 0 ? '개' : undefined,
-      sub: inboxLive.filter((k) => k.key !== 'review').map((k) => `${k.key === 'sugg' ? '승인 기다리는 제안' : k.title} ${k.n}건`).join(' · ') || undefined,
+      // ★6번 덩이: 숫자 줄이 켜지면 승인 대기가 첫 줄에 있으므로 여기서 "승인 기다리는 제안"을 또 말하지 않는다(같은 숫자 한 번).
+      sub: inboxLive.filter((k) => k.key !== 'review' && !(askFirst && askCounts && k.key === 'sugg')).map((k) => `${k.key === 'sugg' ? '승인 기다리는 제안' : k.title} ${k.n}건`).join(' · ') || undefined,
       visual: inboxTotal > 0 ? <StackBar parts={inboxKinds.map((k) => ({ n: k.n, label: k.label, color: k.color }))} /> : undefined,
       onPress: inboxTotal === 0 ? undefined : inboxLive.length === 1 ? () => goKind(inboxLive[0]) : () => setInboxOpen(true),
     },
     // 'AI 답변 사용' 칸은 2026-08-27 §7-6 판정으로 뺐다 — 월 사용/캡은 매장 설정(owner/settings)의 한 행으로 옮김.
   ];
+
+  // 숫자 줄 합계(스위치가 켜졌고 서버 숫자를 읽었을 때만). 매장 고르기 시트는 overview 매장 순서 · 0건 매장 포함.
+  const askNumbers = askFirst && askCounts
+    ? (() => {
+        const by = new Map(askCounts.map((r) => [r.unitId, r]));
+        const sum = (k: 'questions' | 'aiAnswered' | 'directAnswered' | 'unanswered' | 'approval') =>
+          askCounts.reduce((n, r) => n + r[k], 0);
+        const unitsOf = (k: 'unanswered' | 'approval') => overview.map((r) => ({ uid: r.unit_id, count: by.get(r.unit_id)?.[k] ?? 0 }));
+        return {
+          total: { questions: sum('questions'), aiAnswered: sum('aiAnswered'), directAnswered: sum('directAnswered'), unanswered: sum('unanswered'), approval: sum('approval') },
+          unanswered: unitsOf('unanswered'),
+          approval: unitsOf('approval'),
+        };
+      })()
+    : null;
 
   // 시작 체크리스트(콜드스타트) — 매장 1곳 사장만(신규 단일 매장이 타깃, 다점포는 이미 루프를 앎).
   // ownerLoaded 게이트로 "로드 전"을 "새 매장"으로 위장하지 않는다. 4단계 완료 시 영구 소멸.
@@ -291,6 +339,34 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       {/* ── 1) 답 기다리는 질문(블록 X2) — 사장이 오늘 손대야 할 유일한 '막힌 것'.
              2026-08-06: '확인 필요' 카드 안 한 행이던 것을 맨 위 경고행으로 승격했다.
              0건이면 AlertRow가 스스로 숨는다. 아래 '확인 필요'에서는 뺐다(같은 사실 두 번 금지). ── */}
+      {/* ★6번 덩이(스위치 store/ask_first): 같은 자리에 숫자 줄 + 승인 대기 칸. 0건이어도 보인다. 매장이 여럿이면 합계,
+             누르면 매장 고르기 시트(0건 매장 포함). 승인 대기가 여기 오므로 아래 '점검할 노하우' 칸의 "승인 기다리는 제안"은 뺀다. */}
+      {askNumbers ? (
+        <Appear delay={stagger(1)}>
+          <View style={{ gap: Space.sm }}>
+            <NumberRow
+              counts={askNumbers.total}
+              words={NUMBER_WORDS}
+              onPressPending={() => {
+                if (multi) setPicker({ title: STORE_WORDS.statPending, path: '/owner/inbox', units: askNumbers.unanswered });
+                else if (askNumbers.unanswered[0]) void goStore(askNumbers.unanswered[0].uid, '/owner/inbox');
+              }}
+            />
+            <StatCard
+              item={{
+                key: 'approval',
+                label: STORE_WORDS.statApproval,
+                value: askNumbers.total.approval,
+                unit: '건',
+                onPress: () => {
+                  if (multi) setPicker({ title: STORE_WORDS.statApproval, path: '/owner/suggestions', units: askNumbers.approval });
+                  else if (askNumbers.approval[0]) void goStore(askNumbers.approval[0].uid, '/owner/suggestions');
+                },
+              }}
+            />
+          </View>
+        </Appear>
+      ) : (
       <Appear delay={stagger(1)}>
         <AlertRow
           label="답 기다리는 질문"
@@ -303,6 +379,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
           }}
         />
       </Appear>
+      )}
 
       {/* ── 2) '오늘' 섹션(MiniStats 2칸)은 2026-08-27 §7-6 판정으로 아래 L4 첫 칸('오늘 근무')에 흡수했다.
              MiniStats 2칸이 바로 아래 그리드와 형태가 겹치고 숫자 옆에 대상이 없었다(R2). ── */}

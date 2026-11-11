@@ -1647,7 +1647,8 @@ export async function fetchUnknownQueue(unitId: string | null = _unitId): Promis
   const [pending, others] = await Promise.all([
     supabase
       .from('unknown_queries')
-      .select('*')
+      // ★0520 승인 대기는 서버 계산 칸 하나(uq_in_review). 화면이 제안 표로 다시 계산하지 않는다(직원은 남의 제안을 못 읽는다).
+      .select('*, in_review:uq_in_review')
       .eq('unit_id', unitId)
       .eq('status', 'pending_owner_answer')
       .order('asked_at', { ascending: true })
@@ -5075,4 +5076,41 @@ export async function reportEduLink(token: string, key: string, cqId: string, ca
     return { data: null, error: error as DbErr };
   }
   return { data: true, error: null };
+}
+
+// ── 매장 묻기 먼저(0520 · 6번 덩이) ─────────────────────────────────────────
+/** 사장 현황(허브) 숫자 줄 한 행 = 내가 사장인 매장 하나. approval = 그 매장 대기 제안 전부(제안함 숫자와 같다). */
+export type OwnerQuestionCounts = QuestionCounts & { unitId: string; approval: number };
+
+/** 허브 숫자 줄(owner_question_counts). 멤버 표 역할 owner 인 매장만 · 공간은 안 센다. 합계는 화면이 더한다. */
+export async function fetchOwnerQuestionCounts(): Promise<DbResult<OwnerQuestionCounts[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('owner_question_counts').limit(PAGE_LIMIT);
+  if (error) readFail('fetchOwnerQuestionCounts', error);
+  const rows = data as { unit_id: string; questions: number; ai_answered: number; direct_answered: number; unanswered: number; in_review: number }[] | null;
+  return {
+    data: rows
+      ? rows.map((r) => ({ unitId: r.unit_id, questions: r.questions, aiAnswered: r.ai_answered, directAnswered: r.direct_answered, unanswered: r.unanswered, approval: r.in_review }))
+      : null,
+    error: error as DbErr,
+  };
+}
+
+/** 매장 배치 스위치('store','ask_first'). 켜진 계정만 숫자 줄·묻는 칸 위 배치를 쓴다. 줄이 없으면 꺼짐(옛 배치). */
+export function storeAskFirstOf(features: KindFeature[]): boolean {
+  return features.some((f) => f.kind === 'store' && f.feature === 'ask_first' && f.enabled === true);
+}
+
+/**
+ * 직원 답 제안을 승인하며 노하우로 남긴다(save_unknown_answer · 0379). 답 쓴 사람 = 제안한 직원 · 승인한 사람 = 나.
+ * answer_unknown_query 로 남기면 승인한 사장이 "답 쓴 사람"으로 적혀 질문자 알림에 사장 이름이 나갔다(0520 결함 셋 중 셋째).
+ * 결과 분류는 answerUnknownQuery 와 같다(not_pending = already · suggestion_not_found = failed + 코드).
+ */
+export async function answerUnknownQueryBySuggestion(uqId: string, entry: PlaybookEntry, suggestionId: string): Promise<DecisionResult> {
+  if (!HAS_SUPABASE) return { decision: 'ok', code: null };
+  return rpcDecision('answerUnknownQueryBySuggestion', 'save_unknown_answer', {
+    p_uq_id: uqId,
+    p_entry: stripNonColumns(entry),
+    p_suggestion_id: suggestionId,
+  });
 }

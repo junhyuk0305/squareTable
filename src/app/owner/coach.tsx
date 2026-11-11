@@ -153,7 +153,9 @@ export default function OwnerCoachScreen() {
         if (answerEntry) {
           // ★0311 노하우 저장 + 질문 해결 = 서버 한 트랜잭션. 두 기기가 같은 질문에 답해도 노하우는 1건 —
           //   뒤의 것은 already(not_pending)라 오류가 아니다. 중립 한 줄 + 서버 상태로 다시 읽고(answer 가 hydrate) 인박스로.
-          const d = await answer(realUq.id, answerEntry);
+          // ★0520 제안 검토로 왔으면(sugId · 제안의 source_uq_id = 이 질문) 그 제안으로 승인한다 →
+          //   답 쓴 사람 = 제안한 직원 · 승인한 사람 = 나(0379). 질문자 알림 이름도 제안한 직원이 된다.
+          const d = await answer(realUq.id, answerEntry, sugId ?? null);
           if (d === 'already') {
             setToastErr(false);
             setToast('이미 답이 달린 질문이에요.');
