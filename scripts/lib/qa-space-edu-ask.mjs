@@ -62,15 +62,18 @@ insert into public.playbook_entries(id, unit_id, category, title, status, creato
   (${q(e(3))}, ${q(SP)}, '서비스', '묻기 초안', 'draft', 'space_owner', '{}'::jsonb),
   (${q(e(5))}, ${q(SB)}, '서비스', '다른 공간 노하우', 'published', 'space_owner', '{}'::jsonb),
   (${q(e(7))}, ${q(X)}, '서비스', '매장 노하우', 'published', 'owner', '{}'::jsonb);
-insert into public.edu_links(id, unit_id, token, title, entry_ids, expires_at, closed_at) values
-  (${q(L1)}, ${q(SP)}, ${q(TK)}, 'QA 묻기 링크', array[${q(e(1))}, ${q(e(3))}], now() + interval '7 days', null),
-  ('qa_eal2_${rnd}', ${q(SP)}, ${q(TKC)}, 'QA 닫힘', '{}', now() + interval '7 days', now()),
-  ('qa_eal3_${rnd}', ${q(SP)}, ${q(TKE)}, 'QA 만료', '{}', now() - interval '1 minute', null),
-  ('qa_eal4_${rnd}', ${q(SD)}, ${q(TKD)}, 'QA 지운 공간', '{}', now() + interval '7 days', null),
-  ('qa_eal5_${rnd}', ${q(X)}, ${q(TKX)}, 'QA 매장 링크', array[${q(e(7))}], now() + interval '7 days', null),
-  ('qa_eal6_${rnd}', ${q(SB)}, ${q(TKB)}, 'QA 다른 공간 링크', array[${q(e(5))}], now() + interval '7 days', null),
-  ('qa_eal7_${rnd}', ${q(SP)}, ${q(TK2)}, 'QA 손님 제한 링크', '{}', now() + interval '7 days', null),
-  ('qa_eal8_${rnd}', ${q(SP)}, ${q(TK3)}, 'QA 링크 제한 링크', '{}', now() + interval '7 days', null);
+-- ★0555(s2): 손님에게 여는 판정 = 만든 사람이 허용 목록(또는 edu_links+edu_guest 켜짐). 공간 주인 O·N 을 허용 목록에 넣고 만든 사람으로 적는다.
+--   매장 링크(X)는 목록 밖 사장 D 가 만든 행이라 닫힌 채다(7번 판정 자체는 qa-store-edu-link 가 잰다).
+insert into public.space_entry_allowlist(user_id, note) values (${q(U.O)}, 'qa'), (${q(U.N)}, 'qa') on conflict do nothing;
+insert into public.edu_links(id, unit_id, token, title, entry_ids, expires_at, closed_at, created_by) values
+  (${q(L1)}, ${q(SP)}, ${q(TK)}, 'QA 묻기 링크', array[${q(e(1))}, ${q(e(3))}], now() + interval '7 days', null, ${q(U.O)}),
+  ('qa_eal2_${rnd}', ${q(SP)}, ${q(TKC)}, 'QA 닫힘', '{}', now() + interval '7 days', now(), ${q(U.O)}),
+  ('qa_eal3_${rnd}', ${q(SP)}, ${q(TKE)}, 'QA 만료', '{}', now() - interval '1 minute', null, ${q(U.O)}),
+  ('qa_eal4_${rnd}', ${q(SD)}, ${q(TKD)}, 'QA 지운 공간', '{}', now() + interval '7 days', null, ${q(U.O)}),
+  ('qa_eal5_${rnd}', ${q(X)}, ${q(TKX)}, 'QA 매장 링크', array[${q(e(7))}], now() + interval '7 days', null, ${q(U.D)}),
+  ('qa_eal6_${rnd}', ${q(SB)}, ${q(TKB)}, 'QA 다른 공간 링크', array[${q(e(5))}], now() + interval '7 days', null, ${q(U.N)}),
+  ('qa_eal7_${rnd}', ${q(SP)}, ${q(TK2)}, 'QA 손님 제한 링크', '{}', now() + interval '7 days', null, ${q(U.O)}),
+  ('qa_eal8_${rnd}', ${q(SP)}, ${q(TK3)}, 'QA 링크 제한 링크', '{}', now() + interval '7 days', null, ${q(U.O)});
 update public.units set deleted_at = now() where id = ${q(SD)};
 
 -- {K:n} 열쇠 · {C:n} 질문 번호 · {U:n} 그 질문의 답할 질문 번호. 없으면 null(앞 호출이 실패하면 뒤가 엉뚱하게 통과하지 않게).
@@ -121,7 +124,7 @@ ${call('틀린 토큰 → 묻기 거절', null, 'anon', ask(tk(9), 'null', '지�
 ${call('닫힌 링크 → 묻기 거절', null, 'anon', ask(TKC, 'null', '지은', '컵이 없어요'), 'err:link_closed')}
 ${call('만료된 링크 → 묻기 거절', null, 'anon', ask(TKE, 'null', '지은', '컵이 없어요'), 'err:link_closed')}
 ${call('지운 공간 링크 → 묻기 거절', null, 'anon', ask(TKD, 'null', '지은', '컵이 없어요'), 'err:link_closed')}
-${call('매장 링크(기능 꺼짐 · 7번 덩이) → 묻기 거절', null, 'anon', ask(TKX, 'null', '지은', '컵이 없어요'), 'err:link_closed')}
+${call('매장 링크(목록 밖 사장이 만듦 · ★0555) → 묻기 거절', null, 'anon', ask(TKX, 'null', '지은', '컵이 없어요'), 'err:link_closed')}
 ${call('이름 없이 첫 질문 거절', null, 'anon', ask(TK, 'null', '  ', '컵이 없어요'), 'err:name_required')}
 ${call('21자 이름 거절', null, 'anon', ask(TK, 'null', '가'.repeat(21), '컵이 없어요'), 'err:name_required')}
 ${call('빈 질문 거절', null, 'anon', ask(TK, 'null', '지은', '   '), 'err:invalid_argument')}

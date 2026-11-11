@@ -82,10 +82,12 @@ insert into public.unit_members(user_id, unit_id, role) values
 insert into public.session_active_spaces(session_id, user_id, space_id) values (${q(S.O)}, ${q(U.O)}, ${q(SP)}), (${q(S.M)}, ${q(U.M)}, ${q(SP)});
 insert into public.playbook_entries(id, unit_id, category, title, status, creator_role, square) values
   (${q(E1)}, ${q(SP)}, '서비스', '멤버 노하우 1', 'published', 'space_owner', '{"situation":"컵이 모자랄 때"}'::jsonb);
-insert into public.edu_links(id, unit_id, token, title, entry_ids, expires_at) values
-  (${q(L1)}, ${q(SP)}, ${q(TK1)}, 'QA 이어받기 링크', array[${q(E1)}], now() + interval '7 days'),
-  (${q(L2)}, ${q(SP)}, ${q(TK2)}, 'QA 둘째 링크', '{}', now() + interval '7 days'),
-  (${q(L3)}, ${q(SP)}, ${q(TK3)}, 'QA 닫을 링크', '{}', now() + interval '7 days');
+-- ★0555(s2): 손님·이어받기에 여는 판정 = 만든 사람이 허용 목록. 공간 주인 O 를 목록에 넣고 만든 사람으로 적는다.
+insert into public.space_entry_allowlist(user_id, note) values (${q(U.O)}, 'qa') on conflict do nothing;
+insert into public.edu_links(id, unit_id, token, title, entry_ids, expires_at, created_by) values
+  (${q(L1)}, ${q(SP)}, ${q(TK1)}, 'QA 이어받기 링크', array[${q(E1)}], now() + interval '7 days', ${q(U.O)}),
+  (${q(L2)}, ${q(SP)}, ${q(TK2)}, 'QA 둘째 링크', '{}', now() + interval '7 days', ${q(U.O)}),
+  (${q(L3)}, ${q(SP)}, ${q(TK3)}, 'QA 닫을 링크', '{}', now() + interval '7 days', ${q(U.O)});
 
 create function pg_temp.ma_fill(p_sql text) returns text language plpgsql as $f$
 declare m text[]; v text;

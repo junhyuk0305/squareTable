@@ -22,6 +22,7 @@ import { runStoreLinkChecks } from './lib/qa-space-store-link.mjs';
 import { runEduAskChecks } from './lib/qa-space-edu-ask.mjs';
 import { runMemberAskChecks } from './lib/qa-space-member-ask.mjs';
 import { runStoreAskChecks } from './lib/qa-store-ask-counts.mjs';
+import { runStoreEduLinkChecks } from './lib/qa-store-edu-link.mjs';
 
 if (!process.argv.includes('--local')) { console.error('중단: 로컬 전용 하니스다(--local)'); process.exit(2); }
 const DB = process.env.QA_DB_CONTAINER || 'supabase_db_SquareTable';
@@ -93,7 +94,7 @@ ${chk('F 목록 밖 → my_kind_features 공간 입구 꺼짐', 'F', `select ena
 ${tryq(`insert into public.space_entry_allowlist(user_id, note) values (${q(U.F)}, 'qa'), (${q(U.G)}, 'qa'), (${q(U.D)}, 'qa')`)}
 ${chk('F 목록 안 → my_kind_features 공간 입구 켜짐', 'F', `select enabled::text from public.my_kind_features() where kind = 'space' and feature = 'enter'`, 'ok|true')}
 ${chk('E 목록 밖 → 공간 입구 그대로 꺼짐', 'E', `select enabled::text from public.my_kind_features() where kind = 'space' and feature = 'enter'`, 'ok|false')}
-${chk('F 목록 안 → 매장 줄은 표 그대로(ask_first 는 같은 허용 목록을 본다 · 0520 · [7] 에서 잰다)', 'F', `select count(*)::text from public.my_kind_features() f join public.unit_kind_features k using (kind, feature) where f.kind = 'store' and f.feature <> 'ask_first' and f.enabled is distinct from k.enabled`, 'ok|0')}
+${chk('F 목록 안 → 매장 줄은 표 그대로(ask_first 는 같은 허용 목록을 본다 · 0520 · [7] 에서 잰다)', 'F', `select count(*)::text from public.my_kind_features() f join public.unit_kind_features k using (kind, feature) where f.kind = 'store' and f.feature not in ('ask_first', 'edu_links') and f.enabled is distinct from k.enabled`, 'ok|0')}
 ${chk('F 전화 인증 전 → create_space 거절', 'F', `select count(*)::text from public.create_space('QA새공간')`, 'err:PHONE_NOT_VERIFIED')}
 update public.profiles set created_at = '2020-01-01' where id in (${q(U.F)}, ${q(U.G)}, ${q(U.D)});
 update public.profiles set role = 'owner' where id = ${q(U.G)};
@@ -581,6 +582,8 @@ begin
 end $f$;
 select 'QA|CHK|로그인한 사람이 링크를 지워도 질문 두 표가 막지 않는다¦ok|1/1¦' || pg_temp.qa_link_delete_as_user();
 select pg_temp.qa_state(${q(U.A)}, ${q(S.A)}, null, ${q(SP)}, null, null);
+-- ★0555(s2): 링크 만들기·표 쓰기 = 허용 목록 계정만(약관 v2.5 전 · 결정 8). 공간 주인 A 를 이 트랜잭션 안에서 목록에 넣는다.
+insert into public.space_entry_allowlist(user_id, note) values (${q(U.A)}, 'qa') on conflict do nothing;
 select pg_temp.qa_chk('A 공간 주인이 매장 X 노하우를 링크에 담기 거절', 'A', $s$insert into public.edu_links(id, unit_id, token, title, expires_at, entry_ids) values ('qa_el_x_${rnd}', '${SP}', md5('x') || md5('y'), 'x', now() + interval '1 day', array[(select id from public.playbook_entries where unit_id = '${X}' limit 1)]) returning 'inserted'$s$, 'err');
 select pg_temp.qa_chk('A 공간 주인이 자기 공간 노하우를 링크에 담기 됨', 'A', $s$insert into public.edu_links(id, unit_id, token, title, expires_at, entry_ids) values ('qa_el_s_${rnd}', '${SP}', md5('s') || md5('t'), 's', now() + interval '1 day', array['qa_pb_pub_${rnd}']) returning 'inserted'$s$, 'ok|inserted');
 
@@ -732,13 +735,14 @@ insert into public.playbook_entries(id, unit_id, category, title, status, creato
   ('qa_pb_hid_${rnd}', ${q(SP)}, '서비스', '공간 숨김', 'published', 'space_owner', null, now()),
   ('qa_pb_x_${rnd}',   ${q(X)},  '서비스', '매장 X 노하우', 'published', null, null, null);
 insert into public.units(id, store_name, kind, deleted_at) values ('qa_spd_${rnd}', 'QA지운공간', 'space', now());
-insert into public.edu_links(id, unit_id, token, title, entry_ids, expires_at, closed_at) values
-  ('qa_el1_${rnd}', ${q(SP)}, 'qatok1_${rnd}_aaaaaaaaaaaa', 'QA 링크1', array['qa_pb_drf_${rnd}', 'qa_pb_pub_${rnd}', 'qa_pb_arc_${rnd}', 'qa_pb_hid_${rnd}'], now() + interval '7 days', null),
-  ('qa_el2_${rnd}', ${q(SP)}, 'qatok2_${rnd}_aaaaaaaaaaaa', 'QA 닫힘', array['qa_pb_pub_${rnd}'], now() + interval '7 days', now()),
-  ('qa_el3_${rnd}', ${q(SP)}, 'qatok3_${rnd}_aaaaaaaaaaaa', 'QA 만료', array['qa_pb_pub_${rnd}'], now() - interval '1 minute', null),
-  ('qa_el4_${rnd}', ${q(SP)}, 'qatok4_${rnd}_aaaaaaaaaaaa', 'QA 빈 링크', '{}', now() + interval '7 days', null),
-  ('qa_el5_${rnd}', 'qa_spd_${rnd}', 'qatok5_${rnd}_aaaaaaaaaaaa', 'QA 지운 자리', '{}', now() + interval '7 days', null),
-  ('qa_el6_${rnd}', ${q(X)}, 'qatok6_${rnd}_aaaaaaaaaaaa', 'QA 매장 링크', array['qa_pb_x_${rnd}'], now() + interval '7 days', null);
+-- ★0555(s2): 만든 사람 = A(허용 목록 · 위에서 넣음). 매장 링크는 만든 사람이 비어(목록 밖과 같다) 닫힌 채다.
+insert into public.edu_links(id, unit_id, token, title, entry_ids, expires_at, closed_at, created_by) values
+  ('qa_el1_${rnd}', ${q(SP)}, 'qatok1_${rnd}_aaaaaaaaaaaa', 'QA 링크1', array['qa_pb_drf_${rnd}', 'qa_pb_pub_${rnd}', 'qa_pb_arc_${rnd}', 'qa_pb_hid_${rnd}'], now() + interval '7 days', null, ${q(U.A)}),
+  ('qa_el2_${rnd}', ${q(SP)}, 'qatok2_${rnd}_aaaaaaaaaaaa', 'QA 닫힘', array['qa_pb_pub_${rnd}'], now() + interval '7 days', now(), ${q(U.A)}),
+  ('qa_el3_${rnd}', ${q(SP)}, 'qatok3_${rnd}_aaaaaaaaaaaa', 'QA 만료', array['qa_pb_pub_${rnd}'], now() - interval '1 minute', null, ${q(U.A)}),
+  ('qa_el4_${rnd}', ${q(SP)}, 'qatok4_${rnd}_aaaaaaaaaaaa', 'QA 빈 링크', '{}', now() + interval '7 days', null, ${q(U.A)}),
+  ('qa_el5_${rnd}', 'qa_spd_${rnd}', 'qatok5_${rnd}_aaaaaaaaaaaa', 'QA 지운 자리', '{}', now() + interval '7 days', null, ${q(U.A)}),
+  ('qa_el6_${rnd}', ${q(X)}, 'qatok6_${rnd}_aaaaaaaaaaaa', 'QA 매장 링크', array['qa_pb_x_${rnd}'], now() + interval '7 days', null, null);
 -- A 를 지운 공간의 주인으로도 넣는다. 지운 자리라서 막히는지(남의 자리라서가 아니라) 보려고.
 insert into public.unit_members(user_id, unit_id, role) values (${q(U.A)}, 'qa_spd_${rnd}', 'space_owner');
 -- 다른 자리 노하우 번호가 이미 담겨 버린 행(옛 쓰기 길·사고 가정). 트리거를 잠시 끄고 심는다. 손님 함수가 그래도 걸러야 한다.
@@ -840,7 +844,8 @@ ${[
   ['B', '매장 직원 매장 링크 만들기 거절', `select id from public.edu_link_create(${q(X)}, '', '{}', 7)`, 'err:not_manager'],
   ['D', '매장 사장 공간 링크 만들기 거절', `select id from public.edu_link_create(${q(SP)}, '', '{}', 7)`, 'err:not_space_owner'],
   ['D', '매장 사장 매장 링크 만들기 됨', `select (c.id is not null)::text from public.edu_link_create(${q(X)}, 'X', array['qa_pb_x_${rnd}'], 7) c`, 'ok|true'],
-  ['C', '매장 매니저 매장 링크 만들기 됨', `select (c.id is not null)::text from public.edu_link_create(${q(X)}, 'X', '{}', 7) c`, 'ok|true'],
+  // ★0555: C 는 허용 목록 밖이다(목록 안 매니저 = 됨은 qa-store-edu-link 가 잰다).
+  ['C', '매장 매니저(허용 목록 밖) 매장 링크 만들기 거절', `select id from public.edu_link_create(${q(X)}, 'X', '{}', 7)`, 'err:feature_off'],
   ['E', '아무 데도 아닌 사람 링크 만들기 거절', `select id from public.edu_link_create(${q(SP)}, '', '{}', 7)`, 'err:not_space_owner'],
   ['A', '주인이 닫으면 손님 열기 실패(두 번 닫아도 됨)', `select pg_temp.qa_close_then_open('qa_el1_${rnd}', 'qatok1_${rnd}_aaaaaaaaaaaa')`, 'ok|false'],
   ['B', '공간 멤버 링크 닫기 거절', `select public.edu_link_close('qa_el1_${rnd}')::text`, 'err:not_space_owner'],
@@ -909,7 +914,8 @@ const parseTbl = (o) => {
 console.log(`\n[1] 매장 기능 전수 호출 · 함수 ${nFn}개 · 표 ${nTbl}개`);
 check('매장 기능 목록이 비지 않았다', nFn > 50 && nTbl > 20, `함수 ${nFn} · 표 ${nTbl}`);
 // 공간 부품 표: 0371 가 공간 갈래를 붙인 표. 현재 공간이 있을 때만 공간 행이 보여도 된다.
-const SPACE_PART_TABLES = new Set(['playbook_entries', 'playbook_embeddings', 'chat_queries', 'unknown_queries', 'ai_usage_monthly', 'question_replies']);
+// ★0555: edu_links 정책이 auth_space_id 를 부르게 돼 목록에 들어왔다. 교육 링크는 공간 부품이다(공간 주인이 현재 공간에서 자기 링크를 본다).
+const SPACE_PART_TABLES = new Set(['playbook_entries', 'playbook_embeddings', 'chat_queries', 'unknown_queries', 'ai_usage_monthly', 'question_replies', 'edu_links']);
 // 공간 부품 함수(2번 덩이): 현재 공간에서 공간 결과를 돌려주는 것이 정상이라 A·B 의 ①②④ 비교에서 뺀다.
 //   매장 쪽 비교(B·C ③a=③b=③c)와 섞임 검사는 그대로 받는다.
 const SPACE_PART_FNS = new Set(['ai_quota_status_at']);
@@ -1098,7 +1104,9 @@ insert into public.playbook_entries(id, unit_id, category, title, status, creato
   ('qa_dpe_st_${rnd}', ${q(ST)}, '서비스', '대조 매장 노하우', 'published', 'owner');
 insert into public.chat_queries(id, unit_id, query_text) values ('qa_dcq_st_${rnd}', ${q(ST)}, '대조 매장 질문');
 select set_config('request.jwt.claims', '', true);
-insert into public.edu_links(id, unit_id, token, title) values ('qa_del_el_${rnd}', ${q(SPA)}, ${q(TOKEN)}, 'QA 삭제 링크');
+-- ★0555(s2): 링크를 손님에게 여는 판정 = 만든 사람이 허용 목록. 주인 O 를 목록에 넣고 만든 사람으로 적는다.
+insert into public.space_entry_allowlist(user_id, note) values (${q(V.O)}, 'qa') on conflict do nothing;
+insert into public.edu_links(id, unit_id, token, title, created_by) values ('qa_del_el_${rnd}', ${q(SPA)}, ${q(TOKEN)}, 'QA 삭제 링크', ${q(V.O)});
 insert into public.edu_link_guests(id, link_id, unit_id, name, key_hash) values ('qa_del_g_${rnd}', 'qa_del_el_${rnd}', ${q(SPA)}, ${q(GUEST)}, md5(random()::text));
 insert into public.chat_queries(id, unit_id, query_text, link_id, junior_name) values ('qa_dcq_g_${rnd}', ${q(SPA)}, '손님 질문', 'qa_del_el_${rnd}', ${q(GUEST)});
 insert into public.edu_guest_questions(cq_id, guest_id, link_id) values ('qa_dcq_g_${rnd}', 'qa_del_g_${rnd}', 'qa_del_el_${rnd}');
@@ -1268,9 +1276,10 @@ insert into public.unit_members(user_id, unit_id, role) values
   (${q(V.P)}, ${q(S6)}, 'space_owner'), (${q(V.N)}, ${q(S6B)}, 'space_owner'), (${q(V.T)}, ${q(X)}, 'owner');
 update public.profiles set role = 'owner', active_unit_id = ${q(X)} where id = ${q(V.T)};
 update public.units set invite_code = coalesce(invite_code, 'QX' || upper(substr(md5(random()::text), 1, 4))), invite_expires_at = null where id = ${q(X)};
-insert into public.edu_links(id, unit_id, token, title) values
-  ('qa_mem_el_${rnd}', ${q(S6)}, ${q(TK)}, 'QA 멤버 링크'), ('qa_mem_elb_${rnd}', ${q(S6B)}, ${q(TKB)}, 'QA 멤버 링크B'),
-  ('qa_mem_elc_${rnd}', ${q(S6)}, ${q(TKC)}, 'QA 닫힌 링크'), ('qa_mem_elx_${rnd}', ${q(X)}, ${q(TKX)}, 'QA 매장 링크');
+-- ★0555(s2): 손님에게 여는 판정 = 만든 사람이 허용 목록. 만든 사람을 적는다(P·N·T 는 위 허용 목록에 있다).
+insert into public.edu_links(id, unit_id, token, title, created_by) values
+  ('qa_mem_el_${rnd}', ${q(S6)}, ${q(TK)}, 'QA 멤버 링크', ${q(V.P)}), ('qa_mem_elb_${rnd}', ${q(S6B)}, ${q(TKB)}, 'QA 멤버 링크B', ${q(V.N)}),
+  ('qa_mem_elc_${rnd}', ${q(S6)}, ${q(TKC)}, 'QA 닫힌 링크', ${q(V.P)}), ('qa_mem_elx_${rnd}', ${q(X)}, ${q(TKX)}, 'QA 매장 링크', ${q(V.T)});
 update public.edu_links set closed_at = now() where id = 'qa_mem_elc_${rnd}';
 select set_config('request.jwt.claims', json_build_object('sub', ${q(V.P)}, 'role', 'authenticated')::text, true);
 insert into public.playbook_entries(id, unit_id, category, title, status, creator_role, creator_id, creator_name) values
@@ -1299,7 +1308,7 @@ ${chk('틀린 코드 5번이면 맞는 코드도 잠김(매장 합류와 같은 
 -- 링크로 온 사람의 멤버 요청
 ${chk('닫힌 링크로 요청 거절', 'err|link_closed', req('R', TKC, false))}
 ${chk('없는 토큰으로 요청 거절', 'err|link_closed', req('R', `nope_${rnd}_${rnd}_xx`, false))}
-${chk('매장 링크로 요청 거절(★0550 기능 꺼진 링크 = 닫힌 링크)', 'err|link_closed', req('R', TKX, false))}
+${chk('매장 링크로 요청 거절(★0555 허용 목록 사장의 열린 매장 링크 · 공간이 아님)', 'err|feature_off', req('R', TKX, false))}
 ${chk('입구 닫힌 계정 요청 거절', 'err|space_closed', req('G', TK, false))}
 ${chk('이미 멤버는 요청 거절', 'err|already_member', req('Q', TK, false))}
 ${chk('요청 됨', 'ok|true', req('R', TK))}
@@ -1409,6 +1418,7 @@ rollback;
 }
 
 runStoreAskChecks({ DB, check }); // 6번 덩이 매장 묻기 먼저(0520) · 별도 모듈
+runStoreEduLinkChecks({ DB, check }); // 야간 s2 7번 매장 교육 링크(0555) · 별도 모듈
 
 console.log(`\n최종: ${fail === 0 ? 'PASS' : 'FAIL'} · 통과 ${pass} · 실패 ${fail} · skip ${skip} · 부른 수 ${calls} · 거절 ${rejected} · AI 호출 0회`);
 process.exit(fail === 0 ? 0 : 1);
