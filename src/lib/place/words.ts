@@ -315,3 +315,17 @@ export const STORE_LINK = {
   aiCapAsker: '이번 달 AI 답은 다 썼어요. 사장님께 바로 보냈어요.',
   pickNoBrand: '본사 노하우는 링크에 담을 수 없어요.',
 } as const;
+
+// night-1111 g7
+// 매장 교육 링크 목록 화면(`/owner/edu-link`). 만들기·상세는 공간과 같은 부품(components/edu/LinkForm)이라 그 문구를 같이 쓴다.
+export const STORE_LINK_LIST = {
+  newLink: '새 교육 링크',
+  emptyTitle: '아직 만든 링크가 없어요',
+  emptyBody: '노하우를 담아 링크로 보내 보세요.',
+  open: '열림',
+  closed: '닫힘',
+  expired: '기간 끝남',
+  daysLeft: (n: number) => `${n}일 남음`,
+  loadFail: '링크를 불러오지 못했어요',
+  loading: '링크를 불러오고 있어요…',
+} as const;

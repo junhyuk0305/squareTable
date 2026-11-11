@@ -3,6 +3,7 @@ import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Screen } from '@/components/Screen';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { OwnerKnowhowBrowse, type KnowhowSegKey } from '@/components/owner/OwnerKnowhowBrowse';
+import { StoreEduLinkRow } from '@/components/edu/LinkFormStore';
 
 const SEG_KEYS: KnowhowSegKey[] = ['todo', 'knowhow'];
 // 2026-08-19 에 '안 쓰임' 칸이 '할 일'로 흡수됐다. 옛 딥링크(?seg=unused)는 죽이지 않고 그리로 착지시킨다.
@@ -36,6 +37,8 @@ export default function OwnerCategoriesScreen() {
       scroll={false}
     >
       <Stack.Screen options={{ headerShown: false }} />
+      {/* 7번 매장 교육 링크 입구(M06). 스위치가 꺼진 계정은 아무것도 안 그린다 = 지금 화면. */}
+      <StoreEduLinkRow />
       <OwnerKnowhowBrowse onSelect={openEntry} initialSegment={initialSegment} />
     </Screen>
   );
