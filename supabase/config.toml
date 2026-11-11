@@ -418,3 +418,9 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 enabled = true
 verify_jwt = false
 
+
+# knowhow-photo-copy — 공간 제안 승인 뒤 사진을 매장 폴더로 복사(0581 · 야간 작업 11-11 sb).
+# 서비스 키로 복사하므로 로그인 토큰을 게이트에서도 검증한다. 함수 안에서 사람·매장 권한·제안 경로를 다시 본다.
+[functions.knowhow-photo-copy]
+enabled = true
+verify_jwt = true
