@@ -125,6 +125,8 @@ begin
   begin
     select u.id, u.store_name into v_space, v_name from public.units u where u.id = v_cq.unit_id and u.kind = 'space';
     if v_space is not null then
+      -- 서로 다른 손님 질문이 동시에 보내져도 "10분에 한 번" 판정이 한 줄로 서게 공간 단위로 잠근다(합친 CSO · 11-11).
+      perform pg_advisory_xact_lock(hashtext('edu-q-notice:' || v_space));
       insert into public.member_notices (user_id, unit_id, kind, store_name, actor_name, title, body, url)
       select m.user_id, v_space, 'question', v_name, v_cq.junior_name,
              format('%s님의 질문', coalesce(nullif(btrim(v_cq.junior_name), ''), '링크로 온 사람')),
