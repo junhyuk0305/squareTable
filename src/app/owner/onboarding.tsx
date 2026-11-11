@@ -10,6 +10,10 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { OwnerFirstAsk } from '@/components/owner/OwnerFirstAsk';
+import { OwnerFirstFive } from '@/components/owner/OwnerFirstFive';
+import { ScreenLoading } from '@/components/ScreenLoading';
+import { useStoreAskFirst } from '@/lib/hooks/useStoreAskFirst';
+import { OWNER_FIRST } from '@/lib/place/words';
 import { templatesForIndustry, forkTemplate, type PlaybookTemplate } from '@/data/knowhowPacks';
 import { standardSections, UNSECTIONED } from '@/lib/config/sections';
 import { Appear, stagger } from '@/components/Appear';
@@ -46,6 +50,8 @@ export default function OwnerOnboardingScreen() {
   const freeMode = useSessionStore((s) => s.freeMode);
   const iapEnabled = useSessionStore((s) => s.iapEnabled);
   const addEntry = usePlaybookStore((s) => s.add);
+  // 8번 첫 5분 새 순서(결정 116) = 스위치 ('store','ask_first') 가 켜진 계정만. null = 아직 못 읽음.
+  const askFirst = useStoreAskFirst();
 
   const industry = (params.industry as string) || sessionIndustry;
   const inviteCode = (params.code as string) || sessionInvite || '------';
@@ -136,6 +142,30 @@ export default function OwnerOnboardingScreen() {
     setStep('done');
   };
   const goDashboard = () => router.replace('/owner/dashboard');
+
+  // ── 스위치 읽는 동안 = 로딩(옛 화면이 먼저 보였다가 바뀌지 않게) · 켜짐 = 새 순서(초대 → 질문 던져보기) ──
+  if (askFirst === null) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ScreenLoading label={OWNER_FIRST.loading} />
+      </SafeAreaView>
+    );
+  }
+  if (askFirst) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <OwnerFirstFive
+          inviteCode={inviteCode}
+          industry={industry}
+          startAtAsk={params.step === 'ask'}
+          // 허브 재진입(?step=ask)이면 원래 화면으로 · 첫 실행이면 홈으로.
+          onFinish={() => (params.step === 'ask' && router.canGoBack() ? router.back() : goDashboard())}
+        />
+      </SafeAreaView>
+    );
+  }
 
   // ── aha 스텝: 첫 질문 ──
   if (step === 'ask') {

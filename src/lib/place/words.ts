@@ -315,3 +315,43 @@ export const STORE_LINK = {
   aiCapAsker: '이번 달 AI 답은 다 썼어요. 사장님께 바로 보냈어요.',
   pickNoBrand: '본사 노하우는 링크에 담을 수 없어요.',
 } as const;
+
+// night-1111 g8
+/** 사장 답하기 팩 초안(M03 · 결정 115·117). 스위치 ('store','ask_first') 가 켜진 계정만 본다. */
+export const PACK_DRAFT = {
+  label: '업종 노하우에서 찾은 초안',
+  situation: '상황',
+  steps: '할 일',
+  confirm: '맞아요',
+  edit: '고치기',
+  saved: '매장 노하우로 남기고 답을 보냈어요.',
+  saveFail: '저장하지 못했어요. 연결을 확인하고 다시 시도해 주세요.',
+} as const;
+
+/** 사장 첫 5분(M08 · 결정 116). 직원 초대 → 질문 던져보기. 스위치가 꺼진 계정은 옛 순서(템플릿 고르기 → 첫 질문 → 초대코드). */
+export const OWNER_FIRST = {
+  inviteTitle: '직원을 먼저 초대해요',
+  inviteBody: '직원은 궁금한 걸 앱으로 물어요. 사장님 답은 매장 노하우가 돼요.',
+  /** H5-버튼: '다음'을 버튼 이름으로 쓰지 않는다(동사 + 목적어). */
+  next: '질문 던져 보기',
+  askTitle: '직원이 물을 법한 질문을 하나 해 보세요.',
+  askBody: '업종 노하우에서 맞는 답을 찾아 초안으로 보여 드려요.',
+  askPlaceholder: '예) 음료를 쏟았을 때 어떻게 해요?',
+  askButton: '찾아보기',
+  firstSaved: '첫 노하우를 남겼어요.',
+  noDraftTitle: '답할 사람이 없어요.',
+  noDraftBody: '직원 질문은 초대한 뒤에 여기로 와요.',
+  writeOwn: '직접 답 쓰기',
+  finish: '끝내기',
+  backToHub: '현황으로 돌아가기',
+  loading: '불러오고 있어요…',
+} as const;
+
+/** 매니저가 직원 화면(노하우 탭 내 활동)에서 질문에 새 답을 남길 때(결정 145 · 바로 노하우). */
+export const ANSWER_LIVE = {
+  hint: '바로 노하우가 돼요. 다음 사람은 바로 봐요.',
+  button: '노하우로 남기기',
+  saved: '답으로 남겼어요. 다음 사람은 바로 봐요.',
+  saveFail: '저장하지 못했어요. 다시 시도해 주세요.',
+  already: '이미 답이 달린 질문이에요.',
+} as const;

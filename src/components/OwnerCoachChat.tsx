@@ -138,7 +138,8 @@ export function OwnerCoachChat({
       init.push({ id: nextId(), kind: 'alba', text: seedText, meta: `${reviewProposal.name}님의 제안` });
       init.push({ id: nextId(), kind: 'ai', text: '제안을 노하우 초안으로 정리하고 있어요. 초안이 뜨면 고칠 부분만 말씀하시거나, 이대로 좋으면 바로 저장해 주세요.' });
     } else if (isInboxAnswer) {
-      const who = uq.junior_name;
+      // 링크로 온 사람의 질문은 질문자 칸이 비고 이름이 비어 있을 수 있다(0401 · 계약 6-1).
+      const who = uq.junior_name || (uq.junior_id ? '직원' : SPACE_WORDS.guest);
       init.push({
         id: nextId(),
         kind: 'alba',

@@ -50,6 +50,7 @@ import { Surface } from '@/lib/theme/colors';
 import { todayStr, tsMs } from '@/lib/utils/attendance';
 import { sortNotices, isNoticeUnreadFor } from '@/lib/utils/notice';
 import { asMemberRole, canManage } from '@/lib/utils/roles';
+import { answerGoesLive } from '@/lib/utils/answerPolicy';
 import { useBackIntercept } from '@/lib/hooks/useBackIntercept';
 import { unreadMentionIds } from '@/lib/utils/notifications';
 
@@ -799,7 +800,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       noteCaptureNudge('submit');
       const text = line.trim();
       if (!cap || !text) return;
-      if (isOwner) {
+      // 결정 145: 사장·매니저의 답은 바로 노하우(판정 = answerPolicy 한 곳).
+      if (answerGoesLive(sessionRole)) {
         const square: SquareBlock = {
           situation: text,
           quagmire: '', uncover: '',
@@ -818,7 +820,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
         if (ok) showToast('사장님이 확인하면 노하우로 등록돼요', 'good');
       }
     },
-    [capture, isOwner, addEntry, attachKnowhow, submitSuggestion, noteCaptureNudge],
+    [capture, sessionRole, addEntry, attachKnowhow, submitSuggestion, noteCaptureNudge],
   );
   const skipCapture = useCallback(() => {
     setCapture(null);

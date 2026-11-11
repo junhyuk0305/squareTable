@@ -18,6 +18,12 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { buildDirectUq } from '@/lib/utils/buildEntry';
 import { insertKnowhowToUnit } from '@/lib/db';
+import { PackDraftCard, confirmedPackEntry } from '@/components/owner/PackDraftCard';
+import { useStoreAskFirst } from '@/lib/hooks/useStoreAskFirst';
+import { packDraftFrom, packDraftSeed } from '@/lib/knowhow/packDraft';
+import { templatesForIndustry } from '@/data/knowhowPacks';
+import { PACK_DRAFT } from '@/lib/place/words';
+import { Space } from '@/lib/theme/layout';
 import { InkColors, BrandColors, Surface } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Type } from '@/lib/theme/type';
@@ -101,6 +107,9 @@ export default function OwnerCoachScreen() {
   // 0315: 다른 매장에 넣기(copy_knowhow_to)는 양쪽 매장 소유자만 된다. 이 매장의 매니저에게는 넛지를 안 띄운다.
   const isOwnerHere = useSessionStore((s) => s.role === 'owner');
   const userName = useSessionStore((s) => s.userName);
+  const userId = useSessionStore((s) => s.userId);
+  const sessionRole = useSessionStore((s) => s.role);
+  const industry = useSessionStore((s) => s.industry);
   const nudgeTargets = useMemo(
     () => stores.filter((st) => isOwnerHere && st.role === 'owner' && st.unit_id !== activeUnit).map((st) => ({ unit_id: st.unit_id, store_name: st.store_name })),
     [stores, activeUnit, isOwnerHere],
@@ -220,6 +229,36 @@ export default function OwnerCoachScreen() {
     },
     [answerable, realUq, resolve, navAfter],
   );
+
+  // ── 팩 초안(8번 · 결정 115·117 · 스위치 ('store','ask_first')) ──
+  // 받은 질문에 답할 때만. 다른 매장에 쓰는 길(?unit=)·제안 검토(sugId)에는 안 붙인다(그 매장 업종·직원 답이 따로 있다).
+  // 찾기 = 업종 노하우팩 키워드(AI 0회). 맞는 것이 없으면 카드를 안 그린다.
+  const askFirst = useStoreAskFirst();
+  const draftHit = useMemo(
+    () =>
+      askFirst === true && answerable && realUq && !targetUnitId && !sugId
+        ? packDraftFrom(realUq.query_text, templatesForIndustry(industry))
+        : null,
+    [askFirst, answerable, realUq, targetUnitId, sugId, industry],
+  );
+  const [draftClosed, setDraftClosed] = useState(false);
+  const [draftSeed, setDraftSeed] = useState<string | null>(null);
+  const [draftBusy, setDraftBusy] = useState(false);
+  // [맞아요] = 팩 원문으로 노하우 + 질문 해결을 한 번에(코치 저장과 같은 원자 RPC · 질문자 알림 포함).
+  const confirmDraft = useCallback(async () => {
+    if (!draftHit || draftBusy || !activeUnit) return;
+    setDraftBusy(true);
+    const entry = confirmedPackEntry(draftHit.item, { unitId: activeUnit, userId, userName, role: sessionRole });
+    const ok = await finishPublish([entry.id], true, PACK_DRAFT.saved, entry);
+    setDraftBusy(false);
+    if (ok) setDraftClosed(true);
+  }, [draftHit, draftBusy, activeUnit, userId, userName, sessionRole, finishPublish]);
+  // [고치기] = 코치 입력칸에 팩 원문을 채운다(?seed= 와 같은 길). 카드는 닫는다.
+  const editDraft = useCallback(() => {
+    if (!draftHit) return;
+    setDraftSeed(packDraftSeed(draftHit.item));
+    setDraftClosed(true);
+  }, [draftHit]);
 
   // ── 저장 전 확인(겹침·챕터·파트) ──
   // 노하우가 창고에 들어가는 길목이 여기 하나뿐이라, 문지기도 여기 하나만 둔다.
@@ -353,11 +392,19 @@ export default function OwnerCoachScreen() {
       <Stack.Screen options={{ title: isInboxAnswer ? '답 쓰기' : sugId ? '제안 검토' : '노하우 추가' }} />
       <ScreenTitleHeader title={isInboxAnswer ? '답 쓰기' : sugId ? '제안 검토' : '노하우 추가'} backFallback />
 
+      {draftHit && !draftClosed && (
+        <View style={styles.draftWrap}>
+          <PackDraftCard item={draftHit.item} busy={draftBusy} onConfirm={() => void confirmDraft()} onEdit={editDraft} />
+        </View>
+      )}
+
       <OwnerCoachChat
+        // [고치기] 로 팩 원문을 채우면 입력칸 초기값이 바뀌어야 해서 새로 그린다(대화는 아직 비어 있다).
+        key={draftSeed ? 'pack-seed' : 'plain'}
         uq={uq}
         isInboxAnswer={isInboxAnswer}
         initialCategory={initialCategory}
-        seedText={typeof seed === 'string' ? seed : undefined}
+        seedText={draftSeed ?? (typeof seed === 'string' ? seed : undefined)}
         reviewProposal={!isInboxAnswer && sugId ? { name: reviewSug?.proposer_name ?? '직원' } : undefined}
         onPublished={onPublished}
         onAnswerWithExisting={answerable ? answerWithExisting : undefined}
@@ -403,6 +450,7 @@ export default function OwnerCoachScreen() {
 const styles = StyleSheet.create({
   // 화면 바탕(Surface.screen · 채팅도 예외 없음 · 2026-11-02). 입력칸이 아래 안전 영역을 써야 해 SafeAreaView(bottom)는 그대로.
   container: { flex: 1, backgroundColor: Surface.screen },
+  draftWrap: { paddingHorizontal: Space.gutter, paddingTop: Space.md },
 
   toastWrap: { position: 'absolute', left: 0, right: 0, bottom: 36, alignItems: 'center' },
   toast: {
