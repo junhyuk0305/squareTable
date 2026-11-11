@@ -5354,3 +5354,22 @@ export async function copyProposalPhotos(suggestionId: string): Promise<DbResult
     return fail(e instanceof Error ? e.message : 'network');
   }
 }
+
+// night-1111 g7
+/** 매장에 본사 노하우(사본)가 하나라도 있나. 있을 때만 매장 링크 고르기 아래 STORE_LINK.pickNoBrand 를 그린다. 못 읽으면 false(안내 한 줄만 빠진다). */
+export async function storeHasBrandEntries(unitId: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return false;
+  const { data, error } = await supabase
+    .from('playbook_entries')
+    .select('id')
+    .eq('unit_id', unitId)
+    .not('brand_entry_id', 'is', null)
+    .is('archived_at', null)
+    .is('brand_hidden_at', null)
+    .limit(1);
+  if (error) {
+    readFail('storeHasBrandEntries', error);
+    return false;
+  }
+  return ((data as unknown[]) ?? []).length > 0;
+}
