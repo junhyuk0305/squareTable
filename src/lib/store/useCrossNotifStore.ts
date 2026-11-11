@@ -3,7 +3,7 @@
 // RLS 는 활성 매장만 노출하므로 realtime 불가 — 허브/알림 화면 진입 시점 fetch 로 갱신(폴링 온 포커스).
 import { create } from 'zustand';
 import { currentAccountEpoch, isStaleAccountEpoch } from '@/lib/store/tenantEpoch';
-import { fetchCrossStoreNotifData, fetchMyUnitClosureAlerts, fetchJoinNotices, markFeedRead as dbMarkFeedRead, type UnitNotifData, type UnitClosureAlert } from '@/lib/db';
+import { fetchCrossStoreNotifData, fetchMyUnitClosureAlerts, fetchJoinNotices, fetchMySpaceNotifData, markFeedRead as dbMarkFeedRead, type UnitNotifData, type UnitClosureAlert, type SpaceNotifRow } from '@/lib/db';
 import type { JoinNotice } from '@/lib/store/useStaffStore';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -22,6 +22,8 @@ type State = {
   closures: UnitClosureAlert[];
   /** 합류 결과(0247 approved·rejected) — 계정 단위라 RPC(매장 묶음) 밖에서 따로 당긴다(0313 · 결정 1). */
   joinNotices: JoinNotice[];
+  /** ★야간 g4a 공간 벨 줄(my_space_notif_data · 0551). 계정 단위라 매장 묶음 밖에서 따로 당긴다. 행 모양은 spaceNotifications.ts. */
+  spaceRows: SpaceNotifRow[];
   /** true = 조회 **시도가 끝남**(성공·실패 무관). 실패 여부는 loadError 로 본다. */
   loaded: boolean;
   /** 마지막 hydrate 가 실패했는가 — 화면이 "알림 없음"과 "못 불러옴"을 구분해 재시도 UI를 띄운다. */
@@ -40,6 +42,7 @@ export const useCrossNotifStore = create<State>((set, get) => ({
   data: [],
   closures: [],
   joinNotices: [],
+  spaceRows: [],
   // 다른 스토어와 같은 관례 — 백엔드가 없으면(데모) 기다릴 것이 없으므로 처음부터 도착으로 친다.
   loaded: !HAS_SUPABASE,
   loadError: false,
@@ -50,8 +53,12 @@ export const useCrossNotifStore = create<State>((set, get) => ({
     if (now - _lastHydrateAt < HYDRATE_TTL_MS) return;
     _lastHydrateAt = now;
     // 합류 결과 읽기 실패는 허브 실패로 보지 않는다(행 하나가 빠질 뿐 · 명부 스토어와 같은 관례).
-    const [{ data, error }, { data: closures }, joinRes] = await Promise.all([fetchCrossStoreNotifData(), fetchMyUnitClosureAlerts(), fetchJoinNotices()]);
+    // 공간 벨 줄 읽기 실패도 허브 실패로 보지 않는다(그 줄만 지난 값으로 남는다 · 합류 결과와 같은 관례).
+    const [{ data, error }, { data: closures }, joinRes, spaceRes] = await Promise.all([
+      fetchCrossStoreNotifData(), fetchMyUnitClosureAlerts(), fetchJoinNotices(), fetchMySpaceNotifData(),
+    ]);
     if (isStaleAccountEpoch(epoch)) return;
+    if (spaceRes.data) set({ spaceRows: spaceRes.data });
     if (error || !data) {
       _lastHydrateAt = 0; // 실패는 TTL 미적용 — 다음 진입에서 즉시 재시도
       // ★못 불러왔어도 '기다리기'는 끝났다. 여기서 loaded 를 안 세우면 이 플래그를 게이트에 넣은

@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, type ScrollView } from 'react-native';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Screen, Section } from '@/components/Screen';
@@ -9,8 +9,10 @@ import { EmptyState } from '@/components/EmptyState';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { SettingsSection, SettingsRow } from '@/components/settings/SettingsKit';
+import { SpaceMemberAsk } from '@/components/space/SpaceMemberAsk';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
+import { useSpaceAskStore } from '@/lib/store/useSpaceAskStore';
 import { confirmAction } from '@/lib/utils/confirm';
 import { fetchEntries, leaveSpace as rpcLeaveSpace } from '@/lib/db';
 import { placeErrorMessage } from '@/lib/place/errors';
@@ -23,15 +25,21 @@ import { Type } from '@/lib/theme/type';
 import type { PlaybookEntry } from '@/types';
 
 /**
- * S17 참여 중인 공간(멤버) — 그 공간 노하우 읽기 · 공간 나가기. 착지 = 매장 탭 [공간] 줄 · N8 알림(/space/joined/<번호>).
+ * S17 참여 중인 공간(멤버) — 묻기 · 그 공간 노하우 읽기 · 공간 나가기. 착지 = 매장 탭 [공간] 줄 · N8 알림(/space/joined/<번호>)
+ *   · N4 답 알림(/space/joined/<번호>?uqId=<질문> · 그 질문을 펼치고 그 자리로 스크롤).
  * 공간에 들어가는 일은 공간 _layout 이 경로의 번호로 먼저 한다(여기 오면 spaceId = 그 공간 · 역할 = 멤버).
- * 묻기는 아직 없다(멤버 묻기 = 다음 덩이). 숨기지 않고 한 줄로 알린다(SPACE_WORDS.askSoon).
+ * ★야간 g4a: "묻기는 곧 열려요" 한 줄 자리에 묻는 칸(SpaceMemberAsk)을 둔다. 멤버는 무조건 묻는다(사용자 결정 6 · 스위치 없음).
+ *   멤버는 입구 허용 목록 뒤에서만 생긴다(계약 4절). 노하우를 다 읽은 뒤 칸을 그린다(빈 목록이면 AI 를 안 부른다).
  * 나가기: confirmAction 한 번 · 되돌리기 없음. 나간 뒤 앱의 공간 상태를 비운다(목록 다시 읽기).
  */
 export default function SpaceJoined() {
   const router = useRouter();
   const spaceId = useSessionStore((s) => s.spaceId);
   const spaceName = useSessionStore((s) => s.spaceName);
+  const { uqId } = useLocalSearchParams<{ uqId?: string }>();
+  const scrollRef = useRef<ScrollView>(null);
+  const [askY, setAskY] = useState(0);
+  const onFocusY = useCallback((y: number) => scrollRef.current?.scrollTo({ y: askY + y, animated: true }), [askY]);
   const [entries, setEntries] = useState<PlaybookEntry[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState('');
@@ -69,15 +77,20 @@ export default function SpaceJoined() {
     showToast(SPACE_MEMBERS.left, 'good');
     // 먼저 공간 밖으로 옮긴 뒤 상태를 비운다. 거꾸로면 문지기가 이 경로의 공간에 다시 들어가려 한다.
     router.replace('/stores');
+    useSpaceAskStore.getState().clear();
     const s = useSessionStore.getState();
     s.leaveSpace();
     void s.loadSpaces();
   };
 
   return (
-    <Screen header={<ScreenTitleHeader title={spaceName || SPACE_WORDS.place} backFallback="/stores" />}>
+    <Screen scrollRef={scrollRef} header={<ScreenTitleHeader title={spaceName || SPACE_WORDS.place} backFallback="/stores" />}>
       <Stack.Screen options={{ headerShown: false }} />
-      <Text style={styles.note}>{SPACE_WORDS.askSoon}</Text>
+      {spaceId && (entries || failed) ? (
+        <View onLayout={(e) => setAskY(e.nativeEvent.layout.y)}>
+          <SpaceMemberAsk spaceId={spaceId} entries={entries ?? []} focusUq={typeof uqId === 'string' ? uqId : undefined} onFocusY={onFocusY} />
+        </View>
+      ) : null}
       {failed && !entries ? (
         <LoadErrorState title={SPACE_KNOWHOW.loadFail} onRetry={() => void load()} />
       ) : !entries ? (
@@ -129,7 +142,6 @@ export default function SpaceJoined() {
 }
 
 const styles = StyleSheet.create({
-  note: { ...Type.desc, color: TextColor.secondary },
   card: { ...CardStyles.rows },
   pressed: { opacity: 0.7 },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: TouchSize.inline, paddingVertical: Space.md },
