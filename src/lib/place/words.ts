@@ -375,3 +375,29 @@ export const SPACE_ASK = {
   answerClose: '답 접기',
   sendFail: '질문을 보내지 못했어요. 연결을 확인하고 다시 보내 주세요.',
 } as const;
+
+// night-1111 g4b
+/** 이어받기 코드(S14 웹 링크 화면 · S19 코드 칸 · 사용자 결정 3). 코드 = 6자 · 10분 · 한 번. */
+export const HANDOFF = {
+  title: '앱에서 이어 보기',
+  getCode: '코드 받기',
+  again: '새 코드 받기',
+  codeBody: '앱의 코드 넣는 칸에 넣으면 이 링크와 내 질문이 앱으로 옮겨져요. 10분 동안 한 번 쓸 수 있어요.',
+  expired: '코드 시간이 지났어요. 새 코드를 받아 주세요.',
+  codeFail: '코드를 받지 못했어요. 잠시 뒤 다시 눌러 주세요.',
+  /** 직원 허브 코드 칸 (i) 설명에 덧붙는 줄(계약 6-4 codeHint 를 (i) 안 문장으로 · 늘 보이는 설명 줄은 두지 않는다). */
+  infoBody: '매장이나 공간 초대코드를 넣으면 합류해요. 교육 링크 화면에서 받은 코드를 넣으면 그 링크가 앱에서 열려요.',
+} as const;
+
+/** 앱 안 교육 링크(S16 · /link/[id]) · 매장 탭 "받은 교육 링크" 묶음. */
+export const LINK_IN_APP = {
+  opened: '교육 링크를 열었어요.',
+  listTitle: '받은 교육 링크',
+  daysLeft: (n: number) => (n <= 0 ? '오늘까지' : `${n}일 남음`),
+  loading: '교육 링크를 불러오고 있어요…',
+  loadFail: '교육 링크를 불러오지 못했어요.',
+  join: '합류 신청하기',
+  joinTitle: '합류 신청',
+  joinBody: (owner: string) => `멤버가 되면 ${owner} 노하우 전부를 볼 수 있어요. 합류를 신청할까요?`,
+  joinConfirm: '신청하기',
+} as const;

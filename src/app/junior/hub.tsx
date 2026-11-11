@@ -20,7 +20,7 @@ import { PhoneVerifyBlock } from '@/components/PhoneVerifyBlock';
 import { INVITE_CODE_LEN, normalizeInviteCode } from '@/lib/utils/validation';
 import { showToast } from '@/lib/store/useToastStore';
 import { notifyAction } from '@/lib/utils/confirm';
-import { SPACE_MEMBERS } from '@/lib/place/words';
+import { HANDOFF, LINK_IN_APP, SPACE_MEMBERS } from '@/lib/place/words';
 
 const CODE_LEN = INVITE_CODE_LEN;
 
@@ -84,6 +84,14 @@ export default function JuniorHub() {
     setErr(null);
     const res = await joinByCode(code.trim());
     setBusy(false);
+    // 이어받기 코드 갈래(0552 · 사용자 결정 3) — 웹 교육 링크에서 받은 코드면 그 링크를 앱 안(S16)에서 연다.
+    if (res.kind === 'link_opened') {
+      setCode('');
+      setNeedPhone(false);
+      showToast(LINK_IN_APP.opened, 'good');
+      router.push({ pathname: '/link/[id]', params: { id: res.linkId } });
+      return;
+    }
     // 공간 코드 갈래(0461) — 바로 멤버면 그 공간(S17)으로 · 내보낸 사람이면 합류 신청이 들어갔다고 알린다.
     if (res.kind === 'space_joined') {
       setCode('');
@@ -309,7 +317,7 @@ export default function JuniorHub() {
               titleAccessory={
                 <InfoDot
                   title="초대코드"
-                  body="초대코드 6자리는 그 매장 사장님께 받아 넣으세요. 코드는 사장님 화면 설정 맨 위에 있어요."
+                  body={`초대코드 6자리는 그 매장 사장님께 받아 넣으세요. 코드는 사장님 화면 설정 맨 위에 있어요.\n\n${HANDOFF.infoBody}`}
                 />
               }
             />

@@ -24,6 +24,7 @@ import {
   createSpace as rpcCreateSpace,
   enterSpace as rpcEnterSpace,
   joinSpaceByCode as rpcJoinSpaceByCode,
+  claimEduLinkCode as rpcClaimEduLinkCode,
   type MySpace,
   type SpaceRole,
 } from '@/lib/db';
@@ -265,6 +266,7 @@ const DEMO = {
 /** joinByCode 결과. space_joined = 공간 멤버가 됨 · space_requested = 내보낸 사람이라 멤버 요청이 만들어짐(0461)
  *  · space_error = 공간 쪽에서 끝남(문구·코드) · store = 매장 합류 결과(joinByInvite 반환 그대로 · 화면이 지금처럼 처리한다). */
 export type JoinByCodeResult =
+  | { kind: 'link_opened'; linkId: string }
   | { kind: 'space_joined'; spaceId: string; spaceName: string }
   | { kind: 'space_requested'; spaceName: string }
   | { kind: 'space_error'; error: string; code: string | null }
@@ -1534,6 +1536,29 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     //   입구가 닫힌 계정(지금 거의 전부)은 공간 함수를 부르지 않는다 = 지금 매장 합류 그대로.
     // ★입구를 아직 안 읽었으면(처음 값은 비어 있다 · 직원 허브로 바로 열어 공간 목록을 안 읽은 상태) 먼저 읽는다. 안 읽고 매장 함수로 가면
     //   공간 코드가 "없는 코드"로 틀린 시도에 세어진다(11-11 로컬 실측).
+    // ★이어받기 코드가 맨 앞이다(0552 · 사용자 결정 3 · 야간 g4b). 서버가 세 갈래로 답한다:
+    //   claimed = 교육 링크를 옮겨 받음 → 화면이 /link/<번호> 를 연다.
+    //   not_link_code = 살아 있는 매장·공간 초대코드(세지 않았다) → 아래 지금 흐름 그대로(공간 → 매장).
+    //   invalid_code = 어느 코드에도 없음. 서버가 틀린 시도 한 번을 이미 셌다 → 합류 함수를 더 부르지 않는다(두 번 세지 않게).
+    //   번호 미인증·잠김·닫힌 링크 = 지금 합류 오류와 같은 길(space_error · 화면이 PHONE_NOT_VERIFIED 면 인증 단계를 연다).
+    //   그 밖의 오류(옛 서버에 함수가 없음 · 연결)는 지금 흐름으로 넘긴다 = 옛 동작. 입구가 닫힌 계정도 이 갈래를 탄다.
+    const claim = await rpcClaimEduLinkCode(code);
+    if (!claim.error && claim.data) {
+      if (claim.data.status === 'claimed' && claim.data.linkId) {
+        track('edu_link_code', { result: 'claimed' });
+        return { kind: 'link_opened', linkId: claim.data.linkId };
+      }
+      if (claim.data.status === 'invalid_code') {
+        track('edu_link_code', { result: 'invalid_code' });
+        return { kind: 'space_error', error: INVALID_OR_EXPIRED_CODE_MSG, code: 'invalid_code' };
+      }
+    } else if (claim.error) {
+      const cc = placeErrorCode(claim.error);
+      if (cc === 'PHONE_NOT_VERIFIED' || cc === 'too_many_attempts' || cc === 'link_closed' || cc === 'not_authenticated') {
+        track('edu_link_code', { result: cc });
+        return { kind: 'space_error', error: placeErrorMessage(claim.error), code: cc };
+      }
+    }
     if (get().spaceOpen == null && HAS_SUPABASE) await get().loadSpaces();
     if (get().spaceOpen === true) {
       const { data, error } = await rpcJoinSpaceByCode(code);

@@ -25,6 +25,7 @@ import { Type } from '@/lib/theme/type';
 import { ChipStyles } from '@/lib/theme/chip';
 import type { Role } from '@/types';
 import { INDUSTRIES } from '@/lib/config/industry';
+import { autoClaimEduGuests } from '@/lib/edu/autoClaim';
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -168,6 +169,10 @@ export default function SignupScreen() {
         setAccountReady(true); // 세션 확보 — 이후 실패는 매장 연결만 재시도
       }
 
+      // 웹 교육 링크에서 손님으로 보낸 질문을 이 계정으로 옮긴다(사용자 결정 3 · 0552). 이 기기에 열쇠가 없으면 아무 일도 없다.
+      //   실패해도 가입은 그대로 끝난다(옮기기는 매장 목록에서 다시 한다).
+      const claimedLinks = await autoClaimEduGuests(useSessionStore.getState().userId).catch(() => [] as string[]);
+
       // 2) 매장 연결
       if (role === 'owner') {
         const cs = await createStore(storeName.trim(), industry, bizDigits(bizNo) || undefined, birthDateISO(birth) ?? undefined, { isOnboarding: true });
@@ -180,6 +185,11 @@ export default function SignupScreen() {
         // 직원은 계정만 만들고 개인 허브(junior/hub)로 — 초대코드 입력은 hub 한 곳에서만 한다
         // (6칸 입력 + 실시간 에러 + 승인 대기 카드). 가입화면엔 코드칸을 두지 않아 '두 번 입력' 혼선을 없앤다.
         // 초대 링크로 들어왔으면 코드를 실어 보낸다 — hub 가 6칸을 채운다(제출은 직원이 누른다).
+        // 초대코드 없이 가입했고 교육 링크를 옮겨 받았으면 그 링크를 앱 안(S16)에서 연다(결정 82). 뒤로 가면 매장 목록이다.
+        if (!inviteFromLink && claimedLinks.length > 0) {
+          router.replace({ pathname: '/link/[id]', params: { id: claimedLinks[0] } });
+          return;
+        }
         router.replace(inviteFromLink ? { pathname: '/junior/hub', params: { code: inviteFromLink } } : '/junior/hub');
       }
     } catch {
