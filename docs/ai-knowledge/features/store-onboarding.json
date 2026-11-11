@@ -76,7 +76,7 @@
     {
       "id": "join-ui",
       "file": "src/app/junior/hub.tsx",
-      "symbol": "const joinByInvite = useSessionStore",
+      "symbol": "const joinByCode = useSessionStore((s) => s.joinByCode);",
       "kind": "code"
     },
     {
