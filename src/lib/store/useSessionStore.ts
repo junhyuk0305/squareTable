@@ -23,10 +23,12 @@ import {
   spaceOpenOf,
   createSpace as rpcCreateSpace,
   enterSpace as rpcEnterSpace,
+  joinSpaceByCode as rpcJoinSpaceByCode,
   type MySpace,
   type SpaceRole,
 } from '@/lib/db';
 import { placeErrorMessage, placeErrorCode } from '@/lib/place/errors';
+import { markSpaceLeft } from '@/lib/place/spaceTarget';
 import { friendlyError, isMissingRpc } from '@/lib/utils/userError';
 import { sessionReadFailAction } from './sessionReadFail';
 import { sessionBootFault } from './sessionBootFault';
@@ -191,7 +193,8 @@ type SessionState = {
   // Q13(0238): 새 번호로 받은 인증번호로 번호를 바꾼다(otp change_phone). 프로필 저장으로는 번호를 바꾸지 않는다.
   changePhone: (phone: string, code: string) => Promise<{ error: string | null }>;
   // J5: toStaff = 직원이 있어 막힘(owner_has_staff) → 탈퇴 창에 [직원 관리로 가기].
-  deleteAccount: () => Promise<{ error: string | null; toStaff?: boolean }>;
+  // toSpace = 멤버가 남은 공간의 주인(0430 space_has_members) → 탈퇴 창에 [공간 설정으로 가기].
+  deleteAccount: () => Promise<{ error: string | null; toStaff?: boolean; toSpace?: boolean }>;
   leaveStore: () => Promise<{ error: string | null }>;
   // 가게 이름 변경(사장 전용) — 14일 이내 2회 제한. 변경 이력은 기기 로컬에 보관(파일럿).
   renameStore: (name: string) => Promise<{ error: string | null; remaining: number }>;
@@ -214,6 +217,8 @@ type SessionState = {
   createSpace: (name: string) => Promise<{ error: string | null; code?: string | null; spaceId?: string }>;
   /** 공간 들어가기(enter_space). 성공하면 spaceId·spaceName·spaceRole 이 채워진다. 매장 값은 그대로다. */
   enterSpace: (spaceId: string) => Promise<{ error: string | null }>;
+  /** 초대코드 칸 하나(S19 · 4번 덩이). 공간을 쓸 수 있는 계정은 공간 코드를 먼저 본다 → 매장 코드면 joinByInvite 로 넘긴다. */
+  joinByCode: (code: string) => Promise<JoinByCodeResult>;
   /** 공간에서 나온다(앱 상태만 비운다). 서버의 현재 공간 기록은 남지만 매장 읽기는 자리 번호로 거르므로 섞이지 않는다. */
   leaveSpace: () => void;
 
@@ -257,6 +262,14 @@ const DEMO = {
 // (0031: 감사기록 보존을 위해 raise 대신 빈 반환) 화면에서 구분할 수 없다. 두 경우 모두에서 맞는
 // 다음 행동을 말한다 — 코드를 다시 보는 것이 아니라 사장님께 새 코드를 받는 것이다.
 // 0282(C6)부터 새 코드는 만료가 없어 문구에서 기한 이야기는 뺐다.
+/** joinByCode 결과. space_joined = 공간 멤버가 됨 · space_requested = 내보낸 사람이라 멤버 요청이 만들어짐(0461)
+ *  · space_error = 공간 쪽에서 끝남(문구·코드) · store = 매장 합류 결과(joinByInvite 반환 그대로 · 화면이 지금처럼 처리한다). */
+export type JoinByCodeResult =
+  | { kind: 'space_joined'; spaceId: string; spaceName: string }
+  | { kind: 'space_requested'; spaceName: string }
+  | { kind: 'space_error'; error: string; code: string | null }
+  | { kind: 'store'; error: string | null; storeName: string | null; pending?: boolean; code?: string };
+
 const INVALID_OR_EXPIRED_CODE_MSG =
   '초대코드가 올바르지 않아요. 사장님께 코드를 다시 받아주세요.';
 
@@ -1217,7 +1230,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const { error } = await rpcDeleteMyAccount();
     if (error) {
       const e = deleteAccountError(error.message);
-      return { error: e.text, toStaff: e.toStaff };
+      return { error: e.text, toStaff: e.toStaff, toSpace: e.toSpace };
     }
     // 탈퇴한 계정의 합류 마커(신청 매장·거절 여부)를 기기에 남기지 않는다(프라이버시 위생).
     { const uid0 = get().userId; if (uid0) clearJoinMarker(uid0); }
@@ -1515,7 +1528,43 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     return { error: null };
   },
 
-  leaveSpace: () => set({ spaceId: '', spaceName: '', spaceRole: null }),
+  joinByCode: async (code) => {
+    // 공간 함수 먼저(0461): 매장 코드면 세지 않고 store_code 로 알려 준다 → 매장 합류. 거꾸로(매장 먼저)면 공간 코드가
+    //   매장 함수에서 틀린 시도로 한 번 세어진다(두 함수가 같은 잠금 10분 5번을 쓴다). 매장 함수(0366)는 고치지 않는다.
+    //   입구가 닫힌 계정(지금 거의 전부)은 공간 함수를 부르지 않는다 = 지금 매장 합류 그대로.
+    // ★입구를 아직 안 읽었으면(처음 값은 비어 있다 · 직원 허브로 바로 열어 공간 목록을 안 읽은 상태) 먼저 읽는다. 안 읽고 매장 함수로 가면
+    //   공간 코드가 "없는 코드"로 틀린 시도에 세어진다(11-11 로컬 실측).
+    if (get().spaceOpen == null && HAS_SUPABASE) await get().loadSpaces();
+    if (get().spaceOpen === true) {
+      const { data, error } = await rpcJoinSpaceByCode(code);
+      const c = placeErrorCode(error);
+      if (error && c !== 'space_closed') {
+        track('space_join_code', { result: c ?? 'error' });
+        return { kind: 'space_error', error: placeErrorMessage(error, '초대코드를 확인하지 못했어요. 잠시 뒤 다시 시도해 주세요.'), code: c };
+      }
+      if (!error && !data) {
+        // 없는 코드·만료 코드(서버가 틀린 시도로 셌다). 매장 함수를 다시 부르면 한 번 더 세어진다 → 여기서 끝낸다.
+        track('space_join_code', { result: 'invalid_code' });
+        return { kind: 'space_error', error: INVALID_OR_EXPIRED_CODE_MSG, code: 'invalid_code' };
+      }
+      if (data?.status === 'joined') {
+        track('space_join_code', { result: 'joined' });
+        await get().loadSpaces();
+        return { kind: 'space_joined', spaceId: data.spaceId, spaceName: data.spaceName };
+      }
+      if (data?.status === 'requested') {
+        track('space_join_code', { result: 'requested' });
+        return { kind: 'space_requested', spaceName: data.spaceName };
+      }
+      // store_code · space_closed → 매장 합류
+    }
+    return { kind: 'store', ...(await get().joinByInvite(code)) };
+  },
+
+  leaveSpace: () => {
+    markSpaceLeft(get().spaceId);
+    set({ spaceId: '', spaceName: '', spaceRole: null });
+  },
 
   switchTo: (role) => {
     // 데모 신원으로 완전 복귀 — 데모 매장(store_001)까지 되돌린다.

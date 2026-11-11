@@ -14,6 +14,8 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 // 직원/사장 알림 화면 + stores 허브 통합 알림이 공유한다(화면별 재정의 금지).
 // mention 은 두 맵에 다 있는 유일한 키 — 상수 하나를 공유해 한쪽만 바뀌는 무음 드리프트를 원천 차단.
 const MENTION_UI = { icon: 'at', tint: BrandColors.brandSoft } as const;
+// 합류 승인 모양 — 매장 합류(join_approved)와 공간 합류(space_join_approved · 0460)가 같은 것을 쓴다.
+const JOIN_OK_UI = { icon: 'person-add', tint: '#E4F2E8' } as const;
 export const JUNIOR_KIND_UI: Record<JuniorNotifKind, { icon: IconName; tint: string }> = {
   mention: MENTION_UI,
   assign: { icon: 'clipboard', tint: BrandColors.yellowSoft },
@@ -31,12 +33,15 @@ export const JUNIOR_KIND_UI: Record<JuniorNotifKind, { icon: IconName; tint: str
   // 안 푼 퀴즈(P1 역 ④).
   training: { icon: 'school', tint: BrandColors.yellowSoft },
   // 합류 결과(0247) — 승인은 결과(초록), 반려는 사장 쪽 join_request 와 같은 사람 아이콘에 반려 톤.
-  join_approved: { icon: 'person-add', tint: '#E4F2E8' },
+  join_approved: JOIN_OK_UI,
   join_rejected: { icon: 'person-remove', tint: BrandColors.accentSoft },
   // 매니저 지정·해제(0315 member_notices role_changed) — 직원 명부의 매니저 배지와 같은 리본.
   role: { icon: 'ribbon', tint: BrandColors.brandSoft },
   // 내보내짐(0317 · 0247 removed) — 합류 반려와 같은 사람 아이콘.
   member_removed: { icon: 'person-remove', tint: BrandColors.accentSoft },
+  // ★0460 공간(4번 덩이) — 합류 신청이 옴(매장 사장 쪽 join_request 와 같은 사람 아이콘) · 합류 승인(합류 결과와 같은 모양).
+  space_join_request: { icon: 'person-add', tint: BrandColors.yellowSoft },
+  space_join_approved: JOIN_OK_UI,
 };
 export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: string }> = {
   // 직원 나감·탈퇴(0317 · 0247 left·account_deleted).

@@ -30,7 +30,12 @@ export type PendingMember = { id: string; name: string; phone_last4: string; cre
 
 /** 내 합류 결과(0247 member_notices · approved·rejected) — 서버가 승인·반려 때 넣는다. 푸시는 크론이 같은 행을 보낸다. 벨 항목의 원천. */
 // 0317: removed = 사장이 나를 내보냄(0247 · 계정 단위 · 그 매장은 이미 내 매장이 아니다).
-export type JoinNotice = { id: number; unit_id: string; kind: 'approved' | 'rejected' | 'removed'; store_name: string | null; body: string; created_at: string };
+// 0460 공간(4번 덩이): join_approved = 공간 멤버 요청이 수락됨(N8 · 새 종류 값) · space_join_request = 내 공간에 온 대기 요청(N7 ·
+//   요청 행 파생 · id = 요청 번호 · actor_id = 요청한 사람). unit_id = 그 공간 번호.
+export type JoinNotice = {
+  id: number | string; unit_id: string; kind: 'approved' | 'rejected' | 'removed' | 'join_approved' | 'space_join_request';
+  store_name: string | null; body: string; created_at: string; actor_id?: string;
+};
 /** 처리한 합류 신청(0345 join_history_rows · 사장 매장). 사장 목록의 '처리함' 내역. actor = 처리한 사람(0345 전 행은 null). */
 export type JoinDone = {
   id: number; unit_id: string; kind: 'approved' | 'rejected';

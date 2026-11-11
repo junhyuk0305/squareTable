@@ -40,6 +40,10 @@ const enc = (id?: string) => (id ? encodeURIComponent(id) : '');
 const work = (s: NotifSurface) => (s === 'owner' ? '/owner/work' : '/junior/work');
 const schedule = (s: NotifSurface) => (s === 'owner' ? '/owner/schedule' : '/junior/schedule');
 
+/** N7 공간 멤버 요청 하나를 가리키는 공간 설정 주소 — 서버 member_notices.url(0460 · 0461)과 같은 모양. */
+export const spaceRequestRoute = (spaceId: string, memberId: string) =>
+  `/space/settings?space=${enc(spaceId)}&member=${enc(memberId)}` as const;
+
 /** 할일 하나를 가리키는 업무 화면 주소 — `?view=todo&task=<id>`. WorkBoard 가 할일 탭을 열고 그 할일로 스크롤한다. */
 export const taskRoute = (base: '/junior/work' | '/owner/work', templateId: string) =>
   `${base}?view=todo&task=${enc(templateId)}` as const;
@@ -131,6 +135,21 @@ export const NOTIF = {
   member_left: {
     route: (_s) => '/owner/staff',
     badgeUnit: '나간 직원',
+  },
+  // ★0460 공간(4번 덩이) — 계정 단위 축(합류 결과와 같은 갈래 · fetchJoinNotices). 푸시는 서버 크론(sweepMemberNotices)이 보낸다(앱은 쏘지 않는다).
+  //   경로 첫 칸 /space = 공간 층. 공간 _layout 이 ?space= 나 /space/joined/<번호> 로 그 공간에 먼저 들어간 뒤 연다(옛 앱 허용 목록 밖 · 3판 16장).
+  // N7 멤버 요청 → 공간 주인. 벨 행은 대기 요청에서 파생한다(처리하면 사라진다). id = 공간 번호.
+  //   요청한 사람까지 가리키려면 spaceRequestRoute(서버 url 0460 과 같은 모양 · 설정 화면이 그 요청 행을 강조).
+  space_join_request: {
+    title: (actor) => `${actor}님이 합류를 신청했어요`,
+    route: (_s, id) => `/space/settings${id ? `?space=${enc(id)}` : ''}`,
+    badgeUnit: '공간 합류 신청',
+  },
+  // N8 멤버 요청 수락 → 요청한 사람. 그 공간의 참여 화면(S17). actor 자리에는 공간 이름이 온다. id = 공간 번호.
+  space_join_approved: {
+    title: (space) => `${space} 합류가 승인됐어요`,
+    route: (_s, id) => `/space/joined/${enc(id)}`,
+    badgeUnit: '합류 결과',
   },
   // ★0346 직원 즉시 합류(사장 승인 폐지) — 원천은 서버가 넣는 member_notices(member_joined · 사장 멤버십에게만 · actor_id = 합류한 직원).
   //   푸시는 서버 크론(sweepMemberNotices)이 보낸다(앱은 쏘지 않는다 → pushTag 없음). 문구는 서버가 넣은 그대로.

@@ -31,7 +31,9 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { Section } from '@/components/Screen';
 import { TwoPane, Pane } from '@/components/shell/TwoPane';
 import { useStoreEntryStore } from '@/lib/store/useStoreEntryStore';
-import { SpaceEntryRow } from '@/components/place/SpaceEntryRow';
+import { SpaceTabPanel } from '@/components/place/SpaceTabPanel';
+import { SegmentTabs } from '@/components/SegmentTabs';
+import { SPACE_MEMBERS } from '@/lib/place/words';
 
 // 진입 순서·타임아웃·커버는 useStoreEntryStore(+ 전역 StoreEnterCover)로 옮겼다 —
 // 상단바의 매장 칸도 같은 동작을 하기 때문이다(2026-08-08). 이 화면은 부르기만 한다.
@@ -66,6 +68,15 @@ export default function StoresHub() {
   //   ⚠️ 이건 화면 규칙이다. 서버 강제가 아니다(create_store 자체엔 역할 검사가 없다).
   const signupRole = useSessionStore((s) => s.signupRole);
   const canCreateStore = isOwner || signupRole === 'owner';
+
+  // S18 [공간 | 매장](4번 덩이) — 공간 입구가 열린 계정에만 칸이 생긴다(지금은 허용 목록뿐 · 나머지는 지금 화면 그대로).
+  //   사장 계정은 [매장]만(정본 화면지도 S18 가정). 다만 이미 공간이 있으면(멤버·주인) 칸을 보인다(숨기면 들어갈 길이 없다).
+  const spaceOpen = useSessionStore((s) => s.spaceOpen);
+  const spaces = useSessionStore((s) => s.spaces);
+  const loadSpaces = useSessionStore((s) => s.loadSpaces);
+  const showPlaceTabs = spaceOpen === true && (!isOwner || spaces.length > 0);
+  const [placeTab, setPlaceTab] = useState<'space' | 'store'>('store');
+  const tab = showPlaceTabs ? placeTab : 'store';
 
   // 사장은 fetchMyUnits로 채워진 stores. 직원은 아직 단일매장이라 활성 매장 1개로 구성
   // (Phase 0에서 직원 다매장 로드가 열리면 sessionStores로 통일된다).
@@ -116,6 +127,11 @@ export default function StoresHub() {
   }, [hydratePrefs, fgTick]);
 
   // 통합 알림(0077) — 카드 뱃지·허브 알림 섹션. 판정·매핑·탭 동작은 공용 훅(useCrossNotifRows) SSOT.
+  // 공간 입구·내 공간 목록 — 복귀 때도 다시 읽는다(합류 승인·내보내짐이 칸에 바로 맞게).
+  useEffect(() => {
+    if (userId) void loadSpaces();
+  }, [userId, loadSpaces, fgTick]);
+
   const hydrateCross = useCrossNotifStore((s) => s.hydrate);
   useEffect(() => {
     let alive = true;
@@ -125,6 +141,8 @@ export default function StoresHub() {
   const { unreadByUnit } = useCrossNotifRows();
   // 직원 '오늘 할일' 칩 — 카운트는 assignedTodayCount SSOT(오늘 탭·허브 탭바 뱃지와 동일 술어).
   const crossData = useCrossNotifStore((s) => s.data);
+  // [공간] 칸 숫자 = 내 공간에 온 대기 합류 신청(벨과 같은 파생 행 · fetchJoinNotices).
+  const spaceRequests = useCrossNotifStore((s) => s.joinNotices.filter((n) => n.kind === 'space_join_request').length);
   const today = todayStr();
   const todoByUnit = useMemo(() => {
     const m: Record<string, number> = {};
@@ -221,7 +239,21 @@ export default function StoresHub() {
         {/* 상단 바(HubTopBar 공용) — 알림 벨은 여기 고정(탭 금지 — 07-24 사용자 확정) + 프로필(계정 설정) */}
         <HubTopBar />
 
-        {!ready ? (
+        {showPlaceTabs ? (
+          <SegmentTabs
+            items={[
+              { key: 'space', label: SPACE_MEMBERS.tabSpace, count: spaceRequests },
+              { key: 'store', label: SPACE_MEMBERS.tabStore },
+            ]}
+            value={tab}
+            onChange={(k) => setPlaceTab(k === 'space' ? 'space' : 'store')}
+            testID="stores-place-tabs"
+          />
+        ) : null}
+
+        {tab === 'space' ? (
+          <SpaceTabPanel />
+        ) : !ready ? (
           <ScreenLoading label="매장 목록을 불러오고 있어요…" />
         ) : (
           <>
@@ -332,8 +364,6 @@ export default function StoresHub() {
             {/* 요금제는 허브에 노출하지 않는다 — 확인·변경은 전체 계정 설정(구독 및 결제)에서. */}
           </>
         )}
-        {/* 공간(2번 덩이) 임시 입구 — 공간을 쓸 수 있는 계정에게만 한 줄. 나머지 계정에는 아무것도 안 그린다. */}
-        <SpaceEntryRow />
           </>
         )}
       </ScrollView>

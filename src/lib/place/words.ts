@@ -245,3 +245,62 @@ export const STORE_WORDS = {
   /** 직원 노하우 탭 세 번째 칸(옛 "내 공간" · 새 "공간"과 이름이 겹쳐 바꿨다). */
   myActivity: '내 활동',
 } as const;
+
+/**
+ * 공간 멤버 되기·관리 문구(4번 덩이 화면 · S06 멤버·합류 신청·초대코드·공간 지우기 · S17 참여 중인 공간 · S18 매장 탭 [공간 | 매장] · S19 초대코드).
+ * 합류 신청 버튼은 매장 합류와 같은 승인 어휘(승인 · 거절)를 쓴다(알림사건 6장 3번 · owner/staff.tsx 와 같다).
+ */
+export const SPACE_MEMBERS = {
+  // S18 매장 탭
+  tabSpace: '공간',
+  tabStore: '매장',
+  mineTitle: '내 공간',
+  joinedTitle: '참여 중인 공간',
+  joinedRowHint: '눌러서 노하우 읽기',
+  codeHint: '공간이나 매장에서 받은 6자리 코드',
+  requestBadge: (n: number) => `합류 신청 ${n}`,
+  emptySpaceBody: '받은 초대코드를 넣으면 그 공간의 노하우를 읽을 수 있어요.',
+  // S19 초대코드 결과
+  joinedToast: (space: string) => `${space}에 들어왔어요.`,
+  requestedTitle: '합류를 신청했어요',
+  requestedBody: '공간 주인의 승인을 기다리고 있어요.',
+  // S06 설정 · 멤버
+  membersTitle: (n: number) => `멤버 ${n}명`,
+  membersLoadFail: '멤버 목록을 불러오지 못했어요. 연결을 확인해 주세요.',
+  ownerTag: '주인',
+  remove: '내보내기',
+  removeTitle: '멤버 내보내기',
+  removeBody: (name: string) => `${name}님을 내보내요. 다시 들어오려면 내 승인이 필요해요.`,
+  removed: '내보냈어요.',
+  // S06 설정 · 합류 신청
+  requestsTitle: (n: number) => `합류 신청 ${n}명`,
+  approve: '승인',
+  reject: '거절',
+  approved: (name: string) => `${name}님이 멤버가 됐어요.`,
+  rejectTitle: '합류 신청 거절',
+  rejectBody: (name: string) => `${name}님의 합류 신청을 거절할까요? 30분이 지나면 다시 신청할 수 있어요.`,
+  rejected: '거절했어요.',
+  // S06 설정 · 초대코드
+  inviteTitle: '초대코드',
+  inviteHint: '멤버에게 알려 주세요. 최신 앱에서 넣을 수 있어요.',
+  inviteNone: '초대코드가 없어요',
+  inviteCopied: '초대코드를 복사했어요.',
+  inviteCopyFail: '복사하지 못했어요. 코드를 직접 알려 주세요.',
+  // S06 설정 · 공간 지우기(0430 · 되돌리기 없음)
+  deleteRow: '공간 지우기',
+  deleteHint: '멤버가 모두 나가고 30일 뒤 기록이 지워져요',
+  deleteTitle: '공간 지우기',
+  deleteBody: '멤버가 모두 나가고 30일 뒤 기록이 지워져요. 되살릴 수 없어요.',
+  deleted: '공간을 지웠어요.',
+  // S17 참여 중인 공간(멤버)
+  joinedKnowhow: (n: number) => `노하우 ${n}개`,
+  joinedEmptyTitle: '아직 노하우가 없어요',
+  joinedEmptyBody: '공간 주인이 남긴 노하우가 여기 보여요.',
+  leave: '공간 나가기',
+  leaveHint: '나가도 같은 초대코드로 다시 들어올 수 있어요',
+  leaveTitle: '공간 나가기',
+  leaveBody: '이 공간에서 나갈까요? 내가 남긴 질문은 공간에 그대로 남아요.',
+  left: '공간에서 나왔어요.',
+  // 탈퇴 창(0430 space_has_members)
+  toSettings: '공간 설정으로 가기',
+} as const;

@@ -166,8 +166,10 @@ try {
     'mn:shift_time_result': { manager: 'schedule', junior: 'schedule' },
     'mn:shift_changed': { manager: 'schedule', junior: 'schedule' },
     'mn:role_changed': { manager: 'role', junior: 'role' },
-    'mn:join_request': {}, // ★0460 공간 멤버 요청 → 공간 주인. 공간 역할은 이 표의 ROLES 밖이다. 공간 벨 행은 4번 덩이 화면에서
-    'mn:join_approved': {}, // ★0460 공간 멤버 수락 → 요청한 사람. 계정 벨(fetchJoinNotices)이 새 값을 읽는 것은 4번 덩이 화면에서
+    // ★0460 공간(4번 덩이 화면) — 공간 역할은 이 표의 ROLES(매장 역할) 밖이다. 공간 주인·멤버는 매장에서 어떤 역할이든 될 수 있어
+    //   계정 단위 허브 행(buildJoinNotifRows)으로 셋 다 받는다. N7 = 대기 요청 파생 행 · N8 = fetchJoinNotices 가 join_approved 를 읽는다.
+    'mn:join_request': { owner: 'hub:space_join_request', manager: 'hub:space_join_request', junior: 'hub:space_join_request' },
+    'mn:join_approved': { owner: 'hub:space_join_approved', manager: 'hub:space_join_approved', junior: 'hub:space_join_approved' },
     'mn:question': {}, // ★0401 공간 링크 질문(N2 · edu_link_send) → 공간 주인. 공간 역할은 이 표의 ROLES 밖이다. 벨은 답할 질문 목록에서 파생
     // ── 서버 크론 발송(그 밖) ──
     'cron:owner_alerts': { owner: 'src:const raw of alerts' }, // 0191 · ownerRows 가 owner_alerts 행을 그대로 그린다

@@ -41,7 +41,14 @@ export function useCrossNotifRows() {
     // 매장 목록(my_units) 도착 전엔 계산하지 않는다 — 매장별 역할을 모른 채 전역 role 로 세면
     // 찰나에 틀린 뱃지가 떴다 바뀌는 레이스가 생긴다. 목록이 오면(수 초 내) 자동 재계산돼 표시.
     if (sessionStores.length === 0) {
-      return { rows: mergeCrossNotifs([]), unreadByUnit: {} as Record<string, number>, totalUnread: 0, hiddenCount: 0 };
+      // 계정 단위 축(합류 결과 · 공간 멤버 요청과 수락)은 역할을 안 본다 → 매장이 없는 계정(공간만 쓰는 사람)에게도 그린다(4번 덩이).
+      const joinOnly = buildJoinCrossNotifs(joinNotices, accountAckAt(ackByUnit));
+      const unreadOnly: Record<string, number> = {};
+      for (const r of joinOnly) if (r.unread) unreadOnly[r.unitId] = (unreadOnly[r.unitId] ?? 0) + 1;
+      return {
+        rows: mergeCrossNotifs([joinOnly]), unreadByUnit: unreadOnly,
+        totalUnread: Object.values(unreadOnly).reduce((a, b) => a + b, 0), hiddenCount: 0,
+      };
     }
     // 목록에 없는 매장은 직원 기준으로 센다(fail-closed) — 다른 매장의 역할을 빌려 쓰지 않는다.
     const rOf = (uid: string) => sessionStores.find((u) => u.unit_id === uid)?.role ?? 'junior';
@@ -104,6 +111,11 @@ export function useCrossNotifRows() {
     // 닫힌 매장 알림 — 들어갈 매장이 없다(전환하면 unit_locked). 다음 행동은 문구가 말한다.
     if (row.kind === 'closure') {
       showToast(row.body ?? '사장님께 문의해 주세요.');
+      return;
+    }
+    // 공간 행(0460 · N7·N8) — 매장 전환을 하지 않는다(서버가 공간 전환을 거절한다). 공간 _layout 이 경로의 공간에 먼저 들어간다.
+    if (row.route?.startsWith('/space/')) {
+      router.push(row.route as Href);
       return;
     }
     if (row.unitId !== unitId) {

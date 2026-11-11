@@ -66,6 +66,11 @@ r = tap({ url: '/owner/staff', unitId: 'store_a' }, { unitId: 'store_a', role: '
 check('1-14 매니저는 직원 관리 대신 직원 홈을 연다(0201)', eq(r, { kind: 'push', to: '/junior/home' }), show(r));
 r = tap({ url: '/owner/payroll?month=2026-10', unitId: 'store_a' }, { unitId: 'store_a', role: 'manager' });
 check('1-15 매니저는 급여 화면 대신 직원 홈을 연다(0201)', eq(r, { kind: 'push', to: '/junior/home' }), show(r));
+// 공간 알림(0460 N7·N8 · 4번 덩이) — 엣지는 unitId = 공간 번호를 싣는다. 매장 전환을 하지 않고 그 경로를 연다(공간 _layout 이 그 공간에 먼저 들어간다).
+r = tap({ url: '/space/settings?space=sp_1&member=u_1', unitId: 'sp_1' }, { unitId: 'store_a', role: 'junior' });
+check('1-16 공간 합류 신청 알림은 매장을 바꾸지 않고 공간 설정을 연다(N7)', eq(r, { kind: 'push', to: '/space/settings?space=sp_1&member=u_1' }), show(r));
+r = tap({ url: '/space/joined/sp_1', unitId: 'sp_1' }, { unitId: 'store_a', role: 'owner' });
+check('1-17 공간 합류 승인 알림은 역할과 상관없이 참여 화면을 연다(N8)', eq(r, { kind: 'push', to: '/space/joined/sp_1' }), show(r));
 
 // ── [2] 엣지 ────────────────────────────────────────────────────────────────
 console.log('\n[2] 엣지 push/index.ts');
