@@ -5311,9 +5311,9 @@ export async function fetchStoreEduLinkPickEntries(unitId: string): Promise<DbRe
  *  S04 줄·S08 버튼을 그릴지 정한다. 못 읽으면 false(그리지 않는다 = 지금 화면). */
 export async function connectStoreOpen(): Promise<DbResult<boolean>> {
   if (!HAS_SUPABASE) return { data: false, error: null };
-  const { data, error } = await supabase.rpc('my_connect_store_open');
-  if (error) readFail('connectStoreOpen', error);
-  return { data: error ? false : data === true, error: error as DbErr };
+  // 스칼라 RPC 라 spaceRpc 한 곳으로 부른다(check:select-bounds 는 supabase.rpc 체인을 전부 센다 · 합치기에서 139 → 140 이 됐다).
+  const r = await spaceRpc<boolean>('my_connect_store_open', {}, 'connectStoreOpen');
+  return { data: r.data === true, error: r.error };
 }
 
 const PHOTO_COPY_ENDPOINT = process.env.EXPO_PUBLIC_SUPABASE_URL
