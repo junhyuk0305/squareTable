@@ -17,6 +17,7 @@ const ALREADY_CODES = [
   'already_in_store',
   'swap_already_decided',  // swap_requests 트리거(0258)
   'swap_cancel_status_only', // 취소는 status 만(0293) — 다른 칸이 바뀌었다 = 그 사이 남이 처리했다
+  'already_proposed',      // propose_to_store(0490) — 같은 노하우가 같은 매장에 대기 중(suggestion_not_pending 은 not_pending 이 품는다)
 ] as const;
 
 const BLOCKED_CODES = [
@@ -33,6 +34,8 @@ const BLOCKED_CODES = [
   'past_month_locked',       // 지난달 근무 잠금(0266)
   'ai_quota_exceeded',       // 엣지 ai 402
   'rate_limited',            // 엣지 ai 429
+  'too_many_entries',        // propose_to_store(0490) — 한 번에 50개 넘음
+  'from_space_locked',       // 공간에서 온 제안 내용 고치기(0490 가드)
 ] as const;
 
 /** blocked 코드 → 사람 말(AGENTS ⑨: 코드→문구는 한 곳). 모르는 코드는 호출부 폴백. */
