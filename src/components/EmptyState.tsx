@@ -30,6 +30,9 @@ export function EmptyState({ title, body, emoji, cta }: EmptyStateProps) {
       {cta ? (
         <Pressable
           onPress={cta.onPress}
+          accessibilityRole="button"
+          accessibilityLabel={cta.label}
+          accessibilityState={{ disabled: false }}
           style={({ pressed }) => [styles.cta, pressed && { opacity: 0.85 }]}
         >
           <Text style={styles.ctaText}>{cta.label}</Text>
