@@ -189,3 +189,39 @@ export const SPACE_KNOWHOW = {
   pickTitle: '어떤 노하우로 답할까요?',
   pickEmpty: '아직 남긴 노하우가 없어요.',
 } as const;
+
+/**
+ * 교육 링크 묻는 칸(S14 · 0401). {owner} = 공간이면 주인 호칭(민수님) · 매장이면 "사장님".
+ * 보낸 뒤 · 답한 뒤 · AI 다 씀 문구는 SPACE_WORDS(askSent · answeredBy · aiCapAsker)를 같이 쓴다. 화면에 "손님"을 쓰지 않는다. 이름 칸 설명은 처리방침 v2.5 "링크를 보낸 사람에게는 질문마다 적은 이름만 보입니다"와 같은 뜻이다.
+ */
+export const EDU_ASK = {
+  nameLabel: '내 이름',
+  namePlaceholder: '이름을 적어 주세요',
+  nameNote: (owner: string) => `${owner}께는 질문마다 이 이름만 보여요.`,
+  send: '질문 보내기',
+  sending: '보내고 있어요…',
+  myQuestions: '내 질문',
+  notFoundConfirm: (owner: string) => `${owner} 노하우에 아직 없어요. ${owner}께 보낼까요?`,
+  sendToOwner: (owner: string) => `${owner}께 보내기`,
+  answerHere: '답이 오면 이 화면에 떠요.',
+  aiLabel: 'AI 답변',
+  refresh: '새 답 확인하기',
+  report: '신고하기',
+  reportTitle: '이 답 신고하기',
+  reportLead: '어떤 점이 문제인지 적어 주세요. 운영팀이 확인해요.',
+  reportPlaceholder: '5자 이상 적어 주세요',
+  reportCatAi: 'AI 답이 이상해요',
+  reportCatBad: '부적절한 내용이에요',
+  reportCatOther: '그 밖의 문제',
+  reportSend: '신고 보내기',
+  reportDone: '신고를 보냈어요.',
+  askFail: '질문을 보내지 못했어요. 연결을 확인하고 다시 보내 주세요.',
+  loadFail: '내 질문을 불러오지 못했어요.',
+} as const;
+
+/** {owner} 자리 단어. 공간 = 주인 호칭(이름이 비면 "공간 주인님"), 매장 = 사장님. */
+export function eduOwnerWord(place: EduPlace | null, owner?: string): string {
+  if (place === 'store') return '사장님';
+  const name = owner?.trim();
+  return name ? ownerName(name) : '공간 주인님';
+}

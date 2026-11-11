@@ -349,7 +349,15 @@ async function deliver(
   const deviceTokens = (deviceRes.data ?? []) as { id: string; token: string; user_id: string }[];
 
   const list = (webRes.data ?? []) as { id: string; endpoint: string; p256dh: string; auth: string }[];
-  const notif = JSON.stringify({ title: notifIn.title, body: notifIn.body, url: notifIn.url || '/', tag: notifIn.tag });
+  // Q24 공간 갈래(0401 · 알림사건 2장 "제목 앞 자리 이름"): 공간 알림은 제목 앞에 공간 이름을 늘 붙인다(웹·앱 기기 둘 다).
+  //   매장 알림과 섞여 보이지 않게 하려는 것이다. 매장은 아래 앱 기기 갈래의 지금 규칙(2곳 이상일 때만) 그대로다.
+  //   자리 행 읽기는 여기서 한 번만 하고 아래 앱 기기 갈래가 같이 쓴다. 읽기에 실패하면 이름 없이 보낸다(알림이 안 가는 것보다 낫다).
+  const unitRes = await admin.from('units').select('store_name, kind').eq('id', scopeUnit);
+  const unitRow = ((unitRes.data ?? []) as { store_name?: string; kind?: string }[])[0];
+  const unitName = String(unitRow?.store_name ?? '');
+  const spaceName = unitRow?.kind === 'space' ? unitName.trim() : '';
+  const withSpace = (t: string) => (spaceName ? `${spaceName} · ${t}`.slice(0, MAX_TITLE) : t);
+  const notif = JSON.stringify({ title: withSpace(notifIn.title), body: notifIn.body, url: notifIn.url || '/', tag: notifIn.tag });
 
   let sent = 0;
   let webFailed = 0; // 죽은 구독(404/410)이 아닌 전송 오류 수
@@ -389,20 +397,20 @@ async function deliver(
 
   let expo = { sent: 0, pruned: 0, failed: 0 };
   if (nativeIn !== 'skip' && deviceTokens.length > 0) {
-    const native = nativeIn ? { ...notifIn, ...nativeIn } : notifIn;
+    const native0 = nativeIn ? { ...notifIn, ...nativeIn } : notifIn;
+    // ★0401: 공간 알림은 위에서 정한 공간 이름을 늘 붙인다(별명·소속 수를 안 본다).
+    const native = spaceName ? { ...native0, title: withSpace(native0.title) } : native0;
     // Q24: 2곳 이상 소속인 사람에게는 제목 앞에 매장 이름을 붙인다. 그 사람이 이 매장에 붙인 별명을 먼저 쓴다.
     //   읽기에 실패하면 매장 이름 없이 보낸다(알림이 안 가는 것보다 낫다).
     //   공간(units.kind='space')은 소속으로 세지 않는다(0367 허브 합계·벨과 같은 술어 · 매장·본사 작업실은 지금처럼).
-    const [memberRes, unitRes] = await Promise.all([
-      admin.from('unit_members').select('user_id, units!inner(kind)').in('user_id', recipientIds).neq('units.kind', 'space'),
-      admin.from('units').select('store_name').eq('id', scopeUnit),
-    ]);
+    const memberRes = spaceName
+      ? { data: [] as { user_id: string }[] }
+      : await admin.from('unit_members').select('user_id, units!inner(kind)').in('user_id', recipientIds).neq('units.kind', 'space');
     const stores = new Map<string, number>();
     for (const m of (memberRes.data ?? []) as { user_id: string }[]) stores.set(m.user_id, (stores.get(m.user_id) ?? 0) + 1);
-    const unitName = String(((unitRes.data ?? []) as { store_name?: string }[])[0]?.store_name ?? '');
     const titled = deviceTokens.map((t) => {
       const name = String(unitPrefByUser.get(t.user_id)?.nickname || unitName).trim();
-      return (stores.get(t.user_id) ?? 0) >= 2 && name
+      return !spaceName && (stores.get(t.user_id) ?? 0) >= 2 && name
         ? { ...t, title: `${name} · ${native.title}`.slice(0, MAX_TITLE) }
         : t;
     });

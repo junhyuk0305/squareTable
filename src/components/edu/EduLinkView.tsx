@@ -5,13 +5,14 @@
  *  · 닫힌 링크: 안내 한 줄만. 닫힘·만료·없는 주소를 구분해 말하지 않는다(토큰 떠보기 방지 · 서버도 하나로 준다).
  *  · 빈 링크: 묻는 칸 + "아직 담은 노하우가 없어요" 문구.
  *  · 노하우 있음: 묻는 칸 맨 위 → 바로 아래 "먼저 읽어 보세요" → 목록. 목록은 접거나 숨기지 않는다.
- * 묻는 칸은 다음 단계에서 열린다. 지금은 칸 모양만 두고 "곧 열려요"라고 사실대로 말한다(입력은 받지 않는다).
+ * 묻는 칸 = 부모가 넘기는 askSlot(웹 /l/[token] = EduAsk · 0401). 넘기지 않는 곳(앱 안 링크 화면 · 4번 덩이 전)은
+ *   칸 모양만 두고 "곧 열려요"라고 사실대로 말한다(입력은 받지 않는다).
  *
  * ★표시 전용이다. 데이터는 부모가 읽어 넘긴다(앱 안에서 쓸 때 같은 화면을 그대로 쓰려고).
  * ★토큰은 이 부품에 들어오지 않는다. 계측·로그에 실릴 자리 자체를 만들지 않는다.
  * ★노하우 본문은 공용 KnowhowRows 로 그린다(노하우 상세·답변 카드와 같은 모양 · ui.md).
  */
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -40,7 +41,7 @@ function rowsOf(e: EduLinkEntry): KnowhowRow[] {
   return rows;
 }
 
-export function EduLinkView({ info, entries }: { info: EduLinkInfo; entries: EduLinkEntry[] }) {
+export function EduLinkView({ info, entries, askSlot }: { info: EduLinkInfo; entries: EduLinkEntry[]; askSlot?: ReactNode }) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   if (!info.ok) {
@@ -63,14 +64,18 @@ export function EduLinkView({ info, entries }: { info: EduLinkInfo; entries: Edu
         <Text style={st.title}>{title}</Text>
       </Appear>
 
-      {/* 묻는 칸 — 다음 단계에서 연다. 지금은 모양만 두고 입력을 받지 않는다. */}
-      <Appear delay={stagger(1)} style={st.askWrap}>
-        <View style={st.askBox} accessibilityRole="text" accessibilityLabel={`${SPACE_WORDS.askPlaceholder}. ${SPACE_WORDS.askSoon}`}>
-          <Ionicons name="chatbubble-ellipses-outline" size={18} color={TextColor.iconMuted} />
-          <Text style={st.askPlaceholder} numberOfLines={1}>{SPACE_WORDS.askPlaceholder}</Text>
-        </View>
-        <Text style={st.askNote}>{SPACE_WORDS.askSoon}</Text>
-      </Appear>
+      {/* 묻는 칸 — 부모가 넘기면 그것(EduAsk). 아니면 모양만 두고 입력을 받지 않는다. */}
+      {askSlot ? (
+        <Appear delay={stagger(1)}>{askSlot}</Appear>
+      ) : (
+        <Appear delay={stagger(1)} style={st.askWrap}>
+          <View style={st.askBox} accessibilityRole="text" accessibilityLabel={`${SPACE_WORDS.askPlaceholder}. ${SPACE_WORDS.askSoon}`}>
+            <Ionicons name="chatbubble-ellipses-outline" size={18} color={TextColor.iconMuted} />
+            <Text style={st.askPlaceholder} numberOfLines={1}>{SPACE_WORDS.askPlaceholder}</Text>
+          </View>
+          <Text style={st.askNote}>{SPACE_WORDS.askSoon}</Text>
+        </Appear>
+      )}
 
       {entries.length === 0 ? (
         <Appear delay={stagger(2)}>

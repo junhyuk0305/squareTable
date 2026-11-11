@@ -72,6 +72,8 @@ export const NOTIF = {
   },
   // ── 질문·노하우 ──
   // 사장: 답할 질문(coach?uqId= · 홈 히어로와 같은 입구). 직원: 도와줄 수 있는 질문(물어보기 탭 · 내 공간).
+  // ★공간 링크 질문(N2 · 0401): 같은 제목을 서버가 member_notices 'question' 으로 공간 주인에게 보낸다(앱은 안 쏜다).
+  //   경로 = /space/answer/<답할 질문>?space=<공간>(서버가 적는다 · 공간 화면 세트는 4번 덩이 pushTapPlan). 같은 공간 10분에 한 번.
   question: {
     title: (actor) => `${actor}님의 질문`,
     route: (s, id) => (s === 'owner' ? `/owner/coach${id ? `?uqId=${enc(id)}` : ''}` : `/junior/chat${id ? `?uqId=${enc(id)}` : ''}`),

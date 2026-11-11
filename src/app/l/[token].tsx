@@ -2,10 +2,10 @@
  * 교육 링크 화면(S14 · 0400) — 로그인 없이 도는 라우트다. 퀴즈 링크(/q/[token])와 같은 자리에 선다.
  *
  * 카톡으로 받은 주소를 연 사람이 노하우를 읽는다. 본문은 공용 부품 EduLinkView 가 그린다(앱 안에서도 같은 화면).
- * 묻기·도움 안 됨·내 기록 찾기·가입은 다음 단계다. 지금은 읽기만 된다.
+ * 묻기·보내기·도움 안 됨·내 질문 다시 보기·신고 = EduAsk(0401 · 손님 열쇠는 이 기기에 둔다). 가입은 4번 덩이다.
  *
  * 보안 경계(전부 서버가 지킨다. 이 화면은 판정하지 않는다):
- *  · 접근은 토큰 definer RPC 둘뿐(edu_link_open · edu_link_entries). 로그인 경로(RLS)를 열지 않는다.
+ *  · 접근은 토큰 definer RPC 뿐(edu_link_open · entries · ask · send · answers · report)과 AI 엣지 손님 갈래. 로그인 경로(RLS)를 열지 않는다.
  *  · 닫힘·만료·없는 토큰·지운 자리는 서버가 ok=false 하나로 준다. 화면도 "닫힌 링크" 하나로 말한다.
  *  · 열 때마다 서버가 열람 수를 올린다. 그래서 한 번 열 때 edu_link_open 을 한 번만 부른다.
  * ★토큰은 계측·로그에 싣지 않는다. 화면 계측은 경로 템플릿(/l/[token])만 남긴다(useScreenTracking).
@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Appear } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { EduAsk } from '@/components/edu/EduAsk';
 import { EduLinkView } from '@/components/edu/EduLinkView';
 import { openEduLink, fetchEduLinkEntries, type EduLinkEntry, type EduLinkInfo } from '@/lib/db';
 import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
@@ -74,7 +75,11 @@ export default function EduLinkScreen() {
 
       {phase === 'ready' && info.ok && (
         <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
-          <EduLinkView info={info} entries={entries} />
+          <EduLinkView
+            info={info}
+            entries={entries}
+            askSlot={<EduAsk token={tk} place={info.placeKind} ownerName={info.ownerName} />}
+          />
         </ScrollView>
       )}
     </SafeAreaView>

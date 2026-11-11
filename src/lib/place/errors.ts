@@ -56,6 +56,12 @@ const MESSAGES: Record<string, string> = {
   too_many_attempts: '여러 번 틀렸어요. 잠시 뒤 다시 시도해 주세요.',
   request_cooldown: '방금 처리된 요청이에요. 30분 뒤에 다시 신청할 수 있어요.',
   space_owner_cannot_leave: '공간 주인은 나갈 수 없어요. 공간을 지우면 멤버도 함께 나가요.',
+  // ── 교육 링크 묻기·보내기·신고(0401) ── link_closed · invalid_argument · question_not_found 는 위 문구를 같이 쓴다.
+  name_required: '이름을 적어 주세요.',
+  too_many_questions: '질문이 한꺼번에 많이 왔어요. 잠시 뒤 다시 물어봐 주세요.',
+  rate_limited: '신고는 하루에 5건까지 보낼 수 있어요.',
+  invalid_category: '어떤 문제인지 골라 주세요.',
+  invalid_body: '내용을 5자 이상 적어 주세요.',
 };
 
 const FALLBACK = '잠시 뒤 다시 시도해 주세요.';

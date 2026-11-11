@@ -1206,6 +1206,105 @@ async function handleDocExtract(payload: any) {
   return { text, empty: !text || r?.empty === true, usage };
 }
 
+// ── 교육 링크 손님 답(0401 · 3번 덩이 나머지 · 3판 11장) ─────────────────────────────
+// 로그인 없는 사람이 교육 링크(/l/[token])에서 물은 질문 하나에 AI 가 답한다. 질문 행은 edu_link_ask 가 먼저 만들었다.
+// ★자리·노하우 범위는 토큰에서만 뽑는다. 본문에서 받는 것은 토큰·손님 열쇠·질문 번호 셋뿐이다(자리 번호·노하우·범위를 안 받는다).
+//   서버 권한은 줄 규칙을 건너뛰므로 본문 값을 믿으면 남의 자리 노하우가 나간다. 판정은 전부 DB 함수(service_role 전용)가 한다.
+// ★손님 이름은 AI 로 안 보낸다(처리방침 v2.5). edu_link_ai_context 가 이름을 아예 주지 않는다. 보내는 것 = 질문 글 + 노하우.
+// 질문 하나 = AI 한 번: ai_context 는 아직 AI 가 안 본 질문의 차례를 원자적으로 잡고 준다(동시 호출은 하나만 받는다).
+//   답을 적으면(못 찾음도) 다시 못 부른다. 모델 오류·시간 초과면 edu_link_ai_release 로 차례를 푼다(못 찾음으로 굳히지 않는다).
+// 차감 = 그 자리 사용량(공간 상한 · unit_ai_cap). 사전판정은 ai_context 의 exceeded(닫힌 쪽) 하나다. 요청 키 = 질문 번호.
+// 레이트리밋 = 링크(토큰)당 분당 RATE_PER_MIN. 링크별 질문 빈도 제한(10분 30개)은 DB 가 먼저 건다.
+const GUEST_TASK = 'edu_link_answer';
+const GUEST_ID_RE = /^[A-Za-z0-9_-]{20,100}$/;
+
+async function handleGuestAnswer(body: any, json: (b: unknown, s?: number) => Response): Promise<Response> {
+  const p = body?.payload ?? {};
+  const token = typeof p.token === 'string' && GUEST_ID_RE.test(p.token) ? p.token : null;
+  const key = typeof p.key === 'string' && GUEST_ID_RE.test(p.key) ? p.key : null;
+  const cqId = typeof p.cqId === 'string' && GUEST_ID_RE.test(p.cqId) ? p.cqId : null;
+  if (!token || !key || !cqId) return json({ error: 'bad_request' }, 400);
+  if (rateLimited(`g:${token}`, RATE_PER_MIN)) return json({ error: 'rate_limited' }, 429);
+
+  const svc = serviceClient();
+  // 차례를 잡은 뒤 어디서 던지든 차례를 푼다(release 는 pending 일 때만 바꿔 결과가 적힌 뒤 불려도 무해하다).
+  let release: (() => Promise<void>) | null = null;
+  try {
+    const { data, error } = await svc.rpc('edu_link_ai_context', { p_token: token, p_key: key, p_cq: cqId });
+    if (error) { console.error('edu_link_ai_context failed:', error.message); return json({ error: 'internal_error' }, 500); }
+    const row = (Array.isArray(data) ? data[0] : data) as
+      | { unit_id: string; query_text: string; exceeded: boolean; entries: any[] }
+      | undefined;
+    // 0줄 = 닫힌 링크 · 남의 열쇠 · 이미 답한(보낸) 질문. 화면은 답 받기로 지금 상태를 다시 읽는다.
+    if (!row) return json({ state: 'skip' });
+    if (row.exceeded) return json({ error: 'ai_quota_exceeded', scope: 'space' }, 402);
+    release = async () => {
+      const { error: rErr } = await svc.rpc('edu_link_ai_release', { p_token: token, p_key: key, p_cq: cqId });
+      if (rErr) console.error('edu_link_ai_release failed:', rErr.message);
+    };
+
+    const writeResult = async (ids: string[] | null, block: unknown) => {
+      const { error: wErr } = await svc.rpc('edu_link_ai_result', {
+        p_token: token, p_key: key, p_cq: cqId, p_entry_ids: ids, p_block: block, p_confidence: 0,
+      });
+      if (wErr) console.error('edu_link_ai_result failed:', wErr.message);
+    };
+
+    const entries = Array.isArray(row.entries) ? row.entries : [];
+    if (entries.length === 0) { await writeResult(null, null); return json({ grounded: false }); }
+
+    // 노하우가 많으면 링크 범위 벡터 검색으로 줄인다(색인 없는 노하우는 빠진다 · 결과가 없거나 검색이 실패하면 앞쪽 12개).
+    let picked = entries.slice(0, MAX_SOPS);
+    if (entries.length > MAX_SOPS) {
+      let m: unknown[] | null = null;
+      try {
+        const vec = await callEmbed(fence(row.query_text).slice(0, MAX_QUERY_LEN), 'RETRIEVAL_QUERY');
+        const r = await svc.rpc('edu_link_match', { p_token: token, p_embedding: toVecLiteral(vec), p_n: 8 });
+        if (r.error) console.error('edu_link_match failed:', r.error.message);
+        m = (r.data ?? null) as unknown[] | null;
+      } catch (e) {
+        console.error('edu_link_match embed failed:', e);
+      }
+      const byId = new Map(entries.map((e: any) => [String(e.id), e]));
+      const hit = ((m ?? []) as any[]).map((r) => byId.get(String(r.id))).filter(Boolean);
+      if (hit.length > 0) picked = hit;
+    }
+    const sops = picked.map((e: any) => ({
+      id: String(e.id),
+      title: String(e.title ?? ''),
+      situation: String(e.situation ?? ''),
+      steps: Array.isArray(e.steps) ? e.steps.map((x: unknown) => String(x)) : [],
+      donts: e.dont ? [String(e.dont)] : [],
+      creatorName: e.creator_name ?? '',
+      version: e.version ?? 1,
+      updatedAt: e.updated_at ?? '',
+    }));
+
+    const ai: any = await handleAnswer({ query: row.query_text, sops });   // 던지면 아래 바깥 catch 가 차례를 푼다
+    // 모델이 실패했으면(검증·답 생성 실패) 차례만 풀고 끝낸다. 잡음 입력(junk_input)은 "못 찾음"으로 적는다.
+    if (ai.error || (ai.rejected && ai.rejected !== 'junk_input')) {
+      await release?.();
+      return json({ error: 'ai_failed' }, 503);
+    }
+    const grounded = ai.grounded === true && !!ai.block && Array.isArray(ai.usedSopIds) && ai.usedSopIds.length > 0;
+    const block = grounded
+      ? { ...ai.block, mode: 'generated', ...(ai.coverage === 'partial' && ai.caveat ? { caveat: String(ai.caveat) } : {}) }
+      : null;
+    await writeResult(grounded ? ai.usedSopIds : null, block);
+
+    // 모델을 불렀으면 센다(거절·실패는 안 센다 · 아래 본 갈래와 같은 규칙).
+    if (!ai.rejected) {
+      const { error: cErr } = await svc.rpc('consume_ai_quota_for', { p_unit: row.unit_id, p_units: 1, p_request_key: `edu:${cqId}` });
+      if (cErr) console.error('consume_ai_quota_for (guest) error:', cErr.message ?? cErr);
+    }
+    return json({ grounded, block });
+  } catch (e) {
+    console.error('guest answer error:', e);
+    if (release) { try { await release(); } catch { /* 2분 뒤 다시 잡을 수 있다 */ } }
+    return json({ error: 'internal_error' }, 500);
+  }
+}
+
 // 호출자 인증: Authorization 베어러 토큰이 "실제 로그인 유저"여야 함.
 // anon 키(=공개)로는 user 가 잡히지 않아 거부 → 열린 프록시 방지.
 type AuthBase = { id: string; storeUnitId: string | null; authz: string };
@@ -1262,13 +1361,17 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
 
   // 1) 인증 — anon 키만으로는 통과 못 함(실 로그인 유저 + 매장 소속 · 또는 현재 공간).
-  //    로그인 확인이 먼저다(로그인 안 한 요청은 본문을 읽지 않는다). 대상 자리가 본문에 있어 그다음에 본문을 읽는다.
+  //    로그인 확인 → 본문 읽기 순서다. 대상 자리가 본문에 있어 그다음에 본문을 읽는다.
   //    본문 오류는 여기서 던지지 않고 아래 try 안에서 다시 던진다 = 예전과 같은 순서의 응답(401 → 429 → 500).
+  //    ★교육 링크 손님(0401)만 예외다: 로그인이 없어도 본문을 한 번 읽고, task 가 edu_link_answer 면 손님 갈래로 간다
+  //    (그 갈래는 토큰으로만 판정). 손님 task 가 아니면 예전처럼 401 이다.
+  //    로그인이 남은 브라우저에서 와도 같은 손님 갈래로 간다(로그인 신원을 쓰지 않는다 · 일반 답 갈래로 새지 않게).
   const auth = await authUser(req);
-  if (!auth) return json({ error: 'unauthorized' }, 401);
   let body: any = null;
   let bodyErr: unknown = null;
   try { body = await req.json(); } catch (e) { bodyErr = e; }
+  if (!bodyErr && body?.task === GUEST_TASK) return await handleGuestAnswer(body, json);
+  if (!auth) return json({ error: 'unauthorized' }, 401);
   const user = await placeUser(auth, targetUnitOf(body));
   if (!user) return json({ error: 'unauthorized' }, 401);
 

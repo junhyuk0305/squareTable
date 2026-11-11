@@ -4997,3 +4997,82 @@ export async function approveSpaceProposal(
   const row = Array.isArray(data) ? data[0] : null;
   return { data: (row ?? null) as { entry_id: string; source_photos: string[] } | null, error: null };
 }
+
+// ── 교육 링크 묻기·보내기·답 받기·신고(0401 · 3번 덩이 나머지) ─────────────────────
+// 손님 함수는 토큰 + 손님 열쇠로만 판정한다(로그인이 남아 있어도 서버가 손님으로 돈다). 실패 문구 = src/lib/place/errors.ts.
+// ★토큰·열쇠는 계측·로그에 싣지 않는다. reportError 에는 오류 객체만 넘긴다.
+
+/** 묻기 결과. guestKey = 처음 물은 사람에게만 새 열쇠(나머지는 null). aiReady = AI 를 돌려도 됨. sent = AI 를 다 써서 바로 보냈다. */
+export type EduAskResult = { cqId: string; guestKey: string | null; aiReady: boolean; sent: boolean };
+export async function askEduLink(token: string, key: string | null, name: string, text: string): Promise<DbResult<EduAskResult>> {
+  if (!HAS_SUPABASE) return { data: null, error: { message: 'no_backend' } };
+  const { data, error } = await supabase
+    .rpc('edu_link_ask', { p_token: token, p_key: key, p_name: name, p_text: text })
+    .single();
+  if (error) {
+    reportError('db.rpc:askEduLink', error);
+    return { data: null, error: error as DbErr };
+  }
+  const row = data as any;
+  return { data: { cqId: row.cq_id, guestKey: row.guest_key ?? null, aiReady: row.ai_ready === true, sent: row.sent === true }, error: null };
+}
+
+/** 주인에게 보내기 — [보내기](AI 가 못 찾음) · [도움이 안 됐어요](unhelpful) 공용. data = 이번에 보냈나(false = 이미 보냄). */
+export async function sendEduLinkQuestion(token: string, key: string, cqId: string, unhelpful: boolean): Promise<DbResult<boolean>> {
+  if (!HAS_SUPABASE) return { data: null, error: { message: 'no_backend' } };
+  const { data, error } = await supabase.rpc('edu_link_send', { p_token: token, p_key: key, p_cq: cqId, p_unhelpful: unhelpful });
+  if (error) {
+    reportError('db.rpc:sendEduLinkQuestion', error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: data === true, error: null };
+}
+
+/** 내가 보낸 질문과 답. 서버가 최근 50개만 준다. 열쇠가 틀리거나 링크가 닫히면 빈 목록. */
+export type EduAnswerState = 'asking' | 'ai' | 'none' | 'waiting' | 'answered';
+export type EduAnswer = {
+  cqId: string;
+  queryText: string;
+  askedAt: string;
+  state: EduAnswerState;
+  aiBlock: import('@/types').ResponseBlock | null;
+  replyBody: string | null;
+  entryTitle: string | null;
+  entrySquare: import('@/types').SquareBlock | null;
+  answeredAt: string | null;
+};
+export const EDU_ANSWERS_MAX = 50;
+export async function fetchEduLinkAnswers(token: string, key: string): Promise<DbResult<EduAnswer[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('edu_link_answers', { p_token: token, p_key: key }).limit(EDU_ANSWERS_MAX);
+  if (error) {
+    reportError('db.rpc:fetchEduLinkAnswers', error);
+    return { data: null, error: error as DbErr };
+  }
+  return {
+    data: ((data ?? []) as any[]).map((r) => ({
+      cqId: r.cq_id,
+      queryText: r.query_text ?? '',
+      askedAt: r.asked_at,
+      state: r.state as EduAnswerState,
+      aiBlock: r.ai_block ?? null,
+      replyBody: r.reply_body ?? null,
+      entryTitle: r.entry_title ?? null,
+      entrySquare: r.entry_square ?? null,
+      answeredAt: r.answered_at ?? null,
+    })),
+    error: null,
+  };
+}
+
+/** 링크 화면 신고(내 질문 하나에 붙인다). 종류 = ai_answer · inappropriate · other. 하루 5건. */
+export type EduReportCategory = 'ai_answer' | 'inappropriate' | 'other';
+export async function reportEduLink(token: string, key: string, cqId: string, category: EduReportCategory, body: string): Promise<DbResult<true>> {
+  if (!HAS_SUPABASE) return { data: null, error: { message: 'no_backend' } };
+  const { error } = await supabase.rpc('edu_link_report', { p_token: token, p_key: key, p_cq: cqId, p_category: category, p_body: body });
+  if (error) {
+    reportError('db.rpc:reportEduLink', error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: true, error: null };
+}

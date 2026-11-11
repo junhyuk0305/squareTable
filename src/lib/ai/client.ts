@@ -287,3 +287,41 @@ export async function extractIntent(input: IntentInput, target?: AiTarget): Prom
     return { rewritten: '', keywords: [] };
   }
 }
+
+/**
+ * 교육 링크 손님 질문 하나에 AI 답(엣지 task edu_link_answer · 0401).
+ * 로그인 세션을 싣지 않는다. 손님 갈래는 토큰·손님 열쇠·질문 번호로만 판정한다(엣지와 DB 가 자리·범위를 토큰에서 뽑는다).
+ * 결과는 화면이 답 받기(fetchEduLinkAnswers)로 다시 읽는다. 여기서는 어떻게 끝났는지만 돌려준다.
+ *  · 'done' = 답을 적었다(찾았든 못 찾았든) · 'skip' = 이미 본 질문·닫힌 링크 · 'quota' = 그 공간 AI 를 다 썼다 · 'failed' = 연결·서버 문제
+ * ★토큰·열쇠는 계측·로그에 싣지 않는다.
+ */
+export type EduAiOutcome = 'done' | 'skip' | 'quota' | 'failed';
+export async function answerEduLinkQuestion(token: string, key: string, cqId: string): Promise<EduAiOutcome> {
+  if (USE_MOCK || !AI_ENDPOINT) return 'failed';
+  for (let attempt = 1; attempt <= EDGE_MAX_ATTEMPTS; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), EDGE_TIMEOUT_MS);
+    try {
+      const res = await fetch(AI_ENDPOINT as string, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${ANON}` },
+        body: JSON.stringify({ task: 'edu_link_answer', payload: { token, key, cqId } }),
+        signal: ctrl.signal,
+      });
+      if (res.ok) {
+        const body = await res.json().catch(() => null);
+        return body?.state === 'skip' ? 'skip' : 'done';
+      }
+      if (res.status === 402) return 'quota';
+      if (res.status < 500) return 'failed';
+      // 모델 실패(ai_failed)는 다시 불러도 같은 모델을 또 부를 뿐이다 → 재시도하지 않고 [보내기]로 넘긴다.
+      if ((await res.json().catch(() => null))?.error === 'ai_failed') return 'failed';
+    } catch {
+      // 네트워크·시간 초과 → 한 번 더
+    } finally {
+      clearTimeout(timer);
+    }
+    if (attempt < EDGE_MAX_ATTEMPTS) await sleep(EDGE_RETRY_DELAY_MS);
+  }
+  return 'failed';
+}
