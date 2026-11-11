@@ -76,7 +76,8 @@ check('1-17 공간 합류 승인 알림은 역할과 상관없이 참여 화면�
 console.log('\n[2] 엣지 push/index.ts');
 const edgeSrc = read('supabase/functions/push/index.ts');
 const extract = (name) => {
-  const start = edgeSrc.search(new RegExp(`(async )?function ${name}\\(`));
+  // 제네릭 함수(readOnceRetry<T …>)도 찾는다.
+  const start = edgeSrc.search(new RegExp(`(async )?function ${name}[<(]`));
   if (start < 0) return null;
   const end = edgeSrc.indexOf('\n}\n', start);
   return ts.transpileModule(edgeSrc.slice(start, end + 2), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
@@ -97,7 +98,7 @@ check('2-4 serve 가 서버 사건 id 로 route 를 정해 deliver 에 넘긴다
 
 // deliver() 를 가짜 admin 으로 돌려 Expo 메시지를 본다.
 const chain = (data) => {
-  const o = { select: () => o, in: () => o, eq: () => o, delete: () => o, then: (res) => res({ data, error: null }) };
+  const o = { select: () => o, in: () => o, eq: () => o, neq: () => o, delete: () => o, then: (res) => res({ data, error: null }) };
   return o;
 };
 const tables = {
@@ -126,7 +127,7 @@ const fetchFake = async (_u, init) => {
   sent.push(...msgs);
   return { ok: true, json: async () => ({ data: msgs.map(() => ({ status: 'ok' })) }) };
 };
-const parts = ['deliver', 'deliverExpoPush', 'inQuietWindow', 'kstNowHHMM'].map(extract);
+const parts = ['deliver', 'deliverExpoPush', 'inQuietWindow', 'kstNowHHMM', 'readOnceRetry'].map(extract);
 let deliver = null;
 if (parts.every(Boolean)) {
   // EXPO_ACCESS_TOKEN = 엣지 모듈 상수(985619b). 빈 값이면 Authorization 헤더 없이 보낸다.
