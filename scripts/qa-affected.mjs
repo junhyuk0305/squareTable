@@ -103,7 +103,8 @@ for (const f of changed) {
     const sql = read(join(ROOT, f));
     const tag = f.match(/(\d{4})/)?.[1] ?? f;
     const fns = new Set([...sql.matchAll(/\bfunction\s+(?:if\s+exists\s+)?(?:public\.)?"?(\w+)/gi)].map((m) => m[1]));
-    const tables = new Set([...sql.matchAll(/\b(?:table|policy[\s\S]{0,200}?\bon|trigger[\s\S]{0,200}?\bon)\s+(?:if\s+(?:not\s+)?exists\s+)?(?:only\s+)?(?:public\.)?"?(\w+)/gi)].map((m) => m[1]));
+    // index … on <표> 도 표 변경이다(부분 unique 가 옛 앱 쓰기를 거절할 수 있다 · 0632·0633 이 빠졌던 자리).
+    const tables = new Set([...sql.matchAll(/\b(?:table|policy[\s\S]{0,200}?\bon|trigger[\s\S]{0,200}?\bon|index[\s\S]{0,200}?\bon)\s+(?:if\s+(?:not\s+)?exists\s+)?(?:only\s+)?(?:public\.)?"?(\w+)/gi)].map((m) => m[1]));
     const pickOrNote = (kind, name, hits) => {
       if (hits.length > WIDE) { hit = true; notes.push(`${tag} ${kind} ${name}: 하니스 ${hits.length}개에 나온다. 넓어서 이것으로는 고르지 않았다.`); }
       else for (const h of hits) pick(h, `${tag} ${kind} ${name}`);
