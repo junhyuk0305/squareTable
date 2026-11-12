@@ -1,48 +1,6 @@
 {
- "updatedAt": "2026-11-11T10:58:33.919Z",
+ "updatedAt": "2026-11-12T02:49:24.444Z",
  "fails": [
-  {
-   "key": "junior|/|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "owner|/|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "junior|/complete-profile|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "owner|/complete-profile|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "junior|/downgrade|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "owner|/downgrade|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "junior|/hq|R3",
-   "detail": [
-    "<44 \"내 매장으로\" @172,500 116×40"
-   ]
-  },
   {
    "key": "owner|/hq|R3",
    "detail": [
@@ -50,7 +8,7 @@
    ]
   },
   {
-   "key": "junior|/hq/knowhow|R3",
+   "key": "junior|/hq|R3",
    "detail": [
     "<44 \"내 매장으로\" @172,500 116×40"
    ]
@@ -62,7 +20,7 @@
    ]
   },
   {
-   "key": "junior|/hq/knowhow/status|R3",
+   "key": "junior|/hq/knowhow|R3",
    "detail": [
     "<44 \"내 매장으로\" @172,500 116×40"
    ]
@@ -74,7 +32,7 @@
    ]
   },
   {
-   "key": "junior|/hq/quizzes|R3",
+   "key": "junior|/hq/knowhow/status|R3",
    "detail": [
     "<44 \"내 매장으로\" @172,500 116×40"
    ]
@@ -86,7 +44,7 @@
    ]
   },
   {
-   "key": "junior|/hq/quizzes/status|R3",
+   "key": "junior|/hq/quizzes|R3",
    "detail": [
     "<44 \"내 매장으로\" @172,500 116×40"
    ]
@@ -98,7 +56,7 @@
    ]
   },
   {
-   "key": "junior|/hq/settings|R3",
+   "key": "junior|/hq/quizzes/status|R3",
    "detail": [
     "<44 \"내 매장으로\" @172,500 116×40"
    ]
@@ -110,7 +68,7 @@
    ]
   },
   {
-   "key": "junior|/hq/settings/billing|R3",
+   "key": "junior|/hq/settings|R3",
    "detail": [
     "<44 \"내 매장으로\" @172,500 116×40"
    ]
@@ -122,7 +80,7 @@
    ]
   },
   {
-   "key": "junior|/hq/settings/members|R3",
+   "key": "junior|/hq/settings/billing|R3",
    "detail": [
     "<44 \"내 매장으로\" @172,500 116×40"
    ]
@@ -134,7 +92,7 @@
    ]
   },
   {
-   "key": "junior|/hq/stores|R3",
+   "key": "junior|/hq/settings/members|R3",
    "detail": [
     "<44 \"내 매장으로\" @172,500 116×40"
    ]
@@ -146,7 +104,7 @@
    ]
   },
   {
-   "key": "junior|/hq/stores/invites|R3",
+   "key": "junior|/hq/stores|R3",
    "detail": [
     "<44 \"내 매장으로\" @172,500 116×40"
    ]
@@ -158,34 +116,21 @@
    ]
   },
   {
-   "key": "junior|/hub|R3",
+   "key": "junior|/hq/stores/invites|R3",
    "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
+    "<44 \"내 매장으로\" @172,500 116×40"
    ]
   },
   {
-   "key": "owner|/hub|R3",
+   "key": "owner|/hub-growth|R3",
    "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "junior|/hub-growth|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
+    "<44 \"노하우 복사하기\" @38,743 384×39"
    ]
   },
   {
    "key": "junior|/hub-growth|R5",
    "detail": [
     "\"0개류\" 1건: 0개"
-   ]
-  },
-  {
-   "key": "owner|/hub-growth|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40",
-    "<44 \"노하우 복사하기\" @38,743 384×39"
    ]
   },
   {
@@ -229,14 +174,7 @@
   {
    "key": "junior|/junior/home|R3",
    "detail": [
-    "<44 \"내 계정 · 설정\" @399,22 40×40",
     "<44 \"오늘 업무 전체보기\" @331,339 104×18"
-   ]
-  },
-  {
-   "key": "owner|/login|R5",
-   "detail": [
-    "\"알바\" 1건: 우리 매장 운영의 기준 · 알바·직원 교육 AI"
    ]
   },
   {
@@ -269,15 +207,9 @@
   {
    "key": "owner|/owner/categories|R3",
    "detail": [
-    "<44 \"포스 마감 정산 순서, 한 달간 2번 물어봄 · 오래된 노하우\" @38,296 28×28",
-    "<44 \"마감 시재 정산, 한 달간 안 물어봄\" @38,376 28×28",
-    "<44 \"큰 소리로 항의하는 손님, 한 달간 6번 물어봄 · 오래된 노하우\" @38,457 28×28"
-   ]
-  },
-  {
-   "key": "junior|/login|R5",
-   "detail": [
-    "\"알바\" 1건: 우리 매장 운영의 기준 · 알바·직원 교육 AI"
+    "<44 \"포스 마감 정산 순서, 한 달간 2번 물어봄 · 오래된 노하우\" @38,386 28×28",
+    "<44 \"마감 시재 정산, 한 달간 안 물어봄\" @38,466 28×28",
+    "<44 \"큰 소리로 항의하는 손님, 한 달간 6번 물어봄 · 오래된 노하우\" @38,547 28×28"
    ]
   },
   {
@@ -290,7 +222,6 @@
   {
    "key": "owner|/owner/dashboard|R3",
    "detail": [
-    "<44 \"내 계정 · 설정\" @399,22 40×40",
     "<44 \"오늘 업무 전체보기\" @331,394 104×18",
     "<44 \"오늘 근무 보기\" @38,465 384×40"
    ]
@@ -423,119 +354,11 @@
    ]
   },
   {
-   "key": "junior|/signup|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "junior|/space/first|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
    "key": "owner|/report|R3",
    "detail": [
     "<44 \"스퀘어 카페 신촌점\" @38,171 129×34",
     "<44 \"스퀘어 카페 홍대점\" @175,171 129×34",
     "<44 \"박지원 매니저\" @38,252 101×34"
-   ]
-  },
-  {
-   "key": "junior|/space/home|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "owner|/signup|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "junior|/space/knowhow|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "owner|/space/first|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "junior|/space/link/new|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "owner|/space/home|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "junior|/space/settings|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "owner|/space/knowhow|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "owner|/space/link/new|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "junior|/space/teach|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "owner|/space/settings|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "junior|/space/write|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "junior|/stores|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "owner|/space/teach|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "owner|/space/write|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
-   ]
-  },
-  {
-   "key": "owner|/stores|R3",
-   "detail": [
-    "<44 \"내 계정 · 설정\" @399,20 40×40"
    ]
   }
  ]
