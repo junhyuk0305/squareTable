@@ -1,18 +1,14 @@
 {
   "total": {
     "upsert": 8,
-    "setData": 4,
-    "multi": 32
+    "setData": 0,
+    "multi": 29
   },
   "upsert": {
     "src/lib/ai/searchClient.ts": 1,
     "src/lib/db.ts": 7
   },
-  "setData": {
-    "src/lib/store/usePlaybookStore.ts": 2,
-    "src/lib/store/useStaffStore.ts": 1,
-    "src/lib/store/useUnknownQueueStore.ts": 1
-  },
+  "setData": {},
   "multi": {
     "src/app/hq/knowhow/[id].tsx": 1,
     "src/app/hq/quizzes/[id].tsx": 3,
@@ -35,7 +31,6 @@
     "src/lib/store/useChatStore.ts": 1,
     "src/lib/store/useRoomStore.ts": 1,
     "src/lib/store/useSessionStore.ts": 4,
-    "src/lib/store/useUnknownQueueStore.ts": 2,
-    "src/lib/store/useWorkStore.ts": 2
+    "src/lib/store/useUnknownQueueStore.ts": 1
   }
 }
