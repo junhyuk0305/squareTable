@@ -354,10 +354,11 @@ def('M1', '출근 두 기기에서 동시에(열린 기록)', async (W) => {
     R.val(`update public.attendance set check_out = now() where unit_id = ${q(w.unit)} and check_out is null; select 1;`);
     const ins = (c, k) => c.from('attendance').upsert({ id: `att_${A.id}_${Date.now()}_${i}${k}`, staff_id: A.id, date: today, check_in: new Date().toISOString(), check_out: null, work_minutes: 0, unit_id: w.unit }).select('id');
     const rs = await Promise.all([ins(A.c, 'a'), ins(A2, 'b')]);
-    if (rs.some((r) => r.error)) errs++;
+    // 0632 뒤 옛 길: 둘째 기기는 unique(23505)로 진다. 그것만 정상 거절이다.
+    if (rs.some((r) => r.error && r.error.code !== '23505')) errs++;
     if (n(`select count(*) from public.attendance where unit_id = ${q(w.unit)} and staff_id = ${q(A.id)} and check_out is null`) > 1) dup++;
   }
-  check('M1', '요청 오류 0', errs === 0, `오류 ${errs}`);
+  check('M1', '요청 오류 0(23505 거절 빼고)', errs === 0, `오류 ${errs}`);
   check('M1', `열린 기록 ≤ 1(${ROUNDS}회)`, dup === 0, `2건 ${dup}/${ROUNDS}`);
 });
 
@@ -368,6 +369,8 @@ def('M2', '퇴근과 관리자 출근시각 수정이 동시에(행 전체 upser
   for (let i = 0; i < ROUNDS; i++) {
     const id = `att_rc${i}_${w.s}`;
     const open = { id, staff_id: A.id, date: today, check_in: new Date(Date.now() - 4 * 3600e3).toISOString(), check_out: null, work_minutes: 0, unit_id: w.unit };
+    // 앞 라운드에서 퇴근이 사라진 기록은 열린 채라 닫고 시작한다(0632 열린 기록 unique).
+    R.val(`update public.attendance set check_out = now() where unit_id = ${q(w.unit)} and check_out is null; select 1;`);
     R.val(`insert into public.attendance(id, staff_id, date, check_in, unit_id) values (${q(id)}, ${q(A.id)}, ${q(today)}, ${q(open.check_in)}, ${q(w.unit)}); select 1;`);
     const rs = await Promise.all([
       A.c.from('attendance').upsert({ ...open, check_out: new Date().toISOString(), work_minutes: 240 }).select('id'),
@@ -391,10 +394,11 @@ def('M3', '교대 요청 두 기기에서 같은 근무에 동시에', async (W)
     R.val(`insert into public.shift_templates(id, unit_id, staff_id, weekday, start_time, end_time) values (${q(tpl)}, ${q(w.unit)}, ${q(A.id)}, 1, '09:00', '13:00'); select 1;`);
     const ins = (c, k) => c.from('swap_requests').insert({ id: `swap_rc${i}${k}_${w.s}`, unit_id: w.unit, kind: 'cover', requester_id: A.id, date: kstDay(3), template_id: tpl, note: '', status: 'open', accepted_by: null });
     const rs = await Promise.all([ins(A.c, 'a'), ins(A2, 'b')]);
-    if (rs.some((r) => r.error)) errs++;
+    // 0633 뒤: 둘째 기기는 unique(23505)로 진다. 그것만 정상 거절이다.
+    if (rs.some((r) => r.error && r.error.code !== '23505')) errs++;
     if (n(`select count(*) from public.swap_requests where template_id = ${q(tpl)} and status = 'open'`) > 1) dup++;
   }
-  check('M3', '요청 오류 0', errs === 0, `오류 ${errs}`);
+  check('M3', '요청 오류 0(23505 거절 빼고)', errs === 0, `오류 ${errs}`);
   check('M3', `같은 근무의 열린 요청 ≤ 1(${ROUNDS}회)`, dup === 0, `2건 ${dup}/${ROUNDS}`);
 });
 
@@ -437,7 +441,8 @@ def('M14', '공지 다시 올리기(남의 공지) · 공지 지우기와 댓글
     const cm = { id: `f_rcc${i}_${w.s}`, unit_id: w.unit, feed_date: today, room_id: null,
       data: { id: `f_rcc${i}_${w.s}`, date: today, kind: 'comment', text: 'RC 댓글', authorId: A.id, authorName: A.key, authorRole: 'junior', createdAt: new Date().toISOString(), refId: id } };
     const rs = await Promise.all([w.owner.c.from('work_feed').delete().eq('id', id).select('id'), A.c.from('work_feed').insert(cm)]);
-    if (rs.some((r) => r.error)) errs++;
+    // 0635 뒤: 지워진 공지에 단 댓글은 feed_parent_gone 으로 진다. 그것만 정상 거절이다.
+    if (rs.some((r) => r.error && !/feed_parent_gone/.test(r.error.message ?? ''))) errs++;
     if (n(`select count(*) from public.work_feed where unit_id = ${q(w.unit)} and data->>'refId' = ${q(id)}`) > 0) orphan++;
   }
   check('M14', '요청 오류 0', errs === 0, `오류 ${errs}`);
@@ -490,6 +495,149 @@ def('L9c', 'set_my_marketing_consent 켜기 동시 두 번(23505 원문)', async
   check('L9c', '둘 다 성공', a.ok && b.ok, `${show(a)} · ${show(b)}`);
   check('L9c', '유효 동의 = 1', act === 1, `행 ${act}`);
   R.val(`delete from public.user_consents where user_id = ${q(w.owner.id)} and item = 'marketing'; select 1;`);
+});
+
+// ─────────────────────────────── S2 새 서버 함수(방식 A · 0630~0636) ───────────────────────────────
+// 옛 길(위 방식 B 케이스)은 옛 앱이 사라질 때까지 남는 것이 있다. 새 함수는 여기서 겹침을 보장해 잰다. 함수가 없으면(적용 전) RED 다.
+const st = (fn) => `(${fn} ->> 'status')`;
+
+def('H3A', 'complete_task 두 직원 동시 · uncomplete_task 권한과 두 행 같이 지우기(0630)', async (W) => {
+  const w = await W({ staffN: 2 });
+  const [A, B] = w.staff;
+  const tpl = `wt_rca_${w.s}`, fid = `fdone_${today}_${tpl}`;
+  R.val(`insert into public.work_templates(id, unit_id, section, text) values (${q(tpl)}, ${q(w.unit)}, 'open', 'RC 새 할 일'); select 1;`);
+  const body = st(`public.complete_task(${q(today)}, ${q(tpl)})`);
+  const [a, b] = R.twoAtOnce(S(w, A.id, body, true), S(w, B.id, body, false));
+  check('H3A', '이긴 쪽 ok · 진 쪽 already', a.ok && a.v === 'ok' && b.ok && b.v === 'already', `${show(a)} · ${show(b)}`);
+  const by = R.val(`select data->>'by' from public.work_done where unit_id = ${q(w.unit)} and template_id = ${q(tpl)}`);
+  const au = R.val(`select data->>'authorId' || '|' || (data->>'text') from public.work_feed where id = ${q(fid)}`);
+  check('H3A', '완료 기록 = 완료 글 작성자 = 앞 세션', by === A.id && au.startsWith(`${A.id}|`), `by=${by} · feed=${au}`);
+  check('H3A', '완료 글 문구 = 서버가 지은 할 일 문구', /RC 새 할 일 완료$/.test(au), au);
+  const rb = R.psqlRun(`${R.as(B.id)}\nselect public.uncomplete_task(${q(today)}, ${q(tpl)})::text;`);
+  check('H3A', '남의 완료 해제 = forbidden', rb.status !== 0 && /forbidden/.test(rb.stderr), (rb.stderr || rb.stdout).trim().slice(0, 120));
+  // 해제와 다른 직원 완료가 겹침: 해제가 쥐는 동안 B 가 완료 → 해제 커밋 뒤 B 가 새 완료자(두 행 이름 일치).
+  const [c, d] = R.twoAtOnce(S(w, A.id, st(`public.uncomplete_task(${q(today)}, ${q(tpl)})`), true), S(w, B.id, body, false));
+  check('H3A', '해제 ok · 겹친 완료 ok', c.ok && c.v === 'ok' && d.ok && d.v === 'ok', `${show(c)} · ${show(d)}`);
+  const by2 = R.val(`select coalesce((select data->>'by' from public.work_done where unit_id = ${q(w.unit)} and template_id = ${q(tpl)}), '')`);
+  const au2 = R.val(`select coalesce(string_agg(data->>'authorId', ','), '') from public.work_feed where unit_id = ${q(w.unit)} and data->>'refId' = ${q(tpl)}`);
+  check('H3A', '겹친 뒤 완료 1 · 완료 글 1 · 이름 일치(B)', by2 === B.id && au2 === B.id, `by=${by2} · feed=${au2}`);
+  const rbu = R.psqlRun(`${R.as(B.id)}\nselect public.uncomplete_task(${q(today)}, ${q(tpl)}) ->> 'status';`);
+  const left = n(`select (select count(*) from public.work_done where unit_id = ${q(w.unit)} and template_id = ${q(tpl)}) + (select count(*) from public.work_feed where unit_id = ${q(w.unit)} and data->>'refId' = ${q(tpl)})`);
+  check('H3A', '완료자 해제 → 두 행 다 지움', rbu.status === 0 && left === 0, `${(rbu.stdout || rbu.stderr).trim().slice(-60)} · 남은 ${left}`);
+});
+
+def('H4A', 'review_suggestion 두 관리자 동시 승인 · 승인과 반려 동시 · 자동 반려 뒤 승인(0631)', async (W) => {
+  const { w, M } = await managerWorld(W, 2);
+  const [P] = w.staff;
+  const seed = (id, extra = `'pending', null, null`) => R.val(`insert into public.playbook_suggestions(id, unit_id, kind, proposer_id, proposer_name, text, status, reviewed_by, owner_note)
+    values (${q(id)}, ${q(w.unit)}, 'new', ${q(P.id)}, 'RC', 'RC 제안', ${extra}); select 1;`);
+  const ap = (sug) => st(`public.review_suggestion(${q(sug)}, 'approved')`);
+  const rj = (sug) => st(`public.review_suggestion(${q(sug)}, 'rejected', null, 'RC 반려')`);
+  const s1 = `sug_rca1_${w.s}`; seed(s1);
+  const [a, b] = R.twoAtOnce(S(w, w.owner.id, ap(s1), true), S(w, M.id, ap(s1), false));
+  check('H4A', '동시 승인: ok · already', a.ok && a.v === 'ok' && b.ok && b.v === 'already', `${show(a)} · ${show(b)}`);
+  check('H4A', '승인자 = 앞 세션', R.val(`select reviewed_by::text from public.playbook_suggestions where id = ${q(s1)}`) === w.owner.id);
+  const s2 = `sug_rca2_${w.s}`; seed(s2);
+  const [c, d] = R.twoAtOnce(S(w, w.owner.id, ap(s2), true), S(w, M.id, rj(s2), false));
+  check('H4A', '승인·반려 동시: ok · already · 최종 승인', c.ok && c.v === 'ok' && d.ok && d.v === 'already'
+    && R.val(`select status from public.playbook_suggestions where id = ${q(s2)}`) === 'approved', `${show(c)} · ${show(d)}`);
+  const s3 = `sug_rca3_${w.s}`; seed(s3, `'rejected', null, '다른 답으로 해결된 질문이에요.'`);
+  const r3 = R.psqlRun(`${R.as(w.owner.id)}\nselect public.review_suggestion(${q(s3)}, 'approved') ->> 'status';`);
+  check('H4A', '0582 자동 반려 뒤 승인 = ok', r3.status === 0 && /ok\s*$/.test(r3.stdout), (r3.stdout || r3.stderr).trim().slice(-80));
+  // 옛 앱 직접 update: 이미 승인된 행을 다시 반려 → 0행(트리거가 건너뜀).
+  const r4 = await M.c.from('playbook_suggestions').update({ status: 'rejected' }).eq('id', s1).select('id');
+  check('H4A', '옛 앱 직접 update: 검토된 행 다시 바꾸기 = 0행', !r4.error && (r4.data ?? []).length === 0, r4.error?.message ?? `rows ${(r4.data ?? []).length}`);
+  // 직원은 못 한다.
+  const r5 = R.psqlRun(`${R.as(P.id)}\nselect public.review_suggestion(${q(s2)}, 'rejected');`);
+  check('H4A', '직원 = not_manager', r5.status !== 0 && /not_manager/.test(r5.stderr), (r5.stderr || '').trim().slice(0, 80));
+});
+
+def('M1A', 'attendance_check_in 두 기기 동시(0632)', async (W) => {
+  const w = await W({ staffN: 1 });
+  const [A] = w.staff;
+  const ci = (k) => st(`public.attendance_check_in(${q(`att_rca${k}_${w.s}`)}, ${q(today)})`);
+  const [a, b] = R.twoAtOnce(S(w, A.id, ci('a'), true), S(w, A.id, ci('b'), false));
+  const open = n(`select count(*) from public.attendance where unit_id = ${q(w.unit)} and staff_id = ${q(A.id)} and check_out is null`);
+  check('M1A', '앞 ok · 뒤 already', a.ok && a.v === 'ok' && b.ok && b.v === 'already', `${show(a)} · ${show(b)}`);
+  check('M1A', '열린 기록 = 1', open === 1, `열린 ${open}`);
+  const re = R.psqlRun(`${R.as(A.id)}\nselect public.attendance_check_in(${q(`att_rcaa_${w.s}`)}, ${q(today)}) ->> 'id';`);
+  check('M1A', '같은 id 재시도 = already(같은 기록)', re.status === 0 && re.stdout.trim().endsWith(`att_rcaa_${w.s}`), (re.stdout || re.stderr).trim().slice(-80));
+});
+
+def('M2A', 'attendance_check_out 과 attendance_edit_times 동시(0632)', async (W) => {
+  const w = await W({ staffN: 1 });
+  const [A] = w.staff;
+  const id = `att_rcm2_${w.s}`;
+  R.val(`insert into public.attendance(id, staff_id, date, check_in, unit_id) values (${q(id)}, ${q(A.id)}, ${q(today)}, now() - interval '4 hours', ${q(w.unit)}); select 1;`);
+  const [a, b] = R.twoAtOnce(
+    S(w, A.id, st(`public.attendance_check_out()`), true),
+    S(w, w.owner.id, st(`public.attendance_edit_times(${q(id)}, now() - interval '5 hours')`), false));
+  const row = R.val(`select (check_out is not null)::text || '/' || coalesce(edited_by, '-') || '/' || work_minutes from public.attendance where id = ${q(id)}`);
+  check('M2A', '둘 다 ok', a.ok && a.v === 'ok' && b.ok && b.v === 'ok', `${show(a)} · ${show(b)}`);
+  check('M2A', '퇴근과 수정이 다 남는다 · 근무 분 = 새 출근 기준(약 300)', /^true\/owner\/(29[89]|30[01])$/.test(row), row);
+  const again = R.val(`${R.as(A.id)}\nselect public.attendance_check_out() ->> 'status';`);
+  check('M2A', '다시 퇴근 = already', again.split('\n').pop() === 'already', again);
+});
+
+def('M13A', 'submit_unknown_query 두 직원 동시(첫 질문 · 같은 질문 합치기 · 0634)', async (W) => {
+  const w = await W({ staffN: 2 });
+  const [A, B] = w.staff;
+  const sub = (k, text) => st(`public.submit_unknown_query(${q(`uq_rca${k}_${w.s}`)}, ${q(text)})`);
+  const [a, b] = R.twoAtOnce(S(w, A.id, sub('a', 'RC 동시 첫 질문'), true), S(w, B.id, sub('b', ' RC 동시 첫 질문 '), false));
+  const rowsN = n(`select count(*) from public.unknown_queries where unit_id = ${q(w.unit)} and btrim(query_text) = 'RC 동시 첫 질문' and status = 'pending_owner_answer'`);
+  const cnt = n(`select coalesce(max(similar_queries_count), -1) from public.unknown_queries where unit_id = ${q(w.unit)} and btrim(query_text) = 'RC 동시 첫 질문'`);
+  check('M13A', '앞 created · 뒤 merged', a.ok && a.v === 'created' && b.ok && b.v === 'merged', `${show(a)} · ${show(b)}`);
+  check('M13A', '같은 첫 질문 = 1행 · 유사 수 1', rowsN === 1 && cnt === 1, `행 ${rowsN} · 유사 ${cnt}`);
+  check('M13A', '작성자 = 앞 세션(서버가 찍음)', R.val(`select junior_id from public.unknown_queries where id = ${q(`uq_rcaa_${w.s}`)}`) === A.id);
+  const [c, d] = R.twoAtOnce(S(w, A.id, sub('c', 'RC 동시 첫 질문'), true), S(w, B.id, sub('d', 'RC 동시 첫 질문'), false));
+  const cnt2 = n(`select similar_queries_count from public.unknown_queries where id = ${q(`uq_rcaa_${w.s}`)}`);
+  check('M13A', '둘 다 merged · 유사 수 1 → 3', c.ok && c.v === 'merged' && d.ok && d.v === 'merged' && cnt2 === 3, `${show(c)} · ${show(d)} · 유사 ${cnt2}`);
+});
+
+def('M14A', 'repost_notice 남의 공지 · delete_feed_item 과 댓글 겹침(0635)', async (W) => {
+  const w = await W({ staffN: 1 });
+  const [A] = w.staff;
+  const nid = `f_rcan_${w.s}`;
+  const note = (id) => `insert into public.work_feed(id, unit_id, feed_date, data) values (${q(id)}, ${q(w.unit)}, ${q(today)},
+    jsonb_build_object('id', ${q(id)}, 'date', ${q(today)}, 'kind', 'notice', 'text', 'RC 공지', 'authorId', ${q(w.owner.id)}, 'authorName', 'O', 'authorRole', 'owner', 'createdAt', now() - interval '1 hour', 'read_by', jsonb_build_array(${q(A.id)}))); select 1;`;
+  R.val(note(nid));
+  const rp = R.psqlRun(`${R.as(A.id)}\nselect public.repost_notice(${q(nid)}) ->> 'status';`);
+  const after = R.val(`select (data->>'authorId') || '|' || jsonb_array_length(data->'read_by') || '|' || ((data->>'createdAt')::timestamptz > now() - interval '1 minute')::text from public.work_feed where id = ${q(nid)}`);
+  check('M14A', '직원이 사장 공지 다시 올리기 = ok', rp.status === 0 && /ok\s*$/.test(rp.stdout), (rp.stdout || rp.stderr).trim().slice(-80));
+  check('M14A', '작성자 그대로 · 읽음 비움 · createdAt 지금', after === `${w.owner.id}|0|true`, after);
+  const cm = (id, ref) => `insert into public.work_feed(id, unit_id, feed_date, data) values (${q(id)}, ${q(w.unit)}, ${q(today)},
+    jsonb_build_object('id', ${q(id)}, 'date', ${q(today)}, 'kind', 'comment', 'text', 'RC 댓글', 'authorId', ${q(A.id)}, 'refId', ${q(ref)})) returning id`;
+  // 지우기가 쥐는 동안 댓글 → 댓글은 feed_parent_gone · 남은 댓글 0
+  const d1 = `f_rcad1_${w.s}`; R.val(note(d1));
+  const [a, b] = R.twoAtOnce(S(w, w.owner.id, st(`public.delete_feed_item(${q(d1)})`), true), S(w, A.id, cm(`f_rcac1_${w.s}`, d1), false));
+  check('M14A', '지우기 ok · 겹친 댓글 feed_parent_gone', a.ok && a.v === 'ok' && !b.ok && b.code === 'feed_parent_gone', `${show(a)} · ${show(b)}`);
+  // 댓글이 쥐는 동안 지우기 → 지우기가 기다린 뒤 그 댓글까지 지움
+  const d2 = `f_rcad2_${w.s}`; R.val(note(d2));
+  const [c, d] = R.twoAtOnce(S(w, A.id, cm(`f_rcac2_${w.s}`, d2), true), S(w, w.owner.id, st(`public.delete_feed_item(${q(d2)})`), false));
+  const orphan = n(`select count(*) from public.work_feed where unit_id = ${q(w.unit)} and data->>'refId' in (${q(d1)}, ${q(d2)})`);
+  check('M14A', '댓글 1행 · 지우기 ok', c.ok && c.v === '1' && d.ok && d.v === 'ok', `${show(c)} · ${show(d)}`);
+  check('M14A', '공지를 지운 뒤 남은 댓글 = 0', orphan === 0, `고아 ${orphan}`);
+  const rf = R.psqlRun(`${R.as(A.id)}\nselect public.delete_feed_item(${q(nid)});`);
+  check('M14A', '직원이 사장 공지 지우기 = forbidden', rf.status !== 0 && /forbidden/.test(rf.stderr), (rf.stderr || '').trim().slice(0, 80));
+});
+
+def('L23', 'add_shift_series 같은 반복 근무 동시 두 번 · apply_shift_series_ops 중간 실패(0636)', async (W) => {
+  const w = await W({ staffN: 1 });
+  const [A] = w.staff;
+  const from = kstDay(7);
+  const wd = new Date(`${from}T12:00:00+09:00`).getUTCDay();   // KST 정오 = 같은 날짜의 UTC 새벽 → 요일 그대로
+  const add = `public.add_shift_series(${q(A.id)}, ${wd}, ${q(from)}::date, '09:00', '13:00')`;
+  const [a, b] = R.twoAtOnce(S(w, w.owner.id, add, true), S(w, w.owner.id, add, false));
+  const cnt = n(`select count(*) from public.shift_templates where unit_id = ${q(w.unit)} and staff_id = ${q(A.id)} and shift_date is null`);
+  check('L23', '둘 다 같은 id', a.ok && b.ok && a.v === b.v, `${show(a)} · ${show(b)}`);
+  check('L23', '반복 근무 = 1', cnt === 1, `행 ${cnt}`);
+  // 묶음: add(다른 요일) 뒤 없는 근무 end → 전부 되돌림
+  const ops = JSON.stringify([{ kind: 'add', weekday: (wd + 1) % 7, from }, { kind: 'end', id: `tpl_none_${w.s}`, from }]);
+  const r = R.psqlRun(`${R.as(w.owner.id)}\nselect public.apply_shift_series_ops(${q(A.id)}, ${q(ops)}::jsonb, '09:00', '13:00');`);
+  const cnt2 = n(`select count(*) from public.shift_templates where unit_id = ${q(w.unit)} and staff_id = ${q(A.id)}`);
+  check('L23', '묶음 중간 실패 = 오류 · 앞 단계(add)도 되돌림', r.status !== 0 && cnt2 === 1, `${(r.stderr || '').split('\n').find((l) => /ERROR/.test(l)) ?? r.stdout} · 행 ${cnt2}`);
+  const ok2 = R.psqlRun(`${R.as(w.owner.id)}\nselect public.apply_shift_series_ops(${q(A.id)}, ${q(JSON.stringify([{ kind: 'add', weekday: (wd + 1) % 7, from }]))}::jsonb, '09:00', '13:00') ->> 'status';`);
+  check('L23', '묶음 정상 = ok', ok2.status === 0 && /ok\s*$/.test(ok2.stdout), (ok2.stdout || ok2.stderr).trim().slice(-80));
 });
 
 // ─────────────────────────────── 엣지 · OTP 문자(H5) ───────────────────────────────

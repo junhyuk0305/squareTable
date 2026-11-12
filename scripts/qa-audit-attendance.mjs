@@ -107,7 +107,8 @@ insert into public.shift_templates (id, unit_id, staff_id, weekday, shift_date, 
 insert into public.swap_requests (id, unit_id, kind, requester_id, date, template_id, status, accepted_by) values
   ('qa_a10_ap', 'store_001', 'cover', current_setting('qa.j'), current_setting('qa.d'), 'qa_a10_t', 'approved', current_setting('qa.o')),
   ('qa_a10_ac', 'store_001', 'cover', current_setting('qa.j'), current_setting('qa.d'), 'qa_a10_t', 'accepted', current_setting('qa.o')),
-  ('qa_a10_op', 'store_001', 'cover', current_setting('qa.o'), current_setting('qa.d'), 'qa_a10_t', 'open', null);
+  -- 0633: 같은 (근무, 날짜)의 진행 중(open·accepted) 요청은 하나다(swap_requests_one_live_uq). open 요청은 한 주 뒤 날짜로 둔다.
+  ('qa_a10_op', 'store_001', 'cover', current_setting('qa.o'), to_char(current_setting('qa.d')::date + 7, 'YYYY-MM-DD'), 'qa_a10_t', 'open', null);
 `;
     const as = (who) => `
 set local role authenticated;

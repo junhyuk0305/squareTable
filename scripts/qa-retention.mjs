@@ -139,7 +139,8 @@ try {
     const stale = now - 30 * H;   // 퇴근을 깜빡한 오래된 기록 — 세면 안 된다
     const { error } = await admin.from('attendance').insert([
       { id: `ret_n1_${s}`, unit_id: UNIT, staff_id: jId, date: kstDate(now - 24 * H), check_in: iso(night), check_out: null, work_minutes: 0 },
-      { id: `ret_n2_${s}`, unit_id: UNIT, staff_id: jId, date: kstDate(now - 48 * H), check_in: iso(stale), check_out: null, work_minutes: 0 },
+      // 0632: 한 사람의 열린 기록은 하나다(attendance_one_open_uq). 오래된 열린 기록은 다른 멤버(사장) 것으로 둔다.
+      { id: `ret_n2_${s}`, unit_id: UNIT, staff_id: users[0].id, date: kstDate(now - 48 * H), check_in: iso(stale), check_out: null, work_minutes: 0 },
     ]);
     if (error) throw new Error('night attendance 셋업: ' + error.message);
     const r = await O.rpc('owner_today');
