@@ -53,6 +53,7 @@
     "db:start": "npx -y supabase@2.122.1 start && docker image prune -a -f",
     "compile:packs": "node scripts/compile-pack.mjs",
     "platform:status": "node scripts/platform-status.mjs",
+    "deploy:fn": "node scripts/deploy-fn.mjs",
     "native:gate": "node scripts/native-gate.mjs",
     "native:preflight": "node scripts/native-preflight.mjs",
     "qa:seed": "node scripts/seed-demo.mjs && node scripts/seed-quiz-demo.mjs && node scripts/seed-brand-demo.mjs",
