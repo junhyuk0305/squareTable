@@ -224,7 +224,9 @@ for (const f of files) {
 //    Android 15 edge-to-edge 는 adjustResize 를 무시한다 → KeyboardShift(또는 그걸 품은 BottomSheet) 밖의 입력칸은
 //    키보드가 그대로 덮는다. 웹엔 키보드가 없어 안 보인다. 화면 위쪽 입력칸(검색창)은 안 닿을 수 있어 🟡.
 //    판정: 라우트 파일에서 src/app·src/components 의 .tsx import 를 따라가며 <TextInput 이 있는 파일을 모은다.
-//    <KeyboardShift·<BottomSheet 를 그리는 파일에서 멈춘다(그 아래는 보호됨으로 본다 — 근사).
+//    <KeyboardShift 를 그리는 파일에서 멈춘다(그 아래는 보호됨으로 본다 — 근사).
+//    <BottomSheet>…</BottomSheet> 안은 시트가 KeyboardShift 를 품어 면제한다. 시트 밖 본문은 그대로 본다(2026-11-13 E-1:
+//    파일에 시트가 하나라도 있으면 통째로 건너뛰어 공간 답하기 화면의 본문 입력칸을 놓쳤다). 시트 안에서만 그리는 부품은 따라가지 않는다.
 //    import 했다고 다 그리는 건 아니다(조건부·다른 탭) → 목록을 보고 실제로 그 화면에 뜨는지 판정한다.
 {
   const tsx = new Map(files.filter((f) => f.endsWith('.tsx')).map((f) => [path.resolve(f), stripComments(readFileSync(f, 'utf8'))]));
@@ -234,8 +236,15 @@ for (const f of files) {
     for (const c of [base + '.tsx', path.join(base, 'index.tsx')]) if (tsx.has(path.resolve(c))) return path.resolve(c);
     return null;
   };
-  const shielded = (src) => /<(KeyboardShift|BottomSheet)[\s/>]/.test(src);
-  const hasInput = (src) => /<TextInput[\s/>]/.test(src);
+  const outsideSheets = (src) => src.replace(/<BottomSheet[\s>][\s\S]*?<\/BottomSheet>/g, '');
+  const shielded = (src) => /<KeyboardShift[\s/>]/.test(src);
+  const hasInput = (src) => /<TextInput[\s/>]/.test(outsideSheets(src));
+  // 시트 밖에서 그리는 import 만 따라간다(이름을 못 읽는 import 는 예전처럼 따라간다).
+  const drawnOutside = (src, names) => {
+    const out = outsideSheets(src);
+    const ids = names.split(/[\s,{}]+/).map((n) => n.split(/\s+as\s+/).pop()).filter((n) => /^[A-Z]\w*$/.test(n ?? ''));
+    return !ids.length || ids.some((n) => new RegExp(`<${n}[\\s/>.]`).test(out));
+  };
   for (const [f, src] of tsx) {
     const r = rel(f);
     // 본사 화면(src/app/hq)은 스토어 앱에 없다(hq/_layout.tsx 의 store-policy 판정) — 웹 전용이라 키보드 대상이 아니다.
@@ -248,9 +257,9 @@ for (const f of files) {
       const s = tsx.get(cur);
       if (cur !== f && shielded(s)) continue;
       if (hasInput(s)) bare.push(rel(cur));
-      for (const m of s.matchAll(/from\s+['"]([^'"]+)['"]/g)) {
-        const next = resolve(cur, m[1]);
-        if (next && !seen.has(next) && /[\\/]src[\\/](components|app)[\\/]/.test(next)) { seen.add(next); stack.push(next); }
+      for (const m of s.matchAll(/import\s+(?:type\s+)?([^;]*?)\s*from\s+['"]([^'"]+)['"]/g)) {
+        const next = resolve(cur, m[2]);
+        if (next && !seen.has(next) && /[\\/]src[\\/](components|app)[\\/]/.test(next) && drawnOutside(s, m[1])) { seen.add(next); stack.push(next); }
       }
     }
     if (!bare.length) continue;

@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from 
 import { Stack, useFocusEffect, useRouter, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { Screen } from '@/components/Screen';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { ChatComposerBar } from '@/components/ChatComposerBar';
@@ -104,7 +105,9 @@ export default function SpaceFirst() {
   const title =
     step === 'write' ? SPACE_SCREEN.firstStepWrite : step === 'ask' ? SPACE_SCREEN.firstStepAsk : SPACE_SCREEN.firstStepLink;
 
+  // 키보드 회피 = 화면 전체(헤더 포함)를 감싼다. Screen 이 스크롤을 품고 있어 그 안에는 둘 수 없다(L-2 와 같은 방식).
   return (
+    <KeyboardShift>
     <Screen header={<ScreenTitleHeader title={SPACE_SCREEN.firstTitle} line={spaceName} backFallback={HOME} />}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.head}>
@@ -220,6 +223,7 @@ export default function SpaceFirst() {
         </View>
       ) : null}
     </Screen>
+    </KeyboardShift>
   );
 }
 

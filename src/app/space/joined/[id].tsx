@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet, type ScrollView } from 'react-native
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { Screen, Section } from '@/components/Screen';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -83,7 +84,9 @@ export default function SpaceJoined() {
     void s.loadSpaces();
   };
 
+  // 키보드 회피 = 화면 전체(헤더 포함)를 감싼다. 묻는 칸(SpaceMemberAsk)이 Screen 스크롤 안에 있어 그 안에는 둘 수 없다(L-2 와 같은 방식).
   return (
+    <KeyboardShift>
     <Screen scrollRef={scrollRef} header={<ScreenTitleHeader title={spaceName || SPACE_WORDS.place} backFallback="/stores" />}>
       <Stack.Screen options={{ headerShown: false }} />
       {spaceId && (entries || failed) ? (
@@ -138,6 +141,7 @@ export default function SpaceJoined() {
         <SettingsRow first danger icon="exit-outline" label={SPACE_MEMBERS.leave} hint={SPACE_MEMBERS.leaveHint} onPress={() => void leave()} />
       </SettingsSection>
     </Screen>
+    </KeyboardShift>
   );
 }
 

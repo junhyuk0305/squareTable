@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, ActivityIndic
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { Screen } from '@/components/Screen';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -147,7 +148,9 @@ export default function SpaceAnswer() {
 
   const canSend = !!body.trim() && !busy;
 
+  // 키보드 회피 = 화면 전체(헤더 포함)를 감싼다. Screen 이 스크롤을 품고 있어 그 안에는 둘 수 없다(L-2 와 같은 방식).
   return (
+    <KeyboardShift>
     <Screen header={header}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.card}>
@@ -233,6 +236,7 @@ export default function SpaceAnswer() {
         </BottomSheet>
       )}
     </Screen>
+    </KeyboardShift>
   );
 }
 

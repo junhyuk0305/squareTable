@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Stack, useRouter, type Href } from 'expo-router';
 
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { Screen } from '@/components/Screen';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { PhoneVerifyBlock } from '@/components/PhoneVerifyBlock';
@@ -66,7 +67,9 @@ export default function SpaceStart() {
     router.replace(FIRST);
   };
 
+  // 키보드 회피 = 화면 전체(헤더 포함)를 감싼다. Screen 이 스크롤을 품고 있어 그 안에는 둘 수 없다(L-2 와 같은 방식).
   return (
+    <KeyboardShift>
     <Screen header={<ScreenTitleHeader title={SPACE_SCREEN.startTitle} backFallback="/stores" />}>
       <Stack.Screen options={{ headerShown: false }} />
       <Text style={styles.lead}>{SPACE_SCREEN.startLead}</Text>
@@ -112,6 +115,7 @@ export default function SpaceStart() {
         </Pressable>
       </View>
     </Screen>
+    </KeyboardShift>
   );
 }
 
