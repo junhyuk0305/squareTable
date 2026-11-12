@@ -12,6 +12,7 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { buildStoreNotifs, buildClosureNotifs, buildJoinCrossNotifs, mergeCrossNotifs, crossNotifTotal, storeUnreadCount } from '@/lib/utils/crossStoreNotifs';
 import { accountAckAt } from '@/lib/utils/notifications';
+import { buildSpaceNotifRows } from '@/lib/utils/spaceNotifications';
 import { storeColor } from '@/lib/utils/storeColor';
 import { todayStr } from '@/lib/utils/attendance';
 import type { NotifRow } from '@/components/NotificationList';
@@ -25,6 +26,7 @@ export function useCrossNotifRows() {
   const crossData = useCrossNotifStore((s) => s.data);
   const closures = useCrossNotifStore((s) => s.closures);
   const joinNotices = useCrossNotifStore((s) => s.joinNotices);
+  const spaceRaw = useCrossNotifStore((s) => s.spaceRows);
   const markFeedRead = useCrossNotifStore((s) => s.markFeedRead);
   const prefFor = useMemberPrefsStore((s) => s.prefFor);
   const ackNotifs = useMemberPrefsStore((s) => s.ackNotifs);
@@ -37,6 +39,10 @@ export function useCrossNotifRows() {
     prefFor(uid).nickname || sessionStores.find((u) => u.unit_id === uid)?.store_name || fallback || '매장';
 
   const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
+  // 공간 줄(야간 g4a · my_space_notif_data) — 계정 층 벨 목록과 허브 벨 숫자가 이 배열 하나를 본다(1112 fix 16).
+  //   매장별 칩(unreadByUnit)에는 넣지 않는다. 공간은 매장 층 밖이다. 읽음 기준 = 계정 단위 축(accountAckAt).
+  const spaceRows = useMemo(() => buildSpaceNotifRows(spaceRaw, accountAckAt(ackByUnit)), [spaceRaw, ackByUnit]);
+  const spaceUnread = spaceRows.filter((r) => r.unread).length;
   const { rows, unreadByUnit, totalUnread, hiddenCount } = useMemo(() => {
     // 매장 목록(my_units) 도착 전엔 계산하지 않는다 — 매장별 역할을 모른 채 전역 role 로 세면
     // 찰나에 틀린 뱃지가 떴다 바뀌는 레이스가 생긴다. 목록이 오면(수 초 내) 자동 재계산돼 표시.
@@ -47,7 +53,7 @@ export function useCrossNotifRows() {
       for (const r of joinOnly) if (r.unread) unreadOnly[r.unitId] = (unreadOnly[r.unitId] ?? 0) + 1;
       return {
         rows: mergeCrossNotifs([joinOnly]), unreadByUnit: unreadOnly,
-        totalUnread: Object.values(unreadOnly).reduce((a, b) => a + b, 0), hiddenCount: 0,
+        totalUnread: Object.values(unreadOnly).reduce((a, b) => a + b, 0) + spaceUnread, hiddenCount: 0,
       };
     }
     // 목록에 없는 매장은 직원 기준으로 센다(fail-closed) — 다른 매장의 역할을 빌려 쓰지 않는다.
@@ -68,11 +74,11 @@ export function useCrossNotifRows() {
     return {
       rows: merged,
       unreadByUnit,
-      totalUnread: Object.values(unreadByUnit).reduce((a, b) => a + b, 0),
+      totalUnread: Object.values(unreadByUnit).reduce((a, b) => a + b, 0) + spaceUnread,
       // 목록에서 잘려나간 개수 — 0 이 아니면 화면이 "N건 더 있어요"를 말해야 한다(#13).
       hiddenCount: Math.max(0, crossNotifTotal(perStore) - merged.length),
     };
-  }, [crossData, closures, joinNotices, sessionStores, me, today, ackByUnit]);
+  }, [crossData, closures, joinNotices, sessionStores, me, today, ackByUnit, spaceUnread]);
 
   /** NotificationList 에 바로 넣을 행(매장 점·이름 칩 포함). */
   const listRows: (NotifRow & { unitId: string })[] = rows.map((r) => ({
@@ -137,5 +143,5 @@ export function useCrossNotifRows() {
   };
 
   // 반환 = 소비처(4화면)가 실제 쓰는 것만(죽은 export 금지 — 2026-07-24 효율 리뷰). hasUnread·markAll 은 허브 알림 화면.
-  return { listRows, unreadByUnit, totalUnread, hiddenCount, openRow, hasUnread, markAll };
+  return { listRows, spaceRows, unreadByUnit, totalUnread, hiddenCount, openRow, hasUnread, markAll };
 }

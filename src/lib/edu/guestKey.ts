@@ -36,18 +36,18 @@ export async function saveEduGuest(token: string, guest: EduGuest): Promise<void
 
 const PREFIX = 'sqt.eduGuest.v1:';
 
-/** 이 기기에 둔 손님 열쇠 전부(가입 뒤 자동 옮기기 · autoClaim.ts). 저장소를 못 읽으면 빈 목록. */
-export async function listEduGuestKeys(): Promise<string[]> {
+/** 이 기기에 둔 손님 열쇠 전부와 그 저장 칸(옮기기 확인 · autoClaim.ts). 저장소를 못 읽으면 빈 목록. */
+export async function listEduGuestKeys(): Promise<{ slot: string; key: string }[]> {
   try {
     const names = (await AsyncStorage.getAllKeys()).filter((k) => k.startsWith(PREFIX));
     if (names.length === 0) return [];
     const pairs = await AsyncStorage.multiGet(names);
-    const keys: string[] = [];
-    for (const [, raw] of pairs) {
+    const keys: { slot: string; key: string }[] = [];
+    for (const [name, raw] of pairs) {
       if (!raw) continue;
       try {
         const v = JSON.parse(raw) as Partial<EduGuest>;
-        if (typeof v.key === 'string' && v.key) keys.push(v.key);
+        if (typeof v.key === 'string' && v.key) keys.push({ slot: name, key: v.key });
       } catch {
         // 깨진 값은 건너뛴다.
       }
@@ -55,5 +55,36 @@ export async function listEduGuestKeys(): Promise<string[]> {
     return keys;
   } catch {
     return [];
+  }
+}
+
+/** 옮기지 않기로 한 열쇠를 이 기기에서 지운다(공용 기기 · 1112 fix 5). 못 지우면 그대로 둔다. */
+export async function forgetEduGuests(slots: string[]): Promise<void> {
+  try {
+    if (slots.length > 0) await AsyncStorage.multiRemove(slots);
+  } catch {
+    // 저장소를 못 쓰면 다음 로그인에 다시 묻는다.
+  }
+}
+
+// 이미 답한 (계정 · 열쇠) — 열쇠 원문 대신 짧은 지문으로 둔다(저장소 목록에 열쇠가 두 번 남지 않게).
+const ASKED = 'sqt.eduGuestAsked.v1';
+export const askedTag = (uid: string, key: string): string => `${uid}:${slot(key).slice(PREFIX.length)}`;
+
+export async function loadAskedTags(): Promise<Set<string>> {
+  try {
+    const raw = await AsyncStorage.getItem(ASKED);
+    const v = raw ? (JSON.parse(raw) as unknown) : [];
+    return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export async function saveAskedTags(tags: Set<string>): Promise<void> {
+  try {
+    await AsyncStorage.setItem(ASKED, JSON.stringify([...tags]));
+  } catch {
+    // 저장 못 하면 다음 로그인에 다시 묻는다.
   }
 }

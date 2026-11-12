@@ -4979,17 +4979,21 @@ export async function proposeToStore(
   spaceId: string,
   storeId: string,
   entryIds: string[],
-): Promise<{ data: { entry_id: string; suggestion_id: string }[]; error: DbErr }> {
-  if (!HAS_SUPABASE) return { data: [], error: null };
+): Promise<{ data: { entry_id: string; suggestion_id: string }[]; error: DbErr; alreadyIds: string[] }> {
+  if (!HAS_SUPABASE) return { data: [], error: null, alreadyIds: [] };
   const { data, error } = await supabase
     .rpc('propose_to_store', { p_space: spaceId, p_store: storeId, p_entry_ids: entryIds })
     .limit(50); // 서버가 50개 넘게 고르면 거절한다(invalid_argument)
   if (error) {
     console.warn('[db] proposeToStore:', error.message);
     reportError('db.write:proposeToStore', error);
-    return { data: [], error };
+    // already_proposed 의 detail = 이미 대기인 노하우 번호(쉼표 · 0588). 옛 서버는 detail 이 없다 → 빈 목록. 화면은 번호로 줄만 짚는다.
+    const alreadyIds = error.message === 'already_proposed' && typeof error.details === 'string'
+      ? error.details.split(',').map((x) => x.trim()).filter(Boolean)
+      : [];
+    return { data: [], error, alreadyIds };
   }
-  return { data: (data ?? []) as { entry_id: string; suggestion_id: string }[], error: null };
+  return { data: (data ?? []) as { entry_id: string; suggestion_id: string }[], error: null, alreadyIds: [] };
 }
 
 /** 현재 매장 사장·매니저가 공간에서 온 대기 제안을 승인한다 → 매장 사본(발행·색인 대기). 반려는 지금처럼 reviewSuggestion.
@@ -5050,6 +5054,8 @@ export type EduAnswer = {
   entryTitle: string | null;
   entrySquare: import('@/types').SquareBlock | null;
   answeredAt: string | null;
+  /** 보낸 질문의 답할 질문 번호(0587 · 맨 뒤 칸). 안 보냈거나 옛 서버(칸 없음)면 null. 앱 안 링크 ?uqId= 착지에 쓴다. */
+  uqId: string | null;
 };
 export const EDU_ANSWERS_MAX = 50;
 export async function fetchEduLinkAnswers(token: string, key: string): Promise<DbResult<EduAnswer[]>> {
@@ -5070,6 +5076,7 @@ export async function fetchEduLinkAnswers(token: string, key: string): Promise<D
       entryTitle: r.entry_title ?? null,
       entrySquare: r.entry_square ?? null,
       answeredAt: r.answered_at ?? null,
+      uqId: typeof r.uq_id === 'string' ? r.uq_id : null,
     })),
     error: null,
   };

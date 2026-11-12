@@ -19,6 +19,7 @@ export const KNOWHOW_TEMPLATES = packsJson as unknown as PlaybookTemplate[];
 export const INDUSTRY_PACKS: Record<string, string[]> = {
   // 카페·음식점 전용팩 보유. 나머지 F&B는 공통팩(클레임·환불·위생 등 업종 무관 표준)으로 커버.
   '카페·디저트': ['common', 'cafe'],
+  cafe: ['common', 'cafe'], // 옛 업종 코드로 저장된 카페 매장(초안이 안 나왔다 · 1112 fix 11).
   베이커리: ['common'],
   ...Object.fromEntries(RESTAURANT_INDUSTRIES.map((i) => [i, ['common', 'restaurant']])),
   배달전문: ['common'], // 홀이 없어 음식점팩(세팅·리필·서빙)은 안 맞는다.

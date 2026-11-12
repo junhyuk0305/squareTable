@@ -25,7 +25,7 @@ import { Type } from '@/lib/theme/type';
 import { ChipStyles } from '@/lib/theme/chip';
 import type { Role } from '@/types';
 import { INDUSTRIES } from '@/lib/config/industry';
-import { autoClaimEduGuests } from '@/lib/edu/autoClaim';
+import { askClaimEduGuests } from '@/lib/edu/autoClaim';
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -169,9 +169,9 @@ export default function SignupScreen() {
         setAccountReady(true); // 세션 확보 — 이후 실패는 매장 연결만 재시도
       }
 
-      // 웹 교육 링크에서 손님으로 보낸 질문을 이 계정으로 옮긴다(사용자 결정 3 · 0552). 이 기기에 열쇠가 없으면 아무 일도 없다.
-      //   실패해도 가입은 그대로 끝난다(옮기기는 매장 목록에서 다시 한다).
-      const claimedLinks = await autoClaimEduGuests(useSessionStore.getState().userId).catch(() => [] as string[]);
+      // 웹 교육 링크에서 이 기기로 보낸 질문을 이 계정으로 옮길지 묻는다(사용자 결정 3 · 0552 · 1112 fix 5). 이 기기에 열쇠가 없으면 묻지 않는다.
+      //   실패해도 가입은 그대로 끝난다(옮기기는 매장 목록에서 다시 묻는다).
+      const claimedLinks = await askClaimEduGuests(useSessionStore.getState().userId).catch(() => [] as string[]);
 
       // 2) 매장 연결
       if (role === 'owner') {

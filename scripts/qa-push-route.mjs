@@ -71,6 +71,8 @@ r = tap({ url: '/space/settings?space=sp_1&member=u_1', unitId: 'sp_1' }, { unit
 check('1-16 공간 합류 신청 알림은 매장을 바꾸지 않고 공간 설정을 연다(N7)', eq(r, { kind: 'push', to: '/space/settings?space=sp_1&member=u_1' }), show(r));
 r = tap({ url: '/space/joined/sp_1', unitId: 'sp_1' }, { unitId: 'store_a', role: 'owner' });
 check('1-17 공간 합류 승인 알림은 역할과 상관없이 참여 화면을 연다(N8)', eq(r, { kind: 'push', to: '/space/joined/sp_1' }), show(r));
+r = tap({ url: '/link/lk_1?uqId=uq_1', route: '/link/lk_1?uqId=uq_1', unitId: 'store_b' }, A);
+check('1-18 링크 질문 답 알림은 매장을 바꾸지 않고 앱 안 링크 화면을 연다(0551)', eq(r, { kind: 'push', to: '/link/lk_1?uqId=uq_1' }), show(r));
 
 // ── [2] 엣지 ────────────────────────────────────────────────────────────────
 console.log('\n[2] 엣지 push/index.ts');

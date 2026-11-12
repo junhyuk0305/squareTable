@@ -1,28 +1,49 @@
 /**
- * 가입·로그인 뒤 보낸 질문 자동 옮기기(사용자 결정 3 · 0552 edu_link_claim_guest).
- * 이 기기(브라우저)에 둔 손님 열쇠를 전부 서버에 한 번씩 보낸다. 서버가 링크가 살아 있는지와 남이 이미 옮겨 갔는지를 본다.
- * 열쇠가 없으면(앱에서 처음 가입 · 물은 적 없음) 아무 일도 안 한다. 그때는 이어받기 코드로 옮긴다.
- * ★실패는 조용히 넘긴다. 이 일은 화면을 막지 않는다(옛 서버에 함수가 없어도 지금 화면 그대로).
+ * 가입·로그인 뒤 이 기기에서 보낸 교육 링크 질문 옮기기(사용자 결정 3 · 0552 edu_link_claim_guest).
+ * ★1112 fix 5: 자동으로 옮기지 않는다. 공용 기기에서 다음 사람이 로그인하면 앞사람 질문을 가져갔다.
+ *   옮길 열쇠가 있으면 한 번 묻는다(confirmAction). [옮기기] = 서버에 열쇠를 보낸다 · [옮기지 않기] = 이 기기에서 열쇠를 지운다.
+ *   한 번 답한 (계정 · 열쇠)는 기기에 적어 두고 다시 묻지 않는다. 질문 수는 세지 않는다(서버 읽기를 늘리지 않는다).
+ * 부르는 곳 = 매장 목록(stores) · 웹 링크 화면(l/[token]) · 가입 직후(signup). 셋 다 이 함수 하나다.
+ * 열쇠가 없으면(앱에서 처음 가입 · 물은 적 없음) 묻지 않는다. 그때는 이어받기 코드로 옮긴다.
+ * ★옮기기 실패는 조용히 넘긴다(옛 서버에 함수가 없어도 지금 화면 그대로). 실패한 열쇠는 다음에 다시 묻는다.
  * ★열쇠는 계측·로그에 싣지 않는다.
  */
 import { claimEduLinkGuest } from '@/lib/db';
-import { listEduGuestKeys } from './guestKey';
+import { LINK_IN_APP } from '@/lib/place/words';
+import { confirmAction } from '@/lib/utils/confirm';
+import { askedTag, forgetEduGuests, listEduGuestKeys, loadAskedTags, saveAskedTags } from './guestKey';
 
-/** 이번 실행에서 이미 끝난 (계정 · 열쇠). 매장 목록이 다시 그려질 때마다 같은 열쇠를 또 보내지 않는다. */
-const done = new Set<string>();
+/** 같은 순간 두 곳(매장 목록 · 링크 화면)에서 불려도 창은 하나만 띄운다. */
+let running: Promise<string[]> | null = null;
 
 /** 옮겨진(또는 이미 내 것인) 링크 번호 목록. uid 가 비면 부르지 않는다. */
-export async function autoClaimEduGuests(uid: string): Promise<string[]> {
-  if (!uid) return [];
-  const keys = await listEduGuestKeys();
+export function askClaimEduGuests(uid: string): Promise<string[]> {
+  if (!uid) return Promise.resolve([]);
+  running ??= run(uid).finally(() => {
+    running = null;
+  });
+  return running;
+}
+
+async function run(uid: string): Promise<string[]> {
+  const asked = await loadAskedTags();
+  const todo = (await listEduGuestKeys()).filter((g) => !asked.has(askedTag(uid, g.key)));
+  if (todo.length === 0) return [];
+  const yes = await confirmAction(LINK_IN_APP.claimTitle, LINK_IN_APP.claimBody, LINK_IN_APP.claimYes, {
+    cancelLabel: LINK_IN_APP.claimNo,
+    icon: 'chatbubbles-outline',
+  });
+  if (!yes) {
+    await forgetEduGuests(todo.map((g) => g.slot));
+    return [];
+  }
   const linkIds: string[] = [];
-  for (const key of keys) {
-    const memo = `${uid}:${key}`;
-    if (done.has(memo)) continue;
-    const r = await claimEduLinkGuest(key);
-    if (r.error) continue; // 다음 기회에 다시 본다(memo 에 안 넣는다)
-    done.add(memo);
+  for (const g of todo) {
+    const r = await claimEduLinkGuest(g.key);
+    if (r.error) continue; // 다음 로그인에 다시 묻는다(적지 않는다)
+    asked.add(askedTag(uid, g.key));
     if (r.data?.claimed) linkIds.push(r.data.linkId);
   }
+  await saveAskedTags(asked);
   return linkIds;
 }

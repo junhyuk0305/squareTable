@@ -23,7 +23,7 @@ import { EduAsk } from '@/components/edu/EduAsk';
 import { EduLinkView } from '@/components/edu/EduLinkView';
 import { HandoffCode } from '@/components/edu/HandoffCode';
 import { openEduLink, fetchEduLinkEntries, type EduLinkEntry, type EduLinkInfo } from '@/lib/db';
-import { autoClaimEduGuests } from '@/lib/edu/autoClaim';
+import { askClaimEduGuests } from '@/lib/edu/autoClaim';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Gap, Space, screenScrollStyle } from '@/lib/theme/layout';
@@ -44,12 +44,12 @@ export default function EduLinkScreen() {
   // 개발 모드 StrictMode 가 이펙트를 두 번 돌려도 열람 수가 두 번 오르지 않게 토큰당 한 번만 연다.
   const openedFor = useRef<string | null>(null);
 
-  // 이 브라우저에 로그인 세션이 있으면(가입하고 돌아옴) 이 기기에서 보낸 질문을 그 계정으로 옮긴다(사용자 결정 3).
-  //   열쇠가 없거나 이미 옮겼으면 아무 일도 없다. 화면은 지금처럼 손님 열쇠로 돈다.
+  // 이 브라우저에 로그인 세션이 있으면(가입하고 돌아옴) 이 기기에서 보낸 질문을 그 계정으로 옮길지 묻는다(사용자 결정 3 · 1112 fix 5).
+  //   열쇠가 없거나 이미 답했으면 묻지 않는다. 화면은 지금처럼 손님 열쇠로 돈다.
   const userId = useSessionStore((s) => s.userId);
   const signedIn = useSessionStore((s) => s.status === 'signed_in');
   useEffect(() => {
-    if (signedIn && userId) void autoClaimEduGuests(userId);
+    if (signedIn && userId) void askClaimEduGuests(userId);
   }, [signedIn, userId]);
 
   useEffect(() => {

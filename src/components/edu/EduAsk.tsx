@@ -10,7 +10,7 @@
  * ★토큰·열쇠는 화면 계측·로그에 싣지 않는다. 오류 원문을 화면에 내지 않는다(placeErrorMessage).
  * ★"손님"을 쓰지 않는다. 문구는 place/words.ts(EDU_ASK · SPACE_WORDS) 한 곳.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -62,8 +62,13 @@ function aiRows(a: EduAnswer): KnowhowRow[] {
 /**
  * me = 앱 안 링크 화면(S16 · /link/[id])이 넘기는 로그인한 사람의 열쇠(0552 edu_link_me_key · 이름 = 받은 이름).
  *   넘기면 이름 칸이 없고 기기 저장소를 읽거나 쓰지 않는다(계정이 바뀐 기기에 남의 열쇠가 남지 않게). 웹 손님 화면은 넘기지 않는다.
+ * focusUq = 답 알림 착지(?uqId= · S16). 그 질문 카드가 그려지면 onFocusCard 로 한 번 알린다(화면이 스크롤한다 · 1112 fix 8).
+ *   옛 서버(uq_id 칸 없음)면 맞는 카드가 없어 아무 일도 없다.
  */
-export function EduAsk({ token, place, ownerName, me }: { token: string; place: EduPlace | null; ownerName: string; me?: EduGuest }) {
+export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard }: {
+  token: string; place: EduPlace | null; ownerName: string; me?: EduGuest;
+  focusUq?: string; onFocusCard?: (card: View) => void;
+}) {
   const owner = eduOwnerWord(place, ownerName);
   const [guest, setGuest] = useState<EduGuest | null>(me ?? null);
   const [name, setName] = useState('');
@@ -77,6 +82,9 @@ export function EduAsk({ token, place, ownerName, me }: { token: string; place: 
   const [reportFor, setReportFor] = useState<string | null>(null);
   const [reportCat, setReportCat] = useState<EduReportCategory>('ai_answer');
   const [reportBody, setReportBody] = useState('');
+  // 착지 카드 — 한 착지에 한 번만 알린다(그 뒤 새로 물어 목록이 밀려도 화면을 다시 끌어당기지 않는다).
+  const focusRef = useRef<View>(null);
+  const focused = useRef('');
 
   const refresh = useCallback(async (g: EduGuest | null) => {
     if (!g) return;
@@ -268,7 +276,17 @@ export function EduAsk({ token, place, ownerName, me }: { token: string; place: 
           <SectionLabel title={EDU_ASK.myQuestions} hint={answers.length > 0 ? `${answers.length}개` : undefined} />
           {loadFailed ? <Text style={st.note}>{EDU_ASK.loadFail}</Text> : null}
           {answers.map((a) => (
-            <View key={a.cqId} style={st.card}>
+            <View
+              key={a.cqId}
+              style={st.card}
+              ref={focusUq && a.uqId === focusUq ? focusRef : undefined}
+              collapsable={false}
+              onLayout={focusUq && a.uqId === focusUq ? () => {
+                if (focused.current === focusUq || !focusRef.current) return;
+                focused.current = focusUq;
+                onFocusCard?.(focusRef.current);
+              } : undefined}
+            >
               <Text style={st.question}>{a.queryText}</Text>
               {renderAnswer(a)}
               {reportFor === a.cqId && (

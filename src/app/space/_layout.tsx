@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
 import { Stack, Redirect, usePathname, useGlobalSearchParams } from 'expo-router';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { showToast } from '@/lib/store/useToastStore';
-import { justLeftSpace, pendingSpaceTarget, rememberSpaceTarget } from '@/lib/place/spaceTarget';
+import { firstAddressOnce, justLeftSpace, pendingSpaceTarget, rememberSpaceTarget } from '@/lib/place/spaceTarget';
 
 /** 공간이 없어도 열리는 화면 — 공간 만들기(S02 앞 단계). */
 const START = '/space/start';
@@ -39,6 +38,11 @@ function spaceTargetOf(pathname: string, spaceParam: unknown): string {
  * ★매장 데이터 스토어를 여기서 hydrate 하지 않는다. 공간 화면은 공간 번호를 db.ts 에 직접 넘긴다.
  */
 export default function SpaceLayout() {
+  // ★React Compiler 를 끈다(1112 fix 1 · 원인). 이 문지기는 그릴 때마다 모듈 값(pendingSpaceTarget · rememberSpaceTarget)을 읽고 쓴다.
+  //   컴파일러는 인자 없는 pendingSpaceTarget() 을 처음 한 번만 부르고 그 값을 묶어 둔다(번들에서 memo_cache_sentinel 확인).
+  //   그러면 아래에서 기억을 지워도(rememberSpaceTarget(null)) 낡은 pending 이 남아 경로가 바뀔 때마다 옛 주소로 <Redirect> 를 되풀이했다
+  //   = 웹 "Maximum update depth exceeded"(?space= 로 들어와 다른 화면을 열 때 · 1112 실측). 앱(네이티브)도 같은 번들 규칙이라 같이 걸린다.
+  'use no memo';
   const status = useSessionStore((s) => s.status);
   const userId = useSessionStore((s) => s.userId);
   const spaceOpen = useSessionStore((s) => s.spaceOpen);
@@ -50,7 +54,12 @@ export default function SpaceLayout() {
   const params = useGlobalSearchParams<Record<string, string | string[]>>();
   const enterSpace = useSessionStore((s) => s.enterSpace);
   // 웹 첫 그림에서는 라우터 값이 아직 비어 있을 수 있다(새로고침·주소 직접 입력 · 11-11 실측) → 주소창 값으로 한 번 더 본다.
-  const loc = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location : null;
+  // ★주소창은 이 페이지의 첫 그림 한 번만 읽는다. 앱 안에서 화면을 옮기면 라우터 경로는 바뀌었는데 주소창은 한 박자 늦게
+  //   옛 주소다(1112 실측: 탭을 누른 뒤 그림에서 pathname=/space/home · 주소창=/space/teach?space=…). 라우터 값이 빈 그림에서
+  //   그 값을 다시 기억하면 아래 Redirect 가 옛 주소로 되돌려 보낸다(야간 g4a·g5 의 "Maximum update depth exceeded" 길).
+  //   첫 그림에서 기억한 값은 pending 이 들고 있다.
+  //   레이아웃이 경로마다 다시 마운트돼 ref 로는 안 된다 → spaceTarget 모듈이 든다(웹 새로고침이면 다시 처음부터).
+  const loc = firstAddressOnce(pathname);
   const fromRouter = spaceTargetOf(pathname, params.space);
   const locPath = loc ? decodeURIComponent(loc.pathname) : '';
   const fromLoc = loc && locPath.startsWith('/space/') ? spaceTargetOf(locPath, new URLSearchParams(loc.search).get('space') ?? undefined) : '';

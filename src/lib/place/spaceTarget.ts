@@ -1,6 +1,8 @@
 // spaceTarget.ts — 공간에서 막 나온 순간을 공간 _layout 에 알린다(4번 덩이 · verify 고려 1).
 // 나가기·공간 지우기·매장으로 돌아가기는 화면을 옮기고 앱의 공간 상태를 비운다. 그 사이 공간 _layout 이 한 번 더 그려지면
 //   주소(?space= · /space/joined/<번호>)의 공간에 다시 들어가려 한다(서버 거절 → 경고 토스트). 몇 초 동안 그 공간은 건너뛴다.
+import { Platform } from 'react-native';
+
 let left: { id: string; at: number } | null = null;
 const HOLD_MS = 3000;
 
@@ -25,4 +27,17 @@ export function rememberSpaceTarget(p: PendingSpace | null): void {
 }
 export function pendingSpaceTarget(): PendingSpace | null {
   return pending;
+}
+
+/**
+ * 웹 주소창(window.location) — 이 페이지에서 처음 부를 때만 준다(1112 fix 1). 앱 안에서 화면을 옮기면 주소창이 한 박자 늦게
+ * 옛 주소라, 그 값을 공간 _layout 이 그림마다 다시 기억하면 옛 주소로 되돌려 보낸다. 네이티브는 늘 null.
+ */
+let addressRead = false;
+/** routerPath = 그 그림의 라우터 경로. 값에는 안 쓰고, 그림마다 다시 부르게(React Compiler 가 한 번 값을 묶어 두지 않게) 받는다.
+ *  돌려주는 것은 그 순간의 사본이다(live Location 을 들고 있으면 나중 그림에서 늦은 주소를 다시 읽는다). */
+export function firstAddressOnce(routerPath: string): { pathname: string; search: string } | null {
+  if (!routerPath || addressRead || Platform.OS !== 'web' || typeof window === 'undefined') return null;
+  addressRead = true;
+  return { pathname: window.location.pathname, search: window.location.search };
 }

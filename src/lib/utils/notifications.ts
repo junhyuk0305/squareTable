@@ -841,7 +841,7 @@ function ownerRows(args: {
 //   합류 승인·제안 검토·사장 알림(요금제·본사)·입금 결과는 사장 전용 화면이라 뺀다(0201). 예전엔 사장 축을
 //   그대로 받아 눌러도 직원 홈으로 튕겼다. 질문과 내 제안 결과는 물어보기 탭(/junior/chat)에서 본다.
 export type ManagerNotifKind =
-  | 'mention' | 'swap_approval' | 'question' | 'assign' | 'suggestion_approved' | 'suggestion_rejected' | 'role'
+  | 'mention' | 'swap_approval' | 'question' | 'suggestion' | 'assign' | 'suggestion_approved' | 'suggestion_rejected' | 'role'
   | 'schedule' | 'shift_time' | 'quiz_done' | 'q_answered' | 'training' | 'swap' | 'swap_approved' | 'swap_rejected';
 export type ManagerNotifRoute = string;
 export type ManagerNotif = Omit<OwnerNotif, 'kind' | 'route'> & { kind: ManagerNotifKind; route: ManagerNotifRoute };
@@ -907,15 +907,22 @@ function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
 
 /** ① 사장 축 중 매니저가 행동할 수 있는 것만(F-2) — 멘션(/owner/work) · 교대 승인 대기(/owner/schedule) ·
  *  근무 시간 수정 요청(0316 · 내 요청 제외 — 내가 결정할 수 없다) · 질문(/junior/chat). 질문은 물어보기 탭이 보여 주는 것(answerableQuestions)만 남긴다. 내가 물은 질문은
- *  거기서 답할 수 없어서 뺀다. */
+ *  거기서 답할 수 없어서 뺀다.
+ *  제안 검토는 사장 전용(F-2 · 푸시 ownerOnly)이라 동료 제안은 넣지 않는다. 예외 하나 = 내가 공간에서 보낸 노하우(from_space · 결정 193).
+ *  그건 내가 승인하는 일이라 노하우 탭 할 일 숫자(isTodoSuggestion)에 세어지는데 벨에 없었다(1112 fix 10). */
 function managerOwnerRows(ownerArgs: Parameters<typeof ownerRows>[0]): ManagerNotif[] {
   const answerable = new Set(
     answerableQuestions(ownerArgs.queue, ownerArgs.userId ?? '', ownerArgs.suggestions).map((u) => `q_${u.id}`),
+  );
+  const mySpaceProposals = new Set(
+    ownerArgs.suggestions.filter((x) => x.kind === 'from_space' && x.proposer_id === ownerArgs.userId).map((x) => `s_${x.id}`),
   );
   const mine = new Set((ownerArgs.timeRequests ?? []).filter((t) => t.staff_id === ownerArgs.userId).map((t) => `shift_time_${t.id}`));
   const out: ManagerNotif[] = [];
   for (const r of ownerRows(ownerArgs)) {
     if (r.kind === 'mention' || r.kind === 'swap_approval' || r.kind === 'quiz_done') out.push({ ...r, kind: r.kind });
+    // 판정(대기 · 검토 대상)은 ownerRows 의 isPendingSuggestionToReview 그대로. 여기서는 내 공간 제안만 고른다.
+    else if (r.kind === 'suggestion' && mySpaceProposals.has(r.id)) out.push({ ...r, kind: 'suggestion' });
     else if (r.kind === 'shift_time' && !mine.has(r.id)) out.push({ ...r, kind: 'shift_time' });
     // 질문은 사장과 같은 처리 화면(/owner/coach?uqId= · 0315 부터 매니저 허용 · 답·노하우 저장은 RLS auth_can_manage).
     else if (r.kind === 'question' && answerable.has(r.id)) out.push({ ...r, kind: 'question' });

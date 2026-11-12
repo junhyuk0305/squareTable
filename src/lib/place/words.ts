@@ -400,6 +400,11 @@ export const LINK_IN_APP = {
   joinTitle: '합류 신청',
   joinBody: (owner: string) => `멤버가 되면 ${owner} 노하우 전부를 볼 수 있어요. 합류를 신청할까요?`,
   joinConfirm: '신청하기',
+  /** 로그인·가입 뒤 이 기기의 교육 링크 질문 옮기기 확인(1112 fix 5 · 공용 기기에서 남의 질문을 가져가지 않게 묻는다). */
+  claimTitle: '이 기기에서 교육 링크로 보낸 질문이 있어요',
+  claimBody: '내가 보낸 질문이면 내 계정으로 옮겨요. 옮기지 않으면 이 기기에서 지워요.',
+  claimYes: '옮기기',
+  claimNo: '옮기지 않기',
 } as const;
 
 // night-1111 g7
@@ -438,6 +443,9 @@ export const CONNECT = {
   connectNoStore: '노하우는 내가 일하는 매장에만 보낼 수 있어요. 초대코드로 먼저 합류해 주세요.',
   send: '사장님께 보내기',
   sending: '보내고 있어요…',
+  /** 묶음 중 이미 대기인 노하우(already_proposed detail · 0588 · 1112 fix 9). 줄 칩 + 토스트. */
+  alreadyChip: '승인 대기',
+  alreadyToast: '이미 보낸 노하우가 있어요. 승인 대기 표시를 빼고 보내 주세요.',
   sent: (n: number) => `사장님께 노하우 ${n}개를 보냈어요. 승인되면 매장 노하우가 돼요.`,
   loading: '노하우를 불러오고 있어요…',
   loadFail: '노하우를 불러오지 못했어요.',

@@ -16,7 +16,7 @@ import { assignedTodayCount } from '@/lib/utils/crossStoreNotifs';
 import { roleNoun } from '@/lib/utils/roles';
 import { todayStr } from '@/lib/utils/attendance';
 import { fetchOwnerOverview, fetchMyLockedUnits, fetchMyCanAddStore, fetchMyEduLinks, type MyEduLink, type MyUnitRow, type OwnerOverviewRow } from '@/lib/db';
-import { autoClaimEduGuests } from '@/lib/edu/autoClaim';
+import { askClaimEduGuests } from '@/lib/edu/autoClaim';
 import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Type } from '@/lib/theme/type';
 import { Radius } from '@/lib/theme/elevation';
@@ -133,14 +133,14 @@ export default function StoresHub() {
     if (userId) void loadSpaces();
   }, [userId, loadSpaces, fgTick]);
 
-  // 받은 교육 링크(S16 입구 · 사용자 결정 3) — 이 기기에서 손님으로 보낸 질문을 먼저 옮기고(autoClaim) 목록을 읽는다.
+  // 받은 교육 링크(S16 입구 · 사용자 결정 3) — 이 기기에서 보낸 질문을 옮길지 먼저 묻고(autoClaim · 1112 fix 5) 목록을 읽는다.
   //   [공간] 칸 여부와 무관하다. 링크가 없으면(지금 거의 전부 · 옛 서버) 묶음이 없다 = 지금 화면 그대로.
   const [myLinks, setMyLinks] = useState<(MyEduLink & { days: number })[]>([]);
   useEffect(() => {
     let alive = true;
     if (!userId) return;
     void (async () => {
-      await autoClaimEduGuests(userId);
+      await askClaimEduGuests(userId);
       const { data } = await fetchMyEduLinks();
       // 남은 날은 읽은 순간에 센다(그리는 동안 시계를 읽지 않는다).
       const now = Date.now();

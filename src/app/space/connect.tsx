@@ -45,6 +45,8 @@ export default function SpaceConnect() {
   const [store, setStore] = useState('');
   const [picked, setPicked] = useState<string[]>(() => (typeof entry === 'string' && entry ? [entry] : []));
   const [busy, setBusy] = useState(false);
+  // 이미 승인 대기인 노하우(묶음이 already_proposed 로 거절됐을 때 서버가 짚어 준 것 · 1112 fix 9). 다음 보내기 결과로 바뀐다.
+  const [already, setAlready] = useState<Set<string>>(() => new Set());
 
   const load = useCallback(async () => {
     if (!spaceId) return;
@@ -80,8 +82,10 @@ export default function SpaceConnect() {
     setBusy(true);
     const r = await proposeToStore(spaceId, chosenStore, picked);
     setBusy(false);
+    setAlready(new Set(r.alreadyIds));
     if (r.error) {
-      showToast(placeErrorMessage(r.error), 'warn');
+      // 짚을 줄이 있으면 그 줄에 칩을 달고 빼라고 말한다. 옛 서버(번호 없음)는 지금 문구 그대로.
+      showToast(r.alreadyIds.length > 0 ? CONNECT.alreadyToast : placeErrorMessage(r.error), 'warn');
       return;
     }
     showToast(CONNECT.sent(r.data.length || picked.length), 'good');
@@ -154,6 +158,7 @@ export default function SpaceConnect() {
               key: e.id,
               title: e.title,
               picked: pickedSet.has(e.id),
+              chips: already.has(e.id) ? [{ text: CONNECT.alreadyChip, tone: 'warn' as const }] : undefined,
               onToggle: () => toggle(e.id),
             }))}
           />

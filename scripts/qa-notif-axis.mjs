@@ -10,6 +10,7 @@
 //  ⑥ 사장 스트림은 이번 변경으로 **바뀌지 않는다**(자기 제안 제외분 말고는 회귀 0)
 //  ⑦ 배지 수 == 목록의 안읽음 수 (드리프트 방지 · F-2 부터 배지는 목록과 같은 배열에서 센다)
 //  ⑧ 매니저 행은 열 수 있는 곳(허용 목록·/junior/*)으로만 간다(F-2 · 2026-10-04). 제안 검토는 사장 전용
+//     (예외 = 내가 공간에서 보낸 from_space 제안 · 할 일 숫자와 벨이 같게 · 1112 fix 10)
 // 실행: node scripts/qa-notif-axis.mjs
 import { pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -95,6 +96,12 @@ check('⑥ 사장: 직원 제안 2건 모두 검토함에(자기 것 아님)', o
   const ownMine = buildOwnerNotifications({ ...ownerArgs, userId: ME, suggestions: [...suggestions, fs] }).map((r) => r.id);
   check('② 예외: 관리 화면 목록(사장 축 · 나 = 보낸 사람)에 from_space 행이 있고 improve 행은 없다',
     ownMine.includes('s_sg_fs_mine') && !ownMine.includes('s_sg_mine'), ownMine.join(','));
+  // 1112 fix 10: 자기 공간 제안이 할 일 숫자(isTodoSuggestion)에만 있고 매니저 벨에 없던 차이.
+  const mgrFs = buildManagerNotifications({ ...ownerArgs, suggestions: [...suggestions, fs] }, received);
+  const mgrFsIds = mgrFs.map((r) => r.id);
+  check('② 예외: 매니저 벨에 내가 보낸 from_space 대기 제안이 있다(할 일 숫자와 같다)', mgrFsIds.includes('s_sg_fs_mine') && !mgrFsIds.includes('s_sg_mine'), mgrFsIds.join(','));
+  check('⑦ from_space 를 넣어도 배지 수 == 목록 안읽음 수',
+    managerUnreadCount({ ...ownerArgs, suggestions: [...suggestions, fs] }, received) === mgrFs.filter((r) => r.unread).length);
 }
 
 // ── 논리 점검 D11 (2026-10-06) ───────────────────────────────────────────

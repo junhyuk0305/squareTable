@@ -10,8 +10,7 @@ import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
-import { accountAckAt, MAX_NOTIFS } from '@/lib/utils/notifications';
-import { buildSpaceNotifRows } from '@/lib/utils/spaceNotifications';
+import { MAX_NOTIFS } from '@/lib/utils/notifications';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useStoreDisplay } from '@/components/StoreHeaderTitle';
 import { NotificationList, ALL_KIND_UI, type NotifRow } from '@/components/NotificationList';
@@ -52,14 +51,12 @@ export default function HubNotificationsScreen() {
     void hydrateCross();
   });
   // '모두 읽기' = 내 매장 전부 ack(결정 3 · 훅이 매장 벨과 같은 ackNotifs 를 매장마다 부른다).
-  const { listRows, openRow, hasUnread: storeUnread, markAll } = useCrossNotifRows();
+  const { listRows, spaceRows, openRow, hasUnread: storeUnread, markAll } = useCrossNotifRows();
   // ★야간 g4a 공간 줄(my_space_notif_data) — 매장 줄과 같은 목록에 시간순으로 섞는다. 읽음 기준은 계정 단위 축(accountAckAt).
   //   누르면 매장 전환 없이 그 주소로 간다(공간 _layout 이 그 공간에 먼저 들어간다 · /link 는 앱 안 링크).
-  const spaceRaw = useCrossNotifStore((s) => s.spaceRows);
-  const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
+  //   행은 훅이 만든다(허브 벨 숫자와 같은 배열 · 1112 fix 16).
   const ackNotifs = useMemberPrefsStore((s) => s.ackNotifs);
   const sessionStores = useSessionStore((s) => s.stores);
-  const spaceRows = useMemo(() => buildSpaceNotifRows(spaceRaw, accountAckAt(ackByUnit)), [spaceRaw, ackByUnit]);
   const rows = useMemo(
     () => [...listRows, ...spaceRows].sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_NOTIFS),
     [listRows, spaceRows],

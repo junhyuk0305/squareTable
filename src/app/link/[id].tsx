@@ -7,13 +7,13 @@
  *  · 열 때 edu_link_me_key 로 이 기기 열쇠를 한 번 받는다. 그 열쇠로 웹 손님 화면과 같은 묻기·답·신고 길(EduAsk)을 쓴다.
  *    열쇠는 화면 상태에만 둔다. 기기 저장소에 남기지 않는다(같은 기기에서 계정이 바뀌어도 남의 질문이 안 보인다).
  *  · 공간 링크 + 공간 입구가 열린 계정 = [합류 신청하기](확인 한 번). 매장 링크에는 없다(결정 188). 이미 멤버면 서버가 그 문구를 준다.
- *  · ?uqId= 는 답 알림 착지다. 내 질문 칸은 묻는 칸 바로 아래라 첫 화면에 보인다. 질문 하나로 옮겨 가지는 않는다
- *    (edu_link_answers 가 답할 질문 번호를 주지 않는다 · 기록 g4b 가결정).
+ *  · ?uqId= 는 답 알림 착지다. 그 질문 카드로 스크롤한다(edu_link_answers 맨 뒤 칸 uq_id · 0587 · 1112 fix 8).
+ *    옛 서버(칸 없음)면 지금처럼 묻는 칸 아래 내 질문 칸이 보이는 첫 화면 그대로다.
  * ★토큰·열쇠는 계측·로그에 싣지 않는다. 화면 계측은 경로 템플릿(/link/[id])만 남는다.
  * ★열람 수를 올리는 edu_link_open 은 부르지 않는다. 제목·자리 이름은 my_edu_links 가 준다.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Pressable, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Pressable, Text, StyleSheet, ActivityIndicator, type ScrollView } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 
 import { Screen } from '@/components/Screen';
@@ -35,7 +35,7 @@ import { placeErrorCode, placeErrorMessage } from '@/lib/place/errors';
 import { LINK_IN_APP, SPACE_MEMBERS, SPACE_WORDS, eduOwnerWord } from '@/lib/place/words';
 import { InkColors, Surface } from '@/lib/theme/colors';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
-import { Gap } from '@/lib/theme/layout';
+import { Gap, Layout } from '@/lib/theme/layout';
 
 const CLOSED: EduLinkInfo = { ok: false, failed: false, placeKind: null, placeName: '', ownerName: '', title: '', entryCount: 0, expiresAt: null };
 
@@ -43,8 +43,17 @@ type Phase = 'loading' | 'ready' | 'closed' | 'failed';
 
 export default function LinkInApp() {
   const gate = useSessionGate();
-  const { id } = useLocalSearchParams<{ id: string; uqId?: string }>();
+  const { id, uqId } = useLocalSearchParams<{ id: string; uqId?: string }>();
   const linkId = typeof id === 'string' ? id : '';
+  const focusUq = typeof uqId === 'string' && uqId ? uqId : undefined;
+  // 착지 카드로 스크롤 — 카드와 스크롤 안 맨 위 표시를 창 기준으로 재서 그 차이로 옮긴다(EduLinkView 안 깊이와 상관없이 맞다).
+  const scrollRef = useRef<ScrollView>(null);
+  const topRef = useRef<View>(null);
+  const onFocusCard = useCallback((card: View) => {
+    topRef.current?.measureInWindow((_x, top) => {
+      card.measureInWindow((_cx, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - top - Layout.screenTop), animated: true }));
+    });
+  }, []);
   const userId = useSessionStore((s) => s.userId);
   const spaceOpen = useSessionStore((s) => s.spaceOpen);
   const loadSpaces = useSessionStore((s) => s.loadSpaces);
@@ -116,8 +125,10 @@ export default function LinkInApp() {
   if (gate !== undefined) return gate;
 
   return (
-    <Screen header={<ScreenTitleHeader title={SPACE_WORDS.link} backFallback="/stores" />}>
+    <Screen scrollRef={scrollRef} header={<ScreenTitleHeader title={SPACE_WORDS.link} backFallback="/stores" />}>
       <Stack.Screen options={{ headerShown: false }} />
+      {/* 스크롤 안 맨 위 표시(착지 스크롤 기준) · 떠 있어 간격에 끼지 않는다. */}
+      <View ref={topRef} collapsable={false} pointerEvents="none" style={st.topMark} />
       {phase === 'loading' && <ScreenLoading label={LINK_IN_APP.loading} />}
       {phase === 'failed' && <LoadErrorState title={LINK_IN_APP.loadFail} onRetry={() => void load()} />}
       {phase === 'closed' && <EduLinkView info={CLOSED} entries={[]} />}
@@ -127,7 +138,7 @@ export default function LinkInApp() {
           entries={entries}
           askSlot={
             <View style={st.askStack}>
-              <EduAsk token={token} place={info.placeKind} ownerName={info.ownerName} me={me} />
+              <EduAsk token={token} place={info.placeKind} ownerName={info.ownerName} me={me} focusUq={focusUq} onFocusCard={onFocusCard} />
               {showJoin ? (
                 <Pressable
                   onPress={() => void join()}
@@ -149,6 +160,7 @@ export default function LinkInApp() {
 
 const st = StyleSheet.create({
   askStack: { gap: Gap.group },
+  topMark: { position: 'absolute', top: 0, left: 0, right: 0 },
   // 보조 버튼 — 화면의 Primary 는 묻는 칸의 [질문 보내기] 하나다.
   btn: { ...ButtonStyles.small, minHeight: 48, borderWidth: 1, borderColor: InkColors.lineStrong, backgroundColor: Surface.card },
   btnText: { ...ButtonTextStyles.small, color: InkColors.ink },
