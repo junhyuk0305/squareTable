@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Pressable, Text, StyleSheet, ActivityIndicator, type ScrollView } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { Screen } from '@/components/Screen';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -124,7 +125,9 @@ export default function LinkInApp() {
 
   if (gate !== undefined) return gate;
 
+  // 키보드 회피 = 화면 전체(헤더 포함)를 감싼다. Screen 이 스크롤을 품고 있어 그 안에는 둘 수 없다.
   return (
+    <KeyboardShift>
     <Screen scrollRef={scrollRef} header={<ScreenTitleHeader title={SPACE_WORDS.link} backFallback="/stores" />}>
       <Stack.Screen options={{ headerShown: false }} />
       {/* 스크롤 안 맨 위 표시(착지 스크롤 기준) · 떠 있어 간격에 끼지 않는다. */}
@@ -155,6 +158,7 @@ export default function LinkInApp() {
         />
       )}
     </Screen>
+    </KeyboardShift>
   );
 }
 

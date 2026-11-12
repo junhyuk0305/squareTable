@@ -18,6 +18,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Appear } from '@/components/Appear';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { EduAsk } from '@/components/edu/EduAsk';
 import { EduLinkView } from '@/components/edu/EduLinkView';
@@ -85,7 +86,8 @@ export default function EduLinkScreen() {
       {phase === 'ready' && !info.ok && <EduLinkView info={info} entries={[]} />}
 
       {phase === 'ready' && info.ok && (
-        <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
+        <KeyboardShift>
+        <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <EduLinkView
             info={info}
             entries={entries}
@@ -98,6 +100,7 @@ export default function EduLinkScreen() {
             }
           />
         </ScrollView>
+        </KeyboardShift>
       )}
     </SafeAreaView>
   );

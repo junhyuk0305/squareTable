@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { Screen, Section } from '@/components/Screen';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -169,7 +170,9 @@ export function EduLinkNewForm({
     );
   }
 
+  // 키보드 회피 = 화면 전체(헤더 포함)를 감싼다. Screen 이 스크롤을 품고 있어 그 안에는 둘 수 없다.
   return (
+    <KeyboardShift>
     <Screen header={header}>
       <Stack.Screen options={{ headerShown: false }} />
 
@@ -221,6 +224,7 @@ export function EduLinkNewForm({
         <Text style={st.ctaText}>링크 만들기</Text>
       </Pressable>
     </Screen>
+    </KeyboardShift>
   );
 }
 

@@ -37,6 +37,23 @@ const NAME_MAX = 20;
 const REPORT_MIN = 5;
 const REPORT_MAX = 1000;
 
+/** 요청 열쇠의 난수 부분(소문자·숫자 n자). crypto 가 있으면 그걸 쓰고, 없을 때만 Math.random 으로 떨어진다(/cso L-5). */
+const REQ_CHARS = '0123456789abcdefghijklmnopqrstuvwxyz';
+function reqRandom(n: number): string {
+  const c = (globalThis as { crypto?: { getRandomValues?: (a: Uint8Array) => Uint8Array } }).crypto;
+  if (c?.getRandomValues) {
+    let out = '';
+    while (out.length < n) {
+      const buf = c.getRandomValues(new Uint8Array(n));
+      // 252 = 36×7 · 그 이상은 버려 글자마다 확률을 같게 한다.
+      for (let i = 0; i < buf.length && out.length < n; i++) if (buf[i] < 252) out += REQ_CHARS[buf[i] % 36];
+    }
+    return out;
+  }
+  const rnd = () => Math.random().toString(36).slice(2).padEnd(10, '0').slice(0, 10);
+  return (rnd() + rnd()).slice(0, n);
+}
+
 function squareRows(sq: SquareBlock | null): KnowhowRow[] {
   const rows: KnowhowRow[] = [];
   if (!sq) return rows;
@@ -124,8 +141,7 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard }: {
     setBusy(true);
     // 요청 열쇠 — 응답만 끊겨 같은 글을 다시 보내면 같은 열쇠를 실어 서버가 앞 질문을 돌려준다(0681 · 2건 쌓임 방지).
     if (reqRef.current?.text !== q) {
-      const rnd = () => Math.random().toString(36).slice(2).padEnd(10, '0').slice(0, 10);
-      reqRef.current = { text: q, id: `${Date.now().toString(36)}${rnd()}${rnd()}` }; // 28자 · 서버 형식 16~64자
+      reqRef.current = { text: q, id: `${Date.now().toString(36)}${reqRandom(20)}` }; // 28자 · 서버 형식 16~64자
     }
     const r = await askEduLink(token, guest?.key ?? null, nm, q, reqRef.current.id);
     sendingRef.current = false;
