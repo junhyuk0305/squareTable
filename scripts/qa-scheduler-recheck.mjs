@@ -21,7 +21,7 @@ console.log(`— 대상 로컬 ${env.URL_} · schema_migrations 최고 ${MIG} ·
 if (Number(MIG) >= 348) console.log(`  · 0348(11-04 main 머지) 이후 DB 다. ①퀴즈·②·④ 는 0348 이 고쳤으므로 재현 안 됨이 정상이다. 수정 전 RED 를 보려면 0348 이전 DB 가 필요하다.`);
 
 let pass = 0, fail = 0, skip = 0, executed = 0, ref = 0; // ref = 단언 없이 사실만 찍은 참고 줄(통과로 안 센다)
-const PLANNED = 10;   // ⑤~⑧ 4개를 더했다(2026-11-12 S0)
+const PLANNED = 14;   // ⑤~⑧ 4개를 더했다(2026-11-12 S0) · ⑨~⑫ 4개(S3)
 const check = (n, reproduced, extra = '') => { executed++; reproduced ? (fail++, console.log('  ✗ 재현됨 ·', n, extra)) : (pass++, console.log('  ✓ 재현 안 됨 ·', n, extra)); };
 const skipped = (n, why) => { executed++; skip++; console.log('  - skip ·', n, '·', why); };
 const worlds = [];
@@ -154,7 +154,8 @@ select coalesce(string_agg(out_id::text, ','), '') from public.sweep_member_noti
 
   console.log('— ⑥ 역할을 두 번 바꾼 뒤 쌓인 역할 알림 —');
   const n6a = notice(s2.id, 'role_changed', '매니저가 됐어요');
-  const n6b = notice(s2.id, 'role_changed', '직원이 됐어요');
+  // 제목은 set_member_role(0318:39) 이 넣는 두 문장 그대로다. s2 는 지금 직원(junior)이라 '해제' 가 지금 역할이다.
+  const n6b = notice(s2.id, 'role_changed', '매니저에서 해제됐어요');
   const got6 = sweptMember([n6a, n6b]);
   if (!got6.includes(n6b)) skipped('⑥(M8)', '지금 역할 알림(대조군)도 안 나갔다');
   else check('⑥(M8): 지금 역할과 다른 옛 역할 알림까지 보낸다', got6.includes(n6a), `보낸 수 ${got6.length}/2`);
@@ -176,6 +177,38 @@ select coalesce(string_agg(out_id::text, ','), '') from public.sweep_member_noti
   const cap = Number(psql(`select cap from public.unit_ai_cap(${sq(w.unit)})`));
   const got8 = Number(inTx(`select count(*) from public.sweep_owner_alerts() where out_id = ${a8};`));
   check('⑧(M10): 한도에 한참 못 미치는데(사용 ' + used + ' / 상한 ' + cap + ') 한도 알림을 보낸다', got8 === 1);
+
+  // ── ⑨~⑫ S3(2026-11-12) · 종류별 재확인 표의 나머지 칸 ──
+  console.log('— ⑨ 같은 역할 알림이 두 번 쌓임(매니저 → 직원 → 매니저 → 직원) —');
+  const n9a = notice(s2.id, 'role_changed', '매니저에서 해제됐어요');
+  const n9b = notice(s2.id, 'role_changed', '매니저에서 해제됐어요');
+  const got9 = sweptMember([n9a, n9b]);
+  if (!got9.includes(n9b)) skipped('⑨(M8)', '마지막 역할 알림(대조군)도 안 나갔다');
+  else check('⑨(M8): 같은 역할 알림을 두 번 보낸다', got9.includes(n9a), `보낸 수 ${got9.length}/2`);
+
+  console.log('— ⑩ 승인 알림이 나가기 전에 내보낸 직원 —');
+  const n10 = notice(s1.id, 'approved', '합류가 승인됐어요', 'QA', '/stores');   // s1 은 ⑤ 에서 이미 나갔다
+  const c10 = notice(s2.id, 'approved', '합류가 승인됐어요', 'QA', '/stores');
+  const got10 = sweptMember([n10, c10]);
+  if (!got10.includes(c10)) skipped('⑩(M8)', '대조군(매장에 있는 직원)도 안 나갔다');
+  else check('⑩(M8): 이미 나간 사람에게 합류 승인 알림을 보낸다', got10.includes(n10));
+
+  console.log('— ⑪ 재선점(엣지가 결과를 못 적은 행)도 다시 본다 —');
+  const n11 = notice(s1.id, 'shift_changed', '근무가 바뀌었어요');
+  const c11 = notice(s2.id, 'shift_changed', '근무가 바뀌었어요');
+  psql(`update public.member_notices set claimed_at = now() - interval '20 minutes', delivered = null where id in (${n11}, ${c11})`);
+  const got11 = sweptMember([n11, c11]);
+  if (!got11.includes(c11)) skipped('⑪(M8)', '재선점 대조군도 안 나갔다');
+  else check('⑪(M8): 나간 직원의 행을 재선점으로 한 번 더 보낸다', got11.includes(n11));
+
+  console.log('— ⑫ 좌석 잠김 주기가 닫힌 뒤의 좌석 알림 —');
+  const ep = Number(psql(`with x as (insert into public.seat_lock_episodes (unit_id, started_at, closed_at) values (${sq(w.unit)}, now() - interval '1 hour', now()) returning id) select id from x`));
+  const a12 = Number(psql(`with x as (insert into public.owner_alerts (unit_id, kind, period, step, title, body) values (${sq(w.unit)}, 'seat_lock', ${sq(String(ep))}, 1, 'QA 직원 1명이 앱을 못 쓰고 있어요', 'QA') returning id) select id from x`));
+  // 대조군 = 같은 매장의 재확인 대상이 아닌 종류(card_renew). 스윕이 이 매장 행까지 닿았는지만 본다.
+  const c12 = Number(psql(`with x as (insert into public.owner_alerts (unit_id, kind, period, step, title, body) values (${sq(w.unit)}, 'card_renew', ${sq('qa:' + w.s)}, 3, 'QA 결제 예고', 'QA') returning id) select id from x`));
+  const got12 = inTx(`select coalesce(string_agg(out_id::text, ','), '') from public.sweep_owner_alerts() where out_id in (${a12}, ${c12});`).split(',').filter(Boolean).map(Number);
+  if (!got12.includes(c12)) skipped('⑫', '대조군(card_renew)도 안 나갔다');
+  else check('⑫: 좌석이 풀려 주기가 닫혔는데 좌석 알림을 보낸다', got12.includes(a12));
 }
 
 let crashed = null;
