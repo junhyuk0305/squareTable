@@ -164,6 +164,11 @@ if (!LIST && todo.length) {
   mkdirSync(logDir, { recursive: true });
   if (REMOTE && !existsSync(join(ROOT, '.env'))) { console.error('중단: --allow-remote 는 키가 있는 main 체크아웃에서만 쓴다.'); process.exit(2); }
   if (!REMOTE && todo.some((p) => !p.h.pure)) childEnv = { ...process.env, ...localEnv() }; // 로컬 도커의 주소·키(supabase status)
+  // supabase start 는 엣지 함수를 띄우지 않는다. 꺼져 있으면 하니스가 503 으로 죽어 원인이 안 보이니 먼저 알린다.
+  if (!REMOTE && todo.some((p) => p.h.edges.size)) {
+    const r = await fetch(`${childEnv.SUPABASE_URL}/functions/v1/push`, { method: 'OPTIONS' }).catch(() => null);
+    if (!r || r.status === 503) console.log('  ※ 로컬 엣지 함수가 꺼져 있다. 엣지를 부르는 하니스는 503 으로 실패한다. 띄우는 법: npx -y supabase@2.122.1 functions serve --env-file <VAPID_PUBLIC_KEY·VAPID_PRIVATE_KEY 를 적은 파일>');
+  }
   const queue = todo.filter((p) => !p.h.serial);
   await Promise.all(Array.from({ length: JOBS }, async () => { while (queue.length) await runOne(queue.shift(), false); }));
   for (const p of [...todo.filter((x) => x.h.serial), ...retry]) await runOne(p, true);
