@@ -238,8 +238,11 @@ try {
     }
     const myIds = new Set([...(await noticesOf(A.id)), ...(await noticesOf(B.id)), ...(await noticesOf(O.id))].map((x) => x.id));
     const got = rows1.filter((x) => myIds.has(x.out_id));
-    check('4-1 ★첫 스윕이 이 매장 알림을 돌려준다(승인 · 반려 · 내보냄 · 나감 · 탈퇴 = 5행 이상)', !s1.error && got.length >= 5,
+    // 0660 뒤: A 는 승인된 뒤 내보내졌다 → A 의 승인 알림은 보내는 시점 재확인(받는 사람이 아직 멤버)에서 버린다.
+    check('4-1 ★첫 스윕이 이 매장 알림을 돌려준다(반려 · 내보냄 · 나감 · 탈퇴 = 4행 이상)', !s1.error && got.length >= 4,
       s1.error?.message ?? `rows=${rows1.length} mine=${got.length}`);
+    check('4-1b ★0660 내보낸 사람의 승인 알림은 보내지 않는다', !got.some((x) => x.out_user_id === A.id && x.out_kind === 'approved'),
+      JSON.stringify(got.filter((x) => x.out_user_id === A.id).map((x) => x.out_kind)));
     const one = got.find((x) => x.out_user_id === A.id);
     check('4-2 행마다 받는 사람 · 매장 · 제목 · 본문 · 이동 경로', !!one && one.out_unit_id === UNIT && !!one.out_title && !!one.out_url,
       JSON.stringify(one ?? {}));
@@ -301,7 +304,8 @@ try {
         from: (t) => ({ update: (v) => ({ eq: async (_c, id) => { calls.update.push([t, id, v]); return { error: null }; } }) }),
       };
       const fakeDeliver = async (_a, scope, targets, notif) => { calls.deliver.push({ scope, targets, notif }); return { sent: 1, recipients: 1, suppressed: 0, pruned: 0 }; };
-      const fn = new Function('createClient', 'SUPABASE_URL', 'deliver', `${src}; return sweepMemberNotices;`)(() => fakeAdmin, 'http://x', fakeDeliver);
+      // 결과 기록은 readOnceRetry 로 감싼다(S3 · L22). 여기서는 한 번 부르는 대역으로 넘긴다.
+      const fn = new Function('createClient', 'SUPABASE_URL', 'deliver', 'readOnceRetry', `${src}; return sweepMemberNotices;`)(() => fakeAdmin, 'http://x', fakeDeliver, (run) => run());
       const res = await fn('tok');
       check('5-2 ★행마다 deliver() 를 한 번 부른다(받는 사람 1명 · 매장 범위 · 이동 경로)', calls.deliver.length === 2
         && calls.deliver[0].scope === 's1' && JSON.stringify(calls.deliver[0].targets) === '["u1"]' && calls.deliver[1].notif.url === '/owner/staff',

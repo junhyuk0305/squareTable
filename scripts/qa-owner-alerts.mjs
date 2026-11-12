@@ -174,7 +174,9 @@ async function main() {
         if (r.error) throw new Error(`${table} 시드 실패: ${r.error.message}`);
         return r.data.id;
       };
-      const oa = (period, extra) => ({ unit_id: unitR, kind: 'seat_lock', period, step: 1, title: 'QA 재선점', body: 'b', ...extra });
+      // 0660 뒤 seat_lock · ai_cap 은 보내는 시점 재확인(_owner_alert_due)을 탄다. 가짜 주기로 심으면 버려진다.
+      //   재선점 규칙만 재려고 재확인이 없는 종류(card_fail)를 쓴다.
+      const oa = (period, extra) => ({ unit_id: unitR, kind: 'card_fail', period, step: 1, title: 'QA 재선점', body: 'b', ...extra });
       const o1 = await ins('owner_alerts', oa(`qa-o1-${s}`, { claimed_at: minsAgo(15), delivered: null }));
       const o2 = await ins('owner_alerts', oa(`qa-o2-${s}`, { claimed_at: minsAgo(15), delivered: 0 }));
       const o3 = await ins('owner_alerts', oa(`qa-o3-${s}`, { claimed_at: minsAgo(5), delivered: null }));
