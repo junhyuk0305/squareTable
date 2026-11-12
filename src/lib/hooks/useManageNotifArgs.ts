@@ -13,7 +13,7 @@ import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
 import { useOwnerAlertStore } from '@/lib/store/useOwnerAlertStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useLegacyQuizOpen } from '@/lib/hooks/useLegacyQuizOpen';
-import { todayStr } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import type { buildOwnerNotifications, ManagerReceivedArgs } from '@/lib/utils/notifications';
 
 const EMPTY_IDS: string[] = [];
@@ -44,7 +44,7 @@ export function useManageNotifArgs(): { ownerArgs: ManageOwnerArgs; received: Ma
   const legacyQuizIds = useLegacyQuizOpen().ids ?? EMPTY_IDS;
   const claims = usePaymentClaimStore((s) => s.claims);
   const alerts = useOwnerAlertStore((s) => s.alerts);
-  const today = todayStr();
+  const today = useToday();
 
   return useMemo(() => {
     // 매니저에게 배정한 사람은 사장이다 — 명부 SSOT(memberNameOf · 사장 포함). '직원'은 명부에 없을 때만.

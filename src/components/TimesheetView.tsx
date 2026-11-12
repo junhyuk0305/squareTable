@@ -19,6 +19,7 @@ import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Type } from '@/lib/theme/type';
 import { BadgeStyles } from '@/lib/theme/badge';
 import { fmtDuration, hhmm, todayStr, normalizeTime, shiftMonth, daysInMonth, maskHHMM } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import { checkShiftTime, isOvernight, monthDates } from '@/lib/utils/schedule';
 import { confirmAction } from '@/lib/utils/confirm';
 
@@ -70,7 +71,7 @@ export function TimesheetView({ staffId, editedBy, badgeLabel, badgeTone = 'ink'
   const from = days[0];
   const to = days[days.length - 1];
   const loadMonth = useAttendanceStore((s) => s.loadMonth);
-  const curYm = todayStr().slice(0, 7);
+  const curYm = useToday().slice(0, 7);
   const pastMonths = [ym].filter((m) => m < curYm);
   const pastKey = pastMonths.join(',');
   const monthStates = useAttendanceStore((s) => pastMonths.map((m) => s.months[`${staffId}|${m}`] ?? '').join(','));

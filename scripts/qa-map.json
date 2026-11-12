@@ -19,5 +19,8 @@
     "handle_new_user": ["qa-onboarding"],
     "approve_member": ["qa-onboarding"]
   },
+  "migrations": [
+    ["^supabase/migrations/", ["qa-old-client-compat", "qa-definer-filters"]]
+  ],
   "heavy": ["qa-journey-join", "qa-journey-task", "qa-journey-quiz", "qa-journey-ai", "qa-crawl"]
 }

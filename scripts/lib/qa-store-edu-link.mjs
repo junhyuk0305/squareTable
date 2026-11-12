@@ -162,14 +162,16 @@ ${call('사장 미응답 숫자에 들어옴', 'O', 'authenticated', `select una
 ${call('직원 J 벨에도 도와줄 질문으로 보임(파생 · 푸시 아님)', 'J', 'authenticated', `select count(*)::text from public.my_units_notif_data() d where d.unit_id = ${q(X1)} and d.source = 'uq' and d.payload->>'link_id' = {V:lm:1}`, 'ok|1')}
 ${call('손님 AI 예약 = 그 매장 자리(ai_quota_reserve · 손님 요청 키 · 엣지와 같은 호출)', null, 'service_role', `select r.allowed::text from public.ai_quota_reserve(${q(X1)}, 1, 'edu:' || {V:g1:2}, true) r`, 'ok|true')}
 ${val('매장 AI 한도에서 깎임(이번 달 사용량 1)', `select coalesce((select used from public.ai_usage_monthly where unit_id = ${q(X1)} and month = to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM')), 0)::text`, '1')}
--- ★0584: 만든 사람이 나가면 링크가 닫힌다. 사장 전원으로 돌리는 갈래는 매니저 → 직원 강등(아직 매장 사람 · 링크 열림)으로 잰다.
+-- ★0584: 만든 사람이 나가면 링크가 닫힌다. ★0680: 매니저 → 직원 강등이면 닫지 않고 손님에게 안 열린다(링크 권한을 잃었다).
+--   그래서 강등 뒤 사장 전원으로 돌리는 갈래(_edu_link_escalate)는 새 질문으로는 닿지 않는다. 다시 매니저가 되면 열린다.
 update public.unit_members set role = 'junior' where unit_id = ${q(X1)} and user_id = ${q(U.M)};
-${call('만든 사람 M 이 직원으로 내려간 뒤 손님 묻기', null, 'anon', ask(V('lm', 2), '하늘', '마감 정산은요'), 'ok|gk_*', 'g2')}
-${call('보내기 → true', null, 'anon', `select public.edu_link_send({V:lm:2}, {V:g2:1}, {V:g2:2}, false)::text`, 'ok|true')}
-${val('M 강등 → 사장 전원(O 1 · P 1) · M 그대로 1 · J 0', `select ${notes(U.M)} || '/' || ${notes(U.O)} || '/' || ${notes(U.P)} || '/' || ${notes(U.J)}`, '1/1/1/0')}
+${call('0680 만든 사람 M 이 직원으로 내려간 뒤 손님 묻기 = link_closed', null, 'anon', ask(V('lm', 2), '하늘', '마감 정산은요'), 'err:link_closed')}
+${val('0680 M 강등 뒤 알림 그대로(M 1 · O 0 · P 0 · J 0)', `select ${notes(U.M)} || '/' || ${notes(U.O)} || '/' || ${notes(U.P)} || '/' || ${notes(U.J)}`, '1/0/0/0')}
+update public.unit_members set role = 'manager' where unit_id = ${q(X1)} and user_id = ${q(U.M)};
+${call('0680 M 다시 매니저 → 손님 묻기 됨', null, 'anon', `select (guest_key is not null)::text from public.edu_link_ask(${V('lm', 2)}, null, '하늘', '마감 정산은요')`, 'ok|true')}
 ${call('O 링크 손님 질문 → O 한 명', null, 'anon', ask(V('lo', 2), '바다', '컵 세척은요'), 'ok|gk_*', 'g3')}
 ${call('보내기', null, 'anon', `select public.edu_link_send({V:lo:2}, {V:g3:1}, {V:g3:2}, false)::text`, 'ok|true')}
-${val('O 링크 → O 2 · P 1 그대로', `select ${notes(U.O)} || '/' || ${notes(U.P)}`, '2/1')}
+${val('O 링크 → O 1 · P 0', `select ${notes(U.O)} || '/' || ${notes(U.P)}`, '1/0')}
 delete from public.unit_members where unit_id = ${q(X1)} and user_id = ${q(U.M)};
 ${call('0584 만든 사람 M 이 나가면 링크 닫힘(손님 묻기 = link_closed)', null, 'anon', ask(V('lm', 2), '구름', '나간 뒤 질문'), 'err:link_closed')}
 

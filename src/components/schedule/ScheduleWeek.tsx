@@ -15,7 +15,7 @@ import {
   type ShiftException,
 } from '@/lib/store/useScheduleStore';
 import type { Junior } from '@/types';
-import { todayStr } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import {
   addDays,
   weekDates,
@@ -63,7 +63,7 @@ export function ScheduleWeek({
   /** 주 이동 네비를 숨긴다 — 바깥에 이미 주 이동 컨트롤이 있는 화면에서 중복을 막는다. */
   hideNav?: boolean;
 }) {
-  const today = todayStr();
+  const today = useToday();
   const thisMonday = mondayOf(today);
   const days = useMemo(() => weekDates(monday), [monday]);
   const nameOf = (id: string) => staff.find((x) => x.id === id)?.name ?? '직원';

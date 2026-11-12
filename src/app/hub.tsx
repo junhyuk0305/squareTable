@@ -10,7 +10,7 @@ import { OwnerStatusView } from '@/components/hub/OwnerStatusView';
 import { JuniorTodayView } from '@/components/hub/JuniorTodayView';
 import { NoStoreView } from '@/components/hub/NoStoreView';
 import { Appear, stagger } from '@/components/Appear';
-import { todayStr } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import { weekdayOf } from '@/lib/utils/schedule';
 import { InkColors, Surface } from '@/lib/theme/colors';
 import { Type } from '@/lib/theme/type';
@@ -29,13 +29,13 @@ export default function HubScreen() {
   const sessionStores = useSessionStore((s) => s.stores);
   // 출입 게이트 4단(미로그인·세션 확정 전·프로필 미완성·다운그레이드 선택 대기)은 stores.tsx 와 같은 훅.
   const gate = useSessionGate();
+  const today = useToday();
 
   if (gate !== undefined) return gate;
   // 매장 0곳이어도 이 탭을 막지 않는다 — 예전엔 /stores 로 되돌려서, 아직 합류하지 않은 직원은
   // 탭이 보이는데 누르면 튕겨 나왔다. 본문만 빈 상태로 바꾸고 다음 행동을 준다(NoStoreView).
   const hasStore = sessionStores.length > 0 || !!unitId;
 
-  const today = todayStr();
   const dateLabel = `${Number(today.slice(5, 7))}월 ${Number(today.slice(8, 10))}일 (${WEEKDAYS[weekdayOf(today)]})`;
 
   // 제목은 본문 뷰에 **넘겨서** 그 뷰의 로딩 게이트 안에서 그리게 한다(2026-08-25).

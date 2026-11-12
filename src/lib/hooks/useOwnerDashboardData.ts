@@ -9,7 +9,8 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useScheduleStore, shiftsOn, pendingApprovals, pendingTimeRequests } from '@/lib/store/useScheduleStore';
 import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
-import { todayStr, hhmm } from '@/lib/utils/attendance';
+import { hhmm } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import { gradableTasks, staffBehind, type StaffBehind } from '@/lib/utils/taskProgress';
 import { sortByUrgency } from '@/lib/utils/unknownQuery';
 import { isTodoQuestion } from '@/lib/hooks/useOwnerTodoCount';
@@ -110,7 +111,7 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   const staffLoaded = useStaffStore((s) => s.loaded);
   const suggestionLoaded = useSuggestionStore((s) => s.loaded);
 
-  const today = todayStr();
+  const today = useToday();
 
   // 2026-08-06: 인건비(monthPay)는 홈 KPI가 MiniStats로 흡수되며 소비자가 사라져 제거했다.
   // 인건비 계산은 2026-11-02 급여 기능 제거로 앱에서 없어졌다.
