@@ -71,11 +71,30 @@ const ss = strip(read('src/lib/store/useSessionStore.ts'));
 check('★2-2 세션이 inviteExpiresAt 을 들고, 매장 정보에서 채운다', /inviteExpiresAt: string;/.test(ss) && /inviteExpiresAt = unit\?\.invite_expires_at \?\? '';/.test(ss) && /\n\s+inviteExpiresAt,\n/.test(ss));
 check('2-3 비운 상태(로그아웃 · 매장 전환)에 inviteExpiresAt 이 함께 비워진다', /inviteCode: '', inviteExpiresAt: '',/.test(ss));
 // G3(QA 2026-10-05): 30초 새로고침에서 매장 정보 읽기가 한 번 실패하면 이름·초대코드가 빈칸이 됐다.
-const unitRead = (ss.match(/const \{[^}]*\} = await fetchUnitInfo\(unitId\);[\s\S]*?industry = unit\?\.industry \?\? '';[\s\S]*?\n\s+\}/) || [''])[0];
+// ★M3(b831713 · 0354 session_bootstrap · 2026-11-05): 매장 정보는 부팅 RPC 한 번으로 읽는다. 필드별 읽기 실패 분기는 없어졌다
+//   (통째로 성공 아니면 통째로 실패). 같은 성질 = 읽기가 실패하면 같은 사용자의 세션 값을 하나도 바꾸지 않는다(readFailed 'keep').
+//   매장 전환 중 실패(expectedUnitId)는 readFailed 전에 false 로 끝나 이전 매장 값이 그대로 남는다.
+const lp = (ss.match(/\nasync function loadProfile\([\s\S]*?\n\}\n/) || [''])[0];
+const rf = (lp.match(/const readFailed = \([^)]*\) => \{[\s\S]*?\n    \};/) || [''])[0];
+const unitSet = (lp.match(/if \(unitId\) \{\n\s+if \(expectedUnitId !== undefined && !unit\) return false;[\s\S]*?industry = unit\?\.industry \?\? '';/) || [''])[0];
+const RF = await load('../src/lib/store/sessionReadFail.ts');
+const rfa = RF?.sessionReadFailAction;
 check('★G3 매장 정보 읽기 실패면 같은 사용자·같은 매장의 이전 이름·초대코드·만료일·업종을 지킨다',
-  /error: unitErr/.test(unitRead) && /unitErr && \w+\.userId === userId && \w+\.unitId === unitId/.test(unitRead)
-  && ['storeName', 'inviteCode', 'inviteExpiresAt', 'industry'].every((k) => new RegExp(`${k} = \\w+\\.${k};`).test(unitRead)),
-  show(unitRead.slice(0, 200)));
+  // 읽기 실패 → readFailed 가 set 보다 먼저 'keep' 이면 아무것도 쓰지 않고 돌아간다
+  /if \(sessionReadFailAction\(prior, userId\) === 'keep'\) return;/.test(rf)
+  && rf.indexOf("=== 'keep') return;") < rf.indexOf('set(')
+  && /const first = await fetchSessionBootstrap\(\);/.test(lp)
+  && /if \(expectedUnitId !== undefined && \(bootErr \|\| !boot\)\) return false;/.test(lp)
+  && /if \(bootErr \|\| !boot\) \{\s*readFailed\(/.test(lp)
+  // 이름·초대코드·만료일·업종은 부팅 RPC 가 성공한 뒤의 boot.unit 에서만 채운다
+  && ['store_name', 'invite_code', 'invite_expires_at', 'industry'].every((k) => unitSet.includes(`unit?.${k} ?? ''`))
+  && lp.indexOf('if (bootErr || !boot)') < lp.indexOf(unitSet)
+  // 판정 함수: 같은 사용자 signed_in = 지킨다 · 다른 사용자·콜드 로드 = 비운다
+  && typeof rfa === 'function'
+  && rfa({ status: 'signed_in', userId: 'u1' }, 'u1') === 'keep'
+  && rfa({ status: 'signed_in', userId: 'u1' }, 'u2') === 'reset'
+  && rfa({ status: 'loading', userId: '' }, 'u1') === 'reset',
+  show({ rf: rf.slice(0, 120), unitSet: unitSet.slice(0, 120) }));
 const staff = strip(read('src/app/owner/staff.tsx'));
 check('★2-4 [코드 변경] 뒤 만료일도 새 값으로 바꾼다', /useSessionStore\.setState\(\{ inviteCode: res\.inviteCode, inviteExpiresAt: res\.expiresAt \}\)/.test(staff));
 // ★0346: 0067 파일만 보면 뒤 정의가 조건을 빠뜨려도 못 잡는다. join_by_invite 를 마지막으로 정의한 파일을 본다.

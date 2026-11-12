@@ -62,7 +62,19 @@ console.log('[E1] 초안·외부용 퀴즈는 직원 카드와 자동 배정에 
       f({ audience: null, startAt: null, createdAt: '2026-08-01T00:00:00+09:00' }, 0) === true);
   }
   const board = strip(read('src/components/WorkBoard.tsx'));
-  check('★직원 카드가 staffCanSeeCourse 로 거른다', /if \(!staffCanSeeCourse\(c, sends\.length\)\) continue;/.test(board));
+  // ★d59735f(10-23 · P3): 발송된 퀴즈 카드는 staffQuizTodo 한 입구(외부용 제외)로, 발송 0건 옛 퀴즈는 staffCanSeeCourse(c, 0) 로 거른다.
+  //   예전 한 줄(staffCanSeeCourse(c, sends.length))이 두 갈래로 나뉘었다. 두 갈래 모두와 입구의 실제 거르기를 본다.
+  const prog = await tryImport('../src/lib/quiz/progress.ts');
+  const todoOf = (audience) => typeof prog.staffQuizTodo === 'function'
+    ? prog.staffQuizTodo([{ id: 'a1', courseId: 'c1', userId: 'u1', sentAt: '2026-10-01T00:00:00Z', completedAt: null }],
+      [{ assignmentId: 'a1', pendingEntryIds: ['e1'], totalItems: 1, answeredItems: 0, state: 'todo' }],
+      [{ id: 'c1', due_days: null, audience }], { userId: 'u1', cardRule: true }).length
+    : -1;
+  check('★직원 카드가 staffCanSeeCourse 로 거른다',
+    /for \(const todo of staffQuizTodo\(assignments, quizProgress, courses, \{ userId, preferredId: quizParam, cardRule: true \}\)\)/.test(board)
+      && /if \(assignments\.some\(\(a\) => a\.courseId === c\.id\) \|\| !staffCanSeeCourse\(c, 0\)\) continue;/.test(board)
+      && todoOf('guest') === 0 && todoOf('staff') === 1 && todoOf(null) === 1,
+    `${prog.__err ?? ''} guest=${todoOf('guest')} staff=${todoOf('staff')}`);
 
   for (const fn of ['enqueue_knowhow_rechecks']) {
     const d = lastDef(fn);
@@ -93,8 +105,24 @@ console.log('\n[E2] 노하우가 바뀌어 재확인이 나가면 직원 카드�
   check('★발송 원장을 읽을 때 origin 도 읽는다', /const QUIZ_ASSIGNMENT_COLS = '[^']*\borigin\b[^']*'/.test(db) && /origin: r\.origin \?\? 'manual'/.test(db));
   check('QuizAssignment 에 origin 이 있다', /origin\?: string;/.test(read('src/lib/quiz/types.ts')));
   const board = strip(read('src/components/WorkBoard.tsx'));
+  // ★d59735f(10-23 · P3) + 0332·0348: 발송된 퀴즈(재확인 포함)의 남은 항목은 서버 진행(quiz_assignment_progress)이 정한다.
+  //   카드는 pending.pendingEntryIds 를 그대로 띄운다. 재확인 발송은 앞 회차를 이어받지 않아(count_from 없음) 발송 시각부터 다시 센다.
+  //   그래서 "바뀐 노하우를 다시 확인"은 재확인 발송 카드가 그 노하우를 남은 항목으로 띄우는 것으로 본다.
+  const progE2 = await tryImport('../src/lib/quiz/progress.ts');
+  const recheckCard = typeof progE2.staffQuizTodo === 'function'
+    ? progE2.staffQuizTodo([
+      { id: 'old', courseId: 'c1', userId: 'u1', sentAt: '2026-09-01T00:00:00Z', completedAt: '2026-09-02T00:00:00Z', origin: 'manual' },
+      { id: 'rc', courseId: 'c1', userId: 'u1', sentAt: '2026-10-03T02:00:00Z', completedAt: null, origin: 'recheck' },
+    ], [{ assignmentId: 'rc', pendingEntryIds: ['e1'], totalItems: 1, answeredItems: 0, state: 'todo' }],
+    [{ id: 'c1', due_days: null, audience: 'staff' }], { userId: 'u1', cardRule: true })
+    : [];
+  const carry = migFiles().map((f) => [f, read(`supabase/migrations/${f}`)])
+    .filter(([, s]) => /create or replace function public\.quiz_assignment_carry_count_from\(/.test(s)).at(-1);
   check('★카드 판정이 내 미완료 재확인 발송을 보고 바뀐 노하우를 due 로 띄운다',
-    /a\.origin === 'recheck' && !a\.completedAt/.test(board) && /recheckEntryDue\(myRow\(id\)\?\.verifiedAt, entryById\.get\(id\)\?\.updated_at, recheck\)/.test(board));
+    /const ids = new Set\(pending\.pendingEntryIds\);/.test(board) && /\.filter\(\(e\) => ids\.has\(e\.entryId\) && !!titleOf\(e\.entryId\)\)/.test(board)
+      && recheckCard.length === 1 && recheckCard[0].assignment.id === 'rc' && recheckCard[0].state === 'todo'
+      && !!carry && /if new\.origin is distinct from 'manual' then return new; end if;/.test(sqlStrip(carry[1])),
+    `${progE2.__err ?? ''} cards=${JSON.stringify(recheckCard.map((t) => t.assignment.id))} carry=${carry?.[0] ?? '없음'}`);
   check('★1회성 재확인 카드는 앞선 1회성 카드에 가려지지 않는다',
     /c === firstOnce \|\| c\.items\.some\(\(it\) => it\.state === 'due'\)/.test(board));
 }
@@ -114,7 +142,7 @@ console.log('\n[E3] 퀴즈가 안 나가는 이유(근무표에 없음·자동 �
   check('권한: authenticated 만 실행', /revoke all on function public\.quiz_send_status\(text\) from public, anon, authenticated;/.test(f)
     && /grant\s+execute on function public\.quiz_send_status\(text\) to authenticated;/.test(f));
   const db = strip(read('src/lib/db.ts'));
-  check('★fetchQuizSendStatus 가 rpc 를 부른다', /export async function fetchQuizSendStatus\(courseId: string\)/.test(db) && /rpc\('quiz_send_status', \{ p_course_id: courseId \}\)/.test(db));
+  check('★fetchQuizSendStatus 가 rpc 를 부른다', /export async function fetchQuizSendStatus\(courseId: string(, strict = false)?\)/.test(db) && /rpc\('quiz_send_status', \{ p_course_id: courseId \}\)/.test(db));
   const scr = strip(read('src/app/owner/quiz/[id].tsx'));
   // 문구는 recipientReadiness.ts 표 한 곳(P5 · 2026-10-16) — 화면은 readinessText 로 읽는다.
   const rr = strip(read('src/lib/recipientReadiness.ts'));
@@ -124,32 +152,79 @@ console.log('\n[E3] 퀴즈가 안 나가는 이유(근무표에 없음·자동 �
 
 console.log('\n[E4] "푼 사람"은 담긴 노하우를 다 풀었을 때(맞힘과 무관) · 개인 결과는 그 사람의 실제 응시로');
 {
+  // ★0326→0332→0348: 완료 판정은 함수 하나로 모였다(0332 "질문 하나에 함수 하나").
+  //   mark_quiz_completed → quiz_assignment_state('answered' 일 때만) → quiz_assignment_pending(문항 단위 · 발송 퀴즈의 servable 문항)
+  //   → quiz_course_servable(보관·모르는 형식 제외). 노하우 단위 셈은 10-22 사용자 결정으로 문항 단위가 됐다.
   const d = lastDef('mark_quiz_completed');
   const b = d.body;
+  const st = lastDef('quiz_assignment_state'), pd = lastDef('quiz_assignment_pending');
+  const cf = lastDef('quiz_assignment_count_from'), sv = lastDef('quiz_course_servable'), lv = lastDef('quiz_course_live');
   check('★완료는 이 발송 뒤에 담긴 노하우를 전부 풀었을 때만(맞혔는지는 안 본다)',
-    /t\.taken_at >= v_a\.sent_at/.test(b) && /from public\.course_entries ce/.test(b) && /return false;/.test(b), d.file);
+    /select s\.state into v_state from public\.quiz_assignment_state\(a\.id\) s;/.test(b)
+      && /if v_state is distinct from 'answered' then return false; end if;/.test(b)
+      && /when v_answered >= v_total then 'answered'/.test(st.body) && /from public\.quiz_assignment_pending\(a\.id\) p/.test(st.body)
+      && /cross join lateral public\.quiz_course_servable\(a\.unit_id,\s*a\.course_id\) q/.test(pd.body)
+      && /ai\.created_at\s*>=\s*public\.quiz_assignment_count_from\(a\)/.test(pd.body) && /ai\.course_id\s*=\s*a\.course_id/.test(pd.body)
+      && !/correct/.test(pd.body)
+      && /coalesce\(a\.count_from, a\.sent_at\)/.test(cf.body),
+    `${d.file} · state ${st.file} · pending ${pd.file} · count_from ${cf.file}`);
+  // 옛 규칙("이미 아는 노하우는 다시 안 풀어도 된다 · knowhow_understanding 면제")은 0326 에서 의도적으로 뺐다:
+  //   "본인이 발송 후 낸 답만 센다. 전체 이해 기록이나 다른 코스의 답으로 대체하지 않는다"(0326·0330·0348 pending 머리말).
+  //   재확인 발송은 앞 회차를 이어받지 않는다(E2 carry_count_from). 같은 성질을 지금 규칙으로 본다.
   check('이미 알아 카드에 안 뜨는 노하우는 다시 풀지 않아도 된다(재확인 발송은 바뀐 뒤 통과만 인정)',
-    /from public\.knowhow_understanding ku/.test(b) && /v_a\.origin <> 'recheck' or ku\.verified_at >= pe\.updated_at/.test(b), d.file);
+    !!pd.body && !/knowhow_understanding/.test(pd.body) && !/knowhow_understanding/.test(st.body) && !/knowhow_understanding/.test(b)
+      && /not ai\.self_check/.test(pd.body),
+    `pending ${pd.file} — 0326 결정: 이해 기록으로 대체하지 않는다 · 자청 답 제외`);
   check('낼 문항이 없는 노하우·보관한 노하우는 셈에서 뺀다',
-    /pe\.archived_at is null/.test(b) && /q\.format = any\(public\.quiz_known_formats\(\)\)/.test(b), d.file);
-  check('본인·이미 나간 발송만', /a\.user_id = \(select auth\.uid\(\)\)/.test(b) && /a\.sent_at is not null/.test(b), d.file);
+    /pe\.archived_at is null/.test(sv.body) && /q\.format = any\(public\.quiz_known_formats\(\)\)/.test(sv.body)
+      && /public\.quiz_course_live\(p_unit, p_course\)/.test(sv.body) && /pe\.archived_at is null/.test(lv.body)
+      && /when v_total = 0 then 'void'/.test(st.body),
+    `servable ${sv.file} · live ${lv.file}`);
+  check('본인·이미 나간 발송만',
+    /x\.user_id\s*=\s*(\(select )?auth\.uid\(\)\)?/.test(b) && /x\.sent_at is not null/.test(b) && /x\.unit_id\s*=\s*public\.auth_unit_id\(\)/.test(b), d.file);
   const sheet = strip(read('src/components/work/UnderstandingCheckSheet.tsx'));
+  // ★260c9c4(10-22 · 0326 계약): 저장이 .then 사슬에서 await 로 바뀌었다. 같은 성질 = 저장 성공(submissionId) 뒤,
+  //   통과 분기(onPass) 밖에서 onFinished 를 부른다.
+  const rec = sheet.indexOf('const submissionId = await recordStaffQuizAttempt(given.current');
+  const okGate = sheet.indexOf('if (!submissionId) { setSaveFailed(true); return; }', rec);
+  const passIf = sheet.indexOf('if (marks.length === items.length && marks.every(Boolean)) {', okGate);
+  const passEnd = passIf < 0 ? -1 : sheet.indexOf('\n      }\n', passIf);
+  const fin = sheet.indexOf('await onFinished?.(', okGate);
   check('★응시를 마치면(통과와 무관) 기록 저장 뒤 onFinished 를 부른다',
-    /recordStaffQuizAttempt\(given\.current\)\.then\(\((?:submissionId)?\) => \{?[\s\S]{0,120}?onFinished\?\.\(/.test(sheet));
+    rec >= 0 && okGate > rec && passIf > okGate && passEnd > passIf && fin > passEnd,
+    JSON.stringify({ rec, okGate, passIf, passEnd, fin }));
   const store = strip(read('src/lib/store/useWorkStore.ts'));
   const mu = (store.match(/\n  markUnderstood: async[\s\S]*?\n  \},/) || [''])[0];
-  const nf = (store.match(/\n  noteQuizFinished: \(entryIds\) => \{[\s\S]*?\n  \},/) || [''])[0];
+  // ★260c9c4·d59735f: 발송 id 를 받는 async 로 바뀌었다(이번 호출로 완료됐을 때만 사장 알림 · 실패면 던진다).
+  const nf = (store.match(/\n  noteQuizFinished: async \([^)]*\) => \{[\s\S]*?\n  \},/) || [''])[0];
   check('★통과(markUnderstood)가 발송을 완료로 찍지 않는다', !!mu && !/markQuizCompleted/.test(mu), mu.slice(0, 80));
-  check('★noteQuizFinished 가 완료 판정을 서버에 맡긴다', /markQuizCompleted\(id\)/.test(nf));
+  check('★noteQuizFinished 가 완료 판정을 서버에 맡긴다',
+    /const done = await markQuizCompleted\(id\);/.test(nf) && /if \(!done\) continue;/.test(nf), nf.slice(0, 120));
   const board = strip(read('src/components/WorkBoard.tsx'));
-  check('WorkBoard 가 응시 끝을 넘긴다', /onFinished=\{\(entryIds\) => useWorkStore\.getState\(\)\.noteQuizFinished\(entryIds\)\}/.test(board));
+  check('WorkBoard 가 응시 끝을 넘긴다', /onFinished=\{\(entryIds\) => useWorkStore\.getState\(\)\.noteQuizFinished\(entryIds, selfCheck\.assignmentId\)\}/.test(board));
 
-  const p = lastDef('quiz_course_person');
+  // ★0330(퀴즈 문항 course_id 필수 · 축소) + 0332: 코스 없이 낸 옛 서명 제출도 저장할 때 문항의 퀴즈로 귀속한다.
+  //   예전엔 읽기(quiz_course_person)가 course_id null 행을 노하우로 묶었다. 이제 쓰기(quiz_staff_record_internal)가 묶고,
+  //   개인 결과 화면은 quiz_course_attempt_items(course_id = 이 퀴즈)를 읽는다.
+  const rw = lastDef('quiz_staff_record_internal');
+  const ai = lastDef('quiz_course_attempt_items');
+  const notNull = read('supabase/migrations/0330_quiz_item_course_required.sql');
   check('★직원 응시(course_id 없음)도 담긴 노하우로 이 퀴즈에 묶는다',
-    /a\.course_id is null and a\.entry_id in \(select ce\.entry_id from public\.course_entries ce where ce\.course_id = p_course_id\)/.test(p.body), p.file);
+    /v_course := coalesce\(p_course_id, q\.course_id\);/.test(rw.body)
+      && /insert into public\.quiz_attempt_items\s*\([^)]*\bcourse_id\b[^)]*\)\s*values\([^;]*\bv_course\b/.test(rw.body)
+      && /alter table public\.quiz_items alter column course_id set not null;/.test(notNull)
+      && /where ai\.course_id=p_course_id/.test(ai.body),
+    `record ${rw.file} · attempt_items ${ai.file}`);
+  // ★22393cb(10-23 · P5 N05·N16): 개인 결과는 이 퀴즈 답 행 전부(페이지로 끝까지)를 읽어 그 사람 것만 거른다.
+  //   문항별 정오 = 문항마다 마지막 답의 스냅샷(payload). 지금 문항 표(fetchStaffAttemptItems)를 다시 읽지 않는다.
   const person = strip(read('src/app/owner/quiz/person.tsx'));
+  const dbE4 = strip(read('src/lib/db.ts'));
+  const fca = (dbE4.match(/export async function fetchQuizCourseAttemptItems\([\s\S]*?\n\}/) || [''])[0];
   check('★개인 결과의 문항 목록은 그 사람의 최근 응시(submission) 스냅샷 전부다(매장 500줄 상한·지운 문항 무관)',
-    /fetchGuestAttemptItems\(sub\)/.test(person) && !/fetchStaffAttemptItems/.test(person));
+    /fetchQuizCourseAttemptItems\(cid\)/.test(person) && /\.filter\(\(r\) => r\.staffId === sid && r\.source !== 'self'\)/.test(person)
+      && /latestCourseAnswers\(rows\)/.test(person) && !/fetchStaffAttemptItems/.test(person)
+      && /for \(let offset = 0; ; offset \+= pageSize\)/.test(fca) && /\.range\(offset, offset \+ pageSize - 1\)/.test(fca)
+      && /if \(\(data \?\? \[\]\)\.length < pageSize\) break;/.test(fca) && /payload: r\.payload/.test(fca));
 }
 
 console.log('\n[E5] 지운(보관한) 노하우는 할일·퀴즈 연결 판정에서 빠진다');
@@ -201,8 +276,13 @@ console.log('\n[E9] AI 사용량: 재시도는 한 번만 차감 · 직원이 �
   check('★같은 요청 키는 재시도 한 번만 무료(세 번째부터 차감)',
     /on conflict \(request_key\) do update set hits = r\.hits \+ 1\s+returning r\.hits into v_hits;/.test(b)
       && /if v_hits = 2 then/.test(b), d.file);
+  // ★0369(11-10 · 상한 숫자 한 곳): 200/3,000 은 unit_ai_cap 으로 옮겼다. 차감 함수는 그것을 부르고 숫자를 따로 갖지 않는다.
+  const cap = lastDef('unit_ai_cap');
   check('0193 본문(캡 200/3,000 · 80%·100% 사장 알림 · 단위 1~60)을 그대로 쓴다',
-    /then 3000 else 200 end/.test(b) && /'ai_cap', v_month, 80/.test(b) && /'ai_cap', v_month, 100/.test(b) && /least\(greatest\(coalesce\(p_units, 1\), 1\), 60\)/.test(b), d.file);
+    /from public\.unit_ai_cap\(v_unit\)/.test(b) && !/then 3000/.test(b)
+      && /when public\.effective_plan\(p_unit\) in \('single', 'multi'\) then 3000/.test(cap.body) && /else 200/.test(cap.body)
+      && /'ai_cap', v_month, 80/.test(b) && /'ai_cap', v_month, 100/.test(b) && /least\(greatest\(coalesce\(p_units, 1\), 1\), 60\)/.test(b),
+    `${d.file} · cap ${cap.file}`);
   const f = d.file ? read(`supabase/migrations/${d.file}`) : '';
   // 옛 ai 엣지 호환: 0276 은 열어 두고(확장), 새 엣지 배포 뒤 0297 이 닫는다(축소).
   const close = read('supabase/migrations/0297_ai_quota_close_client.sql');

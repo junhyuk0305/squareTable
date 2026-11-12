@@ -60,7 +60,14 @@ console.log('\n■ 소스 계약');
   const ss = strip(read('src/lib/store/useSessionStore.ts'));
   const sg = (ss.match(/signInWithGoogle: async[\s\S]*?\n  \},/) || [''])[0];
   check('★store: 앱은 window.location 을 읽지 않고 네이티브 경로로 간다', /googleNativeSignIn\(/.test(sg) && /googleRedirectTo\(/.test(sg) && !/window\.location\.origin\s*:/.test(sg));
-  check('store: 앱 로그인 뒤 기존 성공 경로(loadProfile)', /loadProfile\(/.test(sg));
+  // ★M3(b831713 · 2026-11-05): 호출부 입구는 loadSession(합치기·측정) 이고, 그 안에서 loadProfile 이 읽고 판정한다.
+  //   같은 성질 = 앱 구글 로그인이 이메일 로그인과 같은 입구를 force(옵션 없음)로 부르고, 세션이 떨어지면 성공으로 돌려주지 않는다.
+  const sp = (ss.match(/signInWithPassword: async[\s\S]*?\n  \},/) || [''])[0];
+  const ls = (ss.match(/\nfunction loadSession\([\s\S]*?\n\}\n/) || [''])[0];
+  check('store: 앱 로그인 뒤 기존 성공 경로(loadProfile)',
+    /await loadSession\(set, r\.userId, r\.email\);/.test(sg) && /await loadSession\(set, data\.user\.id,/.test(sp)
+      && /const run = loadProfile\(set, userId, email, meta, expectedUnitId\);/.test(ls)
+      && /if \(get\(\)\.status !== 'signed_in'\) \{/.test(sg));
   const btn = strip(read('src/components/SocialAuthButtons.tsx'));
   check('버튼: try/finally 로 로딩을 푼다', /try \{[\s\S]*\} finally \{/.test(btn));
   check('버튼: 앱에서 로그인되면 루트로 간다', /router\.replace\('\/'\)/.test(btn));
