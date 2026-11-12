@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-02",
+  "updated": "2026-11-12",
   "entries": [
     "src/app/billing.tsx::void navigator.clipboard.writeText(value);",
     "src/app/index.tsx::isLostOAuthReturn(window.location.search, window.location.hash);",
@@ -8,6 +8,7 @@
     "src/components/SyncBanner.tsx::return () => window.removeEventListener('online', onOnline);",
     "src/components/SyncBanner.tsx::window.addEventListener('online', onOnline);",
     "src/components/junior/JuniorWelcomeCoach.tsx::let _memSeen = false; // localStorage 불가 환경의 세션 폴백",
+    "src/components/owner/OwnerFirstFive.tsx::<PackDraftCard item={hit.item} busy={busy} onConfirm={() => void confirm()} onEdit={() => openCoach(packDraftSeed(hit.item))} />",
     "src/lib/analytics/track.ts::window.addEventListener('error', (e: any) => {",
     "src/lib/analytics/track.ts::window.addEventListener('unhandledrejection', (e: any) => {",
     "src/lib/db.ts::const c = document.createElement('canvas');",
@@ -16,6 +17,7 @@
     "src/lib/payments/cardBilling.ts::const origin = window.location.origin;",
     "src/lib/payments/cardBilling.ts::const s = document.createElement('script');",
     "src/lib/payments/cardBilling.ts::document.head.appendChild(s);",
+    "src/lib/place/spaceTarget.ts::return { pathname: window.location.pathname, search: window.location.search };",
     "src/lib/push/usePushBootstrap.ts::navigator.serviceWorker.addEventListener('message', onMessage);",
     "src/lib/push/usePushBootstrap.ts::return () => navigator.serviceWorker.removeEventListener('message', onMessage);",
     "src/lib/push/webpush.ts::(window.navigator as unknown as { standalone?: boolean }).standalone === true ||",
