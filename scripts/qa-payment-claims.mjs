@@ -164,6 +164,16 @@ async function main() {
   });
   check('④-c 금액 위조 직접 insert 차단(RLS)', !!ins3, ins3?.message?.slice(0, 60) ?? '통과돼버림');
 
+  // 4-h) ★0605: 금액이 맞는 직접 insert 도 막힌다. 이 길은 RPC 의 가드(앱 구독·카드 자동결제·카드 결제 진행 중 · 0601 사장 잠금)를
+  //   전부 건너뛴다. 클라는 이 표를 읽기만 한다(옛 앱 v1.1.1 · main 의 db.ts 는 select 만 · 신고는 rpc submit_payment_claim).
+  const amt = await svcRpc('payment_claim_amount', { p_plan: 'single', p_months: 1, p_store_count: 1 });
+  const { data: ins4, error: ins4e } = await B.c.from('payment_claims').insert({
+    unit_id: unitB, claimed_by: B.uid, plan: 'single', amount_krw: amt.body, depositor_name: '우회', months: 1, store_count: 1,
+    terms_version: TERMS, agreed_at: new Date().toISOString(),
+  }).select('id');
+  check('④-h 금액이 맞는 직접 insert 도 차단(RPC 가드 우회 · 0605)', !!ins4e, ins4e?.message?.slice(0, 60) ?? '통과돼버림');
+  for (const r of ins4 ?? []) await fetch(`${URL}/rest/v1/payment_claims?id=eq.${r.id}`, { method: 'DELETE', headers: SH });
+
   // 4-d) 자기 pending 행을 스스로 승인 (가장 치명적인 우회)
   const { data: upd, error: updErr } = await A.c
     .from('payment_claims').update({ status: 'approved', reviewed_at: new Date().toISOString() })

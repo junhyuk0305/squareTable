@@ -12,5 +12,12 @@
     ["^src/lib/(place|edu)/|^src/app/space/|^src/components/(space|place|edu)/", ["qa-space-isolation"]],
     ["^src/(app|components)/", ["qa-journey-join", "qa-journey-task", "qa-journey-quiz", "qa-journey-ai", "qa-crawl"]]
   ],
+  "fn": {
+    "_": "마이그레이션이 이 함수를 정의하면 넓이와 관계없이 고른다. 가입·합류 함수는 qa-onboarding 이 필수 게이트다(.claude/rules/signup-drift.md).",
+    "create_store": ["qa-onboarding"],
+    "join_by_invite": ["qa-onboarding"],
+    "handle_new_user": ["qa-onboarding"],
+    "approve_member": ["qa-onboarding"]
+  },
   "heavy": ["qa-journey-join", "qa-journey-task", "qa-journey-quiz", "qa-journey-ai", "qa-crawl"]
 }

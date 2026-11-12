@@ -109,6 +109,8 @@ for (const f of changed) {
       else for (const h of hits) pick(h, `${tag} ${kind} ${name}`);
     };
     for (const fn of fns) pickOrNote('함수', fn, harness.filter((h) => new RegExp(`\\b${fn}\\b`).test(h.t)));
+    // 넓어서 걸러지는 함수라도 꼭 돌릴 하니스(qa-map.json fn 표 · 예: 가입 함수 → qa-onboarding).
+    for (const fn of fns) for (const id of map.fn?.[fn] ?? []) for (const h of harness) if (h.id === id) pick(h, `${tag} 함수 ${fn} (표)`);
     for (const tb of tables) pickOrNote('표', tb, harness.filter((h) => h.tables.has(tb)));
   } else if (/^supabase\/functions\/([\w-]+)\//.test(f)) {
     const name = f.split('/')[2];

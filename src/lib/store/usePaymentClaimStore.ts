@@ -23,6 +23,7 @@ export type ClaimError =
   | 'iap_subscription_active'
   | 'card_subscription_active'
   | 'multi_plan_active'
+  | 'payment_in_progress'
   | 'unknown';
 
 function toClaimError(message?: string): ClaimError {
@@ -38,6 +39,8 @@ function toClaimError(message?: string): ClaimError {
   if (m.includes('card_subscription_active')) return 'card_subscription_active';
   // 다점포 기간이 남았는데 단일을 신고하면 그 기간이 단일로 내려간다(0342).
   if (m.includes('multi_plan_active')) return 'multi_plan_active';
+  // 카드 결제가 진행 중이면 계좌이체를 받지 않는다(0601) — 두 채널로 두 번 내지 않게.
+  if (m.includes('payment_in_progress')) return 'payment_in_progress';
   return 'unknown';
 }
 
@@ -51,6 +54,7 @@ export const CLAIM_ERROR_TEXT: Record<ClaimError, string> = {
   iap_subscription_active: '앱에서 결제 중이신 요금제가 있어요. 요금제 변경은 앱에서 해 주세요.',
   card_subscription_active: '카드 자동결제를 이용 중이에요. 요금제 변경은 이 화면의 카드 자동결제에서 해 주세요.',
   multi_plan_active: '다점포 기간이 끝나기 3일 전부터 단일 매장으로 바꿀 수 있어요.',
+  payment_in_progress: '카드 결제를 처리하고 있어요. 잠시 후 요금제 화면에서 결과를 확인해 주세요.',
   unknown: '입금 알림에 실패했어요. 잠시 후 다시 시도해 주세요.',
 };
 

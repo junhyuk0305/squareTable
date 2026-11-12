@@ -444,6 +444,54 @@ def('M14', '공지 다시 올리기(남의 공지) · 공지 지우기와 댓글
   check('M14', `공지를 지운 뒤 남은 댓글 = 0(${ROUNDS}회)`, orphan === 0, `고아 ${orphan}/${ROUNDS}`);
 });
 
+// ─────────────────────────────── S1 이 더한 케이스(2026-11-12 · 0600~0604) ───────────────────────────────
+def('H2b', 'card_begin_subscribe 결과를 모르는 20분 전 주문이 있을 때(나이 무관 · 사용자 결정 11-12)', async (W) => {
+  const w = await W({ staffN: 0 });
+  const ck = `ck_rc_${w.s}`;
+  R.val(`insert into public.card_billing_keys(owner_id, customer_key) values (${q(w.owner.id)}, ${q(ck)});
+insert into public.card_payments(order_id, owner_id, kind, plan, store_count, amount_krw, livemode, order_name, created_at)
+values (${q(`FPrcold${w.s}`)}, ${q(w.owner.id)}, 'first', 'multi', 1, 31900, false, 'RC 옛 주문', now() - interval '20 minutes'); select 1;`);
+  const r = R.psqlRun(`\\set VERBOSITY verbose\n${R.as('service')}\nselect order_id from public.card_begin_subscribe(${q(w.owner.id)}::uuid, ${q(ck)}, 'multi', 1, 'v1', false);`);
+  const code = (r.stderr || '').match(/ERROR:\s+\S+:\s+(\S+)/)?.[1];
+  check('H2b', '새 주문 거절 = payment_in_progress', r.status !== 0 && code === 'payment_in_progress', r.status === 0 ? '새 주문이 생겼다' : code);
+  check('H2b', 'pending 첫 결제 주문 = 1', n(`select count(*) from public.card_payments where owner_id = ${q(w.owner.id)} and status = 'pending' and kind = 'first'`) === 1);
+});
+
+def('L24', 'rename_store 14일 2회 한도 직전에 동시 두 번', async (W) => {
+  const w = await W({ staffN: 0 });
+  R.val(`update public.units set rename_events = array[now() - interval '1 day'] where id = ${q(w.unit)}; select 1;`);
+  const body = `public.rename_store('RC 새 이름')::text`;
+  const [a, b] = R.twoAtOnce(S(w, w.owner.id, body, true), S(w, w.owner.id, body, false));
+  const ev = n(`select coalesce(array_length(rename_events, 1), 0) from public.units where id = ${q(w.unit)}`);
+  check('L24', '앞 = 남은 0 · 뒤 = rename_limit', a.ok && a.v === '0' && !b.ok && b.code === 'rename_limit', `${show(a)} · ${show(b)}`);
+  check('L24', '14일 기록 = 2(한도)', ev === 2, `기록 ${ev}`);
+});
+
+def('L9b', 'request_shift_time 같은 근무·같은 날 동시 두 번(23505 원문)', async (W) => {
+  const w = await W({ staffN: 1 });
+  const [A] = w.staff;
+  const tpl = `st_rq_${w.s}`;
+  R.val(`insert into public.shift_templates(id, unit_id, staff_id, weekday, shift_date, start_time, end_time)
+values (${q(tpl)}, ${q(w.unit)}, ${q(A.id)}, null, public.kst_today() + 3, '09:00', '13:00'); select 1;`);
+  const body = `public.request_shift_time(${q(tpl)}, public.kst_today() + 3, '10:00', '14:00', null)`;
+  const [a, b] = R.twoAtOnce(S(w, A.id, body, true), S(w, A.id, body, false));
+  const pend = n(`select count(*) from public.shift_change_requests where template_id = ${q(tpl)} and status = 'pending'`);
+  check('L9b', '둘 다 성공(뒤 요청이 앞 요청을 닫고 새로 낸다)', a.ok && b.ok, `${show(a)} · ${show(b)}`);
+  check('L9b', '대기 요청 = 1', pend === 1, `대기 ${pend}`);
+  R.val(`delete from public.shift_change_requests where template_id = ${q(tpl)}; delete from public.shift_templates where id = ${q(tpl)}; select 1;`);
+});
+
+def('L9c', 'set_my_marketing_consent 켜기 동시 두 번(23505 원문)', async (W) => {
+  const w = await W({ staffN: 0 });
+  R.val(`update public.user_consents set withdrawn_at = now() where user_id = ${q(w.owner.id)} and item = 'marketing' and withdrawn_at is null; select 1;`);
+  const body = `(public.set_my_marketing_consent(true, '2026-11-12')->>'on')`;
+  const [a, b] = R.twoAtOnce(S(w, w.owner.id, body, true), S(w, w.owner.id, body, false));
+  const act = n(`select count(*) from public.user_consents where user_id = ${q(w.owner.id)} and item = 'marketing' and withdrawn_at is null`);
+  check('L9c', '둘 다 성공', a.ok && b.ok, `${show(a)} · ${show(b)}`);
+  check('L9c', '유효 동의 = 1', act === 1, `행 ${act}`);
+  R.val(`delete from public.user_consents where user_id = ${q(w.owner.id)} and item = 'marketing'; select 1;`);
+});
+
 // ─────────────────────────────── 엣지 · OTP 문자(H5) ───────────────────────────────
 // 로컬 엣지가 떠 있어야 한다: `npx -y supabase@2.122.1 functions serve otp --no-verify-jwt --env-file <파일>`.
 //   env 파일 = 가짜 SOLAPI_API_KEY·SECRET·FROM + HTTPS_PROXY=http://127.0.0.1:9 (밖으로 나가는 요청이 연결 거부로 끝난다 · 문자 0통).
@@ -464,6 +512,28 @@ def('H5', 'OTP 문자 발송 같은 번호로 동시 5번', async () => {
   } finally {
     R.val(`delete from public.phone_otps where phone = ${q(phone)}; select 1;`);
     check('H5', '정리 뒤 남은 행 = 0', n(`select count(*) from public.phone_otps where phone = ${q(phone)}`) === 0);
+  }
+});
+
+// H5c(S1): IP 분당 3건 제한을 이 IP 에서만 잠깐 풀고 잰다 → 번호 단위 차지(0603 otp_claim_send)만으로 1통인지 본다.
+//   IP 행은 먼저 한 번 보내 만든다(다른 번호). 그 IP 의 창을 지금으로 두고 n 을 크게 낮춘다. 1분 뒤 창이 새로 열리면 원래대로다.
+def('H5c', 'OTP 문자 발송 같은 번호로 동시 5번 · IP 제한 없이', async () => {
+  const url = process.env.QA_OTP_FN_URL ?? `${env.URL_}/functions/v1/otp`;
+  const phone = `0105${String(Date.now()).slice(-7)}`, warm = `0106${String(Date.now()).slice(-7)}`;
+  const send = (p) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.ANON}`, apikey: env.ANON },
+    body: JSON.stringify({ action: 'send', phone: p }) }).then(async (r) => ({ s: r.status, j: await r.json().catch(() => ({})) }));
+  try {
+    const w0 = await send(warm).catch(() => null);
+    if (!w0) { check('H5c', '셋업: 로컬 엣지 otp', false, `${url} 응답 없음`); return; }
+    R.val(`update public.otp_ip_hits set n = -100, window_start = now() where ip = (select ip from public.otp_ip_hits order by window_start desc limit 1); select 1;`);
+    const rs = await Promise.all(Array.from({ length: 5 }, () => send(phone)));
+    const reasons = rs.map((r) => r.j.reason ?? (r.j.ok ? 'ok' : r.s));
+    const reached = reasons.filter((x) => x === 'send_failed' || x === 'ok').length;
+    check('H5c', '셋업: IP 제한에 걸린 요청 0 · 문자 단계 응답 1개 이상', !reasons.includes('rate_limited') && !reasons.includes('not_configured') && reached >= 1, reasons.join(','));
+    check('H5c', '문자 단계까지 간 요청 = 1(나머지 cooldown)', reached === 1, `문자 단계 ${reached}/5 · ${reasons.join(',')}`);
+  } finally {
+    R.val(`delete from public.phone_otps where phone in (${q(phone)}, ${q(warm)}); select 1;`);
+    check('H5c', '정리 뒤 남은 행 = 0', n(`select count(*) from public.phone_otps where phone in (${q(phone)}, ${q(warm)})`) === 0);
   }
 });
 

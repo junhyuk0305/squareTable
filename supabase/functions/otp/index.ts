@@ -5,7 +5,7 @@
 // 보안 (★ ai/push 와 다른 정책 — 반드시 읽을 것):
 //   - 이 함수는 "가입 전(무세션)" 사용자가 호출한다 → JWT 검증이 없다(config.toml verify_jwt=false).
 //   - 따라서 유일한 방어선은 아래 레이트리밋이다. SMS는 건당 과금(약 9원)이라 뚫리면 바로 돈이 샌다.
-//       · 같은 번호 재발송 쿨다운 60초 + 일일 5건 (phone_otps 행 기반 — 인스턴스 재시작과 무관)
+//       · 같은 번호 재발송 쿨다운 60초 + 일일 5건 (phone_otps 행 기반 — 인스턴스 재시작과 무관 · 0603 otp_claim_send 가 한 문장으로 차지)
 //       · IP당 분당 3건 (★0124: DB 기반 — 예전 인메모리 Map 은 isolate 로컬이라 실측 24발 전부 통과했다)
 //       · 코드 3분 만료 · 오답 5회면 코드 무효(온라인 브루트포스 차단: 6자리×5회)
 //   - 코드는 평문 저장하지 않는다(sha256). 응답에 코드·해시를 절대 싣지 않는다.
@@ -180,6 +180,29 @@ Deno.serve(async (req) => {
       return json(500, { ok: false, reason: 'not_configured' }, cors);
     }
 
+    const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000).padStart(6, '0');
+    const codeHash = await sha256Hex(`${phone}:${code}`);
+
+    // (0603) 쿨다운·하루 상한 판정과 새 코드 기록을 DB 한 문장으로 먼저 차지한다. 차지했을 때만 문자를 보낸다.
+    //   예전 길(읽고 판정 → upsert)은 같은 번호로 동시에 오면 여러 요청이 판정을 함께 통과해 문자가 여러 통 나갔다.
+    //   0603 이 아직 없는 DB(함수 없음 · PGRST202)면 아래 옛 길로 떨어진다(엣지가 DB 보다 먼저 배포돼도 돈다).
+    const { data: claim, error: claimErr } = await admin.rpc('otp_claim_send', {
+      p_phone: phone, p_code_hash: codeHash, p_ttl_min: CODE_TTL_MIN, p_cooldown_sec: COOLDOWN_SEC, p_daily_cap: DAILY_CAP,
+    });
+    if (!claimErr) {
+      const c = claim as { ok: boolean; reason?: string; retry_after_sec?: number };
+      if (!c?.ok) return json(429, { ok: false, reason: c?.reason ?? 'cooldown', retry_after_sec: c?.retry_after_sec ?? COOLDOWN_SEC }, cors);
+      try {
+        await sendSms(phone, `[매장의 정석] 인증번호 ${code}\n3분 안에 입력해 주세요.`);
+      } catch (e) {
+        console.error('solapi send failed:', e);
+        return json(502, { ok: false, reason: 'send_failed' }, cors);
+      }
+      return json(200, { ok: true }, cors);
+    }
+    if (claimErr.code !== 'PGRST202') return json(500, { ok: false, reason: 'db' }, cors);
+
+    // ── 옛 길(0603 이 없는 DB 전용) ──
     const { data: row, error: selErr } = await admin
       .from('phone_otps').select('*').eq('phone', phone).maybeSingle();
     if (selErr) return json(500, { ok: false, reason: 'db' }, cors);
@@ -210,12 +233,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000).padStart(6, '0');
     // 발송 "전에" 기록한다 — 솔라피 발송이 실패해도 카운트는 소모(과금 폭주 방어가 UX보다 우선).
     // verified_at 은 upsert 컬럼에 넣지 않는다 → 기존 인증 이력이 재발송으로 지워지지 않는다.
     const { error: upErr } = await admin.from('phone_otps').upsert({
       phone,
-      code_hash: await sha256Hex(`${phone}:${code}`),
+      code_hash: codeHash,
       expires_at: new Date(now + CODE_TTL_MIN * 60_000).toISOString(),
       attempts: 0,
       last_sent_at: new Date(now).toISOString(),
