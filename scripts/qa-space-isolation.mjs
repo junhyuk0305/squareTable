@@ -1036,10 +1036,11 @@ console.log('\n[4] 실세션 · 공간만 있는 계정');
 //   이 대조 줄(QA|STORE)은 마이그레이션 적용 전 실행 결과와도 비교한다(작업 기록).
 console.log('\n[5] 공간 삭제 · 30일 파기 · 공간 주인 탈퇴');
 {
-  const V = Object.fromEntries(['O', 'M', 'K', 'N', 'O2', 'M2', 'O3', 'Z'].map((k, i) => [k, `00000000-0000-4000-a${rnd.slice(0, 3)}-${rnd}${String(i).padStart(4, '0')}`]));
+  // ★0690(B-2): L = 지우기 전에 스스로 나간 멤버 · R = 지우기 전에 내보낸 멤버. 둘 다 질문·노하우를 안 남긴다.
+  const V = Object.fromEntries(['O', 'M', 'K', 'N', 'O2', 'M2', 'O3', 'Z', 'L', 'R'].map((k, i) => [k, `00000000-0000-4000-a${rnd.slice(0, 3)}-${rnd}${String(i).padStart(4, '0')}`]));
   const VS = Object.fromEntries(Object.keys(V).map((k, i) => [k, `00000000-0000-4000-b${rnd.slice(0, 3)}-${rnd}${String(i).padStart(4, '0')}`]));
   const SPA = `qa_dsa_${rnd}`, SPB = `qa_dsb_${rnd}`, SPC = `qa_dsc_${rnd}`, ST = `qa_dst_${rnd}`;
-  const OWNER = `오너${rnd}`, GUEST = `손님${rnd.slice(0, 4)}`, MARK = `mk${rnd}`;
+  const OWNER = `오너${rnd}`, GUEST = `손님${rnd.slice(0, 4)}`, MARK = `mk${rnd}`, MARK2 = `mb${rnd}`;
   const TOKEN = `qa_del_tok_${rnd}_${rnd}`;
   const as = (who, s, keep = false, role = 'authenticated') => `pg_temp.qa_as(${who ? q(V[who]) + '::uuid' : 'null'}, ${who ? q(VS[who]) + '::uuid' : 'null'}, ${q(role)}, ${q(s)}, ${keep})`;
   const chk = (name, expect, gotSql) => `insert into qa_out(l) select ${q(`QA|DEL|${name}¦${expect}¦`)} || (${gotSql});`;
@@ -1092,12 +1093,15 @@ select ${q(ST)}, 'QA대조매장', 'store', ${q(V.Z)}, u.industry, now() - inter
 set local session_replication_role = origin;
 insert into public.unit_members(user_id, unit_id, role) values
   (${q(V.O)}, ${q(SPA)}, 'space_owner'), (${q(V.M)}, ${q(SPA)}, 'space_member'),
+  (${q(V.L)}, ${q(SPA)}, 'space_member'), (${q(V.R)}, ${q(SPA)}, 'space_member'),
   (${q(V.O2)}, ${q(SPB)}, 'space_owner'), (${q(V.M2)}, ${q(SPB)}, 'space_member'), (${q(V.O3)}, ${q(SPC)}, 'space_owner');
 
 -- 공간 A 기록: 주인 노하우(제목에 주인·손님 이름) · 주인 질문 · 답할 질문 · 교육 링크 · 손님 · 손님 질문 짝
 select set_config('request.jwt.claims', json_build_object('sub', ${q(V.O)}, 'role', 'authenticated')::text, true);
 insert into public.playbook_entries(id, unit_id, category, title, status, creator_role, creator_id, creator_name) values
-  ('qa_dpe_${rnd}', ${q(SPA)}, '서비스', ${q(`${OWNER} 비법 ${GUEST} ${MARK}`)}, 'published', 'space_owner', ${q(V.O)}, ${q(OWNER)});
+  ('qa_dpe_${rnd}', ${q(SPA)}, '서비스', ${q(`${OWNER} 비법 ${GUEST} ${MARK}`)}, 'published', 'space_owner', ${q(V.O)}, ${q(OWNER)}),
+  -- ★0690(B-2): 주인이 쓴 글에 멤버 M · 나간 L · 내보낸 R 이름(셋 다 기록을 안 남긴다 · 이름 = QA + 키)
+  ('qa_dpe2_${rnd}', ${q(SPA)}, '서비스', ${q(`QAM QAL QAR 마감 ${MARK2}`)}, 'published', 'space_owner', ${q(V.O)}, ${q(OWNER)});
 insert into public.chat_queries(id, unit_id, query_text) values ('qa_dcq_o_${rnd}', ${q(SPA)}, '공간 삭제 질문');
 insert into public.unknown_queries(id, unit_id, query_text, status) values ('qa_duq_o_${rnd}', ${q(SPA)}, '공간 삭제 질문', 'pending_owner_answer');
 select set_config('request.jwt.claims', json_build_object('sub', ${q(V.Z)}, 'role', 'authenticated')::text, true);
@@ -1126,6 +1130,9 @@ ${chk('남은 못 지운다', 'err|not_space_owner', as('N', `select 'done' from
 ${chk('남의 공간(B)을 주인 O 가 못 지운다', 'err|not_space_owner', as('O', `select 'done' from public.delete_space(${q(SPB)})`))}
 ${chk('로그인 없이 못 지운다', 'err|permission denied for function delete_space', as(null, `select 'done' from public.delete_space(${q(SPA)})`, false, 'anon'))}
 
+-- ★0690(B-2): 지우기 전에 L 은 스스로 나가고 R 은 내보내진다(남긴다)
+${chk('지우기 전 멤버 L 이 나간다', 'ok|done', as('L', `select 'done' from public.leave_space(${q(SPA)})`, true))}
+${chk('지우기 전 주인 O 가 멤버 R 을 내보낸다', 'ok|done', as('O', `select 'done' from public.space_remove_member(${q(SPA)}, ${q(V.R)})`, true))}
 -- 주인이 지운다(남긴다)
 ${chk('주인 O 가 지운다', 'ok|done', as('O', `select 'done' from public.delete_space(${q(SPA)})`, true))}
 ${chk('지운 표시 · 초대 코드 비움', 'true|true', svc(`select (deleted_at is not null)::text || '|' || (invite_code is null)::text from public.units where id = ${q(SPA)}`))}
@@ -1169,6 +1176,7 @@ ${chk('링크·손님·손님 질문 짝 0', '0|0|0', svc(`select (select count(
 ${chk('질문·답할 질문·노하우 0', '0|0|0', svc(`select (select count(*) from public.chat_queries where id like 'qa_dcq_%${rnd}' and id <> 'qa_dcq_st_${rnd}') || '|' || (select count(*) from public.unknown_queries where id = 'qa_duq_o_${rnd}') || '|' || (select count(*) from public.playbook_entries where id = 'qa_dpe_${rnd}')`))}
 ${chk('질문 통계 생김(질문 +2 · 답할 질문 +1 · 업종 없음)', '2|1', svc(`select (select coalesce(sum(questions), 0) from public.retained_question_stats where industry = '' and source = 'chat') - (select v from qa_v where k = 'chat') || '|' || (select coalesce(sum(questions), 0) from public.retained_question_stats where industry = '' and source = 'unknown') - (select v from qa_v where k = 'unknown')`))}
 ${chk('보관 노하우: 주인·손님 이름 지움', `[이름] 비법 [이름] ${MARK}`, svc(`select string_agg(title, ' / ') from public.retained_knowhow where title like ${q(`%${MARK}%`)}`))}
+${chk('보관 노하우: 멤버·나간 멤버·내보낸 멤버 이름 지움(0690 · B-2)', `[이름] [이름] [이름] 마감 ${MARK2}`, svc(`select string_agg(title, ' / ') from public.retained_knowhow where title like ${q(`%${MARK2}%`)}`))}
 ${chk('탈퇴 30일 지난 공간 주인 O3 계정 파기', '0', svc(`select count(*) from auth.users where id = ${q(V.O3)}`))}
 ${chk('지운 지 30일 안 된 공간 B 는 남음', '1', svc(`select count(*) from public.units where id = ${q(SPB)}`))}
 ${storeSnap('after')}

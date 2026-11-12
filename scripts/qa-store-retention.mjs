@@ -7,9 +7,10 @@
 //       사장이 탈퇴해 삭제 대기인 매장의 게스트 링크도 닫힌다(멤버십이 못 막는 유일한 길 · W5-0 새는 곳 1).
 //   [2] 탈퇴한 직원(0359·0360) — 탈퇴하자마자 저장된 표시 이름이 "탈퇴한 직원"이 된다(근무 기록 이름은 유지).
 //       계정 30일 파기 뒤에도 퀴즈 응시·문항별 답·이해 확인·제안·교육 요청·채팅·질문이 남고 사장이 읽는다.
+//       계정으로 옮긴 교육 링크 손님 이름과 그 손님 질문 이름도 "탈퇴한 직원"이 된다(0692 · B-1).
 //   [3] 6개월 지난 채팅·피드·질문을 지우지 않는다(0360 · purge_retention_global).
 //   [4] 매장 삭제 30일 파기(0361) — 개인 기록은 없고, 통계·노하우·문항 글이 매장 연결 없이 남는다. 근로기록은 남는다.
-//       다시 돌려도 통계가 두 번 쌓이지 않는다.
+//       다시 돌려도 통계가 두 번 쌓이지 않는다. 통계 달은 KST 달이다(0694 · A-4 · KST 1일 01:30 질문 = 그 달).
 //
 // ★로컬 전용: 계정을 가입시키고 psql 로 시각을 되돌린다. 대상이 127.0.0.1 이 아니면 멈춘다.
 // 실행: node scripts/qa-store-retention.mjs --local   자가정리(계정·남은 매장·OTP 시드).
@@ -99,6 +100,8 @@ try {
   const qS = await seedQuiz(S.unit_id, oId, 's');
   // D 의 개인 기록(30일 파기 대상) + 근로기록(남길 것)
   await must('D chat', admin.from('chat_queries').insert({ id: `sr_cq_d_${s}`, unit_id: D.unit_id, junior_id: jId, junior_name: 'QA탈퇴직원', query_text: '가스 밸브 어디', matched_entry_ids: [qD.entry], asked_at: nowIso() }));
+  // ★0694(A-4): KST 2020-03-01 01:30 질문(= UTC 2020-02-29 16:30). 통계는 KST 3월로 묶여야 한다. 지난 달이라 다른 실행과 안 겹친다.
+  await must('D chat KST', admin.from('chat_queries').insert({ id: `sr_cq_dk_${s}`, unit_id: D.unit_id, junior_id: jId, junior_name: 'QA탈퇴직원', query_text: '월초 새벽 질문', asked_at: '2020-03-01T01:30:00+09:00' }));
   await must('D unknown', admin.from('unknown_queries').insert({ id: `sr_uq_d_${s}`, unit_id: D.unit_id, junior_id: jId, junior_name: 'QA탈퇴직원', query_text: '포스 오류', presumed_category: 'Event', status: 'archived', asked_at: nowIso() }));
   await must('D feed', admin.from('work_feed').insert({ id: `sr_wf_d_${s}`, unit_id: D.unit_id, feed_date: nowIso().slice(0, 10), data: { kind: 'message', text: '안녕', authorId: jId, authorName: 'QA탈퇴직원' } }));
   await must('D attempt items', admin.from('quiz_attempt_items').insert([true, false].map((ok, i) => ({ id: `sr_ai_d${i}_${s}`, unit_id: D.unit_id, submission_id: `sr_sub_d_${s}`,
@@ -161,6 +164,13 @@ try {
     ['training_req', admin.from('training_requests').insert({ id: `sr_tr_j_${s}`, unit_id: U, staff_id: jId, entry_id: qS.entry })],
   ];
   for (const [l, q] of seeds) await must(l, q);
+  // ★0692(B-1): J 가 매장 S 교육 링크에서 손님으로 물은 질문을 계정으로 옮겼다(claimed_by · 질문 행 질문자 칸은 비어 있다 · 0552 가결정 5).
+  const LK = `sr_lk_${s}`, LG = `sr_lg_${s}`;
+  await must('link', admin.from('edu_links').insert({ id: LK, unit_id: U, token: `sr_ltok_${s}_0123456789`, title: '보관 링크', entry_ids: [], created_by: oId, expires_at: new Date(Date.now() + 86400000).toISOString() }));
+  await must('link guest', admin.from('edu_link_guests').insert({ id: LG, link_id: LK, unit_id: U, name: 'QA탈퇴직원', key_hash: `sr_kh_${s}`, claimed_by: jId, claimed_at: nowIso() }));
+  await must('link chat', admin.from('chat_queries').insert({ id: `sr_cq_g_${s}`, unit_id: U, junior_name: 'QA탈퇴직원', query_text: '링크 손님 질문', link_id: LK, asked_at: nowIso() }));
+  await must('link unknown', admin.from('unknown_queries').insert({ id: `sr_uq_g_${s}`, unit_id: U, junior_name: 'QA탈퇴직원', query_text: '링크 손님 질문', link_id: LK, asked_at: nowIso() }));
+  await must('link pair', admin.from('edu_guest_questions').insert({ cq_id: `sr_cq_g_${s}`, uq_id: `sr_uq_g_${s}`, guest_id: LG, link_id: LK }));
   const jd = await J.rpc('delete_my_account');
   check('2-0 J 탈퇴 성공', !jd.error, jd.error?.message);
   const nm = psql(`select concat_ws('|',
@@ -172,6 +182,11 @@ try {
     (select staff_name from public.knowhow_understanding where entry_id = '${qS.entry}'),
     (select proposer_name from public.playbook_suggestions where id = 'sr_ps_j_${s}'))`);
   check('2-1 ★탈퇴 즉시 저장된 표시 이름 7곳이 "탈퇴한 직원"', nm === Array(7).fill(LABEL).join('|'), nm);
+  const gn = psql(`select concat_ws('|',
+    (select name from public.edu_link_guests where id = '${LG}'),
+    (select junior_name from public.chat_queries where id = 'sr_cq_g_${s}'),
+    (select junior_name from public.unknown_queries where id = 'sr_uq_g_${s}'))`);
+  check('2-1b ★옮긴 교육 링크 손님 이름 · 그 손님 질문 · 답할 질문 이름도 "탈퇴한 직원"(0692 · B-1)', gn === Array(3).fill(LABEL).join('|'), gn);
   const snap = psql(`select name_snapshot from public.member_tenures where unit_id = '${U}' and user_id = '${jId}' order by joined_at desc limit 1`);
   check('2-2 근무 기록 이름(member_tenures.name_snapshot)은 그대로', snap === 'QA탈퇴직원', snap);
   psql(`update public.profiles set deleted_at = now() - interval '31 days' where id = '${jId}'`);
@@ -204,7 +219,11 @@ try {
 
   // ═══ [4] 매장 삭제 30일 파기 ═══
   console.log('\n[4] 매장 삭제 30일 뒤 — 개인 기록 파기 · 통계·콘텐츠 보관 · 근로기록 유지');
-  const statBefore = psql(`select coalesce(sum(questions), 0) from public.retained_question_stats where industry = '카페·디저트' and month = date_trunc('month', now())::date`);
+  // ★0694: 통계 달 = KST 달(파기 함수와 같은 식 · UTC 달로 기대값을 만들면 늘 맞아 보인다 · A-4).
+  const statBefore = psql(`select coalesce(sum(questions), 0) from public.retained_question_stats where industry = '카페·디저트' and month = date_trunc('month', now() at time zone 'Asia/Seoul')::date`);
+  const kstStat = () => psql(`select concat_ws('|', (select coalesce(sum(questions), 0) from public.retained_question_stats where industry = '카페·디저트' and source = 'chat' and month = '2020-03-01'),
+    (select coalesce(sum(questions), 0) from public.retained_question_stats where industry = '카페·디저트' and source = 'chat' and month = '2020-02-01'))`);
+  const kstBefore = kstStat();
   psql(`update public.units set deleted_at = now() - interval '31 days' where id = '${D.unit_id}'`);
   // [5] 준비: X 매장(XS)의 파기를 일부러 실패시킨다(노하우 삭제에서 예외). X 계정·Z 계정도 30일이 지났다.
   const zd = await Z.rpc('delete_my_account');
@@ -226,13 +245,16 @@ try {
   check('4-3 보관 노하우 표가 있고 매장·작성자 열이 없다', khExists === 't' && khCols === '', `${khExists} ${khCols}`);
   const qi = psql(`select concat_ws('|', attempts, correct, cardinality(knowhow_ids)) from public.retained_quiz_items where payload->>'ask' = '무엇을 잠그나요 d ${s}'`);
   check('4-4 ★문항 글 + 문항별 응시 수·정답 수가 남는다(2회 중 1회 정답 · 노하우 연결)', qi === '2|1|1', qi);
-  const statAfter = psql(`select coalesce(sum(questions), 0) from public.retained_question_stats where industry = '카페·디저트' and month = date_trunc('month', now())::date`);
+  const statAfter = psql(`select coalesce(sum(questions), 0) from public.retained_question_stats where industry = '카페·디저트' and month = date_trunc('month', now() at time zone 'Asia/Seoul')::date`);
   check('4-5 ★질문 통계(업종 × 카테고리 × 월)가 2건 늘었다', Number(statAfter) - Number(statBefore) === 2, `${statBefore} → ${statAfter}`);
+  const kstAfter = kstStat();
+  const [k3b, k2b] = kstBefore.split('|').map(Number), [k3a, k2a] = kstAfter.split('|').map(Number);
+  check('4-5b ★KST 1일 01:30 질문은 그 달(3월)로 묶인다 · 앞 달(2월)은 그대로(0694 · A-4)', k3a - k3b === 1 && k2a - k2b === 0, `3월 ${k3b}→${k3a} · 2월 ${k2b}→${k2a}`);
   const tomb = psql(`select concat_ws('|', (select count(*) from public.attendance where id = 'sr_at_d_${s}'), (select count(*) from public.attendance where id = 'sr_at_do_${s}'),
     (select count(*) from public.member_tenures where unit_id = '${D.unit_id}'), (select (purged_at is not null)::text from public.units where id = '${D.unit_id}'))`);
   check('4-6 ★직원 근로기록(출퇴근·재직 기간)은 남고 사장 본인 출퇴근은 지운다 · 매장 행은 파기 표시만 남는다', tomb === '1|0|1|true', tomb);
   psql('select public.purge_deleted_accounts()');
-  const statAgain = psql(`select coalesce(sum(questions), 0) from public.retained_question_stats where industry = '카페·디저트' and month = date_trunc('month', now())::date`);
+  const statAgain = psql(`select coalesce(sum(questions), 0) from public.retained_question_stats where industry = '카페·디저트' and month = date_trunc('month', now() at time zone 'Asia/Seoul')::date`);
   check('4-7 다시 돌려도 통계가 두 번 쌓이지 않는다', !statAgain.startsWith('psql 오류') && statAgain === statAfter, `${statAfter} → ${statAgain}`);
   // ★개인 식별 내용 정리(약관 제8조 제3항): 보관 노하우·문항 글에 매장 이름·사람 이름·전화·이메일이 없다
   const khDump = psql(`select coalesce((select to_jsonb(r)::text from public.retained_knowhow r where title = '보관 노하우 d ${s}'), '')`);

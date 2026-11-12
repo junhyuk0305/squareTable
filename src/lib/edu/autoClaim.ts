@@ -40,12 +40,17 @@ async function run(uid: string): Promise<string[]> {
     return [];
   }
   const linkIds: string[] = [];
+  const done: string[] = [];
   for (const g of todo) {
     const r = await claimEduLinkGuest(g.key);
     if (r.error) continue; // 다음 로그인에 다시 묻는다(적지 않는다)
     asked.add(askedTag(uid, g.key));
     if (r.data?.claimed) linkIds.push(r.data.linkId);
+    // ★0691(C-1): 서버가 답을 줬으면 그 열쇠는 이제 아무도 못 쓴다(옮긴 손님 행은 원래 열쇠로 안 풀린다).
+    //   공용 기기의 다음 사람이 앞사람 화면을 이어 보지 않게 이 기기에서 지운다. 옮긴 사람은 앱(/link/[id])에서 본다.
+    if (r.data) done.push(g.slot);
   }
   await saveAskedTags(asked);
+  await forgetEduGuests(done);
   return linkIds;
 }

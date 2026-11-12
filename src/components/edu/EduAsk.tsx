@@ -18,8 +18,9 @@ import { KnowhowRows, type KnowhowRow } from '@/components/blocks/KnowhowRows';
 import { SectionLabel } from '@/components/SectionLabel';
 import { answerEduLinkQuestion } from '@/lib/ai/client';
 import { askEduLink, fetchEduLinkAnswers, reportEduLink, sendEduLinkQuestion, type EduAnswer, type EduReportCategory } from '@/lib/db';
-import { loadEduGuest, saveEduGuest, type EduGuest } from '@/lib/edu/guestKey';
-import { placeErrorMessage } from '@/lib/place/errors';
+import { forgetEduGuest, loadEduGuest, saveEduGuest, type EduGuest } from '@/lib/edu/guestKey';
+import { placeErrorCode, placeErrorMessage } from '@/lib/place/errors';
+import { REPORT_BODY_MAX, REPORT_BODY_MIN } from '@/lib/report/form';
 import { EDU_ASK, SPACE_WORDS, eduOwnerWord, type EduPlace } from '@/lib/place/words';
 import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
@@ -34,8 +35,9 @@ import type { SquareBlock } from '@/types';
 /** 서버 묻기 상한과 같은 글자 수(0401 edu_link_ask 1~500자 · 이름 1~20자). */
 const TEXT_MAX = 500;
 const NAME_MAX = 20;
-const REPORT_MIN = 5;
-const REPORT_MAX = 1000;
+// 신고 글자 수 = 매장 신고와 같은 상수(report/form.ts). 서버 char_length 는 코드 포인트로 센다 → [...s].length 로 센다(D-1).
+const REPORT_MIN = REPORT_BODY_MIN;
+const REPORT_MAX = REPORT_BODY_MAX;
 
 /** 요청 열쇠의 난수 부분(소문자·숫자 n자). crypto 가 있으면 그걸 쓰고, 없을 때만 Math.random 으로 떨어진다(/cso L-5). */
 const REQ_CHARS = '0123456789abcdefghijklmnopqrstuvwxyz';
@@ -105,12 +107,14 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard }: {
   const reqRef = useRef<{ text: string; id: string } | null>(null);
   const sendingRef = useRef(false);
 
-  const refresh = useCallback(async (g: EduGuest | null) => {
-    if (!g) return;
+  /** 내 질문을 다시 읽는다. 돌려주는 값 = 읽은 목록(실패하면 null). */
+  const refresh = useCallback(async (g: EduGuest | null): Promise<EduAnswer[] | null> => {
+    if (!g) return null;
     const r = await fetchEduLinkAnswers(token, g.key);
-    if (r.error) { setLoadFailed(true); return; }
+    if (r.error) { setLoadFailed(true); return null; }
     setLoadFailed(false);
     setAnswers(r.data ?? []);
+    return r.data ?? [];
   }, [token]);
 
   useEffect(() => {
@@ -119,7 +123,12 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard }: {
       const g = me ?? (await loadEduGuest(token));
       if (!alive || !g) return;
       setGuest(g);
-      await refresh(g);
+      const list = await refresh(g);
+      // ★0691(C-1): 웹 손님 열쇠는 첫 질문과 함께 생긴다. 그런데 서버가 질문을 하나도 안 주면 그 열쇠는 계정으로 옮겼거나 못 쓰는 열쇠다.
+      //   이 기기에서 지우고 처음 화면(이름 칸)으로 둔다. 공용 기기의 다음 사람이 앞사람 이름으로 묻지 않게 한다. 앱 안 링크(me)는 대상이 아니다.
+      if (!alive || me || !list || list.length > 0) return;
+      await forgetEduGuest(token);
+      if (alive) setGuest(null);
     })();
     return () => { alive = false; };
   }, [token, refresh, me]);
@@ -146,8 +155,14 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard }: {
     const r = await askEduLink(token, guest?.key ?? null, nm, q, reqRef.current.id);
     sendingRef.current = false;
     if (r.error || !r.data) {
+      const code = placeErrorCode(r.error);
       // 서버가 요청 열쇠를 더 받지 않으면(10분 지남 등) 다음 누름은 새 열쇠로 보낸다(/cso L-3).
-      if (r.error?.message === 'invalid_argument') reqRef.current = null;
+      if (code === 'invalid_argument' || code === 'request_expired') reqRef.current = null;
+      // ★0695(A-5): 10분 지난 다시 보내기. 앞 질문은 서버에 이미 있을 수 있다 → 내 질문을 다시 읽고, 같은 글이 있으면 보낸 것으로 보고 입력칸을 비운다.
+      if (code === 'request_expired') {
+        const list = await refresh(guest);
+        if (list?.some((a) => a.queryText.trim() === q)) setText('');
+      }
       setBusy(false);
       showToast(r.error ? placeErrorMessage(r.error, EDU_ASK.askFail) : EDU_ASK.askFail, 'warn');
       return;
@@ -175,7 +190,7 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard }: {
   const submitReport = useCallback(async () => {
     if (!guest || !reportFor) return;
     const body = reportBody.trim();
-    if (body.length < REPORT_MIN) { showToast(placeErrorMessage('invalid_body'), 'warn'); return; }
+    if ([...body].length < REPORT_MIN) { showToast(placeErrorMessage('invalid_body'), 'warn'); return; }
     const r = await reportEduLink(token, guest.key, reportFor, reportCat, body);
     if (r.error) { showToast(placeErrorMessage(r.error), 'warn'); return; }
     showToast(EDU_ASK.reportDone, 'good');

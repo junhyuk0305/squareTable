@@ -96,3 +96,9 @@ Object.assign(MESSAGES, {
   from_space_locked: '공간에서 온 노하우는 고칠 수 없어요. 취소하고 다시 보내 주세요.',
   photo_copy_failed: '사진은 옮기지 못했어요. 노하우는 남겼어요.',
 });
+
+// new-lens 1113
+// 교육 링크 묻기(0695): 10분 지난 다시 보내기. 화면은 내 질문을 다시 읽고, 앞 질문이 있으면 입력칸을 비운다(EduAsk.tsx).
+Object.assign(MESSAGES, {
+  request_expired: '시간이 지나 다시 보내지 못했어요. 아래 내 질문에 없으면 한 번 더 보내 주세요.',
+});

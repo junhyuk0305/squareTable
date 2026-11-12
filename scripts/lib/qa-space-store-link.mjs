@@ -226,6 +226,21 @@ insert into public.playbook_suggestions(id, unit_id, kind, proposer_id, proposer
   ('qa_slc1x_${rnd}', ${q(X)}, 'new', ${q(U.J)}, 'QAJ', 'J 늦은 답', 'pending', 'qa_sluq1_${rnd}');
 update public.unknown_queries set status = 'archived' where id = 'qa_sluq1_${rnd}';
 ${val('대기가 아니던 질문의 상태 변경 = 정리 안 함', `select status from public.playbook_suggestions where id = 'qa_slc1x_${rnd}'`, 'pending')}
+
+-- ★0693(B-3): 공간을 지우면 그 공간이 매장에 보낸 대기 제안을 보관 표로 거둔다(0582 취소 길). 승인된 것·다른 공간 제안은 그대로.
+--   이 묶음은 공간 SP 를 지운다 → 이 트랜잭션의 마지막 검사로 둔다.
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+insert into public.playbook_suggestions(id, unit_id, kind, proposer_id, proposer_name, text, status, source_unit_id, source_entry_id, source_snapshot) values
+  ('qa_sldel_${rnd}', ${q(X)}, 'from_space', ${q(U.A)}, 'QAA', '지울 공간 제안', 'pending', ${q(SP)}, ${q(e(8))},
+     jsonb_build_object('title', '연결 노하우 8', 'photos', jsonb_build_array(${q(SP + '/p8.jpg')}))),
+  ('qa_sloth_${rnd}', ${q(X)}, 'from_space', ${q(U.B)}, 'QAB', '남의 공간 제안', 'pending', ${q(SB)}, ${q(e(5))}, '{}'::jsonb);
+${call('공간 주인 A 가 공간을 지운다', 'A', `select 'done' from public.delete_space(${q(SP)})`, 'ok|done')}
+${val('지운 공간에서 온 대기 제안 0(B-3)', `select count(*) from public.playbook_suggestions where kind = 'from_space' and source_unit_id = ${q(SP)} and status = 'pending'`, '0')}
+${val('거둔 제안은 보관 표로 · 옮긴 사람 = 공간 주인 · 출처 칸 그대로', `select count(*) from public.playbook_suggestions_withdrawn where id = 'qa_sldel_${rnd}' and withdrawn_by = ${q(U.A)} and source_unit_id = ${q(SP)} and source_snapshot ? 'photos'`, '1')}
+${call('지운 공간 제안 사장 승인 = suggestion_not_found', 'D', `select count(*) from public.approve_space_proposal('qa_sldel_${rnd}')`, 'err:suggestion_not_found')}
+${val('지운 공간 제안의 사진 판정 = 원본을 주지 않는다', `select public._proposal_photo_source('qa_sldel_${rnd}', ${q(U.D)})->>'status'`, 'forbidden')}
+${val('이미 승인된 공간 제안은 매장 것으로 남는다', `select (count(*) > 0)::text from public.playbook_suggestions where source_unit_id = ${q(SP)} and status = 'approved'`, 'true')}
+${val('다른 공간에서 온 대기 제안은 그대로', `select status from public.playbook_suggestions where id = 'qa_sloth_${rnd}'`, 'pending')}
 rollback;
 `;
 

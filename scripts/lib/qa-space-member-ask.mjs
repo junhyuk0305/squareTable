@@ -212,11 +212,15 @@ ${call('잠긴 계정은 공간 초대코드도 거절(같은 join 칸)', 'L', '
 ${call('0585 열쇠 없는 코드 = handoff_needs_question(손님 행 없음)', null, 'anon', `select code from public.edu_link_handoff_code(${q(TK2)}, null)`, 'err:handoff_needs_question')}
 ${call('0585 같은 손님 21번 받기 = 다 됨(링크당 20개 상한 없음)', null, 'anon', `select count(distinct x.c) from (select (select h.code from public.edu_link_handoff_code(${q(TK2)}, {P1:g4} || left(g::text, 0)) h) as c from generate_series(1, 21) g) x`, 'ok|21')}
 ${val('0585 같은 손님 살아 있는 코드 = 1', `select count(*) from public.edu_link_handoffs h join public.edu_link_guests g on g.id = h.guest_id where h.link_id = ${q(L2)} and g.name = '둘째손님' and h.used_at is null and h.expires_at > now()`, '1')}
-${call('손님 있는 코드 받기(L1)', null, 'anon', `select count(*) from public.edu_link_handoff_code(${q(TK1)}, {P1:g1})`, 'ok|1')}
+-- ★0691(C-1): g1 손님 행은 위에서 Z 계정으로 옮겼다 → 기기에 남은 g1 열쇠로는 손님 함수가 안 풀린다(다음 사람이 앞사람 기록을 못 본다).
+${call('옮긴 손님 열쇠로 코드 받기 = handoff_needs_question(0691)', null, 'anon', `select count(*) from public.edu_link_handoff_code(${q(TK1)}, {P1:g1})`, 'err:handoff_needs_question')}
+${call('옮긴 손님 열쇠로 답 읽기 = 0(0691)', null, 'anon', `select count(*)::text from public.edu_link_answers(${q(TK1)}, {P1:g1})`, 'ok|0')}
+${call('옮긴 손님 열쇠로 보내기 = question_not_found(0691)', null, 'anon', `select public.edu_link_send(${q(TK1)}, {P1:g1}, {P2:g1}, false)::text`, 'err:question_not_found')}
 ${val('초대코드 발급이 살아 있는 이어받기 코드를 피한다(_new_join_code 본문)', `select (prosrc ~ 'edu_link_handoffs')::text from pg_proc where oid = 'public._new_join_code()'::regprocedure`, 'true')}
 
--- 옮긴 뒤 답 → 그 계정 알림 · 앱 안 링크
-${call('손님 보내기', null, 'anon', `select public.edu_link_send(${q(TK1)}, {P1:g1}, {P2:g1}, false)::text`, 'ok|true')}
+-- 옮긴 뒤 답 → 그 계정 알림 · 앱 안 링크. 옮긴 사람은 계정 길 열쇠(edu_link_me_key)로 보낸다(0691 · 앱 /link/[id] 와 같은 길).
+${call('옮긴 사람 기기 열쇠 받기(보내기용)', 'Z', 'authenticated', `select key || '|' || name from public.edu_link_me_key(${q(L1)})`, 'ok|gk_*|이어받을손님', 'mk0')}
+${call('옮긴 사람이 기기 열쇠로 보내기', null, 'anon', `select public.edu_link_send(${q(TK1)}, {P1:mk0}, {P2:g1}, false)::text`, 'ok|true')}
 ${put('g1uq', `select uq_id from public.edu_guest_questions where cq_id = (select split_part(v, '|', 2) from ma_v where k = 'g1')`)}
 ${call('주인 답', 'O', 'authenticated', `select ((public.reply_unknown_query({V:g1uq}, '세 개요')).uq_id is not null)::text`, 'ok|true')}
 set constraints all immediate;

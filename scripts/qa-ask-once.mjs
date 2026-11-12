@@ -10,6 +10,9 @@
 //   F 못 보는 방의 행은 여전히 세지 않는다(0).
 //   H 열쇠 가진 손님의 둘째 질문 요청 열쇠를 열쇠 없이 다시 보내면 거절 · 앞 열쇠 그대로(/cso M-1).
 //   G submit_unknown_query(0634) 가 남의 자리 id 를 받으면 잠그기 전에 not_member(찾은결함 I1-3).
+//   I 10분 지난 요청 열쇠를 다시 보내면 request_expired(0695 · A-5 · 전 = invalid_argument) · 질문 수 그대로.
+//   J 계정으로 옮긴 손님 행은 원래 손님 열쇠로 안 풀린다(0691 · C-1 · 전 = 앞사람 질문이 보임): 답 목록 0 · 신고 거절 ·
+//     그 열쇠로 물으면 새 손님(새 열쇠) · 옮긴 사람의 계정 길(edu_link_me_key 열쇠)은 그대로 읽는다.
 // 쓰는 법: node scripts/qa-ask-once.mjs --local
 import { spawnSync } from 'node:child_process';
 
@@ -21,7 +24,7 @@ const KS = ['O', 'J'];
 const U = Object.fromEntries(KS.map((k, i) => [k, `00000000-0000-4000-c${rnd.slice(0, 3)}-${rnd}${String(i).padStart(4, '0')}`]));
 const S = Object.fromEntries(KS.map((k, i) => [k, `00000000-0000-4000-d${rnd.slice(0, 3)}-${rnd}${String(i).padStart(4, '0')}`]));
 const SP = `qa_aosp_${rnd}`, ST = `qa_aost_${rnd}`, LK = `qa_aol_${rnd}`, TK = `qa_aotok_${rnd}_aaaaaaaaaaaa`;
-const REQ1 = `req1${rnd}aaaaaaaaaaaa`, REQ2 = `req2${rnd}bbbbbbbbbbbb`, REQ3 = `req3${rnd}cccccccccccc`;
+const REQ1 = `req1${rnd}aaaaaaaaaaaa`, REQ2 = `req2${rnd}bbbbbbbbbbbb`, REQ3 = `req3${rnd}cccccccccccc`, REQ4 = `req4${rnd}dddddddddddd`;
 const ROOM = `qa_aoroom_${rnd}`, F1 = `qa_aof1_${rnd}`, F2 = `qa_aof2_${rnd}`, F3 = `qa_aof3_${rnd}`;
 
 const as = (who, role, body) => `pg_temp.ao_do(${who ? q(U[who]) + '::uuid' : 'null'}, ${who ? q(S[who]) + '::uuid' : 'null'}, ${q(role)}, ${q(body)})`;
@@ -108,6 +111,23 @@ ${out('H', `${as(null, 'anon', `select cq_id from public.edu_link_ask(${q(TK)}, 
 ${out('H 앞 열쇠 그대로', `${as(null, 'anon', `select count(*)::text from public.edu_link_answers(${q(TK)}, {V:k2})`)}`)}
 -- G 남의 공간 id 로 질문 보내기(J 는 SP 멤버가 아니다)
 ${out('G', `${as('J', 'authenticated', `select public.submit_unknown_query('qa_aouq_${rnd}', '남의 공간 질문', ${q(SP)})::text`)}`)}
+-- I 바다(kd)가 새 요청 열쇠로 묻고 → 그 질문을 11분 전으로 당기고 → 같은 요청 열쇠로 다시 보낸다(응답이 끊겨 10분 넘겨 다시 누름 · A-5)
+select ${as(null, 'anon', `select cq_id from public.edu_link_ask(${q(TK)}, {V:kd}, '바다', '오래된 다시 보내기', ${q(REQ4)})`)};
+update public.chat_queries set asked_at = now() - interval '11 minutes' where id = 'cq_' || md5(${q(LK)} || ':' || ${q(REQ4)});
+${out('I', `${as(null, 'anon', `select cq_id from public.edu_link_ask(${q(TK)}, {V:kd}, '바다', '오래된 다시 보내기', ${q(REQ4)})`)}`)}
+${out('I 질문 수', `(select count(*) from public.chat_queries where query_text = '오래된 다시 보내기' and link_id = ${q(LK)})`)}
+-- J 바다(kd) 손님 행을 J 계정으로 옮긴다(edu_link_claim_guest 가 적는 칸과 같다) → 같은 기기에 남은 kd 로 다음 사람이 연다(C-1)
+update public.edu_link_guests set claimed_by = ${q(U.J)}, claimed_at = now()
+ where key_hash = encode(extensions.digest((select v from ao_v where k = 'kd'), 'sha256'), 'hex');
+${out('J 옮긴 손님 행', `(select count(*) from public.edu_link_guests where link_id = ${q(LK)} and claimed_by = ${q(U.J)})`)}
+${out('J 옛 열쇠 답 목록', `${as(null, 'anon', `select count(*)::text from public.edu_link_answers(${q(TK)}, {V:kd})`)}`)}
+select pg_temp.put('jcq', (select q.cq_id from public.edu_guest_questions q join public.edu_link_guests g on g.id = q.guest_id where g.claimed_by = ${q(U.J)} order by q.cq_id limit 1));
+${out('J 옛 열쇠 신고', `${as(null, 'anon', `select public.edu_link_report(${q(TK)}, {V:kd}, {V:jcq}, 'other', '다섯 글자 넘는 신고')::text`)}`)}
+select pg_temp.put('j1', ${as(null, 'anon', `select coalesce(guest_key, '-') from public.edu_link_ask(${q(TK)}, {V:kd}, '다음사람', '공용 PC 다음 사람 질문')`)});
+${out('J 옛 열쇠로 묻기', `(select case when v like 'gk_%' then 'new_key' else v end from ao_v where k = 'j1')`)}
+${out('J 옮긴 행 질문 수 그대로', `(select count(*) from public.edu_guest_questions q join public.edu_link_guests g on g.id = q.guest_id where g.claimed_by = ${q(U.J)})`)}
+select pg_temp.put('jm', ${as('J', 'authenticated', `select key from public.edu_link_me_key(${q(LK)})`)});
+${out('J 계정 길 열쇠로 읽기', `${as(null, 'anon', `select count(*)::text from public.edu_link_answers(${q(TK)}, {V:jm})`)}`)}
 rollback;
 `;
 
@@ -133,5 +153,14 @@ check('F 못 보는 방 = 0', got.F === '0', got.F);
 check('H 둘째 질문 요청 열쇠를 열쇠 없이 = invalid_argument(열쇠 안 바꿈)', /invalid_argument/.test(got.H ?? ''), got.H);
 check('H 앞 열쇠로 그대로 읽는다(질문 셋)', Number(got['H 앞 열쇠 그대로']) >= 2, got['H 앞 열쇠 그대로']);
 check('G 남의 공간 id 로 질문 보내기 = 잠그기 전에 not_member(I1-3)', /not_member/.test(got.G ?? ''), got.G);
+console.log('\n[0691 · 0695] 옮긴 손님 열쇠 · 10분 지난 요청');
+check('I 10분 지난 요청 다시 보내기 = request_expired(A-5)', /request_expired/.test(got.I ?? ''), got.I);
+check('I 질문 수 그대로 1', got['I 질문 수'] === '1', got['I 질문 수']);
+check('J 전제: 손님 행을 계정으로 옮김', got['J 옮긴 손님 행'] === '1', got['J 옮긴 손님 행']);
+check('J 옮긴 뒤 기기의 옛 열쇠로 답 목록 = 0(C-1)', got['J 옛 열쇠 답 목록'] === '0', got['J 옛 열쇠 답 목록']);
+check('J 옛 열쇠로 신고 = question_not_found', /question_not_found/.test(got['J 옛 열쇠 신고'] ?? ''), got['J 옛 열쇠 신고']);
+check('J 옛 열쇠로 물으면 새 손님(새 열쇠)', got['J 옛 열쇠로 묻기'] === 'new_key', got['J 옛 열쇠로 묻기']);
+check('J 옮긴 행에 새 질문이 붙지 않는다(질문 둘 그대로)', got['J 옮긴 행 질문 수 그대로'] === '2', got['J 옮긴 행 질문 수 그대로']);
+check('J 옮긴 사람의 계정 길 열쇠로는 읽는다(질문 둘)', got['J 계정 길 열쇠로 읽기'] === '2', got['J 계정 길 열쇠로 읽기']);
 console.log(`\n${fail ? 'RED' : 'GREEN'} — pass ${pass} · fail ${fail} · skip 0 (AI 호출 0회)`);
 process.exit(fail ? 1 : 0);

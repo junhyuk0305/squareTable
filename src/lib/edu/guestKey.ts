@@ -67,6 +67,11 @@ export async function forgetEduGuests(slots: string[]): Promise<void> {
   }
 }
 
+/** 이 링크의 손님 열쇠를 이 기기에서 지운다. 서버가 더 풀어 주지 않는 열쇠(계정으로 옮김 · 0691)를 화면이 알아챘을 때 쓴다. */
+export async function forgetEduGuest(token: string): Promise<void> {
+  await forgetEduGuests([slot(token)]);
+}
+
 // 이미 답한 (계정 · 열쇠) — 열쇠 원문 대신 짧은 지문으로 둔다(저장소 목록에 열쇠가 두 번 남지 않게).
 const ASKED = 'sqt.eduGuestAsked.v1';
 export const askedTag = (uid: string, key: string): string => `${uid}:${slot(key).slice(PREFIX.length)}`;
