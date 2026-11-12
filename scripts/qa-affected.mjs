@@ -15,7 +15,8 @@
 // 함수·표 하나에 하니스가 WIDE 개 넘게 걸리면 그것으로는 고르지 않고 알려만 준다(셋업에 쓰는 join_by_invite · units 같은 것).
 //
 // 돌리는 법: 고정 계정·브라우저를 쓰는 하니스는 한 번에 하나, 나머지는 JOBS 개씩 같이. 하니스당 15분 넘으면 죽인다.
-//   로컬 대상에서는 --local 을 지원하는 하니스와 백엔드를 안 쓰는 하니스만 돈다. 나머지는 skip 으로 센다.
+//   로컬 대상에서는 로컬 도커의 주소·키를 env 로 넘긴다. --local 을 지원하거나 셸 env 를 먼저 읽는 하니스,
+//   백엔드를 안 쓰는 하니스가 돈다. 나머지(.env 파일만 읽는 것)는 skip 으로 센다.
 // 마지막 줄: GREEN|RED — PASS n · FAIL n · SKIP n · KNOWN n · UNMAPPED n. FAIL 이 있으면 종료 코드 1.
 //   KNOWN = qa-known-red.json 에 적힌 하니스의 실패. UNMAPPED = src·supabase 파일인데 걸리는 하니스가 없는 것.
 import { execFileSync, spawn } from 'node:child_process';
@@ -23,6 +24,7 @@ import { createWriteStream, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { localEnv } from './qa-local-target.mjs';
 
 const SCRIPTS = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(SCRIPTS, '..');
@@ -69,6 +71,7 @@ const harness = Object.keys(npmName).map((file) => {
     srcRefs: [...new Set(t.match(/src\/[\w/.\-[\]()]+/g) ?? [])],
     imports: new Set([...t.matchAll(/['"]\.\/(lib\/[\w-]+\.mjs|qa-[\w-]+\.mjs)['"]/g)].map((m) => `scripts/${m[1]}`)),
     local: /--local|qa-local-target/.test(t),
+    shellEnv: /{ ...process.env }/.test(t), // 셸 env 를 .env 파일보다 먼저 읽는다 → 로컬 주소·키를 env 로 넘기면 로컬로 간다
     pure: !/SUPABASE|lib\/cdp|QA_ORIGIN|localhost:8081/.test(t),
     serial: /lib\/(cdp|qa-fixed-accounts)|owner@|staff2?@|hq@pilot|\.0812/.test(t),
     ai: /functions\/v1\/ai\b|invoke\(\s*['"`]ai['"`]/.test(t),
@@ -115,7 +118,7 @@ const plan = [...picked.keys()].sort().map((id) => {
   if (h.heavy && !HEAVY) skip = '무거움(--heavy)';
   else if (REMOTE) { if (h.ai && !ALLOW_AI) skip = 'AI 호출(--allow-ai)'; else args = ['--allow-remote']; }
   else if (h.local) args = ['--local'];
-  else if (!h.pure) skip = '로컬 미지원';
+  else if (!h.pure && !h.shellEnv) skip = '로컬 미지원';
   return { h, skip, args, why: [...picked.get(id)] };
 });
 
@@ -127,10 +130,11 @@ if (unmapped.length) console.log(`  걸리는 하니스 없음(${unmapped.length
 // ── 5. 돌리기 ────────────────────────────────────────────────
 const count = { pass: 0, fail: 0, skip: plan.filter((p) => p.skip).length, known: 0 };
 const logDir = join(tmpdir(), `qa-affected-${Date.now().toString(36)}`);
+let childEnv = process.env;
 const runOne = (p) => new Promise((done) => {
   const log = join(logDir, `${p.h.id}.log`);
   const out = createWriteStream(log);
-  const child = spawn(process.execPath, [join(SCRIPTS, p.h.file), ...p.args], { cwd: ROOT });
+  const child = spawn(process.execPath, [join(SCRIPTS, p.h.file), ...p.args], { cwd: ROOT, env: childEnv });
   let last = '';
   const onData = (d) => { out.write(d); const l = String(d).trim().split('\n').filter((s) => s.trim()).pop(); if (l) last = l.trim(); };
   child.stdout.on('data', onData);
@@ -155,6 +159,7 @@ const todo = plan.filter((p) => !p.skip);
 if (!LIST && todo.length) {
   mkdirSync(logDir, { recursive: true });
   if (REMOTE && !existsSync(join(ROOT, '.env'))) { console.error('중단: --allow-remote 는 키가 있는 main 체크아웃에서만 쓴다.'); process.exit(2); }
+  if (!REMOTE && todo.some((p) => !p.h.pure)) childEnv = { ...process.env, ...localEnv() }; // 로컬 도커의 주소·키(supabase status)
   const queue = todo.filter((p) => !p.h.serial);
   await Promise.all(Array.from({ length: JOBS }, async () => { while (queue.length) await runOne(queue.shift()); }));
   for (const p of todo.filter((x) => x.h.serial)) await runOne(p);
