@@ -90,6 +90,22 @@ const LAYOUT_PROBE = `(() => {
   });
   const clipped = [];
   const vis = new Map(); // 글자 → 스크롤·잘림 상자로 깎은 보이는 상자
+  // 흐르는 배너(marquee) — overflow hidden 창 안에서 자식을 translateX 로 민다. 가로로 넘친 칩은 흘러 들어오므로 스크롤 축처럼 본다.
+  const marqueeX = (a, as) => as.overflowX === 'hidden' && [...a.children].some((c) => /translateX/.test(c.style.transform || ''));
+  // 지금 보이는 상자(스크롤 상자까지 전부 깎음)와 가장 가까운 스크롤 조상. 다른 스크롤 상자에 든 글자끼리 겹침을 볼 때 쓴다 —
+  //   스크롤 안 글자를 안 깎은 상자로 재면, 스크롤 창 아래로 가려진 글자가 바깥 탭바 글자와 "겹친다"고 잡힌다(실제로는 안 보인다).
+  const nowOf = (e) => {
+    const r = e.getBoundingClientRect();
+    let n = { l: r.left, t: r.top, r: r.right, b: r.bottom }, sc = null;
+    for (let a = e.parentElement; a && a !== document.body; a = a.parentElement) {
+      const as = getComputedStyle(a);
+      if (as.overflowX === 'visible' && as.overflowY === 'visible') continue;
+      if (!sc && (/(auto|scroll)/.test(as.overflowX) || /(auto|scroll)/.test(as.overflowY))) sc = a;
+      const ar = a.getBoundingClientRect();
+      n = { l: Math.max(n.l, ar.left), r: Math.min(n.r, ar.right), t: Math.max(n.t, ar.top), b: Math.min(n.b, ar.bottom) };
+    }
+    return { now: n, sc };
+  };
   for (const e of texts) {
     const t = norm(e.innerText).slice(0, 30);
     const r = e.getBoundingClientRect();
@@ -109,7 +125,7 @@ const LAYOUT_PROBE = `(() => {
       const as = getComputedStyle(a);
       if (as.overflowX === 'visible' && as.overflowY === 'visible') continue;
       const ar = a.getBoundingClientRect();
-      const sx = /(auto|scroll)/.test(as.overflowX), sy = /(auto|scroll)/.test(as.overflowY);
+      const sx = /(auto|scroll)/.test(as.overflowX) || marqueeX(a, as), sy = /(auto|scroll)/.test(as.overflowY);
       const outX = checkX && !sx && (r.left < ar.left - 1 || r.right > ar.right + 1);
       const outY = checkY && !sy && (r.top < ar.top - 1 || r.bottom > ar.bottom + 1);
       if (!reported && (outX || outY)) { clipped.push({ t, why: '부모 밖 ' + (outX ? '가로' : '세로') + ' ' + Math.round(r.width) + '×' + Math.round(r.height) + ' / ' + Math.round(ar.width) + '×' + Math.round(ar.height) }); reported = true; }
@@ -125,13 +141,15 @@ const LAYOUT_PROBE = `(() => {
   const rootOf = (e) => { for (let a = e.parentElement; a; a = a.parentElement) { const p = getComputedStyle(a).position; if (p === 'absolute' || p === 'fixed' || p === 'sticky') return a; } return document.body; };
   // 입력칸도 넣는다 — 감긴 칩이 아래 입력칸을 덮는 경우. 상자는 화면 상자 그대로(입력칸이 잘린 상자 안에 들 일은 드물다).
   const inputs = [...document.querySelectorAll('input:not([type="checkbox"]):not([type="radio"]), textarea')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && !hidden(e); })
-    .map((e) => { const r = e.getBoundingClientRect(); return { e, v: { l: r.left, t: r.top, r: r.right, b: r.bottom }, root: rootOf(e), t: '입력칸 ' + (e.placeholder || '').slice(0, 14) }; });
-  const items = [...texts.map((e) => ({ e, v: vis.get(e), root: rootOf(e), t: norm(e.innerText).slice(0, 20) })), ...inputs].filter((x) => x.v.r - x.v.l > 1 && x.v.b - x.v.t > 1);
+    .map((e) => { const r = e.getBoundingClientRect(); return { e, v: { l: r.left, t: r.top, r: r.right, b: r.bottom }, root: rootOf(e), ...nowOf(e), t: '입력칸 ' + (e.placeholder || '').slice(0, 14) }; });
+  const items = [...texts.map((e) => ({ e, v: vis.get(e), root: rootOf(e), ...nowOf(e), t: norm(e.innerText).slice(0, 20) })), ...inputs].filter((x) => x.v.r - x.v.l > 1 && x.v.b - x.v.t > 1);
   const overlaps = [];
   for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
     const a = items[i], b = items[j];
     if (a.root !== b.root || a.e.contains(b.e) || b.e.contains(a.e)) continue;
-    const w = Math.min(a.v.r, b.v.r) - Math.max(a.v.l, b.v.l), h = Math.min(a.v.b, b.v.b) - Math.max(a.v.t, b.v.t);
+    // 같은 스크롤 상자 안이면 스크롤 축을 안 깎은 상자(내리면 보이는 겹침), 서로 다른 스크롤 상자면 지금 보이는 상자로 잰다.
+    const [av, bv] = a.sc === b.sc ? [a.v, b.v] : [a.now, b.now];
+    const w = Math.min(av.r, bv.r) - Math.max(av.l, bv.l), h = Math.min(av.b, bv.b) - Math.max(av.t, bv.t);
     if (w > 2 && h > 2) overlaps.push('"' + a.t + '" ↔ "' + b.t + '" ' + Math.round(w) + '×' + Math.round(h));
   }
   return { clipped, overlaps };

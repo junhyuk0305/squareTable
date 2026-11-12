@@ -4,9 +4,12 @@ import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
-import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { ButtonStyles, ButtonTextStyles, TouchSize, hitTrim } from '@/lib/theme/button';
 import { Type } from '@/lib/theme/type';
 import { COMPOSER_BAR_H } from '@/components/ChatComposerBar';
+
+// 입력바 ＋·보내기 원 — 보이는 38 · 누르는 상자 44(composerHit).
+const COMPOSER_BTN = 38;
 
 export const styles = StyleSheet.create({
   scroll: { flex: 1 },
@@ -121,7 +124,9 @@ export const styles = StyleSheet.create({
   // 입력바(떠 있는 알약)는 공용 ChatComposerBar 가 그린다 — 업무 채팅·직원 물어보기와 같은 형태.
   // 입력바 좌측 ＋ — 업무 채팅(WorkChat)의 composer 와 같은 형태·같은 치수.
   // 사진·음성·한번에 올리기를 아이콘 3개로 늘어놓던 옛 판본을 이 한 칸으로 접었다.
-  plusBtn: { width: 38, height: 38, borderRadius: Radius.pill, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
+  // 바깥 Pressable = 누르는 상자 44. 음수 여백으로 자리는 보이는 원(38)만큼만 차지한다 → 입력바 높이 그대로.
+  composerHit: { minWidth: TouchSize.inline, minHeight: TouchSize.inline, alignItems: 'center', justifyContent: 'center', margin: hitTrim(COMPOSER_BTN) },
+  plusBtn: { width: COMPOSER_BTN, height: COMPOSER_BTN, borderRadius: Radius.pill, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
 
   // ＋ 토글 메뉴 — 입력바 위에 뜨는 팝업. 바깥을 누르면 닫힌다(menuBackdrop).
   menuBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
@@ -167,7 +172,7 @@ export const styles = StyleSheet.create({
   },
   // ＋ 와 같은 38 — 업무 채팅(WorkChat s.plus/s.send)과 같은 치수다. 44였을 때 두 버튼 크기가
   // 서로 달라 알약 안에서 어긋나 보였다(2026-08-19 실측 후 통일).
-  sendBtn: { width: 38, height: 38, borderRadius: Radius.pill, backgroundColor: BrandColors.brand, alignItems: 'center', justifyContent: 'center' },
+  sendBtn: { width: COMPOSER_BTN, height: COMPOSER_BTN, borderRadius: Radius.pill, backgroundColor: BrandColors.brand, alignItems: 'center', justifyContent: 'center' },
   sendBtnDisabled: { backgroundColor: InkColors.line },
   sendIcon: { fontSize: 22, color: InkColors.bubbleText, fontWeight: '900', lineHeight: 24 },
 });

@@ -967,13 +967,15 @@ export function OwnerCoachChat({
               onPress={() => setMenu((v) => !v)}
               accessibilityRole="button"
               accessibilityLabel={menu ? '추가 메뉴 닫기' : '추가 메뉴 열기'}
-              style={({ pressed }) => [styles.plusBtn, pressed && { opacity: 0.85 }]}
+              style={({ pressed }) => [styles.composerHit, pressed && { opacity: 0.85 }]}
             >
-              {uploadingPhoto ? (
-                <ActivityIndicator size="small" color={InkColors.bubbleText} />
-              ) : (
-                <PlusToggleIcon open={menu} color={InkColors.bubbleText} />
-              )}
+              <View style={styles.plusBtn}>
+                {uploadingPhoto ? (
+                  <ActivityIndicator size="small" color={InkColors.bubbleText} />
+                ) : (
+                  <PlusToggleIcon open={menu} color={InkColors.bubbleText} />
+                )}
+              </View>
             </Pressable>
           )}
           <View style={[styles.inputWrap, inputFocused && styles.inputWrapFocused]}>
@@ -1005,13 +1007,11 @@ export function OwnerCoachChat({
             disabled={!input.trim() || busy}
             accessibilityRole="button"
             accessibilityLabel="보내기"
-            style={({ pressed }) => [
-              styles.sendBtn,
-              (!input.trim() || busy) && styles.sendBtnDisabled,
-              pressed && { opacity: 0.85 },
-            ]}
+            style={({ pressed }) => [styles.composerHit, pressed && { opacity: 0.85 }]}
           >
-            <Text style={styles.sendIcon}>↑</Text>
+            <View style={[styles.sendBtn, (!input.trim() || busy) && styles.sendBtnDisabled]}>
+              <Text style={styles.sendIcon}>↑</Text>
+            </View>
           </Pressable>
         </ChatComposerBar>
       )}

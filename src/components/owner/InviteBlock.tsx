@@ -170,8 +170,9 @@ const s = StyleSheet.create({
   head: { gap: Space.xs },
   desc: { ...Type.desc, fontWeight: '600' },
 
-  codeRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
-  codeCol: { flex: 1, minWidth: 0 },
+  // 큰 글씨에서 코드 6자리가 두 줄로 쪼개지지 않게 — 코드 칸은 줄지 않고, 자리가 모자라면 버튼이 다음 줄로 내려간다.
+  codeRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Space.md },
+  codeCol: { flexGrow: 1, flexShrink: 0, maxWidth: '100%' },
   // 코드 6자리 = 칸 숫자(22/27/900).
   code: { ...Type.numCell, color: InkColors.ink, letterSpacing: 3 },
   copyBtn: {

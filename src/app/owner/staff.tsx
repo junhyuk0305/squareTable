@@ -35,6 +35,8 @@ import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
 
 // 등장 애니메이션(Appear)이 가라앉은 뒤 재야 행 위치가 맞다(schedule.tsx 와 같은 값).
 const FOCUS_SETTLE_MS = 520;
+// 직원 줄 아바타 — 줄 누르는 상자(staffTap)의 음수 여백도 이 값으로 잰다.
+const STAFF_AVATAR = 40;
 
 export default function OwnerStaffScreen() {
   const router = useRouter();
@@ -278,7 +280,7 @@ export default function OwnerStaffScreen() {
               style={[styles.staffRow, styles.staffRowFlat]}
             >
               <Pressable onPress={() => router.push(`/owner/timesheet/${s.id}`)} style={({ pressed }) => [styles.staffTap, pressed && { opacity: 0.6 }]}>
-                <Avatar name={s.name} size={40} fontSize={Type.body.fontSize} />
+                <Avatar name={s.name} size={STAFF_AVATAR} fontSize={Type.body.fontSize} />
                 <View style={styles.nameCol}>
                   <View style={styles.nameRow}>
                     <Text style={styles.staffName} numberOfLines={1}>{s.name}</Text>
@@ -450,7 +452,8 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill, backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep,
   },
   roleBtnOnText: { ...Type.tag, fontWeight: '800', color: InkColors.ink },
-  staffTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 0 },
+  // 출근 기록 진입 — 보이는 높이는 아바타(40)지만 누르는 상자는 44. 위아래 음수 여백으로 줄 높이는 그대로 둔다.
+  staffTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 0, minHeight: TouchSize.inline, marginVertical: hitTrim(STAFF_AVATAR) },
   nameCol: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
   staffName: { ...Type.body, fontWeight: '700', flexShrink: 1 },
