@@ -40,7 +40,7 @@ import {
 } from '@/lib/db';
 import { placeErrorMessage } from '@/lib/place/errors';
 import { EDU_LINK_DAY_OPTIONS, EDU_LINK_DEFAULT_DAYS, createdPlusDays, daysLeft, eduLinkUrl } from '@/lib/edu/link';
-import { SPACE_WORDS } from '@/lib/place/words';
+import { LINK_IN_APP, SPACE_WORDS } from '@/lib/place/words';
 import { copyLinkToast, COPY_LINK_LABEL } from '@/lib/quiz/link';
 import { shareText } from '@/lib/utils/shareText';
 import { confirmAction } from '@/lib/utils/confirm';
@@ -303,7 +303,7 @@ export function EduLinkDetailForm({
 
   const closed = !!link.closedAt;
   const left = daysLeft(link.expiresAt);
-  const expired = !closed && left === 0;
+  const expired = !closed && left === null;
   const editable = !closed && !expired;
   const status = closed ? '닫힘' : expired ? '기간 끝남' : '열림';
 
@@ -363,7 +363,7 @@ export function EduLinkDetailForm({
         {!closed ? (
           <View style={st.kvRow}>
             <Text style={st.kvLabel}>남은 기간</Text>
-            <Text style={st.kvValue}>{left > 0 ? `${left}일 (${endDay(link.expiresAt)}까지)` : '없음'}</Text>
+            <Text style={st.kvValue}>{left === null ? '없음' : left > 0 ? `${left}일 (${endDay(link.expiresAt)}까지)` : LINK_IN_APP.daysLeft(left)}</Text>
           </View>
         ) : null}
         <View style={st.kvRow}>

@@ -22,12 +22,14 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { InkColors } from '@/lib/theme/colors';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
-const statusOf = (l: EduLinkRow) =>
-  l.closedAt
+const statusOf = (l: EduLinkRow) => {
+  const left = daysLeft(l.expiresAt);
+  return l.closedAt
     ? STORE_LINK_LIST.closed
-    : daysLeft(l.expiresAt) > 0
-      ? `${STORE_LINK_LIST.open} · ${STORE_LINK_LIST.daysLeft(daysLeft(l.expiresAt))}`
+    : left !== null
+      ? `${STORE_LINK_LIST.open} · ${STORE_LINK_LIST.daysLeft(left)}`
       : STORE_LINK_LIST.expired;
+};
 
 export default function StoreEduLinkListScreen() {
   const router = useRouter();

@@ -44,7 +44,7 @@ export function useStorePickNote(unitId: string): string | undefined {
   return has ? STORE_LINK.pickNoBrand : undefined;
 }
 
-export const isOpenLink = (l: { closedAt: string | null; expiresAt: string }) => !l.closedAt && daysLeft(l.expiresAt) > 0;
+export const isOpenLink = (l: { closedAt: string | null; expiresAt: string }) => !l.closedAt && daysLeft(l.expiresAt) !== null;
 
 /** 노하우 탭(`/owner/categories`) 맨 위 "교육 링크" 줄. 스위치가 꺼졌거나 사장·매니저가 아니면 아무것도 그리지 않는다. */
 export function StoreEduLinkRow() {

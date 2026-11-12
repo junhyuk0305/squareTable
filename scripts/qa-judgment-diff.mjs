@@ -291,10 +291,64 @@ subPair('trialing 지남·원시 plan single', { plan: 'single', subStatus: 'tri
 subPair('active·paidUntil 남음·single', { plan: 'single', subStatus: 'active', paidUntil: '2026-12-01T00:00:00Z', trialEndsAt: '' }, { plan: 'single', entitled: true, state: 'active' });
 note('S10-요금제', '해석', '호출부(billing.tsx:114·233·332)가 세션 plan(이미 강등)을 넘기면 A 가 실제 경로다. 원시 plan 을 넘기는 호출부가 생기면 B 처럼 잠긴다(subscription.ts 주석 "전면 무료 모드 분기가 여기 없는 이유" · 2026-08-06 강등 결정).');
 
+// ══ S11 교육 링크 남은 날(2026-11-13 A-2): 사장 목록(owner/edu-link statusOf) vs 받은 사람(stores.tsx days) vs 기대 ══
+// 기대 = 한국 날짜 차(끝 날이 오늘이면 "오늘까지" · 초대코드 만료 표시 inviteExpiry 와 같은 규칙).
+{
+  const L = await imp('src/lib/edu/link.ts');
+  const W = await imp('src/lib/place/words.ts');
+  const listSf = sourceOf('src/app/owner/edu-link/index.tsx');
+  const storesSf = sourceOf('src/app/stores.tsx');
+  let daysProp;
+  const walk = (n) => {
+    if (daysProp) return;
+    if (ts.isPropertyAssignment(n) && n.name.getText(storesSf) === 'days') { daysProp = n; return; }
+    ts.forEachChild(n, walk);
+  };
+  walk(storesSf);
+  const at = (s) => Date.parse(s);
+  // 11-13 20:00 KST 에 만든 7일 링크 → 끝 = 11-20 20:00 KST
+  const expiresAt = new Date(at('2026-11-13T20:00:00+09:00') + 7 * 86400000).toISOString();
+  const s11 = (name, nowIso, expect) => compare('S11-교육링크남은날', name, () => {
+    const now = at(nowIso);
+    const dl = (e) => L.daysLeft(e, now);
+    const owner = runTs(`__out = ${findVar(listSf, 'statusOf').initializer.getText(listSf)};`, { STORE_LINK_LIST: W.STORE_LINK_LIST, daysLeft: dl })({ closedAt: null, expiresAt });
+    if (!daysProp) throw new Error('stores.tsx 에 days 속성이 없다');
+    const received = W.LINK_IN_APP.daysLeft(runTs(`__out = (l: any) => (${daysProp.initializer.getText(storesSf)});`, { now, daysLeft: dl, Math, Date })({ expiresAt }));
+    return { a: { owner, received }, b: expect };
+  });
+  s11('만든 직후 11-13 20:05', '2026-11-13T20:05:00+09:00', { owner: `${W.STORE_LINK_LIST.open} · 7일 남음`, received: '7일 남음' });
+  s11('끝 전날 밤 11-19 21:00', '2026-11-19T21:00:00+09:00', { owner: `${W.STORE_LINK_LIST.open} · 1일 남음`, received: '1일 남음' });
+  s11('끝 날 아침 11-20 10:00', '2026-11-20T10:00:00+09:00', { owner: `${W.STORE_LINK_LIST.open} · 오늘까지`, received: '오늘까지' });
+}
+
+// ══ 1-4 isRequestDue 기기 시간대(2026-11-13 A-3): 같은 입력을 TZ 가 다른 자식 프로세스 둘에서 돌린다 ══
+// 한 프로세스에서는 TZ 를 바꿀 수 없다 → 함수 원문(useWorkStore isRequestDue + attendance todayStr)을 넘겨 TZ=UTC·Asia/Seoul 에서 잰다.
+{
+  const { spawnSync } = await import('node:child_process');
+  const workSf = sourceOf('src/lib/store/useWorkStore.ts');
+  const attSf = sourceOf('src/lib/utils/attendance.ts');
+  const code = ts.transpileModule(`${fnText(attSf, 'kstShift')}\n${fnText(attSf, 'todayStr')}\n${fnText(workSf, 'isRequestDue')}`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
+  const cases = [
+    ['KST 금 01:30 · 금요일 요청 · 통과 없음', { recurrence: { weekly: [5] }, createdAt: '2026-11-01T00:00:00Z' }, undefined, '2026-11-13T01:30:00+09:00'],
+    ['KST 금 01:30 · 목·금 요청 · 목 23:00 통과', { recurrence: { weekly: [4, 5] }, createdAt: '2026-11-01T00:00:00Z' }, '2026-11-12T23:00:00+09:00', '2026-11-13T01:30:00+09:00'],
+    ['KST 금 12:00 · 금요일 요청 · 금 10:00 통과', { recurrence: { weekly: [5] }, createdAt: '2026-11-01T00:00:00Z' }, '2026-11-13T10:00:00+09:00', '2026-11-13T12:00:00+09:00'],
+  ];
+  const child = `${code}\nconst cases = ${JSON.stringify(cases)};\nprocess.stdout.write(JSON.stringify(cases.map(([, r, v, n]) => isRequestDue(r, v, Date.parse(n)))));`;
+  const runIn = (TZ) => {
+    const r = spawnSync(process.execPath, ['-e', child], { env: { ...process.env, TZ }, encoding: 'utf8' });
+    if (r.status !== 0) throw new Error(`TZ=${TZ} 자식 실패: ${r.stderr}`);
+    return JSON.parse(r.stdout);
+  };
+  try {
+    const utc = runIn('UTC');
+    const seoul = runIn('Asia/Seoul');
+    cases.forEach(([name], i) => compare('1-4 isRequestDue', `${name} (A=TZ UTC · B=TZ Asia/Seoul)`, () => ({ a: utc[i], b: seoul[i] })));
+  } catch (e) { notRun++; console.log(`ERROR 1-4 isRequestDue ${e?.message ?? e}`); }
+}
+
 skipCase('S5-옛퀴즈', '전체', 'B 가 서버 quiz_legacy_open_courses(0338 SQL) · A 는 WorkBoard.tsx 컴포넌트 렌더 안 인라인(518-552)이라 순수 함수 쌍이 없다');
 skipCase('S6-발송이유', '전체', '두 쪽 다 서버 SQL(quiz_send_status 0301 · due_quiz_sends 0332)');
 skipCase('S7-허브50행', '전체', 'A 가 서버 my_units_notif_data(0346) 행 자르기 · SQL');
-skipCase('1-4 isRequestDue', '기기 시간대', 'new Date().getDay() 기기 시간대 의존 · 한 프로세스에서 TZ 를 바꿔 비교할 수 없다(자식 프로세스 TZ 분리가 필요)');
 
 console.log(`\nSAME ${same} · DIFF ${diff} · skip ${skip} · 실행 못 한 케이스 ${notRun} · AI 호출 0회`);
 process.exit(diff > 0 || notRun > 0 ? 1 : 0);

@@ -22,6 +22,7 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useHubStore } from '@/lib/store/useHubStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { getSectionMeta } from '@/lib/utils/category';
+import { useDayNow } from '@/lib/hooks/useToday';
 import type { HeatCell, HeatGroup, HeatLevel } from '@/components/blocks/Heatmap';
 import { cycleLabel, linkLastDayLabel } from '@/lib/quiz/schedule';
 import { itemsOfCourse } from '@/lib/quiz/courseItems';
@@ -154,8 +155,9 @@ export function useQuizBoard() {
     void useHubStore.getState().hydrateKnowhowStats();
   }, []);
 
-  // "최근 30일 확인" 판정 기준 시각 — 렌더 중 Date.now() 금지(컴파일러 순수성), 마운트 시 1회로 충분.
-  const [now] = useState(() => Date.now());
+  // "최근 30일 확인"·링크 만료 판정 기준 시각 — 렌더 중 Date.now() 금지(컴파일러 순수성).
+  //   마운트 때 재고 날짜(KST)가 바뀌면 다시 잰다(A-1 · 켜 둔 채 자정을 넘기면 어제 기준이었다).
+  const now = useDayNow();
 
   // ── 코스(0108) ───────────────────────────────────────────────────────
   const [courses, setCourses] = useState<TrainingCourse[]>([]);

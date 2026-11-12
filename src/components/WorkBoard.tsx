@@ -13,6 +13,7 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useWorkStore, useDayparts, useDaypartLabels, daypartRoutineTemplates, assigneesOf, isRoutineTaskId, ROUTINE_ID_PREFIX, findDuplicateTask, occursOn, knowhowIdsForTask, quizCountForTask, isCaptureEligible, courseEntriesOf, trainingCourseViews, staffWhoUnderstandTask, understandsTask, taskVisibleTo, isRegularDue, isRequestDue, lastQuizAttemptOf, REGULAR_DUE_DAYS_DEFAULT, type FeedItem, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
 import { staffCanSeeCourse, recheckEntryDue } from '@/lib/quiz/schedule';
 import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
+import { useDayNow } from '@/lib/hooks/useToday';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
@@ -159,8 +160,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const [capture, setCapture] = useState<{ templateId: string; text: string } | null>(null);
   // 이해 확인(④) — 제목 + 퀴즈 소스(노하우들). 통과 처리는 시트가 실제로 푼 노하우 id 를 돌려준다(0111).
   const [selfCheck, setSelfCheck] = useState<{ title: string; sops: QuizInput['sops']; courseId?: string | null; assignmentId?: string; quizProgress?: { answered: number; total: number } | null } | null>(null);
-  // 정기 훈련 due 판정 기준 시각 — 렌더 중 Date.now() 금지(컴파일러 순수성), 마운트 시 1회로 충분(주기=30일).
-  const [trainingNow] = useState(() => Date.now());
+  // 정기 훈련·매주 요청 due 판정 기준 시각 — 렌더 중 Date.now() 금지(컴파일러 순수성).
+  //   마운트 때 재고 날짜(KST)가 바뀌면 다시 잰다. 매주 요청은 하루 단위라 마운트 1회면 자정을 넘긴 뒤 어제 기준이 된다(A-1).
+  const trainingNow = useDayNow();
   const toggleTask = useWorkStore((s) => s.toggleTask);
   const addTask = useWorkStore((s) => s.addTask);
   const editTask = useWorkStore((s) => s.editTask);

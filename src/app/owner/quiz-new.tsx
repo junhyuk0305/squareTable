@@ -32,6 +32,7 @@ import { quizErrorMessage } from '@/lib/quiz/errors';
 import { aiCapNextStep } from '@/lib/config/tiers';
 import { showUpgradeHint } from '@/lib/config/store-policy';
 import { getSectionMeta } from '@/lib/utils/category';
+import { useToday } from '@/lib/hooks/useToday';
 import { UNSECTIONED } from '@/lib/config/sections';
 import { FORMATS } from '@/lib/quiz/formats';
 import { COPY_LINK_LABEL, copyLinkToast, copyQuizLink, makeQuizToken, quizLinkUrl } from '@/lib/quiz/link';
@@ -420,8 +421,8 @@ export default function QuizNewScreen() {
   /** 지금 만들고 있는 줄 = 아직 안 끝난 첫 줄(생성 루프가 위에서부터 순서대로 돈다). */
   const runningIndex = made.findIndex((m) => m.state === 'wait');
 
-  /** 오늘(KST) — 렌더 중 Date.now() 금지(React 컴파일러). 달력 기준일이라 마운트 1회면 충분하다. */
-  const [today] = useState(() => todayKst());
+  /** 오늘(KST) — 렌더 중 Date.now() 금지(React 컴파일러). 날짜가 바뀌면 useToday 가 다시 잰다(A-1). */
+  const today = useToday();
   /** 실제로 나가는 날. 마감일 달력의 하한이 이것이다(마감이 발송보다 빠를 수 없다). */
   const sendOn = sendNow ? today : startAt;
 

@@ -161,9 +161,11 @@ export function isRequestDue(
   now: number,
 ): boolean {
   if (req.recurrence && req.recurrence !== 'once') {
-    if (!req.recurrence.weekly.includes(new Date(now).getDay())) return false;
+    // 요일·같은 날은 KST 로 정한다(todayStr · 기기 시간대 무관 · 2026-11-13 A-3: UTC 기기면 KST 00~09시에 그날 요청이 안 떴다).
+    const today = todayStr(new Date(now));
+    if (!req.recurrence.weekly.includes(new Date(`${today}T00:00:00Z`).getUTCDay())) return false;
     if (!verifiedAt) return true;
-    return new Date(verifiedAt).toDateString() !== new Date(now).toDateString();
+    return todayStr(new Date(verifiedAt)) !== today;
   }
   if (!verifiedAt) return true;
   const t = Date.parse(verifiedAt);

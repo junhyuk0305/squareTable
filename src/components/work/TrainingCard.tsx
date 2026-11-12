@@ -6,6 +6,7 @@ import { Collapse } from '@/components/Collapse';
 import { ProgressPill, type ProgressTone } from '@/components/blocks/ProgressPill';
 import { cardProgressText, type QuizItemProgress } from '@/lib/quiz/checkCopy';
 import { roundLabel } from '@/lib/quiz/metrics';
+import { useToday } from '@/lib/hooks/useToday';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { ButtonStyles } from '@/lib/theme/button';
 import { CardStyles } from '@/lib/theme/card';
@@ -99,8 +100,8 @@ export function TrainingCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   // KST 오늘 "YYYY-MM-DD". 마감은 날짜 비교라 시각이 필요 없다(서버 due_on 도 KST 날짜).
-  // 렌더 중 Date.now() 금지(컴파일러 순수성) → 마운트 1회. 날짜가 바뀌는 순간은 앱이 다시 뜬다.
-  const [kstToday] = useState(() => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10));
+  // 렌더 중 Date.now() 금지(컴파일러 순수성) → useToday 가 날짜가 바뀌면 다시 잰다(A-1 · 탭을 켠 채 자정을 넘겨도 오늘 기준).
+  const kstToday = useToday();
   // 요청(asked)이 주기(due)보다 먼저 — 사람이 기다리는 것부터.
   const next = items.find((it) => it.state === 'asked') ?? items.find((it) => it.state === 'next' || it.state === 'due');
   if (!next) return null;

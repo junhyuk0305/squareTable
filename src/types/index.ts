@@ -238,7 +238,8 @@ export type UnknownQuery = {
   match_attempted: boolean;
   best_match_confidence: number;
   best_match_entry_id: string | null;
-  status: 'pending_owner_answer' | 'resolved_with_entry' | 'dismissed' | 'auto_answered' | 'archived';
+  // DB CHECK unknown_queries_status_check 와 같은 6값(0378·0382 · answered_direct = 노하우 없이 직접 답함).
+  status: 'pending_owner_answer' | 'resolved_with_entry' | 'dismissed' | 'auto_answered' | 'archived' | 'answered_direct';
   fallback_action: string;
   owner_notified_at: string;
   owner_will_answer: boolean;

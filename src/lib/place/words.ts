@@ -416,7 +416,8 @@ export const STORE_LINK_LIST = {
   open: '열림',
   closed: '닫힘',
   expired: '기간 끝남',
-  daysLeft: (n: number) => `${n}일 남음`,
+  /** 받은 사람 묶음과 같은 문구(link.ts daysLeft 가 센 날 · 0 = 오늘까지). */
+  daysLeft: LINK_IN_APP.daysLeft,
   loadFail: '링크를 불러오지 못했어요',
   loading: '링크를 불러오고 있어요…',
 } as const;
