@@ -13,7 +13,7 @@ import { hhmm } from '@/lib/utils/attendance';
 import { useToday } from '@/lib/hooks/useToday';
 import { gradableTasks, staffBehind, type StaffBehind } from '@/lib/utils/taskProgress';
 import { sortByUrgency } from '@/lib/utils/unknownQuery';
-import { isTodoQuestion } from '@/lib/hooks/useOwnerTodoCount';
+import { isTodoQuestion, isTodoSuggestion } from '@/lib/hooks/useOwnerTodoCount';
 import type { UnknownQuery } from '@/types';
 
 export type OwnerDashboardData = {
@@ -231,8 +231,9 @@ export function useOwnerDashboardData(): OwnerDashboardData {
 
   // ── 홈 '다음 행동' 한 자리를 채우는 나머지 신호들 ──────────────────────────
   // 스토어는 전부 owner/_layout에서 이미 hydrate·subscribe 중이라 여기서 새로 부르지 않는다.
+  // 검토할 제안 = 할 일 배지·벨·결재함과 같은 술어(isTodoSuggestion · 내가 올린 제안 제외).
   const pendingSuggestions = useSuggestionStore(
-    (s) => s.suggestions.filter((x) => x.status === 'pending').length,
+    (s) => s.suggestions.filter((x) => isTodoSuggestion(x, userId)).length,
   );
 
   // 오답 판정(표본 5회·오답률 40%)은 useQuizBoard가 SSOT다 — 여기서 다시 정의하면

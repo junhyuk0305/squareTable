@@ -82,7 +82,8 @@ async function ensureSpaceOwner() {
     if (error) throw new Error(`공간 주인 생성 실패: ${error.message}`);
     u = data.user;
   }
-  await admin.from('profiles').update({ name: 'QA공간주인', created_at: '2020-01-01' }).eq('id', u.id).throwOnError();
+  // 전화가 비면 앱이 '가입 폼을 안 거친 계정'으로 보고 /complete-profile 로 보낸다(profileSetup.ts · S5 남은 것). 번호를 채운다.
+  await admin.from('profiles').update({ name: 'QA공간주인', phone: '01099990031', created_at: '2020-01-01' }).eq('id', u.id).throwOnError();
   await admin.from('space_entry_allowlist').upsert({ user_id: u.id, note: 'qa-local-accounts' }, { onConflict: 'user_id', ignoreDuplicates: true }).throwOnError();
   const c = mk();
   const { error: le } = await c.auth.signInWithPassword({ email: SPACE_EMAIL, password: PW });

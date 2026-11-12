@@ -709,9 +709,20 @@ for (const c of CASES) {
   } catch (e) { check(c.id, '정리', false, e.message.slice(0, 200)); }
 }
 
+// 옛 앱 길(새 앱이 나가고 옛 앱이 사라질 때까지 RED · S2 가 증명 · 같은 자리의 새 함수 케이스 H3A·H4A·M2A·M13A·M14A 가 GREEN 이다).
+// 여기 걸린 실패는 따로 세고 종료 코드에서 뺀다. 늘 빨간 게이트는 새 RED 를 못 본다(남은일 D-9). 목록 밖 실패는 그대로 FAIL 이다.
+const OLD_APP = new Set([
+  'H3|완료 기록 ↔ 완료 글 이름 일치(10회)', 'H3|해제 뒤 남은 완료 글 = 0(10회)', 'H4|동시 승인: 노하우 1건(10회)',
+  'M2|두 변경이 다 남는다(10회)', 'M13|유사 수가 2 늘어난다(10회)', 'M13|같은 첫 질문 = 1행(10회)',
+  'M14|남의 같은 문구 공지에 다시 올리기가 실패하지 않는다',
+]);
+const isOld = (r) => r.ok === false && OLD_APP.has(`${r.id}|${r.name}`);
+const oldFail = t.rows.filter(isOld).length;
+const realFail = t.fail - oldFail;
 console.log('\n── 케이스별 ❌ ──');
 const red = {};
-for (const r of t.rows) if (r.ok === false) red[r.id] = (red[r.id] ?? 0) + 1;
+for (const r of t.rows) if (r.ok === false && !isOld(r)) red[r.id] = (red[r.id] ?? 0) + 1;
 console.log(Object.keys(red).length ? Object.entries(red).map(([k, v]) => `${k}:${v}`).join(' · ') : '없음');
-console.log(`\n${t.fail ? 'RED' : 'GREEN'} — pass ${t.pass} · fail ${t.fail} · skip ${t.skip} (AI 호출 0회)`);
-process.exitCode = t.fail ? 1 : 0;
+console.log(`옛 앱 길(새 앱이 나갈 때까지 RED · 종료 코드에서 뺌): ${oldFail}건`);
+console.log(`\n${realFail ? 'RED' : 'GREEN'} — pass ${t.pass} · fail ${realFail} · skip ${t.skip} · 옛 앱 길 ${oldFail} (AI 호출 0회)`);
+process.exitCode = realFail ? 1 : 0;

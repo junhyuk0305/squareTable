@@ -54,7 +54,7 @@ const SH = { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type'
 const s = String(Date.now()).slice(-9);
 const pw = 'Test1234!qa';
 let pass = 0, fail = 0;
-const skip = 0; // 이 하니스에 건너뛰는 검사는 없다. 최종 줄 규약(pass n fail n skip n)만 맞춘다.
+let skip = 0; // 로컬은 ⑦ AI 단계(엣지 ai 답변 = LLM)를 건너뛴다(AGENTS 10-26 · 찾은결함 I1-6).
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  PASS', n, extra)) : (fail++, console.log('  FAIL', n, extra)); };
 
 const kstMonth = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit' })
@@ -230,7 +230,8 @@ async function main() {
     await sweep();
     let a = await alerts(unit, 'seat_lock');
     check('① 잠김 발생 → 1회차 1행', a.length === 1 && a[0].step === 1, JSON.stringify(a.map((x) => x.step)));
-    check('① 문구 = 잠긴 인원 1명', /직원 1명이 앱을 못 쓰고 있어요/.test(a[0]?.title ?? ''), a[0]?.title);
+    // 무료 좌석 상한 = 2(0336 free_staff_cap) · 직원 4명 → 잠긴 2명. 상한 3 때 쓴 기대(1명)가 낡았다(찾은결함 I1-5).
+    check('① 문구 = 잠긴 인원 2명', /직원 2명이 앱을 못 쓰고 있어요/.test(a[0]?.title ?? ''), a[0]?.title);
     check('① 선점됨(발송 시도)', !!a[0]?.claimed_at, String(a[0]?.claimed_at));
     check('① 수신자 = 사장 1명뿐(직원 4명 제외)', a[0]?.recipients === 1, `recipients=${a[0]?.recipients}`);
 
@@ -292,6 +293,7 @@ async function main() {
     const { data: qs } = await O.c.rpc('ai_quota_status');
     const cap = (Array.isArray(qs) ? qs[0] : qs)?.cap_count;
     check('⑦ 유료 캡 = 3000', cap === 3000, `cap=${cap}`);
+    if (IS_LOCAL) { skip += 10; console.log('  SKIP ⑦ AI 80%·100% 10개 — 로컬은 AI 를 부르지 않는다'); } else {
     const t80 = Math.ceil(cap * 0.8);
     await seedAiUsage(unit, t80 - 2);
     check('⑦ 80% 직전 답변 200', (await edgeAnswer(O.c)) === 200);
@@ -310,6 +312,7 @@ async function main() {
     await sweep();
     ai = await alerts(unit, 'ai_cap');
     check('⑦ AI 알림도 스윕이 선점·사장 1명', ai.every((x) => !!x.claimed_at && x.recipients === 1), JSON.stringify(ai));
+    }
 
     // ⑧ 야간 보류 없음(0290 · D10) — 개인 방해금지를 안 켠 매장도 새벽에 바로 선점(별도 매장 — 앞 주기와 안 섞이게)
     const N = await signUp('owner', 'QA야간사장');
@@ -446,6 +449,6 @@ main()
     for (const c of cleanup) { try { await c.rpc('delete_my_account'); } catch { /* best-effort */ } }
     await cleanupSeededPhones(URL, SERVICE, seededPhones);
     // 최종 줄은 FATAL 로 끊겨도 찍는다(예외로 죽은 실행이 "결과 없음"으로 남지 않게).
-    console.log(`\nRESULT: pass ${pass} fail ${fail} skip ${skip}`);
+    console.log(`\nRESULT: pass ${pass} fail ${fail} skip ${skip}${skip ? ' (AI)' : ''}`);
     process.exit(fail === 0 ? 0 : 1);
   });

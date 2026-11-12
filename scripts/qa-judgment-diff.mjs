@@ -116,7 +116,7 @@ const homeCount = runTs(`__out = function (assignments: any, quizProgress: any, 
 
 // useOwnerDashboardData.ts: pendingSuggestions(useSuggestionStore 셀렉터)
 const dashSf = sourceOf('src/lib/hooks/useOwnerDashboardData.ts');
-const dashPending = runTs(`__out = ${hookArg(dashSf, 'pendingSuggestions', 'useSuggestionStore')};`, {});
+const dashPending = runTs(`__out = ${hookArg(dashSf, 'pendingSuggestions', 'useSuggestionStore')};`, { isTodoSuggestion: (x, me) => N.isPendingSuggestionToReview(x, me), userId: 'OWN' });
 
 const TODAY = '2026-11-03';
 const D = (n) => S.addDays(TODAY, n);
@@ -214,7 +214,7 @@ for (const [name, { assignments, progress, err = false, cs = courses, legacy = [
 
 // ══ S4 승인 대기 교대: isSwapAwaitingApproval(벨) vs swapApprovable(홈·근무표·서버 approve_swap 35일) ══
 const acc = (over) => swap({ status: 'accepted', accepted_by: 'B', ...over });
-const s4 = (name, r) => compare('S4-승인대기', name, () => ({ a: N.isSwapAwaitingApproval(r), b: S.swapApprovable(r, TODAY) }));
+const s4 = (name, r) => compare('S4-승인대기', name, () => ({ a: N.isSwapAwaitingApproval(r, TODAY), b: S.swapApprovable(r, TODAY) }));
 s4('S4-1 근무일 오늘-36', acc({ date: D(-36) }));
 s4('S4-2 근무일 오늘-10', acc({ date: D(-10) }));
 s4('S4-3 맞교환 target_date 오늘-36', acc({ kind: 'swap', date: D(1), target_date: D(-36) }));
@@ -277,15 +277,18 @@ sPair('직원이 올린 pending', [sg({})], 'OWN');
 sPair('반영됨', [sg({ status: 'approved' })], 'OWN');
 // 요금제: effectivePlanOf(쓸 수 있는 요금제) vs deriveSubscription(entitled) — 원시 plan 을 넘기는 경우
 const NOW = Date.parse('2026-11-03T00:00:00Z');
-// A = 세션 경로(effectivePlanOf 로 강등한 plan 을 deriveSubscription 에) · B = 원시 plan 을 그대로 deriveSubscription 에.
-const subPair = (name, s) => compare('S10-요금제', name, () => {
+// A = 세션 경로(effectivePlanOf 로 강등한 plan 을 deriveSubscription 에 · 호출부 billing.tsx 가 실제로 쓰는 길).
+// B = 기대 결과(2026-08-06 강등 결정: 기간이 지나면 무료로 내려가 쓸 수 있다 · 남았으면 그 요금제).
+//   원시 plan 을 그대로 넣는 비교는 실제 길이 아니라 늘 DIFF 였다. 게이트로 쓰려고 기대 결과로 바꿨다(남은일 D-11).
+const subPair = (name, s, expect) => compare('S10-요금제', name, () => {
   const plan = SUB.effectivePlanOf(s, NOW);
-  const viaSession = SUB.deriveSubscription({ ...s, plan }, NOW), raw = SUB.deriveSubscription(s, NOW);
-  return { a: { plan, entitled: viaSession.entitled, state: viaSession.state }, b: { plan: s.plan, entitled: raw.entitled, state: raw.state } };
+  const viaSession = SUB.deriveSubscription({ ...s, plan }, NOW);
+  return { a: { plan, entitled: viaSession.entitled, state: viaSession.state }, b: expect };
 });
-subPair('active·paidUntil 지남·원시 plan single', { plan: 'single', subStatus: 'active', paidUntil: '2026-11-01T00:00:00Z', trialEndsAt: '' });
-subPair('trialing 지남·원시 plan single', { plan: 'single', subStatus: 'trialing', paidUntil: '', trialEndsAt: '2026-11-01T00:00:00Z' });
-subPair('active·paidUntil 남음·single', { plan: 'single', subStatus: 'active', paidUntil: '2026-12-01T00:00:00Z', trialEndsAt: '' });
+const FREE_OK = { plan: 'free', entitled: true, state: 'active' };
+subPair('active·paidUntil 지남·원시 plan single', { plan: 'single', subStatus: 'active', paidUntil: '2026-11-01T00:00:00Z', trialEndsAt: '' }, FREE_OK);
+subPair('trialing 지남·원시 plan single', { plan: 'single', subStatus: 'trialing', paidUntil: '', trialEndsAt: '2026-11-01T00:00:00Z' }, FREE_OK);
+subPair('active·paidUntil 남음·single', { plan: 'single', subStatus: 'active', paidUntil: '2026-12-01T00:00:00Z', trialEndsAt: '' }, { plan: 'single', entitled: true, state: 'active' });
 note('S10-요금제', '해석', '호출부(billing.tsx:114·233·332)가 세션 plan(이미 강등)을 넘기면 A 가 실제 경로다. 원시 plan 을 넘기는 호출부가 생기면 B 처럼 잠긴다(subscription.ts 주석 "전면 무료 모드 분기가 여기 없는 이유" · 2026-08-06 강등 결정).');
 
 skipCase('S5-옛퀴즈', '전체', 'B 가 서버 quiz_legacy_open_courses(0338 SQL) · A 는 WorkBoard.tsx 컴포넌트 렌더 안 인라인(518-552)이라 순수 함수 쌍이 없다');

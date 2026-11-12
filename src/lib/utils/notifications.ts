@@ -10,7 +10,9 @@ import type { PendingMember, JoinNotice, JoinDone } from '@/lib/store/useStaffSt
 import type { UnknownQuery, PlaybookSuggestion, PaymentClaim, OwnerAlert } from '@/types';
 // D4 '도와줄 수 있는 질문' 판정 SSOT — 벨 배지·알림 목록이 '내 공간' 리스트와 같은 축을 보게 재사용한다.
 import { answerableQuestions } from '@/lib/store/useUnknownQueueStore';
-import { fmtDateKo, fmtRange } from '@/lib/utils/schedule';
+import { fmtDateKo, fmtRange, swapApprovable } from '@/lib/utils/schedule';
+// 시각 비교 SSOT — 문자열 비교 금지(클라 "…Z" ↔ 서버 "…+00:00" 이 같은 순간인데 사전순이 뒤집힌다 · room.ts 와 같은 함수).
+import { tsMs } from '@/lib/utils/attendance';
 // 요금제 표시명은 tiers.ts 가 SSOT — 알림 문구에서 이름을 재정의하지 않는다.
 import { PLANS } from '@/lib/config/tiers';
 import { SHOW_BILLING } from '@/lib/config/store-policy';
@@ -60,14 +62,14 @@ export type JuniorNotif = {
 /** '모두 읽기'(0078 notif_ack_at) 이후 항목인가 — ack 이전(at <= ack) 항목은 배지·강조 제외.
  *  처리형 항목(합류·질문·제안·교대)은 read_by 로 못 읽으므로 이 시각 비교가 유일한 읽음 축. */
 export const isAfterAck = (at: string | undefined, ackAt?: string | null): boolean =>
-  !ackAt || !at || at > ackAt;
+  !ackAt || !at || tsMs(at) > tsMs(ackAt);
 
 /** 계정 단위 알림(합류 결과 = member_notices approved·rejected)의 읽음 기준 = 내 매장 ack 중 가장 늦은 시각.
  *  특정 매장 ack 에 묶지 않는다 — 반려된 매장엔 unit_member_prefs 행이 없어 그 매장 ackAt 이 영영 null 이다(10-16 결정 3).
  *  어디서 '모두 읽기'를 눌러도(매장 벨·허브) 읽은 것이다. 매장 벨·허브 두 화면이 이 하나를 쓴다. */
 export const accountAckAt = (ackByUnit: Record<string, string | null | undefined>): string | null => {
   let max: string | null = null;
-  for (const at of Object.values(ackByUnit)) if (at && (!max || at > max)) max = at;
+  for (const at of Object.values(ackByUnit)) if (at && (!max || tsMs(at) > tsMs(max))) max = at;
   return max;
 };
 
@@ -105,10 +107,11 @@ export const unreadMentionIds = (feed: FeedItem[], me: string): string[] =>
 /** 남이 나에게 배정한 할일(내가 작성한 건 제외). date에 뜨고, 아직 완료 안 했으면 '해야 할 배정'. */
 export const isAssignedToMe = (t: TaskTemplate, me: string): boolean =>
   assigneesOf(t).includes(me) && !!t.createdBy && t.createdBy !== me;
-/** 나에게 배정된 시각(0272 assignedMeta · D11). 기록이 없으면(옛 행·목업) 만든 시각, 그것도 없으면 오늘 아침.
- *  ★만든 시각만 쓰면 오래된 할일에 오늘 담당자로 들어간 배정이 '모두 읽기' 이전으로 묻혔다. */
+/** 나에게 배정된 시각(0272 assignedMeta · D11). 기록이 없으면(옛 행·목업) 만든 시각, 그것도 없으면 오늘 아침(한국 시각 8시).
+ *  ★만든 시각만 쓰면 오래된 할일에 오늘 담당자로 들어간 배정이 '모두 읽기' 이전으로 묻혔다.
+ *  ★폴백에 시간대를 붙인다 — 없으면 기기 시간대로 읽혀 한국 밖 기기·서버 시각과 9시간 어긋난다. */
 export const assignedAtOf = (t: TaskTemplate, me: string, today: string): string =>
-  t.assignedMeta?.[me]?.at ?? t.createdAt ?? `${today}T08:00:00`;
+  t.assignedMeta?.[me]?.at ?? t.createdAt ?? `${today}T08:00:00+09:00`;
 /** 나를 담당자로 넣은 사람(0272). 기록이 없으면 만든 사람. */
 const assignerOf = (t: TaskTemplate, me: string): string => t.assignedMeta?.[me]?.by ?? t.createdBy ?? '';
 export const isPendingAssignment = (
@@ -557,8 +560,10 @@ export const isPendingSuggestion = (s: PlaybookSuggestion): boolean => s.status 
  *   매니저의 새 답은 원래 승인 없이 바로 노하우라, 자기 공간 노하우를 자기 매장에 승인해도 된다(서버 approve_space_proposal 도 막지 않는다). */
 export const isPendingSuggestionToReview = (s: PlaybookSuggestion, me?: string): boolean =>
   isPendingSuggestion(s) && (!me || s.kind === 'from_space' || s.proposer_id !== me);
-/** 직원이 수락해 사장 승인만 남은 교대. */
-export const isSwapAwaitingApproval = (r: SwapRequest): boolean => r.status === 'accepted';
+/** 직원이 수락해 사장 승인만 남은 교대. 판정 = swapApprovable(근무일 35일 경계 · 홈·근무표·서버 approve_swap 과 같다).
+ *  today 를 모르는 호출(received 없이 부르는 순수 검사)만 수락 여부로 본다. 앱의 벨·목록·허브는 늘 today 를 넘긴다. */
+export const isSwapAwaitingApproval = (r: SwapRequest, today?: string): boolean =>
+  today ? swapApprovable(r, today) : r.status === 'accepted';
 /** 검토가 끝난 입금 신고(승인/반려) — 반려 사유 전달 축(0083 reject_reason).
  *  claimed_by 로 좁히지 않는다: 결제는 매장 단위 소식이라 공동 사장 모두가 알아야 한다
  *  (RLS 가 이미 '그 매장 사장'으로 좁혀 놓았다 — 여기서 또 좁히면 두 번째 사장이 결과를 영영 못 본다). */
@@ -596,7 +601,7 @@ export function ownerUnreadCount(
     pending.filter((p) => isAfterAck(p.created_at, ackAt)).length +
     queue.filter((u) => isPendingQuestion(u) && isAfterAck(u.asked_at, ackAt)).length +
     suggestions.filter((s) => isPendingSuggestionToReview(s, me) && isAfterAck(s.created_at, ackAt)).length +
-    swaps.filter((r) => isSwapAwaitingApproval(r) && isAfterAck(r.updated_at, ackAt)).length +
+    swaps.filter((r) => isSwapAwaitingApproval(r, received?.today) && isAfterAck(r.updated_at, ackAt)).length +
     (me ? feed.filter((f) => isUnreadMention(f, me) && isAfterAck(f.createdAt, ackAt)).length : 0) +
     // 입금 검토 결과 — read 개념이 없어 '모두 읽기'(ack) 전까지 새 소식으로 센다(제안 결과와 동일).
     claims.filter((c) => isPaymentResult(c) && isAfterAck(c.reviewed_at ?? undefined, ackAt)).length
@@ -605,7 +610,7 @@ export function ownerUnreadCount(
 
 /** 사장 알림 목록(시간 역순, MAX_NOTIFS 상한). */
 export function buildOwnerNotifications(args: Parameters<typeof ownerRows>[0], received?: ManagerReceivedArgs): OwnerNotif[] {
-  return [...ownerRows(args), ...(received ? ownerReceivedRows(received) : [])]
+  return [...ownerRows(args, received?.today), ...(received ? ownerReceivedRows(received) : [])]
     .sort((a, b) => b.at.localeCompare(a.at))
     .slice(0, MAX_NOTIFS);
 }
@@ -672,7 +677,7 @@ function ownerRows(args: {
   timeRequests?: ShiftTimeRequest[];
   /** 처리한 합류 신청(0345 · 사장 매장). 없으면 내역 없음. */
   joinDone?: JoinDone[];
-}): OwnerNotif[] {
+}, today?: string): OwnerNotif[] {
   const { queue, suggestions, swaps, pending, nameOf, feed = [], userId: me, ackAt, claims = [], alerts = [], assignments = [], courses = [], timeRequests = [], joinDone = [] } = args;
   const out: OwnerNotif[] = [];
 
@@ -767,7 +772,7 @@ function ownerRows(args: {
   }
 
   for (const r of swaps) {
-    if (!isSwapAwaitingApproval(r)) continue;
+    if (!isSwapAwaitingApproval(r, today)) continue;
     out.push({
       id: `swap_${r.id}`,
       kind: 'swap_approval',
@@ -910,7 +915,7 @@ function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
  *  거기서 답할 수 없어서 뺀다.
  *  제안 검토는 사장 전용(F-2 · 푸시 ownerOnly)이라 동료 제안은 넣지 않는다. 예외 하나 = 내가 공간에서 보낸 노하우(from_space · 결정 193).
  *  그건 내가 승인하는 일이라 노하우 탭 할 일 숫자(isTodoSuggestion)에 세어지는데 벨에 없었다(1112 fix 10). */
-function managerOwnerRows(ownerArgs: Parameters<typeof ownerRows>[0]): ManagerNotif[] {
+function managerOwnerRows(ownerArgs: Parameters<typeof ownerRows>[0], today: string): ManagerNotif[] {
   const answerable = new Set(
     answerableQuestions(ownerArgs.queue, ownerArgs.userId ?? '', ownerArgs.suggestions).map((u) => `q_${u.id}`),
   );
@@ -919,7 +924,7 @@ function managerOwnerRows(ownerArgs: Parameters<typeof ownerRows>[0]): ManagerNo
   );
   const mine = new Set((ownerArgs.timeRequests ?? []).filter((t) => t.staff_id === ownerArgs.userId).map((t) => `shift_time_${t.id}`));
   const out: ManagerNotif[] = [];
-  for (const r of ownerRows(ownerArgs)) {
+  for (const r of ownerRows(ownerArgs, today)) {
     if (r.kind === 'mention' || r.kind === 'swap_approval' || r.kind === 'quiz_done') out.push({ ...r, kind: r.kind });
     // 판정(대기 · 검토 대상)은 ownerRows 의 isPendingSuggestionToReview 그대로. 여기서는 내 공간 제안만 고른다.
     else if (r.kind === 'suggestion' && mySpaceProposals.has(r.id)) out.push({ ...r, kind: 'suggestion' });
@@ -952,7 +957,7 @@ function managerPersonalRows(ownerArgs: Parameters<typeof ownerRows>[0], receive
 
 /** 매니저 행 전부(정렬·상한 전). 목록과 배지가 이 배열 하나를 본다. */
 const managerRows = (ownerArgs: Parameters<typeof ownerRows>[0], received: ManagerReceivedArgs): ManagerNotif[] =>
-  [...managerOwnerRows(ownerArgs), ...buildManagerReceived(received), ...managerPersonalRows(ownerArgs, received)];
+  [...managerOwnerRows(ownerArgs, received.today), ...buildManagerReceived(received), ...managerPersonalRows(ownerArgs, received)];
 
 /** 매니저 알림 목록 = ① 사장 축 중 행동할 수 있는 것 + ② 개인 수신 축. */
 export function buildManagerNotifications(

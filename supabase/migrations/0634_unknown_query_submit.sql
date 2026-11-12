@@ -39,6 +39,10 @@ begin
     raise exception 'invalid_argument';
   end if;
   if v_at > now() + interval '10 minutes' then v_at := now(); end if;
+  -- 잠금 키는 내 매장·내 공간 값만 쓴다(uq_insert 정책과 같은 범위 · 남의 매장 키를 잡지 않는다 · 찾은결함 I1-3).
+  if v_unit is distinct from public.auth_unit_id() and v_unit is distinct from public.auth_space_id() then
+    raise exception 'not_member';
+  end if;
 
   -- race: (매장, 질문 글) 단위로 판정 전에 잠근다. 같은 질문 동시 보내기는 여기서 한 줄로 선다.
   perform pg_advisory_xact_lock(hashtextextended('uq_submit:' || v_unit || ':' || v_text, 634));

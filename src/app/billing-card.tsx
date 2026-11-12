@@ -97,7 +97,9 @@ function ReturnBody() {
         storeCount: plan === 'multi' ? Math.min(Math.max(Number(p.stores) || 2, 1), 15) : 1,
         termsVersion: TERMS_VERSION,
       });
-      if (r.status === 202) {
+      // 응답이 끊긴 경우(network)도 결과를 모른다 — 서버는 결제했을 수 있다. 실패라고 하지 않고 202 와 같이 확인 중으로 둔다.
+      //   보내기 전에 끊긴 것과 가를 수 없지만, 그 경우도 요금제 화면이 다시 읽으면 결제 전 상태가 보인다.
+      if (r.status === 202 || r.body.error === 'network') {
         setPhase('pending');
         setTitle('결제 결과를 확인하고 있어요');
         setDetail('카드사 응답이 늦어지고 있어요. 몇 분 뒤 요금제 화면에서 확인해 주세요. 두 번 결제되지 않아요.');
