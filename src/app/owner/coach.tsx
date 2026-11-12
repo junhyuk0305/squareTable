@@ -190,10 +190,13 @@ export default function OwnerCoachScreen() {
         // ★H4(0631): 다른 관리자가 같은 제안을 먼저 승인했으면(already · 이긴 쪽 노하우가 따로 있다) 방금 만든 내 사본을 보관한다.
         //   안 지우면 같은 노하우가 2건이다. 서버가 노하우 만들기와 승인을 묶지 않은 이유 = 0631 머리말.
         //   이긴 쪽 노하우가 내 것이면(재시도·0520 답 저장이 이미 승인) 지우지 않는다. 반려로 끝났으면 겹칠 노하우가 없어 남긴다.
+        //   보관은 사장만 된다(archive_knowhow → knowhow_delete_ok · 0376). 매니저는 보관을 시도하지 않고 정리를 사장에게 넘긴다.
         if (r.decision === 'already' && r.current === 'approved' && r.resultingEntryId && !entryIds.includes(r.resultingEntryId)) {
-          for (const id of entryIds) archiveEntry(id);
+          if (isOwnerHere) for (const id of entryIds) archiveEntry(id);
           setToastErr(false);
-          setToast('다른 분이 먼저 승인한 제안이에요. 방금 저장한 노하우는 겹쳐서 지웠어요.');
+          setToast(isOwnerHere
+            ? '다른 분이 먼저 승인한 제안이에요. 방금 저장한 노하우는 겹쳐서 지웠어요.'
+            : '다른 분이 먼저 승인한 제안이에요. 겹친 노하우는 사장님이 정리해 주세요.');
           navAfter();
           return true;
         }
@@ -222,7 +225,7 @@ export default function OwnerCoachScreen() {
       else navAfter();
       return true;
     },
-    [answerable, realUq, resolve, answer, noteSaved, sugId, approveSuggestion, archiveEntry, srcTemplate, attachKnowhow, feedId, markPromoted, navAfter, nudgeTargets, targetUnitId],
+    [answerable, realUq, resolve, answer, noteSaved, sugId, approveSuggestion, archiveEntry, isOwnerHere, srcTemplate, attachKnowhow, feedId, markPromoted, navAfter, nudgeTargets, targetUnitId],
   );
 
   // 이미 있는 노하우로 답하기 — 새 노하우를 만들지 않고 질문만 그 노하우로 해결한다.

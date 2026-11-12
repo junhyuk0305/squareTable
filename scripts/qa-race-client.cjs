@@ -189,6 +189,12 @@ async function main() {
     const src = fs.readFileSync(path.join(root, 'src/app/owner/coach.tsx'), 'utf8');
     assert.ok(/archive\w*\(/.test(src) && /already/.test(src.slice(src.indexOf('approveSuggestion(sugId'))), 'coach.tsx 에 already → 보관 갈래가 없다');
   });
+  await test('H4-5 매니저는 보관을 부르지 않고(사장만 보관 · 0376) "지웠어요"라고 말하지 않는다', async () => {
+    const src = fs.readFileSync(path.join(root, 'src/app/owner/coach.tsx'), 'utf8');
+    const br = src.slice(src.indexOf("r.decision === 'already'"), src.indexOf('navAfter();', src.indexOf("r.decision === 'already'")));
+    assert.ok(/if \(isOwnerHere\) for \(const id of entryIds\) archiveEntry\(id\)/.test(br), '보관이 사장 조건 없이 불린다');
+    assert.ok(/isOwnerHere\s*\?\s*'[^']*지웠어요[^']*'\s*:\s*'[^']*사장님이 정리/.test(br), '매니저 문구가 사장 문구와 같다');
+  });
 
   // ── M1·M2 출퇴근 ──
   console.log('— M1·M2 attendance —');
