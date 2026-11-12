@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useRef, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndicator } from 'react-native';
@@ -164,7 +165,7 @@ function AccountEditForm() {
       <Stack.Screen options={{ headerShown: false, title: '프로필 편집' }} />
       <ScreenTitleHeader title="프로필 편집" backFallback />
       <KeyboardShift>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} keyboardShouldPersistTaps="handled">
         <Appear delay={stagger(0)}>
         <SectionGroup title="기본 정보" contentStyle={styles.form}>
           <Text style={styles.label}>이름<Text style={styles.req}> *</Text></Text>
@@ -322,7 +323,7 @@ function AccountEditForm() {
 
         </SectionGroup>
         </Appear>
-        <View style={{ height: 24 }} />
+        <View style={[{ height: 24 }, AppStyles.screenEndSpacer]} />
       </ScrollView>
       </KeyboardShift>
       <BottomSheet visible={phoneOpen} onClose={() => setPhoneOpen(false)}>

@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { SectionGroup } from '@/components/SectionGroup';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
@@ -612,7 +613,7 @@ export default function QuizNewScreen() {
       <ScreenTitleHeader title="퀴즈 만들기" backFallback />
       <KeyboardShift>
       <ScrollView
-        contentContainerStyle={st.scroll}
+        contentContainerStyle={[st.scroll, AppStyles.screenEnd]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >

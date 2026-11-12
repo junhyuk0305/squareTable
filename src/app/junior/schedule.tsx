@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { SectionGroup } from '@/components/SectionGroup';
 import { useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
@@ -147,7 +148,7 @@ export default function JuniorScheduleScreen() {
         onChange={(k) => setTab(k as 'week' | 'swap')}
       />
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
         {!ready ? (
           <ScreenLoading label="근무표를 불러오고 있어요…" />
         ) : scheduleLoadError ? (
@@ -344,7 +345,7 @@ export default function JuniorScheduleScreen() {
         </View>
         {!!config.note && <Text style={styles.infoNote}>{config.note}</Text>}
 
-        <View style={{ height: 12 }} />
+        <View style={[{ height: 12 }, AppStyles.screenEndSpacer]} />
           </>
         )}
       </ScrollView>

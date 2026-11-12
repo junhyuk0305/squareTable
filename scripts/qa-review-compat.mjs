@@ -4,9 +4,10 @@
 // 무엇을 보나
 //   [1] push 엣지 — Expo 요청에 EXPO_ACCESS_TOKEN 을 Authorization: Bearer 로 싣는가(P2-7① 순서의 전제).
 //       시크릿이 비어 있으면 헤더를 빼서 지금처럼 보낸다(Enhanced security 를 켜기 전 동작 그대로).
-//   [2] 허브 이번달 인건비 — db.ts 가 부르는 RPC 의 반복 근무 행이 적용 기간을 실어 직원·급여 화면과 같은 시간을 내는가.
-//       로컬 DB 트랜잭션 안에서 store_solo_local 에 같은 요일 반복을 둘로 나눈 행을 넣고(이번 달 1~10일 4시간 · 11일부터 9시간),
-//       그 매장 사장 권한으로 앱이 부르는 RPC 를 불러 shiftAppliesOn 으로 이번 달 분을 센다. 끝나면 되돌린다(계정 신설 없음).
+//   [2] 옛 앱 허브 근무분 — 옛 앱(1.1.0 이하)이 부르는 owner_labor_inputs_v2 의 반복 근무 행이 적용 기간을 실어 근무표와 같은 시간을 내는가.
+//       로컬 DB 트랜잭션 안에서 store_001(seed-demo 고정 매장 · 예전 store_solo_local 은 로컬 시드에 없다)에 같은 요일 반복을 둘로 나눈 행을 넣고(이번 달 1~10일 4시간 · 11일부터 9시간),
+//       그 매장 사장 권한으로 RPC 를 불러 shiftAppliesOn 으로 이번 달 분을 센다. 끝나면 되돌린다(계정 신설 없음).
+//       2026-11-02 급여 기능을 빼며 새 앱(db.ts)은 이 RPC 를 더 부르지 않는다. 옛 앱이 남는 동안만 보고, DB 축소 때 함께 뺀다.
 // 실행: node scripts/qa-review-compat.mjs
 import { execFileSync } from 'node:child_process';
 import { writeFileSync, readFileSync } from 'node:fs';
@@ -28,12 +29,11 @@ const fetchBlock = fetchAt >= 0 ? push.slice(fetchAt, fetchAt + 600) : '';
 check('Expo 요청 헤더가 토큰을 싣는다', /Authorization/.test(fetchBlock) || /EXPO_HEADERS|expoHeaders/.test(fetchBlock));
 check('토큰이 비면 Authorization 을 빼는 분기가 있다', /EXPO_ACCESS_TOKEN\s*\?/.test(push));
 
-// ── [2] 허브 인건비 RPC 의 기간 ───────────────────────────────────────────────
-console.log('[2] 허브 이번달 인건비 = 기간을 본 근무 시간');
+// ── [2] 옛 앱 허브 근무분 RPC 의 기간 ─────────────────────────────────────────
+console.log('[2] 옛 앱 허브 이번달 근무분 = 기간을 본 근무 시간');
 const dbSrc = read('src/lib/db.ts');
-const fnAt = dbSrc.indexOf('export async function fetchOwnerLaborInputs');
-const rpcName = (dbSrc.slice(fnAt, fnAt + 400).match(/supabase\.rpc\('([a-z0-9_]+)'/) ?? [])[1];
-check('fetchOwnerLaborInputs 가 RPC 를 부른다', !!rpcName, rpcName ?? '');
+const rpcName = 'owner_labor_inputs_v2';
+check('새 앱(db.ts)은 owner_labor_inputs 계열을 부르지 않는다', !/rpc\('owner_labor_inputs/.test(dbSrc));
 
 try {
   execFileSync('npx', ['tsc',
@@ -57,18 +57,18 @@ if (rpcName) {
     out = psql(`
 begin;
 select set_config('qa.today', public.kst_today()::text, true);
-select set_config('qa.owner', (select owner_id::text from public.units where id = 'store_solo_local'), true);
+select set_config('qa.owner', (select owner_id::text from public.units where id = 'store_001'), true);
 select set_config('qa.ms', to_char(date_trunc('month', public.kst_today()), 'YYYY-MM-DD'), true);
 insert into public.shift_templates (id, unit_id, staff_id, weekday, start_time, end_time, valid_from, valid_to) values
-  ('qa-rc-a', 'store_solo_local', '${STAFF}', 1, '09:00', '13:00', '2000-01-01', current_setting('qa.ms')::date + 9),
-  ('qa-rc-b', 'store_solo_local', '${STAFF}', 1, '09:00', '18:00', current_setting('qa.ms')::date + 10, null);
+  ('qa-rc-a', 'store_001', '${STAFF}', 1, '09:00', '13:00', '2000-01-01', current_setting('qa.ms')::date + 9),
+  ('qa-rc-b', 'store_001', '${STAFF}', 1, '09:00', '18:00', current_setting('qa.ms')::date + 10, null);
 select 'TODAY=' || current_setting('qa.today');
 select 'ALL=' || coalesce(jsonb_agg(jsonb_build_object('weekday', weekday, 'start', start_time, 'end', end_time,
   'valid_from', to_char(valid_from, 'YYYY-MM-DD'), 'valid_to', to_char(valid_to, 'YYYY-MM-DD'))), '[]'::jsonb)::text
   from public.shift_templates where staff_id = '${STAFF}';
 set local role authenticated;
 select set_config('request.jwt.claims', json_build_object('sub', current_setting('qa.owner'), 'role', 'authenticated')::text, true);
-select 'RPC=' || coalesce((select r.shifts::text from public.${rpcName}() r where r.unit_id = 'store_solo_local'), '[]');
+select 'RPC=' || coalesce((select r.shifts::text from public.${rpcName}() r where r.unit_id = 'store_001'), '[]');
 rollback;
 `);
   } catch (e) {
@@ -88,7 +88,7 @@ rollback;
     const got = mins(rpcRows);
     check('허브 RPC 가 나눈 두 구간을 모두 준다', rpcRows.length === 2, `행 ${rpcRows.length}`);
     check('허브 RPC 행에 적용 기간이 있다', rpcRows.length > 0 && rpcRows.every((r) => 'valid_from' in r), '');
-    check('이번 달 근무분이 직원·급여 화면 기준과 같다', got === expected, `허브 ${got}분 · 기준 ${expected}분`);
+    check('이번 달 근무분이 근무표 기준과 같다', got === expected, `허브 ${got}분 · 기준 ${expected}분`);
   }
 }
 

@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput, Platform, StyleSheet, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
@@ -387,7 +388,7 @@ export function WorkChat({
         // 이 화면은 네이티브 헤더를 끄고(headerShown:false) 바깥 SafeAreaView 가 top 인셋을 이미 먹으므로,
         // ios-preflight: ok iOS 자동 contentInset('automatic')이 더할 몫이 0 이다 — 이중 여백이 생기지 않는다.
         // 공지 줄이 있으면 그 높이만큼 첫 말풍선을 더 내린다.
-        contentContainerStyle={[s.scroll, { paddingTop: streamTop + (topNotice ? NOTICE_LINE_H : 0) }]}
+        contentContainerStyle={[s.scroll, { paddingTop: streamTop + (topNotice ? NOTICE_LINE_H : 0) }, AppStyles.screenEnd]}
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
         onScroll={onScroll}
@@ -441,7 +442,7 @@ export function WorkChat({
             )}
           </View>
         )}
-        <View style={{ height: 8 }} />
+        <View style={[{ height: 8 }, AppStyles.screenEndSpacer]} />
       </ScrollView>
 
       {/* + 메뉴 */}

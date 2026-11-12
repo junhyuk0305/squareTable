@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // qa-shift-dating.mjs — 0242 근무표 적용 기간(J1) · 순수 계산 + 로컬 DB · 로컬 도커 전용
 //
-// 사용자 결정(J1): 지난 것은 그대로, 앞으로만 바뀐다. 급여 기준은 근무표다(08-26).
+// 사용자 결정(J1): 지난 것은 그대로, 앞으로만 바뀐다.
 // 무엇을 못박나:
-//   [1] 순수 · 골든: 2000-01-01 로 채운 행의 지난 3개월 급여가 옛 판정(요일만)과 새 판정(요일 + 적용 기간)에서 같다.
-//       나눈 행(복사본 ~어제 + 원래 행 오늘~)은 경계 앞뒤 어느 날이든 정확히 1건이다. 실제 computePay 를 쓴다.
+//   [1] 순수 · 골든: 2000-01-01 로 채운 행의 지난 3개월 근무 펼침(날짜·시각 목록)이 옛 판정(요일만)과 새 판정(요일 + 적용 기간)에서 같다.
+//       나눈 행(복사본 ~어제 + 원래 행 오늘~)은 경계 앞뒤 어느 날이든 정확히 1건이다.
+//       2026-11-02 급여 기능을 빼며 급여 합계 비교를 근무 펼침 비교로 바꿨다. 날짜·시각까지 같아야 해서 합계보다 엄격하다.
 //   [2] 옛 앱 사장이 반복 근무를 직접 UPDATE 해도 오류가 없고 오늘부터만 바뀐다(데이터 H1 회귀).
-//       지난 구간은 복사본으로 남고, 지난 예외는 복사본으로 옮겨진다. 지난 3개월 급여가 1원도 안 바뀐다.
-//   [3] 옛 앱 사장이 반복 근무를 직접 DELETE 해도 오류가 없고 "오늘부터 그만"이 된다. 지난 급여는 그대로다.
+//       지난 구간은 복사본으로 남고, 지난 예외는 복사본으로 옮겨진다. 지난 3개월 근무 펼침이 그대로다.
+//   [3] 옛 앱 사장이 반복 근무를 직접 DELETE 해도 오류가 없고 "오늘부터 그만"이 된다. 지난 근무는 그대로다.
 //   [4] 클라이언트가 적용 기간을 직접 고치지 못한다(기간은 RPC 로만).
 //   [5] 첫 반복 근무 시작일(데이터 M1): 그 직원에게 어제 이전에 만든 반복 행이 없으면 매장 합류일(KST)부터다.
 //       옛 앱은 근무마다 요청을 따로 보내므로 같은 날 넣은 행은 모두 합류일부터다. 예전 행이 있으면 오늘부터다.
@@ -24,12 +25,10 @@
 //   [9] 의 purge_deleted_accounts 는 로컬 DB 전체에서 30일 지난 소프트삭제를 파기한다(로컬이라 괜찮다).
 // 실행: node scripts/qa-shift-dating.mjs   자가정리(계정·매장·OTP 시드).
 import { createClient } from '@supabase/supabase-js';
-import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
-import { rm } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { tmpdir } from 'node:os';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -53,25 +52,6 @@ if (!/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(URL_)) {
   process.exit(2);
 }
 console.log(`대상 DB = 로컬 ${URL_}`);
-
-// ── 실제 급여 함수(payroll.ts)를 임시 트랜스파일해서 쓴다(qa-payroll 과 같은 방식 · 로직 중복 없음) ──
-const OUT = mkdtempSync(join(tmpdir(), 'qa-shift-dating-'));
-try {
-  execFileSync('npx', ['tsc',
-    'src/lib/utils/attendance.ts', 'src/lib/utils/schedule.ts', 'src/lib/utils/payroll.ts',
-    '--outDir', OUT, '--module', 'es2022', '--target', 'es2022',
-    '--moduleResolution', 'node', '--skipLibCheck', '--ignoreConfig', '--ignoreDeprecations', '6.0',
-  ], { cwd: ROOT, stdio: 'pipe', shell: process.platform === 'win32' });
-} catch { /* 경고로 비-0 이 나와도 산출물로 판정 */ }
-for (const f of ['payroll.js', 'schedule.js']) {
-  const fp = join(OUT, f);
-  writeFileSync(fp, readFileSync(fp, 'utf8')
-    .split("'./attendance'").join("'./attendance.js'")
-    .split("'./schedule'").join("'./schedule.js'")
-    .split("'@/lib/utils/attendance'").join("'./attendance.js'"), 'utf8');
-}
-writeFileSync(join(OUT, 'package.json'), '{"type":"module"}');
-const { computePay, shiftsToPayRecords } = await import(pathToFileURL(join(OUT, 'payroll.js')));
 
 const mk = () => createClient(URL_, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
 const admin = createClient(URL_, SRV, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -109,10 +89,10 @@ const expand = (rows, exc, staff, dates) => {
   }
   return out;
 };
-const W = 10320;
-const RULES = { breakDeduction: true, nightAllowance: true, overtimeAllowance: true, weeklyHolidayPay: true, extraAllowance: 0 };
-const NOW = `${T}T00:00:00+09:00`;
-const pay = (rows, exc, staff, dates) => computePay(shiftsToPayRecords(expand(rows, exc, staff, dates)), W, RULES, NOW).total;
+/** 근무 펼침 — 그 기간 그 직원이 서기로 된 근무를 "날짜 시작-끝" 목록 하나로 만든다. 같으면 지난 근무가 그대로다. */
+const spread = (rows, exc, staff, dates) => expand(rows, exc, staff, dates)
+  .map((x) => `${x.date} ${String(x.start).slice(0, 5)}-${String(x.end).slice(0, 5)}`).sort().join(',');
+const cnt = (sp) => (sp ? sp.split(',').length : 0);
 const PAST = range(addDays(T, -91), addDays(T, -1)); // 지난 3개월
 
 const phones = ['0181', '0182', '0183', '0184', '0185'].map((p) => `${p}${s.slice(0, 7)}`);
@@ -139,14 +119,14 @@ const store = async (c, name) => {
 
 try {
   // ═══════ [1] 순수 · 골든 (DB 없음) ═══════
-  console.log('[1] 순수 — 2000-01-01 로 채운 행 · 나눈 행의 급여가 옛 판정과 같다');
+  console.log('[1] 순수 — 2000-01-01 로 채운 행 · 나눈 행의 근무 펼침이 옛 판정과 같다');
   {
     const legacy = [{ id: 'g1', staff_id: 'S', weekday: 1, shift_date: null, start_time: '09:00', end_time: '18:00' },
                     { id: 'g2', staff_id: 'S', weekday: 4, shift_date: null, start_time: '22:00', end_time: '06:00' }];
     const backfilled = legacy.map((t) => ({ ...t, valid_from: '2000-01-01', valid_to: null }));
     const exc = [{ template_id: 'g1', date: PAST.find((d) => dow(d) === 1) }];
-    const a = pay(legacy, exc, 'S', PAST), b = pay(backfilled, exc, 'S', PAST);
-    check('1-1 ★골든: 백필 행의 지난 3개월 급여 = 옛 판정(요일만)', a === b && a > 0, `old=${a} new=${b}`);
+    const a = spread(legacy, exc, 'S', PAST), b = spread(backfilled, exc, 'S', PAST);
+    check('1-1 ★골든: 백필 행의 지난 3개월 근무 펼침 = 옛 판정(요일만)', a === b && cnt(a) > 0, `old=${cnt(a)}건 new=${cnt(b)}건`);
     const split = [
       { ...backfilled[0], id: 'g1c', valid_to: addDays(T, -1) },
       { ...backfilled[0], valid_from: T },
@@ -154,8 +134,8 @@ try {
     ];
     const excSplit = [{ template_id: 'g1c', date: exc[0].date }];
     const around = range(addDays(T, -91), addDays(T, 35));
-    check('1-2 같은 시각으로 나눈 행 = 나누기 전과 같은 급여(앞뒤 126일)',
-      pay(split, excSplit, 'S', around) === pay(backfilled, exc, 'S', around), `${pay(split, excSplit, 'S', around)} vs ${pay(backfilled, exc, 'S', around)}`);
+    check('1-2 같은 시각으로 나눈 행 = 나누기 전과 같은 근무 펼침(앞뒤 126일)',
+      spread(split, excSplit, 'S', around) === spread(backfilled, exc, 'S', around), `${cnt(spread(split, excSplit, 'S', around))}건 vs ${cnt(spread(backfilled, exc, 'S', around))}건`);
     const bad = range(addDays(T, -21), addDays(T, 21)).filter((d) => dow(d) === 1)
       .filter((d) => split.filter((t) => t.weekday === 1 && applies(t, d)).length !== 1);
     check('1-3 경계 앞뒤 어느 월요일이든 반복 행이 정확히 1건(중복 0 · 빈 날 0)', bad.length === 0, bad.join(','));
@@ -209,12 +189,12 @@ try {
     await legacy(A1, UNIT, J.id, wdT, '09:00', '18:00');
     await exception(A1, UNIT, excA1);
     const before = await raw(UNIT);
-    const g0 = pay(before.rows, before.exc, J.id, PAST);
+    const g0 = spread(before.rows, before.exc, J.id, PAST);
     const up = await O.c.from('shift_templates').update({ start_time: '10:00', end_time: '20:00' }).eq('id', A1).select('id');
     check('2-1 옛 앱 경로(update().select) 오류 없음 · 1행', !up.error && up.data?.length === 1, up.error?.message ?? `rows=${up.data?.length}`);
     const after = await raw(UNIT);
-    const g1 = pay(after.rows, after.exc, J.id, PAST);
-    check('2-2 ★지난 3개월 급여가 그대로다(J1)', g1 === g0 && g0 > 0, `before=${g0} after=${g1}`);
+    const g1 = spread(after.rows, after.exc, J.id, PAST);
+    check('2-2 ★지난 3개월 근무 펼침이 그대로다(J1)', g1 === g0 && cnt(g0) > 0, `before=${cnt(g0)}건 after=${cnt(g1)}건`);
     const orig = after.rows.find((r) => r.id === A1);
     const copy = after.rows.find((r) => r.id !== A1 && r.staff_id === J.id && r.weekday === wdT);
     check('2-3 원래 id 는 오늘부터 새 시각', orig?.valid_from === T && orig?.start_time === '10:00' && orig?.end_time === '20:00',
@@ -251,8 +231,8 @@ try {
       const v2rows = v2Shifts.map((x) => ({ id: x.id, staff_id: x.staff_id, weekday: x.weekday, shift_date: x.date,
         start_time: x.start, end_time: x.end, valid_from: x.valid_from, valid_to: x.valid_to }));
       const v2exc = ((v2.data ?? []).find((r) => r.unit_id === UNIT)?.exceptions ?? []);
-      check('2-12 ★v2 로 다시 계산해도 지난 3개월 급여 = 수정 전', pay(v2rows, v2exc, J.id, PAST) === g0, `${pay(v2rows, v2exc, J.id, PAST)} vs ${g0}`);
-    } else check('2-12 ★v2 로 다시 계산해도 지난 3개월 급여 = 수정 전', false, v2.error.message);
+      check('2-12 ★v2 로 다시 펼쳐도 지난 3개월 근무 = 수정 전', spread(v2rows, v2exc, J.id, PAST) === g0, `${cnt(spread(v2rows, v2exc, J.id, PAST))}건 vs ${cnt(g0)}건`);
+    } else check('2-12 ★v2 로 다시 펼쳐도 지난 3개월 근무 = 수정 전', false, v2.error.message);
     const mv2 = await J.c.rpc('my_cross_summary_v2');
     const mv2Shifts = (mv2.data ?? []).find((r) => r.unit_id === UNIT)?.shifts ?? [];
     check('2-13 my_cross_summary_v2 는 본인 이력 전부(복사본 포함)', !mv2.error && mv2Shifts.some((x) => x.id === copy?.id),
@@ -268,11 +248,11 @@ try {
     const excDay = addDays(T, -6); // dow = wd2
     await exception(A2, UNIT, excDay);
     const before = await raw(UNIT);
-    const g0 = pay(before.rows, before.exc, J.id, PAST);
+    const g0 = spread(before.rows, before.exc, J.id, PAST);
     const del = await O.c.from('shift_templates').delete().eq('id', A2).select('id');
     check('3-1 옛 앱 경로(delete().select) 오류 없음 · 1행', !del.error && del.data?.length === 1, del.error?.message ?? `rows=${del.data?.length}`);
     const after = await raw(UNIT);
-    check('3-2 ★지난 3개월 급여가 그대로다', pay(after.rows, after.exc, J.id, PAST) === g0, `before=${g0} after=${pay(after.rows, after.exc, J.id, PAST)}`);
+    check('3-2 ★지난 3개월 근무 펼침이 그대로다', spread(after.rows, after.exc, J.id, PAST) === g0 && cnt(g0) > 0, `before=${cnt(g0)}건 after=${cnt(spread(after.rows, after.exc, J.id, PAST))}건`);
     const copy = after.rows.find((r) => r.staff_id === J.id && r.weekday === wd2);
     check('3-3 지난 구간 복사본(~어제)이 남고 원래 id 는 지워진다',
       !after.rows.some((r) => r.id === A2) && copy?.valid_to === addDays(T, -1), JSON.stringify(copy ?? null));
@@ -502,7 +482,7 @@ try {
     check('8-3 미래에만 있던 반복 행(시작일 > 오늘)은 지운다', !after.some((x) => !x.shift_date && x.valid_from > T),
       JSON.stringify(after.filter((x) => !x.shift_date && x.valid_from > T)));
     check('8-4 오늘 이후 날짜 지정 행은 지운다', !after.some((x) => x.shift_date && x.shift_date > T));
-    check('8-5 ★지난 날짜 지정 행은 남긴다(마지막 급여 근거)', after.some((x) => x.shift_date === addDays(T, -3)),
+    check('8-5 ★지난 날짜 지정 행은 남긴다(지난 근무 기록)', after.some((x) => x.shift_date === addDays(T, -3)),
       `before=${before.length} after=${after.length}`);
   }
 
@@ -547,5 +527,4 @@ try {
   try { await cleanupSeededPhones(URL_, SRV, phones); } catch { /* best-effort */ }
 }
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
-await rm(OUT, { recursive: true, force: true }).catch(() => {});
 process.exit(fail ? 1 : 0);

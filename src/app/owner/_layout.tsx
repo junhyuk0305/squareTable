@@ -7,7 +7,6 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
-import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
@@ -34,7 +33,6 @@ function hydrateOwnerStores() {
   useUnknownQueueStore.getState().hydrate();
   useWorkStore.getState().hydrate();
   useAttendanceStore.getState().hydrate();
-  usePayrollStore.getState().hydrate();
   useStaffStore.getState().hydrate();
   useScheduleStore.getState().hydrate();
   // 알림벨 배지가 '검토대기 제안'을 홈/어느 탭에서든 실시간 반영하도록 레이아웃에서 하이드레이트+구독.
@@ -196,7 +194,7 @@ export default function OwnerLayout() {
       <Stack.Screen name="work" options={{ title: '업무 채팅', animation: 'none' }} />
       <Stack.Screen name="settings" options={{ title: '설정', animation: 'none' }} />
       {/* 서브화면 — 전역 headerLeft(HeaderBackButton) 사용 */}
-      <Stack.Screen name="staff" options={{ title: '직원·급여' }} />
+      <Stack.Screen name="staff" options={{ title: '직원' }} />
       {/* 퀴즈는 2026-09-13 부터 탭 루트다 — 다른 탭 루트와 같이 전환 애니메이션 없음. */}
       <Stack.Screen name="training" options={{ title: '퀴즈', animation: 'none' }} />
       {/* 물어보기(사장) — 직원 물어보기 재사용, 업무 채팅에서 진입(WorkBoard). 매니저는 /junior/chat 을 쓴다(F-2) */}
@@ -207,7 +205,6 @@ export default function OwnerLayout() {
       <Stack.Screen name="brand-consent" options={{ title: '본사 연결 요청' }} />
       <Stack.Screen name="brand-link" options={{ title: '본사 연결' }} />
       <Stack.Screen name="timesheet/[staffId]" options={{ title: '출근 기록' }} />
-      <Stack.Screen name="payroll" options={{ title: '급여 설정' }} />
       <Stack.Screen name="knowledge" options={{ title: '내 노하우' }} />
       {/* J10(0248) 노하우 보관함 — 사장만(매니저 허용 목록에 없다) */}
       <Stack.Screen name="templates" options={{ title: '노하우 템플릿' }} />

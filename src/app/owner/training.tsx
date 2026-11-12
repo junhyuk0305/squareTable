@@ -43,6 +43,7 @@ import { useGuideOnce } from '@/lib/store/useGuideStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
+import { AppStyles, appAlertSpacing } from '@/lib/theme/appDesign';
 import { CardStyles } from '@/lib/theme/card';
 import { EmptyStyles } from '@/lib/theme/empty';
 
@@ -292,7 +293,7 @@ export default function OwnerTrainingScreen() {
       {/* ★목록과 + 버튼을 탭바 **위** 상자에 담는다 — + 버튼(absolute)의 바닥 기준이 이 상자라 탭바에 안 가린다.
           예전엔 탭바까지 포함한 화면 전체가 기준이라 + 가 탭바 밑으로 들어갔다(2026-10-14). 노하우 탭과 같은 구조. */}
       <View style={st.body}>
-      <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[st.scroll, !(ready && stats.publishedEntries > 0) && AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
         {/* ★전부 도착 전엔 로딩이다. 코스만 기다리면 "초안"이 먼저 떴다가 "3/5명"으로 뒤바뀐다
             (아직 안 온 것을 없는 것처럼 말하는 것 = 08-07 정본 §0-1 이 금지한 바로 그것). */}
         {loadError ? (
@@ -381,6 +382,7 @@ export default function OwnerTrainingScreen() {
                 고쳐야 할 것이 가장 위다 — 히트맵 아래에 있으면 스크롤해야 보였다.
                 0건이면 줄째로 안 그린다(AlertRow 가 count<=0 에서 null 을 돌려준다). */}
             <AlertRow
+              style={appAlertSpacing(Space.md)}
               label="응시 중인 퀴즈 중 고칠 것"
               count={fix.count}
               unit="건"

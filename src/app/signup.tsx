@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { SectionGroup } from '@/components/SectionGroup';
 import { useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
@@ -54,7 +55,7 @@ export default function SignupScreen() {
   const [bizNo, setBizNo] = useState('');
   const [industry, setIndustry] = useState('');
 
-  // 동의 항목 — 정본은 consent.ts(J12). 역할별 행은 체크리스트가 그린다(직원은 근로·급여정보 추가).
+  // 동의 항목 — 정본은 consent.ts(J12). 역할별 행은 체크리스트가 그린다(직원은 근로정보 추가).
   const [consent, setConsent] = useState<ConsentChecked>({});
 
   const [busy, setBusy] = useState(false);
@@ -185,7 +186,7 @@ export default function SignupScreen() {
       <Stack.Screen options={{ headerShown: false, title: '회원가입', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
       <ScreenTitleHeader title="회원가입" backFallback />
       <KeyboardShift>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} keyboardShouldPersistTaps="handled">
         {/* 역할 — 가입 첫 단계에서 어떤 사용자인지 분명히 고른다 */}
         <Appear delay={0}>
         <SectionGroup title="어떤 분이세요?">

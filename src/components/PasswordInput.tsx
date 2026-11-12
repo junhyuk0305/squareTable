@@ -1,5 +1,5 @@
 import { forwardRef, useState } from 'react';
-import { View, TextInput, Pressable, StyleSheet, type TextInputProps } from 'react-native';
+import { View, TextInput, Pressable, StyleSheet, Platform, type TextInputProps } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { InkColors } from '@/lib/theme/colors';
 
@@ -27,5 +27,5 @@ export const PasswordInput = forwardRef<TextInput, TextInputProps>(function Pass
 const styles = StyleSheet.create({
   wrap: { position: 'relative', justifyContent: 'center' },
   input: { paddingRight: 48 },
-  eye: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 44, alignItems: 'center', justifyContent: 'center' },
+  eye: { position: 'absolute', right: 0, top: 0, bottom: 0, width: Platform.OS === 'web' ? 44 : 48, alignItems: 'center', justifyContent: 'center' },
 });

@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { SectionGroup } from '@/components/SectionGroup';
 import { useMemo, useState, type ReactNode } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
@@ -123,7 +124,7 @@ export function RoomDrawer({
         )}
       </View>
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[s.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
         {/* ① 정체성 — 카드가 아닌 히어로. 이 방이 무엇인지 한눈에. */}
         <Appear delay={0} style={s.identity}>
           {look.imageUrl ? (
@@ -243,7 +244,7 @@ export function RoomDrawer({
             )}
           </View>
         )}
-        <View style={{ height: Space.xl }} />
+        <View style={[{ height: Space.xl }, AppStyles.screenEndSpacer]} />
       </ScrollView>
     </View>
   );

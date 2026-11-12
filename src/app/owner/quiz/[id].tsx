@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { SectionGroup } from '@/components/SectionGroup';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
@@ -431,7 +432,7 @@ export default function QuizDetailScreen() {
         }
       />
       <KeyboardShift>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[st.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
         {/* 본사 사본이면 배지·새 버전(교체/유지)·숨기기 줄(P5 · 노하우 수정 화면과 같은 부품). 사본이 아니면 아무것도 안 그린다. */}
         <BrandCopyPanel kind="course" copy={course} onChanged={reloadCourses} />
         {/* D4 — 낡은 문항. 옛 정답이 그대로 나가는 상태라 결과보다 먼저 말한다. */}

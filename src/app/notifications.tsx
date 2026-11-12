@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useEffect } from 'react';
 import { useForegroundRefresh } from '@/lib/app/useForegroundRefresh';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
@@ -55,7 +56,7 @@ export default function HubNotificationsScreen() {
       {!ready ? (
         <ScreenLoading label="알림을 불러오고 있어요…" />
       ) : (
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
           <Appear delay={stagger(0)}>
             <NotificationList
               rows={listRows}
@@ -70,7 +71,7 @@ export default function HubNotificationsScreen() {
               }}
             />
           </Appear>
-          <View style={{ height: 12 }} />
+          <View style={[{ height: 12 }, AppStyles.screenEndSpacer]} />
         </ScrollView>
       )}
     </SafeAreaView>

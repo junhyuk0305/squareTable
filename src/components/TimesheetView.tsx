@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -5,10 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import { fetchAttendanceEdits, type AttendanceEdit } from '@/lib/db';
-import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { computePay, shiftsToPayRecords, reconcileSchedule, wageForMonth, settingsForMonth, payWindow } from '@/lib/utils/payroll';
-import { fmtPeriodRange } from '@/lib/utils/payPeriod';
+import { reconcileSchedule } from '@/lib/utils/reconcile';
 import { useScheduleStore, scheduledShiftsFor, pendingTimeRequests } from '@/lib/store/useScheduleStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
@@ -18,8 +17,8 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { BadgeStyles } from '@/lib/theme/badge';
-import { fmtDuration, won, hhmm, todayStr, normalizeTime, shiftMonth, daysInMonth, maskHHMM } from '@/lib/utils/attendance';
-import { checkShiftTime, isOvernight } from '@/lib/utils/schedule';
+import { fmtDuration, hhmm, todayStr, normalizeTime, shiftMonth, daysInMonth, maskHHMM } from '@/lib/utils/attendance';
+import { checkShiftTime, isOvernight, monthDates } from '@/lib/utils/schedule';
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -29,14 +28,6 @@ const MISMATCH_SHOWN = 3;
 type Props = {
   /** 대상 직원 id(점주는 [staffId], 직원은 본인 userId) */
   staffId: string;
-  /**
-   * 이 직원의 시급. **정해지지 않았으면 `null`** — 최저시급으로 대신 계산하지 않는다.
-   * 예전엔 미설정이면 `DEFAULT_HOURLY_WAGE`(최저시급)를 넣어 **그럴듯한 금액**을 띄웠고,
-   * 그걸 본 사람은 "사장이 최저시급으로 정해 뒀다"로 읽었다. 금액은 분쟁 대상이라
-   * 빈칸("아직 없다")은 괜찮아도 틀린 숫자는 사실로 읽힌다 — `junior/attendance` 가 먼저 없앤 규칙(P7)을 여기도 맞춘다.
-   * 왜 안 보이는지(미설정/읽기 실패)는 호출부가 `belowSummary`·`topHeader` 에서 말한다.
-   */
-  wage: number | null;
   /** 이 화면에서 보정 시 기록될 주체 */
   editedBy: 'owner' | 'staff';
   /** edited_by==='staff'인 기록에 붙는 배지 라벨('직원 수정' | '수정됨') */
@@ -45,29 +36,23 @@ type Props = {
   addLabel: string;
   /** 요약 카드 위에 들어갈 점주용 직원 헤더(직원 화면은 생략) */
   topHeader?: ReactNode;
-  /** 요약 아래 보조 한 줄 */
-  belowSummary?: ReactNode;
   footerNote: string;
   role: 'owner' | 'junior';
 };
 
-export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone = 'ink', addLabel, topHeader, belowSummary, footerNote, role }: Props) {
+export function TimesheetView({ staffId, editedBy, badgeLabel, badgeTone = 'ink', addLabel, topHeader, footerNote, role }: Props) {
   const records = useAttendanceStore((s) => s.records);
   const upsertManual = useAttendanceStore((s) => s.upsertManual);
   const removeRecord = useAttendanceStore((s) => s.removeRecord);
-  const settings = usePayrollStore((s) => s.settings);
-  // ★게이트는 **두 소스 다** 본다. 기록만 먼저 오고 급여규칙이 늦으면 computePay 가
-  //   주휴·야간·연장이 빠진 **틀린 금액**을 한 번 보여준다 — 0원보다 나쁘다(급여는 분쟁 대상 데이터).
+  // ★게이트는 기록과 근무표 **두 소스 다** 본다. 근무표가 오기 전에 그리면 대조가 전부 "근무표에 없는 근무"로 뜬다.
   //   ⛔`&&` 안에서 훅을 부르지 않는다 — 렌더마다 훅 개수가 달라져 크래시한다.
   const attendanceLoaded = useAttendanceStore((s) => s.loaded);
-  const settingsLoaded = usePayrollStore((s) => s.settingsLoaded);
-  // ★급여 기준이 근무표로 바뀌었다(2026-08-26) — 근무표가 오기 전에 그리면 금액이 0원부터 시작한다.
   const shiftTemplates = useScheduleStore((s) => s.templates);
   const swaps = useScheduleStore((s) => s.swaps);
   const shiftExceptions = useScheduleStore((s) => s.exceptions);
   const scheduleLoaded = useScheduleStore((s) => s.loaded);
   const timeRequests = useScheduleStore((s) => s.timeRequests);
-  const ready = attendanceLoaded && settingsLoaded && scheduleLoaded;
+  const ready = attendanceLoaded && scheduleLoaded;
 
   const [ym, setYm] = useState(() => todayStr().slice(0, 7));
   const [editing, setEditing] = useState<string | null>(null); // record id 또는 'new'
@@ -78,15 +63,13 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
 
   // 지난달은 그 달 기록을 기간 조건으로 따로 읽는다(A8) — 기본 조회는 매장 전체 최근 1,000건이라 예전 달이 잘린다.
   //   다 읽기 전·실패면 "출퇴근을 안 찍었어요" 대조를 띄우지 않는다(잘린 기록을 안 찍은 것으로 말하게 된다).
-  // PAY-02: 이 화면의 숫자(근무시간·대조·예상급여·기록 목록)는 전부 "ym월분" 정산 기간 하나로 센다.
-  //   시작일은 이력이 아니라 지금 값이다(사용자 결정 10-23). 시작일 1이면 달력 월 그대로다.
-  const startDay = settings.periodStartDay;
-  const payWin = useMemo(() => payWindow(ym, startDay), [ym, startDay]);
-  const inPeriod = (d: string) => d >= payWin.from && d <= payWin.to;
-  // 기간은 두 달에 걸칠 수 있다 — 걸친 지난달마다 그 달 기록을 따로 읽는다.
+  // 이 화면의 숫자(근무시간·대조·기록 목록)는 전부 달력 월(1일~말일) 하나로 센다(2026-11-02 급여 제거 · 사용자 결정).
+  const days = useMemo(() => monthDates(ym), [ym]);
+  const from = days[0];
+  const to = days[days.length - 1];
   const loadMonth = useAttendanceStore((s) => s.loadMonth);
   const curYm = todayStr().slice(0, 7);
-  const pastMonths = [...new Set([payWin.from.slice(0, 7), payWin.to.slice(0, 7)])].filter((m) => m < curYm);
+  const pastMonths = [ym].filter((m) => m < curYm);
   const pastKey = pastMonths.join(',');
   const monthStates = useAttendanceStore((s) => pastMonths.map((m) => s.months[`${staffId}|${m}`] ?? '').join(','));
   useEffect(() => {
@@ -95,8 +78,8 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   const monthReady = pastMonths.length === 0 || monthStates.split(',').every((st) => st === 'ok');
 
   const monthRecs = useMemo(
-    () => records.filter((r) => r.staff_id === staffId && r.date >= payWin.from && r.date <= payWin.to).sort((a, b) => b.date.localeCompare(a.date)),
-    [records, staffId, payWin],
+    () => records.filter((r) => r.staff_id === staffId && r.date >= from && r.date <= to).sort((a, b) => b.date.localeCompare(a.date)),
+    [records, staffId, from, to],
   );
 
   // 직원이 고친 흔적(0322 attendance_edits) — 사장 화면에서만 읽는다. 서버가 적고 직원은 못 지운다.
@@ -123,44 +106,23 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
         if (e.edited_role !== 'staff' || e.action !== 'delete' || !e.old_check_in) return false;
         const d = new Date(e.old_check_in);
         const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        return day >= payWin.from && day <= payWin.to;
+        return day >= from && day <= to;
       }),
-    [edits, payWin],
+    [edits, from, to],
   );
 
   const totalMin = monthRecs.reduce((a, r) => a + r.work_minutes, 0);
-  // ★급여의 기준은 **근무표**다(2026-08-26 사용자 확정). 출퇴근 기록은 확인용이라 금액에 안 들어간다.
-  //   규칙(30분 절삭·휴게·야간·연장·주휴)은 computePay 그대로 — 바뀐 것은 입력 소스뿐이다.
+  // ★근무의 기준은 **근무표**다(2026-08-26 사용자 확정). 출퇴근 기록은 확인용이다.
   const monthShifts = useMemo(
-    () => scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, staffId, payWin.inputDates.filter((d) => d >= payWin.from)),
-    [shiftTemplates, swaps, shiftExceptions, staffId, payWin],
+    () => scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, staffId, days),
+    [shiftTemplates, swaps, shiftExceptions, staffId, days],
   );
-  // 급여 입력은 첫 주 월요일부터 편다 — 주휴를 그 주 일요일이 속한 기간에 붙인다(Q9). 대조는 위 monthShifts 그대로.
-  const payShifts = useMemo(
-    () => scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, staffId, payWin.inputDates),
-    [shiftTemplates, swaps, shiftExceptions, staffId, payWin],
-  );
-  // 시급이 없으면 **계산 자체를 하지 않는다** — 없는 시급으로 만든 금액은 0원이든 최저시급이든 거짓말이다.
-  // 지난달은 그 달 시급으로 센다(2026-10-05). 이번 달은 지금 시급이다. 이력이 없으면 지금 시급.
-  const wageRates = usePayrollStore((s) => s.wageRates);
-  // 이력을 못 읽었으면 지난달 금액을 만들지 않는다 — 지금 시급으로 계산된 금액이 사실처럼 보인다([P7-#5]).
-  const pastRatesMissing = usePayrollStore((s) => s.wageRatesLoadError) && ym < todayStr().slice(0, 7);
-  // 급여 설정도 그 달 기준이다(A3 · 2026-10-06). 이력을 못 읽었으면 지난달 금액을 만들지 않는다(지금 설정으로 계산된다).
-  const settingsHistory = usePayrollStore((s) => s.settingsHistory);
-  const pastSettingsMissing = usePayrollStore((s) => s.settingsHistoryLoadError) && ym < todayStr().slice(0, 7);
-  const monthSettings = settingsForMonth(settingsHistory, ym, todayStr(), settings);
-  // PAY-01: 급여 설정을 못 읽었으면 기본값(시작일 1)으로 금액을 짓지 않는다.
-  const settingsFail = usePayrollStore((s) => s.settingsLoadError);
-  const monthWage = wage == null || pastRatesMissing || pastSettingsMissing || settingsFail ? null : wageForMonth(wageRates, staffId, ym, todayStr(), wage);
-  const monthBreakdown = monthWage == null ? null : computePay(shiftsToPayRecords(payShifts), monthWage, monthSettings, undefined, payWin);
-  const monthPay = monthBreakdown?.total ?? null;
-  // 대조(확인) 층 — 근무표와 출퇴근이 30분 넘게 어긋난 것만. 급여는 근무표대로 나가므로
-  // "다르다"를 말하지 않으면 잘못된 근무표가 그대로 지급된다.
+  // 대조(확인) 층 — 근무표와 출퇴근이 30분 넘게 어긋난 것만. "다르다"를 말하지 않으면 잘못된 근무표가 그대로 남는다.
   const mismatches = useMemo(() => (monthReady ? reconcileSchedule(monthShifts, monthRecs) : []), [monthReady, monthShifts, monthRecs]);
-  // 이 달 근무 시간 수정 요청 중 사장 승인 대기(J2). 승인 전이라 예상급여에 아직 안 들어갔다는 것을 말한다.
+  // 이 달 근무 시간 수정 요청 중 사장 승인 대기(J2). 승인 전이라 근무표에 아직 안 들어갔다는 것을 말한다.
   const waitingTimes = useMemo(
-    () => pendingTimeRequests(timeRequests, staffId).filter((r) => r.date >= payWin.from && r.date <= payWin.to).length,
-    [timeRequests, staffId, payWin],
+    () => pendingTimeRequests(timeRequests, staffId).filter((r) => r.date >= from && r.date <= to).length,
+    [timeRequests, staffId, from, to],
   );
   // 승인은 사장만 한다(0243). 매니저도 role='owner' 화면을 쓰므로 안내는 세션 역할로 고른다.
   const sessionIsOwner = useSessionStore((s) => s.role) === 'owner';
@@ -215,10 +177,9 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   }
   function saveNew() {
     const rawDay = Number(newDay.replace(/[^0-9]/g, '')) || 0;
-    // PAY-02: 일자는 이 화면의 정산 기간 안에서 고른다(기간 안에서 같은 일자는 한 번뿐이다). 시작일 1이면 1~말일 그대로다.
-    const date = payWin.inputDates.find((d) => inPeriod(d) && Number(d.slice(8)) === rawDay);
+    const date = days.find((d) => Number(d.slice(8)) === rawDay);
     if (!date) {
-      setErr(startDay === 1 ? `일자는 1~${daysInMonth(ym)} 사이여야 해요.` : `일자는 ${fmtPeriodRange(payWin)} 안이어야 해요.`);
+      setErr(`일자는 1~${daysInMonth(ym)} 사이여야 해요.`);
       return;
     }
     const t = validateTimes();
@@ -243,7 +204,7 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   return (
     <SafeAreaView style={styles.safe} edges={[]}>
       <KeyboardShift>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
         {topHeader && <Appear delay={stagger(0)}>{topHeader}</Appear>}
 
         {/* 월 네비 */}
@@ -253,8 +214,6 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
             <Ionicons name="chevron-back" size={20} color={InkColors.ink2} />
           </Pressable>
           <Text style={styles.monthLabel}>{month}월</Text>
-          {/* PAY-02: 시작일이 1이 아니면 "N월"이 가리키는 날짜 범위를 바로 옆에 둔다. */}
-          {payWin.from !== `${ym}-01` || payWin.to !== `${ym}-${String(daysInMonth(ym)).padStart(2, '0')}` ?<Text style={styles.sumNote}>{fmtPeriodRange(payWin)}</Text> : null}
           <Pressable onPress={() => setYm((v) => shiftMonth(v, 1))} hitSlop={8} style={styles.monthArrow}>
             <Ionicons name="chevron-forward" size={20} color={InkColors.ink2} />
           </Pressable>
@@ -273,47 +232,18 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
             <Text style={styles.sumLabel}>근무시간</Text>
             <Text style={styles.sumValue}>{monthReady ? fmtDuration(totalMin) : '—'}</Text>
           </View>
-          <View style={styles.sumDivider} />
-          <View style={styles.sumCol}>
-            <Text style={styles.sumLabel}>예상급여</Text>
-            <Text style={styles.sumValue}>{monthPay == null ? '—' : won(monthPay)}</Text>
-          </View>
         </View>
-        {/* ★이 금액이 무엇으로 계산됐는지 말한다 — 근무시간(출퇴근)과 안 맞는 게 정상이다. */}
-        {monthPay != null && (
-          <Text style={styles.sumNote}>
-            예상급여는 {fmtPeriodRange(payWin)} 근무표 기준이에요. 근무시간은 실제 출퇴근 기록이라 다를 수 있어요.
-          </Text>
-        )}
-        {monthPay != null && monthSettings.weeklyHolidayPay && (
-          <Text style={styles.sumNote}>주휴수당은 그 주 일요일이 있는 달에 들어가요.</Text>
-        )}
-        {settingsFail && wage != null && (
-          <Text style={styles.sumNote}>급여 설정을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 들어와 주세요.</Text>
-        )}
-        {pastRatesMissing && wage != null && (
-          <Text style={styles.sumNote}>지난달 시급을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 들어와 주세요.</Text>
-        )}
-        {pastSettingsMissing && !pastRatesMissing && wage != null && (
-          <Text style={styles.sumNote}>지난달 급여 설정을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 들어와 주세요.</Text>
-        )}
-        {/* 금액이 근무표 시간 × 시급보다 적으면 **왜 빠졌는지**를 말한다. 안 말하면 계산이 틀린 것으로 읽힌다. */}
         {waitingTimes > 0 && (
           <View style={styles.waitRow}>
             <Ionicons name="time-outline" size={14} color={BrandColors.warnText} />
             <Text style={styles.waitText}>
-              {`근무 시간 수정 승인 대기 ${waitingTimes}건 · ${role !== 'owner' ? '승인되면 예상급여에 반영돼요' : sessionIsOwner ? '근무표에서 승인할 수 있어요' : '사장님이 근무표에서 승인해요'}`}
+              {`근무 시간 수정 승인 대기 ${waitingTimes}건 · ${role !== 'owner' ? '승인되면 근무표에 반영돼요' : sessionIsOwner ? '근무표에서 승인할 수 있어요' : '사장님이 근무표에서 승인해요'}`}
             </Text>
           </View>
         )}
-        {!!monthBreakdown?.breakMin && (
-          <Text style={styles.sumNote}>
-            무급 휴게 {fmtDuration(monthBreakdown.breakMin)}을 뺀 금액이에요 · 하루 4시간 이상 30분, 8시간 이상 60분
-          </Text>
-        )}
         </Appear>
 
-        {/* 대조 — 근무표와 출퇴근이 어긋난 날. 급여는 근무표대로 나가므로 여기서 말해야 고칠 수 있다. */}
+        {/* 대조 — 근무표와 출퇴근이 어긋난 날. 여기서 말해야 근무표를 고칠 수 있다. */}
         {mismatches.length > 0 && (
           <Appear delay={stagger(3)}>
             <View style={styles.mismatch}>
@@ -330,7 +260,6 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
             </View>
           </Appear>
         )}
-        {belowSummary && <Appear delay={stagger(3)}>{belowSummary}</Appear>}
 
         {/* 기록 추가 */}
         <Appear delay={stagger(4)}>
@@ -454,7 +383,7 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
         <Appear delay={stagger(7)}>
         <Text style={styles.demoNote}>{footerNote}</Text>
         </Appear>
-        <View style={{ height: 8 }} />
+        <View style={[{ height: 8 }, AppStyles.screenEndSpacer]} />
       </ScrollView>
       </KeyboardShift>
       <RoleTabBar role={role} />
@@ -497,7 +426,6 @@ const styles = StyleSheet.create({
   sumDivider: { width: 1, backgroundColor: InkColors.line, marginVertical: 4 },
   sumLabel: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
   sumValue: { fontSize: 16, color: InkColors.ink, fontWeight: '800' },
-  sumNote: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', marginTop: 8, textAlign: 'center', lineHeight: 17 },
   mismatch: { marginTop: 12, gap: 6, padding: 13, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.warnBorder, backgroundColor: BrandColors.warnSoft },
   mismatchHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   mismatchTitle: { fontSize: 13, fontWeight: '800', color: BrandColors.warnText },

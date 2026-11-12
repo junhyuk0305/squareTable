@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,20 +13,15 @@ import { LoadErrorState } from '@/components/LoadErrorState';
 import { InfoDot } from '@/components/InfoDot';
 import { ActionRow } from '@/components/blocks/ActionRow';
 import { Sparkline } from '@/components/blocks/Sparkline';
-import { StackBar } from '@/components/blocks/StackBar';
-import { StatCardGrid } from '@/components/blocks/StatCardGrid';
+import { StatCard } from '@/components/blocks/StatCardGrid';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
-import { usePayrollStore, useWagesSettled } from '@/lib/store/usePayrollStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { EmptyStyles } from '@/lib/theme/empty';
-import { fmtDuration, won, hhmm, todayStr, liveMinutes, findOpenRecord, isForgotCheckout, openSinceText } from '@/lib/utils/attendance';
+import { fmtDuration, hhmm, todayStr, liveMinutes, findOpenRecord, isForgotCheckout, openSinceText } from '@/lib/utils/attendance';
 import { ForgotCheckoutCard } from '@/components/junior/ForgotCheckoutCard';
-import { computePay, shiftsToPayRecords, payWindow } from '@/lib/utils/payroll';
-import { payLabelOf, fmtPeriodRange } from '@/lib/utils/payPeriod';
-import { useScheduleStore, scheduledShiftsFor } from '@/lib/store/useScheduleStore';
-import { monthDates, mondayOf, weekDates as weekDatesOf } from '@/lib/utils/schedule';
+import { mondayOf, weekDates as weekDatesOf } from '@/lib/utils/schedule';
 
 /**
  * 출퇴근 패널 — 화면 크롬(SafeAreaView·탭바·헤더) 없이 콘텐츠만.
@@ -40,30 +36,7 @@ export function AttendancePanel() {
   const retryAttendance = useAttendanceStore((s) => s.retry);
   const checkIn = useAttendanceStore((s) => s.checkIn);
   const checkOut = useAttendanceStore((s) => s.checkOut);
-  const wages = usePayrollStore((s) => s.wages);
-  const settings = usePayrollStore((s) => s.settings);
-  // ★금액은 "시급이 실제로 정해진 경우"에만 보여준다(P7 실측).
-  //   예전엔 wages[userId] 가 없으면 최저시급(DEFAULT_HOURLY_WAGE)으로 계산해 **그럴듯한 금액**을 띄웠다 —
-  //   ①시급 미설정 ②읽기 실패 ③본인 행 없음 이 셋이 화면에서 구분되지 않았다.
-  //   0이나 빈칸은 "아직 없다"로 읽히지만 틀린 금액은 사실로 읽힌다(금액은 분쟁 대상).
-  // ★2026-08-11 후속: ②읽기 실패를 스토어가 신호하게 됐다(usePayrollStore.wagesLoadError).
-  //   금액을 안 보여주는 건 같지만 **이유가 다르므로 안내가 달라야 한다** —
-  //   "사장님께 말씀하세요"와 "연결을 확인하세요"는 사용자가 할 행동이 전혀 다르다.
-  const wagesLoadError = usePayrollStore((s) => s.wagesLoadError);
-  // 게이트는 "조회가 끝났나"를 본다 — wagesLoaded 만 보면 읽기 실패 시 영영 스피너다(아래 안내 분기도 못 뜬다).
-  const wagesSettled = useWagesSettled();
-  const wageSet = Object.prototype.hasOwnProperty.call(wages, userId);
-  // 시급이 없으면 0으로 계산만 한다. 금액은 위 wageSet 으로 숨긴다(대체 시급을 지웠다 · Q12).
-  const wage = wages[userId] ?? 0;
-  // PAY-01: 급여 설정을 못 읽었으면 기본값(시작일 1·기본 수당)으로 지은 금액을 보이지 않는다.
-  const settingsFail = usePayrollStore((s) => s.settingsLoadError);
-  const payShown = wageSet && !settingsFail;
   const router = useRouter();
-
-  const shiftTemplates = useScheduleStore((s) => s.templates);
-  const swaps = useScheduleStore((s) => s.swaps);
-  const shiftExceptions = useScheduleStore((s) => s.exceptions);
-  const scheduleLoaded = useScheduleStore((s) => s.loaded);
 
   const [, setTick] = useState(0);
 
@@ -86,16 +59,6 @@ export function AttendancePanel() {
   );
 
   const todayMin = todayRecs.reduce((sum, r) => sum + liveMinutes(r), 0) + (carriedOpen ? liveMinutes(carriedOpen) : 0);
-  // ★급여의 기준은 **근무표**다(2026-08-26 사용자 확정). 출퇴근 기록은 확인용이라 금액에 안 들어간다.
-  //   교대로 넘어온 근무도 shiftsOn 을 거친 scheduledShiftsFor 가 그대로 반영한다.
-  // 순수 계산이라 수동 메모이즈하지 않는다 — React Compiler 가 자동으로 한다
-  // (수동 useMemo 를 겹치면 "Existing memoization could not be preserved" 로 컴파일이 건너뛰어진다).
-  const monthShifts = scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, userId, monthDates(ym));
-  const todayShifts = monthShifts.filter((sh) => sh.date === today);
-  // 하루치는 주휴·월정액 제외(월 단위 항목이라 하루에 얹으면 거짓 금액이 된다).
-  const todayPay = computePay(
-    shiftsToPayRecords(todayShifts), wage, { ...settings, weeklyHolidayPay: false, extraAllowance: 0 },
-  ).total;
   const monthMin = monthRecs.reduce((sum, r) => sum + liveMinutes(r), 0);
   // ── 이번 주 일별 근무분(월~일) — L4 스파크라인의 **실제 원장**(R4).
   //    막대 하나 = 그날 실제로 찍힌 출퇴근 기록의 분이다. 근무가 없는 요일은 0 이고, 0 을 지어내
@@ -107,36 +70,23 @@ export function AttendancePanel() {
     mine.filter((r) => r.date === d).reduce((sum, r) => sum + liveMinutes(r), 0),
   );
   const weekMin = weekMinutes.reduce((a, b) => a + b, 0);
-  // 주휴는 그 주 일요일이 속한 달에 붙인다(Q9) — 급여 입력만 첫 주 월요일부터 편다.
-  // PAY-02: 예상 급여는 오늘이 든 정산 기간(정산 시작일 적용)으로 센다. 시작일 1이면 이번 달 그대로다.
-  const payWin = payWindow(payLabelOf(today, settings.periodStartDay), settings.periodStartDay);
-  const payShifts = scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, userId, payWin.inputDates);
-  const monthBreakdown = computePay(shiftsToPayRecords(payShifts), wage, settings, undefined, payWin);
-  const monthPay = monthBreakdown.total;
-  // 금액이 근무시간 × 시급보다 적으면 **왜 빠졌는지**를 말한다 — 안 말하면 계산이 틀린 것으로 읽힌다.
-  // 휴게는 **하루 합계** 기준이라(§54), 하루에 두 번 찍으면 예전보다 금액이 줄어든다.
-  const breakNote = monthBreakdown.breakMin
-    ? `\n무급 휴게 ${fmtDuration(monthBreakdown.breakMin)}이 빠졌어요 — 하루 4시간 이상 근무는 30분, 8시간 이상은 60분이에요.`
-    : '';
 
   const working = !!openRec;
   const forgotCheckout = !!openRec && isForgotCheckout(openRec);
 
-  // 근무 중일 때만 30초마다 경과시간/급여 갱신(퇴근 상태에선 불필요한 리렌더 방지).
+  // 근무 중일 때만 30초마다 경과시간 갱신(퇴근 상태에선 불필요한 리렌더 방지).
   useEffect(() => {
     if (!working) return;
     const t = setInterval(() => setTick((x) => x + 1), 30000);
     return () => clearInterval(t);
   }, [working]);
 
-  // ★이 화면이 그리는 원격 소스는 둘이다 — 출퇴근 기록과 시급.
-  //   시급을 안 기다리면 "아직 시급이 정해지지 않았어요"가 **거짓으로** 먼저 뜬다(도착 후 금액으로 바뀐다).
+  // ★이 화면이 그리는 원격 소스는 출퇴근 기록 하나다(2026-11-02 급여 제거로 시급·근무표 대기를 뺐다).
   //   기록을 안 기다리면 "아직 출근 전"이 먼저 뜨고 이중 출근이 찍힌다.
-  // ★급여 기준이 근무표로 바뀌었다(2026-08-26) — 근무표가 오기 전에 그리면 금액이 0원부터 시작한다.
-  const ready = attendanceLoaded && wagesSettled && scheduleLoaded;
+  const ready = attendanceLoaded;
 
   return (
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
       {!ready ? (
         <ScreenLoading label="출퇴근 기록을 불러오고 있어요…" />
       ) : attendanceLoadError ? (
@@ -157,9 +107,9 @@ export function AttendancePanel() {
           {carriedOpen
             ? `${openSinceText(carriedOpen.check_in!)} · 근무 중`
             : working
-            ? `${hhmm(openRec!.check_in!)} 출근${payShown ? ` · 오늘 ${won(todayPay)}` : ''}`
+            ? `${hhmm(openRec!.check_in!)} 출근`
             : todayRecs.length > 0
-              ? `오늘 ${todayRecs.length}회 근무${payShown ? ` · ${won(todayPay)}` : ''}`
+              ? `오늘 ${todayRecs.length}회 근무`
               : '아직 출근 전이에요'}
         </Text>
 
@@ -187,66 +137,25 @@ export function AttendancePanel() {
       </View>
       </Appear>
 
-      {/* ── 이번 달 — 블록 L4(§7-2 · 형태 E "큰 값 1 + 보조 2"의 보조 2칸).
-             2026-08-27: MiniStats(숫자 2칸 나열) → 2열 지표 카드. 두 칸의 막대는 **둘 다 실제 원장**이다(R4):
-               · 왼쪽 = 이번 주 일별 근무분(출퇴근 기록). 막대 7개 = 월~일.
-               · 오른쪽 = 이번 달 급여의 **구성**(기본급·주휴·연장·야간·수당). 이력이 아니라 지금 값을 쪼갠 것.
-             ★왼쪽은 출퇴근 기록, 오른쪽은 **근무표** 기준이다(0176~0180) — 원장이 서로 달라 두 값이
-               안 맞아 보일 수 있으므로 오른쪽 보조줄에 "근무표 기준"을 박아 둔다.
-             ★금액 ⓘ 는 그대로 살린다. 예상 급여는 분쟁 대상이라 계산 근거·휴게 공제 사유를 화면에서
-               지울 수 없다(그래서 StatCard 에 info 슬롯을 뒀다). ── */}
+      {/* ── 이번 달 — 블록 L4(§7-2) 지표 카드. 막대는 **실제 원장**이다(R4):
+             이번 주 일별 근무분(출퇴근 기록). 막대 7개 = 월~일.
+             ★2026-11-02 급여 제거로 '예상 급여' 칸이 빠져 한 칸만 남았다. 2열 그리드에 한 칸이면
+               오른쪽 반이 비므로 그리드 대신 칸 하나(StatCard)를 전체 폭으로 그린다. ── */}
       <Appear delay={stagger(2)}>
-        <StatCardGrid
-          items={[
-            {
-              key: 'month',
-              label: '이번 달 근무',
-              value: fmtDuration(monthMin),
-              sub: `이번 주 ${fmtDuration(weekMin)}`,
-              visual: (
-                <Sparkline
-                  values={weekMinutes}
-                  tones={weekMinutes.map((m) => (m > 0 ? 'on' : 'muted'))}
-                  accessibilityLabel={`이번 주 일별 근무, 합계 ${fmtDuration(weekMin)}`}
-                />
-              ),
-            },
-            {
-              key: 'pay',
-              label: '예상 급여',
-              value: payShown ? won(monthPay) : '—',
-              sub: payShown ? `${fmtPeriodRange(payWin)} · 근무표 기준 · 세전` : settingsFail && wageSet ? '급여 설정을 불러오지 못했어요' : undefined,
-              visual: payShown ? (
-                <StackBar
-                  parts={[
-                    { n: monthBreakdown.base, label: '기본', color: InkColors.ink },
-                    { n: monthBreakdown.weeklyHolidayPay, label: '주휴', color: BrandColors.good },
-                    { n: monthBreakdown.overtimePay, label: '연장', color: BrandColors.warn },
-                    { n: monthBreakdown.nightPay, label: '야간', color: BrandColors.mention },
-                    { n: monthBreakdown.extra, label: '수당', color: InkColors.ink3 },
-                  ]}
-                  // 금액은 만원으로 줄여 적는다 — 캡션이 10px 이라 원 단위는 안 읽힌다(실측).
-                  // 1만원 미만 항목은 '1만 미만'으로 — 0만이라고 쓰면 없는 것처럼 읽힌다.
-                  fmt={(n) => (n >= 10000 ? `${Math.round(n / 10000)}만` : '1만 미만')}
-                />
-              ) : undefined,
-              info: wageSet
-                ? {
-                    title: '예상 급여는 어떻게 계산돼요?',
-                    body: `근무표에 잡힌 근무를 시급 ${won(wage)}로 계산한 세전 예상액이에요.\n출퇴근 기록은 확인용이라 금액에 직접 들어가지 않아요.\n세금·4대보험·수당에 따라 실제 받는 금액과 다를 수 있어요.
-주휴수당은 그 주 일요일이 있는 달에 들어가요.${breakNote}`,
-                  }
-                : wagesLoadError
-                  ? {
-                      title: '왜 금액이 안 보여요?',
-                      body: '시급을 불러오지 못했어요.\n인터넷 연결을 확인하고 다시 들어와 주세요.',
-                    }
-                  : {
-                      title: '왜 금액이 안 보여요?',
-                      body: '아직 시급이 정해지지 않았어요.\n사장님께 시급을 정해 달라고 말씀해 주세요.',
-                    },
-            },
-          ]}
+        <StatCard
+          item={{
+            key: 'month',
+            label: '이번 달 근무',
+            value: fmtDuration(monthMin),
+            sub: `이번 주 ${fmtDuration(weekMin)}`,
+            visual: (
+              <Sparkline
+                values={weekMinutes}
+                tones={weekMinutes.map((m) => (m > 0 ? 'on' : 'muted'))}
+                accessibilityLabel={`이번 주 일별 근무, 합계 ${fmtDuration(weekMin)}`}
+              />
+            ),
+          }}
         />
       </Appear>
 
@@ -304,7 +213,7 @@ export function AttendancePanel() {
           </Pressable>
         ))}
       </Appear>
-      <View style={{ height: 8 }} />
+      <View style={[{ height: 8 }, AppStyles.screenEndSpacer]} />
         </>
       )}
     </ScrollView>

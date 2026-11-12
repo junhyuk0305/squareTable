@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useEffect, useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
@@ -153,7 +154,7 @@ export default function JuniorNotificationsScreen() {
       <ScreenTitleHeader title="알림" backFallback right={seg === 'store' && hasUnread ? <MarkAllReadButton onPress={markAll} /> : undefined} />
       <Stack.Screen options={{ title: '알림' }} />
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
         {/* 맨 위 — 매장명 · 내 이름(정체성). 홈 헤더에서 옮겨온 정보 */}
         {/* 카드 자체가 '내 계정' 진입점 — 누르면 프로필 편집 화면으로(설정 탭 프로필 카드와 동일 목적지). */}
         <Appear delay={stagger(0)}>
@@ -235,7 +236,7 @@ export default function JuniorNotificationsScreen() {
         </Appear>
         )}
 
-        <View style={{ height: 12 }} />
+        <View style={[{ height: 12 }, AppStyles.screenEndSpacer]} />
       </ScrollView>
     </SafeAreaView>
   );

@@ -19,12 +19,6 @@ export type AttendanceRecord = {
   edited_by?: 'staff' | 'owner' | null;
 };
 
-/** 직원별 시급 (mock) — 데이터 연결 단계에서 프로필로 이관 */
-export const HOURLY_WAGE: Record<string, number> = {
-  u_staff_001: 10030, // 박지원
-  u_staff_002: 10500, // 이수민
-};
-
 function iso(date: string, time: string): string {
   return nowISO(date, time); // KST 벽시계 → 표준 UTC ISO (직접 "+09:00" 조립 금지)
 }

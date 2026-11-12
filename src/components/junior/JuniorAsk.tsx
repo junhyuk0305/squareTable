@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
@@ -207,7 +208,7 @@ export function JuniorAsk({ suggestEntry = true, seed, focusId }: { suggestEntry
       <ScrollView
         ref={scrollRef}
         style={[styles.scroll, hideUntilPinned]}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, AppStyles.screenEnd]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         onScroll={onScroll}
@@ -308,7 +309,7 @@ export function JuniorAsk({ suggestEntry = true, seed, focusId }: { suggestEntry
           </View>
         )}
 
-        <View style={{ height: 8 }} />
+        <View style={[{ height: 8 }, AppStyles.screenEndSpacer]} />
       </ScrollView>
       )}
 

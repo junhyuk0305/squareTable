@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 // 이전 매장(0196) — 유료가 끝나 닫힌 매장 목록 + 다시 열기.
 // 목록 판정은 서버(my_previous_units = unit_access_locked)가 SSOT 다. 다시 열기(reopen_store)는 새 매장 추가와
 // 같은 규칙으로 이용권(슬롯) 1개를 쓴다. 0235 전 서버는 직원·근무표·출퇴근·업무 보드를 비우고, 0235 부터는 기록을 남긴다.
@@ -73,7 +74,7 @@ export default function PreviousStores() {
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ headerShown: false, title: '이전 매장' }} />
       <ScreenTitleHeader title="이전 매장" backFallback="/account-settings" />
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]}>
         {!ready ? (
           <ScreenLoading label="이전 매장을 불러오고 있어요…" />
         ) : rows.length === 0 ? (

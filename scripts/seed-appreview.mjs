@@ -351,6 +351,7 @@ async function main() {
     }
   }
 
+  // 시급 표는 옛 앱(1.1.0 이하 · 심사 중 빌드 포함)이 쓴다. 2026-11-02 부터 새 앱·웹 화면엔 안 보인다.
   await step('wages', db.from('wages').upsert({ unit_id: UNIT, staff_id: staffId, hourly_wage: 11000 }));
   await step('schedule_config', db.from('schedule_config').upsert({
     unit_id: UNIT, open: '07:30', close: '22:00', closed_days: [],
@@ -472,7 +473,7 @@ async function main() {
   // ════════════════════════════════════════════════════════════════
   console.log('9) 근무표 + 출퇴근 3일치');
   // 근무표가 비면 직원 '출퇴근 > 근무표' 화면이 빈 화면으로 보인다(4.2 리스크).
-  // 적용 시작일(0242)을 직접 넣는다. 빼면 기본값(오늘)이 들어가 지난 날짜 근무표·급여가 빈 화면으로 보인다(데이터 M1).
+  // 적용 시작일(0242)을 직접 넣는다. 빼면 기본값(오늘)이 들어가 지난 날짜 근무표·근무 내역이 빈 화면으로 보인다(데이터 M1).
   await step('shift_templates', db.from('shift_templates').upsert(
     [1, 2, 3, 4, 5].map((wd) => ({
       id: `${P}shift_${wd}`, unit_id: UNIT, staff_id: staffId, weekday: wd,

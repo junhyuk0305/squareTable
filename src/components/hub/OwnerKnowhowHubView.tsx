@@ -33,6 +33,7 @@ import { Appear, stagger } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { appAlertSpacing } from '@/lib/theme/appDesign';
 import { CardStyles } from '@/lib/theme/card';
 import type { Href } from 'expo-router';
 
@@ -310,7 +311,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
              '아무도 모르는' 것이 되어 "24개가 위험"이라고 겁을 주는데, 직원이 없으니 사실은
              위험이 아니다. 지표가 참이어도 그 상태에서 할 수 있는 일이 없으면 경고가 아니다. */}
       {understanding.cells > 0 && (
-        <Appear delay={stagger(2)}>
+        <Appear delay={stagger(2)} style={understanding.noItems > 0 ? appAlertSpacing(Space.xl) : undefined}>
           <AlertRow
             label="퀴즈로 안 쓰인 노하우"
             count={understanding.noItems}

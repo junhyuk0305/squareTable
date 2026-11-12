@@ -15,6 +15,7 @@ import { logout } from '@/lib/auth';
 import { confirmAction, notifyAction } from '@/lib/utils/confirm';
 import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { AppStyles } from '@/lib/theme/appDesign';
 import { Radius } from '@/lib/theme/elevation';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { PricingTable } from '@/components/PricingTable';
@@ -168,11 +169,11 @@ export default function AccountSettings() {
         options={{ headerShown: false, title: '설정' }}
       />
       <ScreenTitleHeader title="설정" backFallback />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
         {/* 프로필 카드 = '내 계정' 진입점 — 누르면 프로필 편집·비밀번호 변경 화면으로. */}
         <Pressable
           onPress={() => router.push('/account-edit')}
-          style={({ pressed }) => [styles.profile, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [styles.profile, AppStyles.sectionSpacing, pressed && { opacity: 0.7 }]}
           accessibilityRole="button"
           accessibilityLabel="내 계정 — 프로필 편집·비밀번호 변경"
         >
@@ -217,7 +218,7 @@ export default function AccountSettings() {
             ⛔ PricingTable(웹 가격 정본)을 여기에 그리지 않는다 — 앱 가격은 스토어가 내려주고 숫자가 다르다.
             행 하나로 `/billing` 에 착지시키고, 가격·구매는 그 화면의 IapPurchasePanel 이 맡는다. */}
         {!SHOW_BILLING && isOwner && showIapSurface(iapEnabled, freeMode) && (
-          <SettingsSection icon="card-outline" title="구독 및 결제">
+          <SettingsSection legacy icon="card-outline" title="구독 및 결제">
             <SettingsRow first icon="card-outline" label="이용권" onPress={() => router.push('/billing' as never)} />
           </SettingsSection>
         )}
@@ -228,7 +229,7 @@ export default function AccountSettings() {
             웹 PG 채널의 표면이다. 판정은 store-policy.ts 하나에만 둔다. */}
         {SHOW_BILLING && isOwner &&
           (!showPaymentSurface(freeMode) ? (
-            <SettingsSection icon="card-outline" title="구독 및 결제">
+            <SettingsSection legacy icon="card-outline" title="구독 및 결제">
               <SettingsRow
                 first
                 icon="card-outline"
@@ -246,7 +247,7 @@ export default function AccountSettings() {
             </SettingsSection>
           ) : (
             <View style={styles.billingSection}>
-              <SectionGroup icon="card-outline"
+              <SectionGroup legacy icon="card-outline"
                 title="구독 및 결제"
                 description={multiOwner && storeName ? `${storeName} 기준` : undefined}>
               <PricingTable currentPlan={plan} footNote={null} />
@@ -301,7 +302,7 @@ export default function AccountSettings() {
         </SettingsSection>
 
         <Text style={styles.foot}>매장의 정석 · 스퀘어테이블</Text>
-        <View style={{ height: 16 }} />
+        <View style={[{ height: 16 }, AppStyles.screenEndSpacer]} />
       </ScrollView>
       <TextScaleModal visible={scaleModal} onClose={() => setScaleModal(false)} />
       <ContactModal visible={contactModal} onClose={() => setContactModal(false)} />

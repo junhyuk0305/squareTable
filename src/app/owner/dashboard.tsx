@@ -14,6 +14,8 @@ import { useTourStore } from '@/lib/store/useTourStore';
 import { RoleTabBar, goToTab } from '@/components/RoleTabBar';
 import { SectionGroup } from '@/components/SectionGroup';
 import { AlertRow } from '@/components/blocks/AlertRow';
+import { AppStyles, appAlertSpacing } from '@/lib/theme/appDesign';
+import { Space } from '@/lib/theme/layout';
 import { HeroSubNav, type HeroSubNavItem } from '@/components/blocks/HeroSubNav';
 import { AppTopBar } from '@/components/AppTopBar';
 import { InviteBlock } from '@/components/owner/InviteBlock';
@@ -26,7 +28,7 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { todayStr } from '@/lib/utils/attendance';
 import { confirmAction } from '@/lib/utils/confirm';
 import { formatAsked } from '@/lib/utils/time';
-import { styles } from '@/styles/ownerDashboardStyles';
+import { styles, dashboardCtaIconColor } from '@/styles/ownerDashboardStyles';
 
 /** 홈 목록은 3건 + "전체보기 ›" — 전 화면 공통 배치 규칙(2026-08-05 블록 어휘). */
 // 홈 목록 상한. ui.md 배치 규칙 3의 기본값은 3이지만 2026-08-12에 4, 2026-08-19에 **5**로 올렸다 —
@@ -119,15 +121,14 @@ export default function OwnerDashboardScreen() {
   const [tourOn, setTourOn] = useState(false);
 
   // 히어로 바닥에 붙는 바로가기 — 탭바가 못 덮는 진입점만. **3칸**(상한 4칸, 5칸이면 라벨이 깨진다).
-  // '급여' 칸은 2026-08-19에 뺐다 — staff 화면이 이미 '직원·급여'라 두 칸이 사실상 같은 화면이었다
-  // (급여 설정 자체는 그 화면 안 진입점과 설정 탭에 그대로 있다).
+  // '급여' 칸은 2026-08-19에 뺐고, 급여 기능 자체는 2026-11-02에 제품에서 뺐다.
   const subnav: HeroSubNavItem[] = useMemo(
     () => [
       { key: 'quiz', icon: 'help-circle-outline', label: '퀴즈', onPress: () => goToTab('/owner/training') },
       {
         key: 'staff',
         icon: 'people-outline',
-        label: '직원·급여',
+        label: '직원',
         onPress: () => router.push('/owner/staff'),
         badge: pendingJoin,
         badgeHint: '합류 승인 대기',
@@ -188,7 +189,7 @@ export default function OwnerDashboardScreen() {
       };
     }
     // 설정 결손 — "오늘 할 일"이 아니라 **선행 조건**이라 사람이 기다리는 것들 뒤에 둔다.
-    // 근무표가 비면 급여가 계산되지 않는데, 그 사실이 화면 어디에도 없어 급여일에야 알게 된다.
+    // 근무표가 비면 교대·근무 기록 대조가 서지 않는데, 그 사실이 화면 어디에도 없다.
     // 짜고 나면 scheduleEmpty 가 false 가 되어 이 줄은 스스로 사라진다.
     if (scheduleEmpty) {
       return {
@@ -214,7 +215,7 @@ export default function OwnerDashboardScreen() {
       {
         targetRef: hubRef,
         title: '매장 운영부터 둘러보세요',
-        body: '직원이 물은 질문이 맨 위에 떠요.\n퀴즈·직원·급여·근무표는 아래 세 칸에 있어요.',
+        body: '직원이 물은 질문이 맨 위에 떠요.\n퀴즈·직원·근무표는 아래 세 칸에 있어요.',
       },
       {
         targetRef: ctaRef,
@@ -271,7 +272,7 @@ export default function OwnerDashboardScreen() {
       {!loaded ? (
         <ScreenLoading label="매장 현황을 불러오고 있어요…" />
       ) : (
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
         {/* 정적 콘텐츠 래퍼 — 진입 애니는 각 <Appear>가 담당. 코치마크 위치 측정 기준(scrollContentRef). */}
         <View ref={scrollContentRef} style={styles.scrollInner}>
         {/* ① N2 히어로 + 서브내비 한 덩어리 — 홈의 유일한 히어로.
@@ -311,7 +312,7 @@ export default function OwnerDashboardScreen() {
             </Text>
             <View ref={ctaRef} style={{ alignSelf: 'flex-start' }}>
               <PressableScale onPress={() => router.push('/owner/onboarding')} scaleTo={0.96} style={styles.onboardCta}>
-                <Ionicons name="download-outline" size={16} color={InkColors.bubbleText} />
+                <Ionicons name="download-outline" size={16} color={dashboardCtaIconColor} />
                 <Text style={styles.onboardCtaText}>추천 노하우 담기</Text>
               </PressableScale>
             </View>
@@ -392,7 +393,7 @@ export default function OwnerDashboardScreen() {
                     accessibilityLabel="할일 등록하기"
                     style={({ pressed }) => [styles.taskEmptyCta, pressed && { opacity: 0.6 }]}
                   >
-                    <Ionicons name="add" size={16} color={InkColors.bubbleText} />
+                    <Ionicons name="add" size={16} color={dashboardCtaIconColor} />
                     <Text style={styles.taskEmptyCtaText}>할일 등록하기</Text>
                   </Pressable>
                 </View>
@@ -459,7 +460,7 @@ export default function OwnerDashboardScreen() {
         {/* ★count>0 을 **바깥에서** 한 번 더 가드하는 이유: AlertRow 는 0건이면 스스로 null 을 돌려주는데,
             그걸 그냥 <Appear>로 감싸면 내용 없는 Animated.View 만 남아 ScrollView gap 이 한 칸 더 벌어진다. */}
         {nextAction.count > 0 && (
-          <Appear delay={stagger(3)}>
+          <Appear delay={stagger(3)} style={[appAlertSpacing(Space.lg), AppStyles.screenLastItem]}>
             <AlertRow
               label={nextAction.label}
               count={nextAction.count}

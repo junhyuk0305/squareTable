@@ -1,52 +1,11 @@
-/** 출퇴근/급여 공용 포맷·계산 헬퍼 */
-
-/**
- * 해마다의 법정 최저시급(원). 시급 미설정 직원의 대체값으로 쓰지 않는다(Q12) — 시급이 없으면 금액을 숨긴다.
- * 2027년 10,700원은 최저임금위원회 의결 보도 기준이다. 고용노동부 고시 원문은 아직 확인하지 못했다.
- */
-export const MIN_WAGE: Record<number, number> = { 2025: 10030, 2026: 10320, 2027: 10700 };
-
-/** 표에서 쓸 해. 표에 없는 해는 가장 가까운 해로 맞춘다(최저시급은 내려간 적이 없어 뒤의 해에는 하한이다). */
-function minWageYear(date: string): number {
-  const years = Object.keys(MIN_WAGE).map(Number).sort((a, b) => a - b);
-  return Math.min(Math.max(Number(date.slice(0, 4)), years[0]), years[years.length - 1]);
-}
-
-/** 'YYYY-MM-DD' 가 속한 해의 최저시급. */
-export function minimumWageFor(date: string): number {
-  return MIN_WAGE[minWageYear(date)];
-}
-
-/**
- * 시급이 그해 최저시급보다 낮으면 경고 문구, 아니면 null.
- * 막지 않고 경고만 한다 — 수습 감액 같은 예외가 있다(최저임금법 제5조 2항).
- * 문구에는 수습을 꺼내지 않는다. 감액은 1년 이상 계약·3개월 이내·90%까지만이고 단순노무는 없어서, 수습이면 괜찮다고 읽히면 안 된다.
- */
-export function minWageWarning(wage: number, date: string): string | null {
-  const min = minimumWageFor(date);
-  if (wage >= min) return null;
-  return `시급이 ${minWageYear(date)}년 최저시급 ${won(min)}보다 낮아요. 다시 확인해 주세요.`;
-}
-
-/** 급여 산정 단위(분). 근무시간은 이 단위로 절삭해 정산한다(실무 관행). */
-export const PAY_UNIT_MIN = 30;
+/** 출퇴근 공용 포맷·계산 헬퍼 */
 
 /**
  * 한 번의 근무로 인정하는 최대 분(=24시간). 퇴근을 안 찍어 타이머가 방치되면
- * 경과시간/급여추정이 무한히 불어나 말도 안 되는 금액이 잡힌다(남용 #12) → 24h에서 절상.
+ * 경과시간이 무한히 불어난다(남용 #12) → 24h에서 절상.
  * 24h를 넘긴 미퇴근 기록은 사실상 '퇴근 깜빡'이므로, 사장이 수기 보정하기 전까지 24h로 고정한다.
  */
 export const MAX_SHIFT_MIN = 24 * 60;
-
-/** 급여 산정 분 — 30분 단위로 내림(미만은 버림). "1분마다 오르는" 체감 대신 30분 단위로 정산. */
-export function payableMinutes(min: number): number {
-  return Math.floor(min / PAY_UNIT_MIN) * PAY_UNIT_MIN;
-}
-
-/** 근무 분 × 시급 → 급여(원). 30분 단위로 절삭 후 계산. */
-export function payFor(min: number, wage: number): number {
-  return Math.round((payableMinutes(min) * wage) / 60);
-}
 
 /**
  * 근무 분 — 퇴근했으면 확정 work_minutes, 근무 중이면 출근시각부터 지금까지의 실시간 경과분.
@@ -115,10 +74,6 @@ export function fmtDuration(min: number): string {
   if (h && m) return `${h}시간 ${m}분`;
   if (h) return `${h}시간`;
   return `${m}분`;
-}
-
-export function won(n: number): string {
-  return `${n.toLocaleString('ko-KR')}원`;
 }
 
 export function hhmm(iso: string): string {

@@ -568,41 +568,39 @@ console.log('\n[10-07 결정 2] 닫힌 매장 숫자는 허브 요약에서도 �
     const PAID = extraUnit('qa_h_paid', '991102',
       `insert into public.unit_subscriptions (unit_id, status, plan, paid_until) values ('qa_h_paid', 'active', 'single', now() + interval '30 days')
          on conflict (unit_id) do update set status = 'active', plan = 'single', paid_until = excluded.paid_until;`);
-    // 직원(j)에게 store_001 시급 12345 · 이번 달 근무 60분을 넣는다(트랜잭션 · 되돌림).
+    // 직원(j)·매니저(m)에게 store_001 이번 달 근무 60분을 넣는다(트랜잭션 · 되돌림).
+    //   2026-11-02 급여 기능을 빼며 시급·급여 설정 비교는 뺐다. 근무분이 0 으로 막히는지만 본다.
     const FIX = `
 set local session_replication_role = replica;
-insert into public.wages (unit_id, staff_id, hourly_wage) values ('store_001', current_setting('qa.j'), 12345)
-  on conflict (unit_id, staff_id) do update set hourly_wage = 12345;
-insert into public.wages (unit_id, staff_id, hourly_wage) values ('store_001', current_setting('qa.m'), 12345)
-  on conflict (unit_id, staff_id) do update set hourly_wage = 12345;
-update public.units set payroll_settings = '{"weeklyHolidayPay": true}' where id = 'store_001';
-update public.attendance set archived_tenure_id = gen_random_uuid() where unit_id = 'store_001' and staff_id = current_setting('qa.j') and archived_tenure_id is null;
-insert into public.attendance (id, unit_id, staff_id, date, check_in, check_out, work_minutes)
-  values ('qa_h_att', 'store_001', current_setting('qa.j'), to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM-DD'), now() - interval '2 hours', now() - interval '1 hour', 60);
+update public.attendance set archived_tenure_id = gen_random_uuid() where unit_id = 'store_001' and staff_id in (current_setting('qa.j'), current_setting('qa.m')) and archived_tenure_id is null;
+insert into public.attendance (id, unit_id, staff_id, date, check_in, check_out, work_minutes) values
+  ('qa_h_att', 'store_001', current_setting('qa.j'), to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM-DD'), now() - interval '2 hours', now() - interval '1 hour', 60),
+  ('qa_h_att_m', 'store_001', current_setting('qa.m'), to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM-DD'), now() - interval '2 hours', now() - interval '1 hour', 60);
 set local session_replication_role = origin;
 `;
     const q = (who, pre) => psql(`${IDS}${FIX}${pre}${as(who)}
-select 'R=v2:' || hourly_wage || ':' || month_minutes || ':' || (payroll_settings is null) from public.my_cross_summary_v2() where unit_id = 'store_001';
-select 'R=v1:' || hourly_wage || ':' || month_minutes from public.my_cross_summary() where unit_id = 'store_001';
+select 'R=v2:' || month_minutes from public.my_cross_summary_v2() where unit_id = 'store_001';
+select 'R=v1:' || month_minutes from public.my_cross_summary() where unit_id = 'store_001';
 select 'R=gr:' || entries_total from public.my_growth() where unit_id = 'store_001';
 select 'R=ke:' || count(*) from public.my_knowhow_entries() e where e.unit_id = 'store_001';
 rollback;
 `);
     const open = q('j', '');
-    check('열린 매장 직원 → 내 시급·근무분이 그대로 온다(v2·v1 = 12345·60)', open.includes('R=v2:12345:60:false') && open.includes('R=v1:12345:60'), tail(open));
+    const has = (out, line) => out.split(/\r?\n/).includes(line); // 줄 전체가 같아야 한다(R=v2:0 이 R=v2:00 에 걸리지 않게)
+    check('열린 매장 직원 → 내 근무분이 그대로 온다(v2·v1 = 60)', has(open, 'R=v2:60') && has(open, 'R=v1:60'), tail(open));
     const shut = q('j', PAID);
-    check('★닫힌 매장 직원 → v2 시급 0·근무분 0·급여 설정 null', shut.includes('R=v2:0:0:true'), tail(shut));
-    check('★닫힌 매장 직원 → v1 시급 0·근무분 0', shut.includes('R=v1:0:0'), tail(shut));
+    check('★닫힌 매장 직원 → v2 근무분 0', has(shut, 'R=v2:0'), tail(shut));
+    check('★닫힌 매장 직원 → v1 근무분 0', has(shut, 'R=v1:0'), tail(shut));
     check('★닫힌 매장 직원 → 성장 탭 노하우 수 0 · 내 노하우 목록 0건', shut.includes('R=gr:0') && shut.includes('R=ke:0'), tail(shut));
     const mgr = q('m', PAID);
-    check('★닫힌 매장 매니저 → v2 시급 0·급여 설정 null', mgr.includes('R=v2:0:') && mgr.includes(':true'), tail(mgr));
+    check('★닫힌 매장 매니저 → v2 근무분 0', has(mgr, 'R=v2:0'), tail(mgr));
     const mgrOpen = q('m', '');
-    check('열린 매장 매니저 → 시급 그대로', mgrOpen.includes('R=v2:12345:'), tail(mgrOpen));
+    check('열린 매장 매니저 → 근무분 그대로(60)', has(mgrOpen, 'R=v2:60'), tail(mgrOpen));
     const own = psql(`${IDS}${FIX}${PAID}${as('o')}
-select 'R=own:' || count(*) from public.my_cross_summary_v2() where unit_id = 'store_001' and payroll_settings is not distinct from (select payroll_settings from public.units where id = 'store_001');
+select 'R=own:' || count(*) from public.my_cross_summary_v2() where unit_id = 'store_001';
 rollback;
 `);
-    check('사장 본인은 대상이 아니다(급여 설정 그대로)', own.includes('R=own:1'), tail(own));
+    check('사장 본인은 대상이 아니다(닫혀도 자기 매장 행이 온다)', own.includes('R=own:1'), tail(own));
   }
 }
 

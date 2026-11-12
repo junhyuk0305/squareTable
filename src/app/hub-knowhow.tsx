@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { SectionGroup } from '@/components/SectionGroup';
 import { useEffect, useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
@@ -139,7 +140,7 @@ export default function HubKnowhowScreen() {
         />
       ) : (
         <KeyboardShift>
-        <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[st.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <Appear delay={stagger(0)}>
             <Text style={st.countLabel}>
               {filtering ? `${total}개 중 ${visible.length}개 보임` : `매장 ${groups.length}곳 · 노하우 ${total}개`}
@@ -222,7 +223,7 @@ export default function HubKnowhowScreen() {
               </Appear>
             ))
           )}
-          <View style={{ height: Space.xl }} />
+          <View style={[{ height: Space.xl }, AppStyles.screenEndSpacer]} />
         </ScrollView>
         </KeyboardShift>
       )}

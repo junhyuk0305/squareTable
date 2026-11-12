@@ -19,6 +19,7 @@ import { fetchOwnerOverview, fetchMyLockedUnits, fetchMyCanAddStore, type MyUnit
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { AppStyles } from '@/lib/theme/appDesign';
 import { canUseMultistore } from '@/lib/config/tiers';
 import { showBillingEntry } from '@/lib/config/store-policy';
 import { HubTopBar } from '@/components/hub/HubTopBar';
@@ -213,7 +214,7 @@ export default function StoresHub() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]}>
         {/* 상단 바(HubTopBar 공용) — 알림 벨은 여기 고정(탭 금지 — 07-24 사용자 확정) + 프로필(계정 설정) */}
         <HubTopBar />
 
@@ -254,7 +255,7 @@ export default function StoresHub() {
           <>
             {/* ── 매장 목록 ── */}
             <Appear delay={stagger(1)}>
-              <View style={styles.section}>
+              <View style={[styles.section, AppStyles.groupSpacing]}>
                 {/* 역할은 매장별(0093)이라 목록 전체를 한 단어로 부를 수 없다 — 전 매장이 같은 역할일
                     때만 표기하고, 섞여 있으면(사장 매장 + 매니저 매장) 각 매장 줄에서 말한다.
                     예전엔 "매니저 매장이 하나라도 있으면 매니저"라 사장 매장까지 매니저로 불렀다. */}
@@ -272,7 +273,7 @@ export default function StoresHub() {
                     <Appear key={s.unit_id} delay={stagger(i)}>
                     <Pressable
                       onPress={() => enterStore(s)}
-                      style={({ pressed }) => [styles.card, i > 0 && styles.cardDivider, isActive && styles.cardActive, pressed && styles.pressed]}
+                      style={({ pressed }) => [styles.card, i > 0 && styles.cardDivider, isActive && [styles.cardActive, AppStyles.groupRow], pressed && styles.pressed]}
                     >
                       <View style={[styles.cardIcon, { backgroundColor: color + '22' }]}>
                         <Ionicons name={industryIcon(s.industry)} size={20} color={color} />
@@ -314,7 +315,7 @@ export default function StoresHub() {
 
                 {/* 매장 추가(사장) / 매장 합류(직원) */}
                 <Pane side="rail">
-                <Pressable onPress={isOwner ? addStore : joinStore} style={({ pressed }) => [styles.addCard, pressed && styles.pressed]}>
+                <Pressable onPress={isOwner ? addStore : joinStore} style={({ pressed }) => [styles.addCard, AppStyles.group, pressed && styles.pressed]}>
                   <View style={styles.addIcon}>
                     <Ionicons name={isOwner ? 'add' : 'enter-outline'} size={20} color={InkColors.ink} />
                   </View>

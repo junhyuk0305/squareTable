@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -187,7 +188,7 @@ export function JuniorMySpace({ me }: { me: string }) {
   }
 
   return (
-    <ScrollView keyboardShouldPersistTaps="handled" style={s.flex} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+    <ScrollView keyboardShouldPersistTaps="handled" style={s.flex} contentContainerStyle={[s.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
       {/* ── 히어로 — 내가 아는 노하우 히트맵(H5). 노하우가 0개면 그리지 않는다(빈 격자 금지).
              ★2026-08-27 오밀조밀 확산 6-4. 옛 판본은 히어로가 없고 groupCard 4장이 연달아 있었고,
                그 사이를 MiniStats 숫자 3칸이 끊고 있었다 — 숫자 3개는 대상이 없어 아무 말도 못 했다.
@@ -217,7 +218,7 @@ export function JuniorMySpace({ me }: { me: string }) {
       {answerable.length === 0 ? (
         <Text style={s.empty}>지금은 도와줄 질문이 없어요.</Text>
       ) : (
-        <View style={s.list}>
+        <View style={[s.list, myAnswered.length === 0 && myProposals.length === 0 && myQuestions.length === 0 && AppStyles.screenLastItem]}>
           {answerable.map((u, i) => (
             <Appear key={u.id} delay={stagger(i)}>
               <Pressable onPress={() => setAnswerFor(u)} style={({ pressed }) => [s.qCard, pressed && { opacity: 0.85 }]}>
@@ -295,7 +296,7 @@ export function JuniorMySpace({ me }: { me: string }) {
       {/* ③ 내가 답한 질문 — 롤업에서 펼쳤을 때만. 카드 1장 + 헤어라인 행(낱개 보더 카드 반복 = 시각 소음) */}
       {openRecord === 'answered' && myAnswered.length > 0 && (
         <>
-          <View style={s.groupCard}>
+          <View style={[s.groupCard, AppStyles.screenLastItem]}>
             {(showAllAnswered ? myAnswered : myAnswered.slice(0, 3)).map((u, i) => {
               const e = u.resolved_with_entry_id ? entryById.get(u.resolved_with_entry_id) : undefined;
               return (
@@ -322,7 +323,7 @@ export function JuniorMySpace({ me }: { me: string }) {
       {/* ② 내가 보낸 제안 — 롤업에서 펼쳤을 때만. 검토 중·반려가 위(정렬은 myProposals에서) */}
       {openRecord === 'proposals' && myProposals.length > 0 && (
         <>
-          <View style={s.groupCard}>
+          <View style={[s.groupCard, AppStyles.screenLastItem]}>
             {(showAllProposals ? myProposals : myProposals.slice(0, 3)).map((sug, i) => (
               <Appear key={sug.id} delay={stagger(i)}>
                 <View style={i > 0 ? s.rowDivider : undefined}>
@@ -349,7 +350,7 @@ export function JuniorMySpace({ me }: { me: string }) {
       {/* ④ 내 질문 이력 — 롤업에서 펼쳤을 때만. 예외(답 기다리는 중)만 강조, 답 받음은 흐린 메타로 */}
       {openRecord === 'questions' && myQuestions.length > 0 && (
         <>
-          <View style={s.groupCard}>
+          <View style={[s.groupCard, AppStyles.screenLastItem]}>
             {(showAllQuestions ? myQuestions.slice(0, 20) : myQuestions.slice(0, 5)).map((q, i) => {
               const answered = !!q.resolved_at || (q.matched_entry_ids?.length ?? 0) > 0;
               return (
@@ -369,7 +370,7 @@ export function JuniorMySpace({ me }: { me: string }) {
         </>
       )}
 
-      <View style={{ height: 24 }} />
+      <View style={[{ height: 24 }, AppStyles.screenEndSpacer]} />
 
       {answerFor && (
         <AnswerSheet

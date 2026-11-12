@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useCallback, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, TextInput, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
@@ -187,7 +188,7 @@ function LegacyHandover() {
       <Stack.Screen options={{ title: '매뉴얼 올리기' }} />
       <ScreenTitleHeader title="매뉴얼 올리기" backFallback />
       <KeyboardShift>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {phase === 'review' ? (
           <ReviewList
             segs={segs}

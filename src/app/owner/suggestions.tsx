@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useEffect, useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, ScrollView, TextInput, StyleSheet } from 'react-native';
@@ -112,7 +113,7 @@ export default function OwnerSuggestionsScreen() {
         <LoadErrorState title="직원 제안을 불러오지 못했어요" onRetry={() => void retry()} />
       ) : (
       <KeyboardShift>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
         <Appear delay={stagger(0)}>
           <Text style={styles.subline}>직원이 올린 제안이에요. 승인하면 노하우에 반영돼요</Text>
         </Appear>
@@ -153,7 +154,7 @@ export default function OwnerSuggestionsScreen() {
           </Appear>
         )}
 
-        <View style={{ height: 16 }} />
+        <View style={[{ height: 16 }, AppStyles.screenEndSpacer]} />
       </ScrollView>
       </KeyboardShift>
       )}

@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { SectionGroup } from '@/components/SectionGroup';
 import { ButtonStyles } from '@/lib/theme/button';
 import { useState } from 'react';
@@ -166,7 +167,7 @@ function CompleteProfileForm() {
           여기로 되돌려보내 화살표가 무한루프처럼 보인다. 이 화면의 탈출구는 아래 '다른 계정으로 로그인'. */}
       <ScreenTitleHeader title="프로필 완성" />
       <KeyboardShift>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} keyboardShouldPersistTaps="handled">
         <Appear delay={stagger(0)}>
         <View style={styles.intro}>
           <Text style={styles.introTitle}>거의 다 왔어요</Text>

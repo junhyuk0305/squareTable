@@ -35,7 +35,9 @@ export const BUSINESS_INFO = {
 // ★v2.2 = 웹 카드 정기결제(0208). **공고일 = 시행일**(2026-09-23 사용자 결정) → 값 = 배포하는 날짜.
 //   아래 '2026-09-17' 은 이미 지난 자리표시자다. legal-content.mjs 의 EFFECTIVE_DATE·ANNOUNCED_DATE 와
 //   **셋이 같은 날짜**가 되게 배포 직전에 함께 바꾼다.
-export const TERMS_VERSION = '2026-09-29';
+// ★v2.3 = 급여 계산 기능 종료(2026-11-02 사용자 결정). 공고일 + 7일 시행(약관 제5조 제3항).
+//   값 = legal-content.mjs 의 EFFECTIVE_DATE(= ANNOUNCED_DATE + 7일). 배포일이 바뀌면 둘을 함께 고친다.
+export const TERMS_VERSION = '2026-11-10';
 
 /**
  * 입금 확인 약속(SLA) — 계좌이체는 사람이 통장을 보고 승인하는 구조라, 이 문장이 없으면

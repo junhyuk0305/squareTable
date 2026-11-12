@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndicator } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
@@ -73,7 +74,7 @@ export default function InquiryScreen() {
       </View>
 
       <KeyboardShift>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} keyboardShouldPersistTaps="handled">
         <Appear delay={0}>
           <View style={styles.header}>
             <Text style={styles.title}>도입 문의</Text>

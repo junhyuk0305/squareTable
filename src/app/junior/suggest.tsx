@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useEffect, useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-native';
@@ -111,7 +112,7 @@ export default function JuniorSuggestScreen() {
       <Stack.Screen options={{ title: '노하우 제안' }} />
       <ScreenTitleHeader title="노하우 제안" backFallback />
       <KeyboardShift>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {!ready ? (
             <ScreenLoading label="노하우를 불러오고 있어요…" />
           ) : (
@@ -256,7 +257,7 @@ export default function JuniorSuggestScreen() {
             </>
           )}
 
-          <View style={{ height: 16 }} />
+          <View style={[{ height: 16 }, AppStyles.screenEndSpacer]} />
         </ScrollView>
       </KeyboardShift>
       <RoleTabBar role="junior" />

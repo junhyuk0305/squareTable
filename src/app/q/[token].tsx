@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 /**
  * 외부 공유 응시 화면(0113, 기획 §4.2) — 이 앱에서 **로그인 없이 도는 유일한 라우트**다.
  *
@@ -212,7 +213,7 @@ export default function QuizLinkScreen() {
 
       {phase === 'name' && info && (
         <KeyboardShift>
-          <ScrollView contentContainerStyle={st.body} keyboardShouldPersistTaps="handled">
+          <ScrollView contentContainerStyle={[st.body, AppStyles.screenEnd]} keyboardShouldPersistTaps="handled">
             {/* 등장은 **섹션 단위**다 — 문단·입력칸마다 감싸면 한 화면이 블록 8개로 읽힌다(C형 몰입형은 ≤3).
                 안쪽 간격은 st.qWrap 의 gap 이 body 의 gap 을 대신한다(레이아웃 불변). */}
             <Appear delay={stagger(0)} style={st.qWrap}>
@@ -443,7 +444,7 @@ function LinkQuizBody({
           ref={scroller}
           keyboardShouldPersistTaps="handled"
           style={{ flex: 1 }}
-          contentContainerStyle={st.body}
+          contentContainerStyle={[st.body, AppStyles.screenEnd]}
           showsVerticalScrollIndicator={false}
         >
           <Appear style={st.qWrap}>

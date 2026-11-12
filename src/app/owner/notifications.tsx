@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
@@ -146,7 +147,7 @@ export default function OwnerNotificationsScreen() {
       {!ready ? (
         <ScreenLoading label="알림을 불러오고 있어요…" />
       ) : (
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
         {/* 맨 위 — 매장명 · 내 이름(정체성). 직원 알림 화면과 동일 구조.
             호칭은 세션 역할에서 파생한다(roles.honorific) — 매니저도 이 화면을 쓰기 때문에
             "사장님"을 하드코딩하면 매니저가 자기를 사장으로 부르게 된다(2026-08-08 수정). */}
@@ -219,7 +220,7 @@ export default function OwnerNotificationsScreen() {
           />
         )}
         </Appear>
-        <View style={{ height: 12 }} />
+        <View style={[{ height: 12 }, AppStyles.screenEndSpacer]} />
       </ScrollView>
       )}
     </SafeAreaView>

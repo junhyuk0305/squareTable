@@ -6,14 +6,13 @@ import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { useRouter } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore, DEFAULT_MEMBER_PREF } from '@/lib/store/useMemberPrefsStore';
-import { usePayrollStore, useWagesSettled } from '@/lib/store/usePayrollStore';
 import { replayGuides as replayGuidesFor } from '@/lib/store/useGuideStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { notifyAction } from '@/lib/utils/confirm';
-import { won } from '@/lib/utils/attendance';
 import { storeColor } from '@/lib/utils/storeColor';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
+import { AppStyles } from '@/lib/theme/appDesign';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
 import { PersonalizeSheet } from '@/components/settings/PersonalizeSheet';
@@ -24,19 +23,16 @@ import { LoadErrorState } from '@/components/LoadErrorState';
 
 /**
  * 매장 설정 — 직원 5탭의 설정 탭. "이 매장에서만" 갈리는 개인 설정을 담는다(직원×매장 레이어).
- * 매장 닉네임·색·내 시급(읽기)·이 매장 방해금지·이 매장 음소거·매장 나가기.
+ * 매장 닉네임·색·이 매장 방해금지·이 매장 음소거·매장 나가기.
  * (프로필·푸시 동의·글자 크기·약관·로그아웃·탈퇴 같은 계정 전역 설정은 '전체 계정 설정'으로 이동.)
  */
 export default function StoreSettings() {
   const router = useRouter();
   const unitId = useSessionStore((s) => s.unitId);
   const storeName = useSessionStore((s) => s.storeName) || '내 매장';
-  const userId = useSessionStore((s) => s.userId);
   const userName = useSessionStore((s) => s.userName);
   const role = useSessionStore((s) => s.role);
   const leaveStore = useSessionStore((s) => s.leaveStore);
-  const wages = usePayrollStore((s) => s.wages);
-  const wagesSettled = useWagesSettled();
 
   const savePref = useMemberPrefsStore((s) => s.save);
   const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
@@ -64,16 +60,14 @@ export default function StoreSettings() {
    * 방해금지 시간대 줄도 안 나타난다(2026-08-19 수정 — 사장 매장 설정과 동일 함정).
    */
   const pref = useMemberPrefsStore((s) => s.byUnit[unitId ?? ''] ?? DEFAULT_MEMBER_PREF);
-  const wage = userId ? wages[userId] : undefined;
   const color = storeColor(unitId ?? '', pref.color);
 
   /**
    * ★도착 전에는 설정 값을 그리지 않는다 — `DEFAULT_MEMBER_PREF` 로 먼저 그리면 음소거·방해금지
    * 토글이 **꺼짐으로 보였다가 켜짐으로 뒤바뀐다**(설정 화면에서 이건 오조작을 부른다).
-   * 시급도 같은 문제 — `wagesLoaded` 전에는 "사장님이 정해요"가 거짓으로 먼저 뜬다.
    * ※ 설정 성격 화면이라 **등장 애니메이션은 넣지 않는다**(의도적으로 정적).
    */
-  const ready = prefsLoaded && wagesSettled;
+  const ready = prefsLoaded;
 
   const openPersonalize = () => {
     setDraftName(pref.nickname ?? '');
@@ -105,7 +99,7 @@ export default function StoreSettings() {
       {/* 상단은 직접 그린다 — 왼쪽 정렬 평문 제목은 네이티브 헤더로 못 낸다(ScreenTitleHeader 주석).
           헤더를 끄는 선언은 junior/_layout 에 있다(마운트 뒤에 끄면 한 프레임 깜빡인다). */}
       <ScreenTitleHeader title="설정" storeLine />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
         {/* 매장 헤더 + '이 매장' 두 행을 한 카드로 합쳤다 — 원래 헤더 카드와 '이 매장' 카드가 따로였고
             그래서 흰 카드 면이 4연속이었다(배치규칙① 위반, 2026-08-06). 매장명이 곧 이 묶음의 제목이라
             '이 매장' 라벨은 없애도 방향을 잃지 않는다. 카드는 SettingsSection(=SettingsKit) 것을 그대로 쓴다. */}
@@ -137,8 +131,6 @@ export default function StoreSettings() {
           </Pressable>
           {/* 내 이름 = 매장에서 다른 사람에게 보이는 이름(프로필 이름, 전역) — 수정은 프로필 편집에서. */}
           <SettingsRow icon="person-outline" label="내 이름" value={userName || ''} onPress={() => router.push('/account-edit')} />
-          {/* 내 시급 = 읽기 표시만(사장이 정하는 값). */}
-          <SettingsRow icon="cash-outline" label="내 시급" value={wage ? `${won(wage)}/시간` : '사장님이 정해요'} />
           {/* 매니저만 — 사장 화면으로 가는 진입은 이 행 하나뿐(허용 목록 = roles.ts MANAGER_OWNER_ROUTES). */}
           {role === 'manager' ? (
             <>
@@ -218,7 +210,7 @@ export default function StoreSettings() {
           <Text style={[styles.outLabel, { color: BrandColors.accentText }]}>매장 나가기</Text>
         </Pressable>
 
-        <View style={{ height: 16 }} />
+        <View style={[{ height: 16 }, AppStyles.screenEndSpacer]} />
       </ScrollView>
 
       <PersonalizeSheet

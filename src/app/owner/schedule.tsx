@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
@@ -130,7 +131,7 @@ export default function OwnerScheduleScreen() {
     return () => clearTimeout(t);
   }, [focusShown, focusDone]);
 
-  // 지난 날짜 승인은 그 기간 급여를 바꾼다 — 경고창을 거친 뒤에만 서버에 확인을 보낸다(§8 Q4).
+  // 지난 날짜 승인은 이미 지난 근무 기록을 바꾼다 — 경고창을 거친 뒤에만 서버에 확인을 보낸다(§8 Q4).
   async function approveTime(r: ShiftTimeRequest) {
     if (!timeRequestApprovable(r, today)) return; // 35일이 지나면 서버가 거부한다. 카드에 [승인] 이 없다.
     const past = r.date < today;
@@ -138,7 +139,7 @@ export default function OwnerScheduleScreen() {
     void decideShiftTime(r.id, true, past);
   }
 
-  // 지난 근무가 든 교대는 급여가 누구에게 가는지 확인창으로 말한 뒤에만 승인한다(Q10). 서버도 확인 없이는 받지 않는다.
+  // 지난 근무가 든 교대는 그 근무가 누구에게 넘어가는지 확인창으로 말한 뒤에만 승인한다(Q10). 서버도 확인 없이는 받지 않는다.
   async function approveSwapChecked(r: SwapRequest) {
     const n = pastSwapNotice(r, today, nameOf, attendance);
     if (n && !(await confirmAction(n.title, n.message, '승인', { icon: 'alert-circle-outline' }))) return;
@@ -254,7 +255,7 @@ export default function OwnerScheduleScreen() {
       <ScreenTitleHeader title="근무표" backFallback />
       <Stack.Screen options={{ title: '근무표' }} />
 
-      <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
         {/* ① 주간 날짜 스트립 — 하루 이동을 이 화면 안에서 끝낸다 */}
         <Appear delay={stagger(0)}>
         <View style={styles.section}>
@@ -413,10 +414,6 @@ export default function OwnerScheduleScreen() {
               </Pressable>
             </View>
           )}
-          {/* ★"근무표가 급여의 기준"은 첫 진입 팝업이 아니라 **상시 한 줄**로 둔다(2026-09-09).
-              팝업은 한 번 보고 사라지는데, 사장이 근무표를 다시 여는 건 보통 몇 주 뒤라 그때는 기억이 없다.
-              이 문장이 필요한 순간은 '여기서 시간을 고칠 때'이고, 그건 매번이다. */}
-          <Text style={styles.basisNote}>근무표에 넣은 시간이 급여 계산의 기준이에요.</Text>
         </View>
         </Appear>
 
@@ -441,7 +438,7 @@ export default function OwnerScheduleScreen() {
         </Appear>
         ) : null}
 
-        <View style={{ height: Space.md }} />
+        <View style={[{ height: Space.md }, AppStyles.screenEndSpacer]} />
       </ScrollView>
 
       {sheet && (
@@ -459,7 +456,7 @@ export default function OwnerScheduleScreen() {
   );
 }
 
-/** 직원의 근무 시간 수정 요청 한 건(J2) — 그날 하루만 바뀐다. 승인하면 근무표(급여 기준)에 들어간다. */
+/** 직원의 근무 시간 수정 요청 한 건(J2) — 그날 하루만 바뀐다. 승인하면 근무표에 들어간다. */
 function TimeRequestCard({
   r,
   name,
@@ -565,7 +562,7 @@ function PendingCard({
         <View style={styles.excRow}>
           <Ionicons name="alert-circle-outline" size={14} color={BrandColors.warnText} />
           <Text style={[styles.excText, { color: BrandColors.warnText }]}>
-            같은 시간에 이미 근무가 있어요. 승인하면 겹쳐서 일하게 돼요. 급여는 겹친 시간을 한 번만 세요.
+            같은 시간에 이미 근무가 있어요. 승인하면 겹쳐서 일하게 돼요.
           </Text>
         </View>
       )}
@@ -606,7 +603,6 @@ const styles = StyleSheet.create({
   dayCard: { gap: Space.md },
   dayNone: { fontSize: 15, lineHeight: 21, color: InkColors.ink2, textAlign: 'center', paddingVertical: Space.lg },
   offText: { fontSize: 12, fontWeight: '700', color: InkColors.ink3, paddingTop: Space.sm },
-  basisNote: { fontSize: 12, fontWeight: '600', color: InkColors.ink3, lineHeight: 17, paddingTop: Space.sm, paddingHorizontal: 4 },
   excRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingTop: Space.sm },
   excText: { flex: 1, fontSize: 12, fontWeight: '700', color: InkColors.ink3, lineHeight: 17 },
   excBtn: { minHeight: 34, justifyContent: 'center', paddingHorizontal: 10, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line },

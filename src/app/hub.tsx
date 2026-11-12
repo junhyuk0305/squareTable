@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { AppStyles } from '@/lib/theme/appDesign';
+import { View, Text, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 
@@ -12,8 +13,7 @@ import { NoStoreView } from '@/components/hub/NoStoreView';
 import { Appear, stagger } from '@/components/Appear';
 import { todayStr } from '@/lib/utils/attendance';
 import { weekdayOf } from '@/lib/utils/schedule';
-import { InkColors } from '@/lib/theme/colors';
-import { Space } from '@/lib/theme/layout';
+import { styles } from '@/styles/hub';
 
 // ── 허브 랜딩 탭: 사장 '현황' / 직원 '오늘' (기획 v2 확정, 2026-07-24) ─────────────────────
 // 로그인 직후 착지 화면(랜딩 = 현황/오늘 — 시장 표준: 관리자 앱은 대시보드가 홈).
@@ -53,7 +53,7 @@ export default function HubScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]}>
         <HubTopBar />
         {/* ★게스트 퀴즈 이력은 랜딩(이 탭)에서만 병기한다 — 성장 탭에도 켜면 같은 카드가 두 탭에
             겹쳐 보인다. 여기가 로그인 직후 실제 착지 화면이라 한 번만 보여주면 그 자리가 맞다. */}
@@ -73,11 +73,3 @@ export default function HubScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.bgSoft },
-  scroll: { padding: Space.gutter, gap: Space.lg, paddingBottom: 40 },
-  titleBlock: { gap: 4 },
-  title: { fontSize: 26, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5 },
-  subtitle: { fontSize: 15, color: InkColors.ink2 },
-});

@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { SectionGroup } from '@/components/SectionGroup';
 // /owner/brand-link — 설정 > 본사 연결(정본 §4-E ②): 상태 · 요금 부담 · 공개 수준(즉시 변경) · 상향 요청 응답 · 요금 부담 제안 응답 · 해제.
 //
@@ -40,7 +41,7 @@ export default function BrandLinkScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ title: '본사 연결' }} />
-      <ScreenTitleHeader title="본사 연결" backFallback="/owner/settings" />
+      <ScreenTitleHeader legacy title="본사 연결" backFallback="/owner/settings" />
       {!loaded ? (
         <ScreenLoading label="본사 연결을 확인하는 중" />
       ) : links.length === 0 ? (
@@ -62,12 +63,12 @@ export default function BrandLinkScreen() {
           </Pressable>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.body} testID="brand-link">
+        <ScrollView contentContainerStyle={[styles.body, AppStyles.screenEnd]} testID="brand-link">
           {links.map((l) => (
             <LinkCard key={l.unit_id} link={l} onChanged={() => void hydrate()} />
           ))}
           <View style={styles.labeled}>
-          <SectionGroup icon="eye-outline" title="공개 수준이 뜻하는 것">
+          <SectionGroup legacy icon="eye-outline" title="공개 수준이 뜻하는 것">
           <View style={styles.card}>
             {VISIBILITY_LEVELS.map((lv, i) => (
               <View key={lv.key} style={[styles.lvRow, i > 0 && styles.rowBorder]}>

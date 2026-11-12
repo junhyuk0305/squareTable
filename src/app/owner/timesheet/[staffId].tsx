@@ -4,7 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
-import { usePayrollStore, useWagesSettled } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { TimesheetView } from '@/components/TimesheetView';
@@ -16,31 +15,25 @@ import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { EmptyStyles } from '@/lib/theme/empty';
-import { won } from '@/lib/utils/attendance';
 
-// 근무·급여(또는 직원관리)에서 직원 행 탭 시 진입. 사장이 직원 출근기록을 보정.
+// 직원 관리에서 직원 행 탭 시 진입. 사장이 직원 출근기록을 보정.
 // 직원이 직접 보정한 건은 '직원 수정' 배지로 구분.
 export default function OwnerTimesheetScreen() {
   const router = useRouter();
   const { staffId } = useLocalSearchParams<{ staffId: string }>();
-  const wages = usePayrollStore((s) => s.wages);
   const isOwner = useSessionStore((s) => s.role) === 'owner';
 
   // ★게이트가 `if (!staff)` 보다 **먼저** 있어야 한다 — 직원 목록이 도착하기 전에는 getStaff가 항상 undefined라
   //   "직원을 찾을 수 없어요"라는 **사실과 반대되는 막다른 화면**이 먼저 그려진다(웹 새로고침·푸시 딥링크로 재현).
   //   훅은 `&&` 안에서 부르지 않는다 — 각각 받은 뒤 AND 한다(단락 평가로 훅 개수가 달라지면 크래시).
   const staffLoaded = useStaffStore((s) => s.loaded);
-  const wagesSettled = useWagesSettled();
   const attendanceLoaded = useAttendanceStore((s) => s.loaded);
-  const ready = staffLoaded && wagesSettled && attendanceLoaded;
+  const ready = staffLoaded && attendanceLoaded;
 
   // ★구독으로 찾는다 — getStaff 일회 조회는 loaded 가 이미 true 인 뒤에 명부가 다시 채워져도 화면이 안 따라온다.
   //   명부는 활성 매장 멤버십(unit_members)으로만 채워지므로 다른 매장 직원은 여기 없다.
   const staff = useStaffStore((s) => s.staff.find((m) => m.id === staffId));
   const staffLoadError = useStaffStore((s) => s.loadError);
-  // ★시급이 없으면 최저시급으로 대신 계산하지 않는다 — 사장이 "정해 뒀다"고 오해하고 그대로 지나간다.
-  //   `junior/attendance`·`junior/timesheet` 와 같은 규칙(P7). 미설정은 아래에서 그대로 말한다.
-  const wage = wages[staffId ?? ''] ?? null;
 
   if (!ready) {
     return (
@@ -95,7 +88,6 @@ export default function OwnerTimesheetScreen() {
       <ScreenTitleHeader title={`${staff.name} 출근 기록`} backFallback />
       <TimesheetView
         staffId={staffId!}
-        wage={wage}
         editedBy="owner"
         badgeLabel="직원 수정"
         badgeTone="accent"
@@ -106,13 +98,11 @@ export default function OwnerTimesheetScreen() {
             <Avatar name={staff.name} size={44} fontSize={17} />
             <View style={{ flex: 1 }}>
               <Text style={styles.staffName}>{staff.name}</Text>
-              <Text style={styles.staffMeta}>
-                {staff.shift ?? '시프트 미지정'} · {wage != null ? `시급 ${won(wage)}` : '시급 미설정'}
-              </Text>
+              <Text style={styles.staffMeta}>{staff.shift ?? '시프트 미지정'}</Text>
             </View>
           </View>
         }
-        footerNote="* 출퇴근 기록은 확인용이에요. 급여는 근무표 기준으로 계산돼요."
+        footerNote="* 출퇴근 기록은 확인용이에요. 기준은 근무표예요."
       />
     </>
   );

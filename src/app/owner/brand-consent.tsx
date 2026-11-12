@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { SectionGroup } from '@/components/SectionGroup';
 // /owner/brand-consent?invite= — 본사 연결 요청 동의 화면(정본 §3-5 B · §5-3: 관측 경계표를 **첫 화면**에).
 //
@@ -88,7 +89,7 @@ export default function BrandConsentScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ title: '본사 연결 요청' }} />
-      <ScreenTitleHeader title="본사 연결 요청" backFallback="/hub" />
+      <ScreenTitleHeader legacy title="본사 연결 요청" backFallback="/hub" />
       {!loaded ? (
         <ScreenLoading label="연결 요청을 확인하는 중" />
       ) : pending ? (
@@ -107,7 +108,7 @@ export default function BrandConsentScreen() {
           ) : null}
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.body} testID="brand-consent">
+        <ScrollView contentContainerStyle={[styles.body, AppStyles.screenEnd]} testID="brand-consent">
           {/* 1) 누가 */}
           <View style={styles.hero}>
             <View style={styles.heroIcon}><Ionicons name="business" size={20} color={InkColors.ink} /></View>
@@ -117,7 +118,7 @@ export default function BrandConsentScreen() {
           </View>
 
           {/* 2) 본사가 보게 되는 것 — 첫 화면(§5-3). 고른 수준이 곧 동의 범위다. */}
-          <SectionGroup icon="eye-outline" title="본사가 보게 되는 것" description="수준은 내가 고르고, 언제든 바꿀 수 있어요" contentStyle={styles.groupContent}>
+          <SectionGroup legacy icon="eye-outline" title="본사가 보게 되는 것" description="수준은 내가 고르고, 언제든 바꿀 수 있어요" contentStyle={styles.groupContent}>
           <View style={styles.levels}>
             {VISIBILITY_LEVELS.map((l) => {
               const on = level === l.key;
@@ -152,7 +153,7 @@ export default function BrandConsentScreen() {
           <Text style={styles.note}>직원이 1~2명인 매장은 매장 단위 숫자만으로도 누구인지 짐작될 수 있어요.</Text></SectionGroup>
 
           {/* 3) 어느 매장을 */}
-          <SectionGroup icon="storefront-outline" title="연결할 내 매장" description="고른 매장만 본사에 보여요" contentStyle={styles.groupContent}>
+          <SectionGroup legacy icon="storefront-outline" title="연결할 내 매장" description="고른 매장만 본사에 보여요" contentStyle={styles.groupContent}>
           {candidates.length === 0 ? (
             <View>
               <Text style={styles.cardText}>연결할 수 있는 매장이 없어요. 내가 사장인 매장 중 아직 다른 본사와 연결되지 않은 매장만 고를 수 있어요.</Text>
@@ -234,7 +235,7 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.body} testID="brand-reconsent">
+    <ScrollView contentContainerStyle={[styles.body, AppStyles.screenEnd]} testID="brand-reconsent">
       <View style={styles.hero}>
         <View style={styles.heroIcon}><Ionicons name="swap-horizontal" size={20} color={InkColors.ink} /></View>
         <Text style={styles.heroTitle}>{link.brand_name}</Text>
@@ -244,7 +245,7 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
         </Text>
       </View>
 
-      <SectionGroup icon={notice ? 'megaphone-outline' : 'shield-checkmark-outline'}
+      <SectionGroup legacy icon={notice ? 'megaphone-outline' : 'shield-checkmark-outline'}
         title={notice ? '본사가 보는 범위를 알려드려요' : '공개 범위에 다시 동의해 주세요'}
         description={notice ? '직영점이라 본사가 정해요' : '관계가 바뀌어 근거가 달라졌어요'} contentStyle={styles.groupContent}>
       <View>
@@ -272,7 +273,7 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
         ) : null}
       </View></SectionGroup>
 
-      <SectionGroup icon="list-outline" title={`${relationLabel(link.relation)}점에서는 이렇게 달라져요`} contentStyle={styles.groupContent}>
+      <SectionGroup legacy icon="list-outline" title={`${relationLabel(link.relation)}점에서는 이렇게 달라져요`} contentStyle={styles.groupContent}>
       <View>
         {RELATION_RULES.map((r, i) => (
           <View key={r.label} style={[styles.pickRow, styles.ruleRow, i > 0 && styles.pickBorder]}>

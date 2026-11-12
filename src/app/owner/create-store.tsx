@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useEffect, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { fetchMyPreviousUnits } from '@/lib/db';
@@ -94,7 +95,7 @@ export default function OwnerCreateStore() {
         backFallback={isAddingStore ? '/stores' : undefined}
       />
       <KeyboardShift>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} keyboardShouldPersistTaps="handled">
         <Appear delay={0}>
         <View style={styles.hero}>
           <View style={styles.iconWrap}>

@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -37,12 +38,12 @@ const DOCS: Record<string, Doc> = {
     note: '※ 정보통신망법에 따라 광고성 정보는 별도 동의를 받습니다.',
   },
   labor: {
-    title: '근로·급여정보 처리 안내',
-    h1: '근로·급여정보 처리 안내 (직원 필수)',
+    title: '근로정보 처리 안내',
+    h1: '근로정보 처리 안내 (직원 필수)',
     sections: [
-      { h: '처리 항목', b: '출근·퇴근 시각, 근무 시간, 시급, 예상 급여 등 근로 관리에 필요한 정보.' },
-      { h: '처리 목적', b: '사장님이 직원의 근무·급여를 확인·정산할 수 있도록 출퇴근 기록과 시급 기반 예상 급여를 제공.' },
-      { h: '열람 범위', b: '본인과 소속 매장 사장님이 같은 데이터를 열람합니다. 사장님이 지정한 매니저는 근무표·출근 기록만 볼 수 있고 시급·급여는 볼 수 없습니다. 다른 직원에게는 공개되지 않습니다.' },
+      { h: '처리 항목', b: '근무표, 출근·퇴근 시각, 근무 시간 등 근로 관리에 필요한 정보.' },
+      { h: '처리 목적', b: '사장님이 직원의 근무표와 출퇴근 기록을 확인할 수 있도록 제공.' },
+      { h: '열람 범위', b: '본인과 소속 매장 사장님이 같은 데이터를 열람합니다. 사장님이 지정한 매니저는 근무표·출근 기록만 볼 수 있습니다. 다른 직원에게는 공개되지 않습니다.' },
       { h: '정정 권리', b: '본인이 출퇴근 시각을 직접 수정할 수 있으며, 수정 내역은 사장님에게 ‘직원 수정’으로 표시됩니다.' },
       { h: '보유 기간', b: '매장 소속 해제 또는 회원 탈퇴 시까지. 관계 법령상 보존 의무가 있는 경우 해당 기간 보관합니다.' },
     ],
@@ -61,7 +62,7 @@ export default function LegalDocScreen() {
       <SafeAreaView style={styles.safe} edges={['bottom']}>
         <Stack.Screen options={{ headerShown: false, title: '문서', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
         <ScreenTitleHeader title="문서" backFallback />
-        <ScrollView contentContainerStyle={styles.scroll}>
+        <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]}>
           <Text style={styles.h1}>문서를 찾지 못했습니다</Text>
           <Text style={styles.body}>주소를 다시 확인해 주세요.</Text>
         </ScrollView>
@@ -73,7 +74,7 @@ export default function LegalDocScreen() {
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ headerShown: false, title: data.title, headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
       <ScreenTitleHeader title={data.title} backFallback />
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]}>
         <Text style={styles.h1}>{data.h1}</Text>
         {/* ★시행일을 여기서 다시 적지 않는다(#54) — business.ts 의 TERMS_VERSION 이 정본이고,
             legal-content.mjs(웹 5종)도 같은 값을 쓴다. 이 화면만 2026-07-10 로 굳어 있어
@@ -86,7 +87,7 @@ export default function LegalDocScreen() {
           </View>
         ))}
         {data.note && <Text style={styles.note}>{data.note}</Text>}
-        <View style={{ height: 24 }} />
+        <View style={[{ height: 24 }, AppStyles.screenEndSpacer]} />
       </ScrollView>
     </SafeAreaView>
   );

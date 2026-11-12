@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -335,7 +336,7 @@ function HandoverImportBody() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {phase === 'review' ? (
           <Appear delay={0}>
             <View style={styles.reviewBanner}>

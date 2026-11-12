@@ -9,6 +9,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStoreDisplay } from '@/components/StoreHeaderTitle';
 import { InkColors } from '@/lib/theme/colors';
 import { SCREEN_GUTTER, Space } from '@/lib/theme/layout';
+import { AppStyles } from '@/lib/theme/appDesign';
 
 /**
  * 제목 상단바 — **네이티브 헤더를 끄고 화면 안에서 직접 그린다.**
@@ -32,6 +33,7 @@ export function ScreenTitleHeader({
   onBack,
   backFallback,
   right,
+  legacy = false,
 }: {
   title: string;
   /** 제목 아래 "어느 매장인가"(색점+매장명)를 함께 보인다 — 탭 루트용(StoreHeaderTitle 과 같은 규칙). */
@@ -46,6 +48,8 @@ export function ScreenTitleHeader({
   backFallback?: Href | true;
   /** 오른쪽 끝 액션. */
   right?: ReactNode;
+  /** Deferred billing and brand screens retain their current header spacing. */
+  legacy?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -73,7 +77,10 @@ export function ScreenTitleHeader({
   };
   const back = onBack ?? (backFallback ? goBack : undefined);
   return (
-    <View style={[styles.bar, { paddingTop: insets.top + Space.sm }]}>
+    <View style={[styles.bar, {
+      paddingTop: insets.top + (legacy ? Space.sm : AppStyles.titleHeader.paddingVertical ?? Space.sm),
+      paddingBottom: legacy ? Space.md : AppStyles.titleHeader.paddingVertical ?? Space.md,
+    }]}>
       {back && (
         <Pressable
           onPress={back}
@@ -85,7 +92,7 @@ export function ScreenTitleHeader({
           <Ionicons name="arrow-back" size={24} color={InkColors.ink} />
         </Pressable>
       )}
-      <View style={styles.titleWrap}>
+      <View style={[styles.titleWrap, !legacy && AppStyles.titleHeaderContent]}>
         <Text style={styles.title} numberOfLines={1}>
           {title}
         </Text>

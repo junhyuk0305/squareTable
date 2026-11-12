@@ -38,7 +38,7 @@ for (const [u, want] of [
   ['/owner/categories', '/owner/categories'],
   ['/owner/training', '/owner/training'],
   ['/owner/quiz/abc', '/owner/quiz/abc'],
-  ['/owner/payroll', '/junior/home'],
+  ['/owner/payroll', '/junior/home'], // 화면은 2026-11-02 에 없어졌다. 목록 밖 /owner/* 는 매니저에게 막힌다는 규칙만 본다
   ['/owner/import-knowhow', '/junior/home'],
   ['/owner/store-config', '/junior/home'],
   ['/owner/staff', '/junior/home'],

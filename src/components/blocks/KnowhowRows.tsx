@@ -5,6 +5,7 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { SectionGroup } from '@/components/SectionGroup';
+import { AppStyles, AppTypography } from '@/lib/theme/appDesign';
 
 /**
  * D10 · 노하우 행 — **좌측 라벨 열 + 점**. 노하우 본문을 그리는 자리는 전부 이것 하나다.
@@ -66,11 +67,11 @@ export function KnowhowRows({ rows, variant = 'compact' }: { rows: KnowhowRow[];
   if (rows.length === 0) return null;
 
   if (variant === 'grouped') return (
-    <View style={styles.groups}>
+    <View style={[styles.groups, AppStyles.groupSpacing]}>
       {rows.map((r, i) => (
         <SectionGroup key={`${r.kind}-${i}`} title={r.label ?? LABEL[r.kind]}>
-          {r.render ?? <RowValue row={r} />}
-          {r.sub ? <Text style={styles.sub}>{r.sub}</Text> : null}
+          {r.render ?? <RowValue row={r} grouped />}
+          {r.sub ? <Text style={[styles.sub, AppTypography.meta]}>{r.sub}</Text> : null}
         </SectionGroup>
       ))}
     </View>
@@ -95,21 +96,21 @@ export function KnowhowRows({ rows, variant = 'compact' }: { rows: KnowhowRow[];
 }
 
 /** 값 한 칸 — 여러 줄(items)은 불릿, 한 덩어리(text)는 문단. */
-function RowValue({ row }: { row: KnowhowRow }) {
+function RowValue({ row, grouped = false }: { row: KnowhowRow; grouped?: boolean }) {
   if (row.items && row.items.length > 0) {
     return (
       <View>
         {row.items.map((it, i) => (
           <View key={i} style={[styles.bullet, i > 0 && styles.bulletGap]}>
             <View style={[styles.bulletDot, { backgroundColor: TONE[row.kind] }]} />
-            <Text style={styles.text}>{it}</Text>
+            <Text style={[styles.text, grouped && AppTypography.body]}>{it}</Text>
           </View>
         ))}
       </View>
     );
   }
   if (!row.text) return null;
-  return <Text style={styles.text}>{row.text}</Text>;
+  return <Text style={[styles.text, grouped && AppTypography.body]}>{row.text}</Text>;
 }
 
 const styles = StyleSheet.create({

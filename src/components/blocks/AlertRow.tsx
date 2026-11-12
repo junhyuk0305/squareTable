@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { BrandColors, InkColors } from '@/lib/theme/colors';
@@ -32,6 +32,7 @@ export function AlertRow({
   onPress,
   icon = 'alert-circle',
   preview,
+  style,
 }: {
   label: string;
   count: number;
@@ -41,6 +42,7 @@ export function AlertRow({
   icon?: keyof typeof Ionicons.glyphMap;
   /** 미리보기 줄("아메리카노 레시피 — 옛 정답이 나가는 중"). 앞 2줄만 쓰고 나머지는 "n건 더"로 접는다. */
   preview?: string[];
+  style?: StyleProp<ViewStyle>;
 }) {
   if (count <= 0) return null;
   const lines = (preview ?? []).slice(0, PREVIEW_MAX);
@@ -51,7 +53,7 @@ export function AlertRow({
       accessibilityRole="button"
       accessibilityLabel={`${label} ${count}${unit}${lines.length ? `. ${lines.join('. ')}` : ''}`}
       onPress={onPress}
-      style={({ pressed }) => [styles.box, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.box, style, pressed && styles.pressed]}
     >
       <View style={styles.row}>
         <View style={styles.dot}>

@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { View, Text, Pressable, ScrollView, StyleSheet, type ViewStyle } from 'react-native';
 import { Appear, stagger } from './Appear';
 import { EmptyState } from './EmptyState';
@@ -133,7 +134,7 @@ export function BrowseList({ entries, onSelect, emptyHint, showCategory = true }
   return (
     <ScrollView
       style={styles.scroll}
-      contentContainerStyle={styles.scrollContent}
+      contentContainerStyle={[styles.scrollContent, AppStyles.screenEnd]}
       showsVerticalScrollIndicator={false}
     >
       {entries.map((entry, i) => (

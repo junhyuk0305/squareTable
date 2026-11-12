@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   View,
@@ -744,7 +745,7 @@ export function OwnerCoachChat({
       <ScrollView
         ref={scrollRef}
         style={[styles.scroll, hideUntilPinned]}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, AppStyles.screenEnd]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         onScroll={trackPin}
@@ -853,7 +854,7 @@ export function OwnerCoachChat({
           </View>
         )}
 
-        <View style={{ height: 8 }} />
+        <View style={[{ height: 8 }, AppStyles.screenEndSpacer]} />
       </ScrollView>
 
       {/* 탈출구 — 꼬리질문이 떠 있는 동안, 답하지 않고도 바로 등록할 수 있게 항상 노출.

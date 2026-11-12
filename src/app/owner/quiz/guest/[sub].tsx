@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
@@ -89,7 +90,7 @@ export default function GuestQuizResultScreen() {
       <Stack.Screen options={{ title: '링크 응시 결과' }} />
       <ScreenTitleHeader title="링크 응시 결과" backFallback />
 
-      <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[st.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
         {!loaded ? (
           /* 빈 판을 먼저 내보내지 않는다 — 기다리는 중이라고 말한다(08-07 정본 §0-1). */
           <View style={st.loadingWrap}>

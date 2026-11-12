@@ -2,7 +2,7 @@
 //
 // 본사 설정 > 데이터 공개 안내와 점주 동의 화면·설정 > 본사 연결이 **같은 표**를 그린다 —
 // 문구가 두 곳에서 어긋나면 점주가 동의한 것과 본사가 보는 것이 달라진다. 여기 한 곳만 고친다.
-// 개인 축(급여·근태·직원 이름·개인 점수·채팅)은 어느 수준에도 없다 — 표에 "없음" 줄로 박아 둔다.
+// 개인 축(근태·직원 이름·개인 점수·채팅)은 어느 수준에도 없다 — 표에 "없음" 줄로 박아 둔다.
 import type { BrandPayer, BrandRelation, BrandVisibility } from '@/lib/brand/brandDb';
 
 export type VisibilityLevel = {
@@ -36,7 +36,7 @@ export const VISIBILITY_LEVELS: VisibilityLevel[] = [
 ];
 
 /** 어느 수준에서도 본사에 가지 않는 것 — 스키마 수준에서 경로가 없다(brand-boundary 규칙). */
-export const NEVER_SHARED = ['급여 · 시급 · 근태', '직원 이름 · 전화번호', '직원 개인별 점수 · 이수 기록', '업무 채팅'];
+export const NEVER_SHARED = ['근태','직원 이름 · 전화번호', '직원 개인별 점수 · 이수 기록', '업무 채팅'];
 
 export const visibilityLabel = (v: BrandVisibility): string =>
   VISIBILITY_LEVELS.find((l) => l.key === v)?.label ?? v;
@@ -81,7 +81,7 @@ export const RELATION_RULES: RelationRule[] = [
   { label: '받은 노하우 숨기기', franchise: '언제든 숨길 수 있어요', direct: '본사가 필수로 보낸 것은 숨길 수 없어요' },
   { label: '연결 해제', franchise: '점주가 끊을 수 있어요', direct: '본사만 끊을 수 있어요' },
   { label: '요금 부담', franchise: '양쪽이 제안하고 상대가 수락해요', direct: '본사 부담으로 고정돼요' },
-  { label: '급여 · 근태 · 직원 개인 기록', franchise: '본사에 가지 않아요', direct: '본사에 가지 않아요' },
+  { label: '근태 · 직원 개인 기록', franchise: '본사에 가지 않아요', direct: '본사에 가지 않아요' },
 ];
 
 /** 잠긴 칸 옆에 붙는 이유 한 줄. 가맹에서 못 켜는 것은 **법**이 이유다(정본 §2 ②). */

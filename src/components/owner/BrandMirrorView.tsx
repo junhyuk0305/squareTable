@@ -84,7 +84,7 @@ export function BrandMirrorView({ unitId }: { unitId: string }) {
               <Kv k="미이수 인원" v={row.staff_behind === null ? '—' : `${row.staff_behind}명`} />
               <Kv k="오답 몰린 노하우" v={row.weak_entries === null ? '—' : `${row.weak_entries}건`} />
               <Text style={styles.foot}>
-                줄표(—)는 지금 공개 수준에서 본사에 가지 않는 값이에요. 급여·근태·직원 이름·개인별 점수·업무 채팅은
+                줄표(—)는 지금 공개 수준에서 본사에 가지 않는 값이에요. 근태·직원 이름·개인별 점수·업무 채팅은
                 어느 수준에서도 본사에 가지 않아요.
               </Text>
             </>

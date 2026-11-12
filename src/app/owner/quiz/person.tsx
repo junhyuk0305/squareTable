@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useEffect, useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
@@ -107,7 +108,7 @@ export default function QuizPersonResultScreen() {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <Stack.Screen options={{ title: name }} />
       <ScreenTitleHeader title={name} backFallback />
-      <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[st.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
         {error ? (
           <EmptyState title="결과를 불러오지 못했어요" body="잠시 후 다시 시도해 주세요." cta={{ label: '다시 시도', onPress: () => setReload((n) => n + 1) }} />
         ) : board.submissions === 0 ? (

@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useRef, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
@@ -158,7 +159,7 @@ export default function JuniorHub() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <Stack.Screen options={{ headerShown: false }} />
       <KeyboardShift>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} keyboardShouldPersistTaps="handled">
         {/* 상단 바: 매장 선택으로(뒤로) + 워드마크.
             ★마이페이지 아이콘 버튼은 제거함(2026-07-29) — 같은 화면 아래 '마이페이지' 카드가 이미
               프로필 편집·로그아웃을 제공해 목적지가 완전히 겹쳤고(중복 진입점), 라벨 없는 아이콘 단독

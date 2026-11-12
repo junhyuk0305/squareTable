@@ -3,6 +3,8 @@ import { View, Text, Pressable, StyleSheet, type StyleProp, type ViewStyle } fro
 import { Ionicons } from '@expo/vector-icons';
 
 import { SectionLabel } from '@/components/SectionLabel';
+import { SectionGroup } from '@/components/SectionGroup';
+import { groupedInviteLayout } from '@/lib/theme/appDesign';
 import { PressableScale } from '@/components/PressableScale';
 import { showToast } from '@/lib/store/useToastStore';
 import { shareText, type ShareTextResult } from '@/lib/utils/shareText';
@@ -95,10 +97,8 @@ export function InviteBlock({
   };
 
 
-  return (
-    <View style={[s.root, style]}>
-      <SectionLabel title="직원 초대" />
-      <View style={s.card}>
+  const content = (
+    <>
         <View style={s.head}>
           <Text style={s.howTitle}>초대코드</Text>
           <Text style={s.desc}>직원이 가입하고 초대코드를 넣으면 합류 신청이 돼요.</Text>
@@ -152,12 +152,23 @@ export function InviteBlock({
           ) : (
             <Text style={s.ask}>{INVITE_ASK_OWNER_TEXT}</Text>
           ))}
-      </View>
+    </>
+  );
+
+  return groupedInviteLayout ? (
+    <SectionGroup title="직원 초대" style={style} contentStyle={s.content}>
+      {content}
+    </SectionGroup>
+  ) : (
+    <View style={[s.root, style]}>
+      <SectionLabel title="직원 초대" />
+      <View style={s.card}>{content}</View>
     </View>
   );
 }
 
 const s = StyleSheet.create({
+  content: { gap: Space.md },
   // 라벨↔카드 8 — 다른 섹션(SectionLabel + 부모 gap sm)과 같은 간격.
   root: { gap: Space.sm },
   card: {

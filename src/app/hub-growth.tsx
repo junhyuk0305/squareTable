@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, Redirect } from 'expo-router';
@@ -51,7 +52,7 @@ export default function HubGrowthScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]}>
         <HubTopBar />
         {!hasStore ? (
           // 매장 0곳 = 원격 데이터 게이트가 없다(세션만으로 그린다) — 제목을 여기서 바로 그린다.

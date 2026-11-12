@@ -5,7 +5,7 @@
 //   `start < end` 로 막고 있어, 심야 매장은 밤 10시~새벽 2시 근무를 아예 넣을 수 없었다(감사 #43).
 //   판정이 근무표 시트와 출퇴근 보정 두 곳에 복제돼 있던 것을 schedule.ts 한 곳으로 합쳤으므로,
 //   그 한 곳을 못박는다. 백엔드를 쓰지 않는 순수 함수 게이트다(레이트 리밋 무관).
-// 방식: qa-payroll 과 동일 — attendance.ts + schedule.ts 만 임시 트랜스파일해 실제 함수로 검증.
+// 방식: attendance.ts + schedule.ts 만 임시 트랜스파일해 실제 함수로 검증(옛 qa-payroll 과 같은 방식 · 2026-11-02 삭제).
 import { execFileSync } from 'node:child_process';
 import { writeFileSync, readFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';

@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { SectionGroup } from '@/components/SectionGroup';
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
@@ -193,7 +194,7 @@ export function OwnerKnowhowImport() {
   return (
     <View style={styles.flex}>
       <StepProgress step={step} total={TOTAL_STEPS} title={STEP_TITLES[step - 1]} />
-      <ScrollView keyboardShouldPersistTaps="handled" style={styles.flex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" style={styles.flex} contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
         {/* ── 1단계 · 매장 고르기 ───────────────────────────────────────────────── */}
         {step === 1 ? (
           <Appear delay={0} style={styles.groups}>
@@ -404,7 +405,7 @@ export function OwnerKnowhowImport() {
 </Appear>
         ) : null}
 
-        <View style={{ height: 96 }} />
+        <View style={[{ height: 96 }, AppStyles.screenEndSpacer]} />
       </ScrollView>
 
       {/* 하단 도크 — 단계마다 주 액션 1개. 프레임 안 정상 흐름(모달 아님)이라 폭은 프레임에 귀속. */}

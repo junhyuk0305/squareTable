@@ -5,10 +5,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { CardStyles } from '@/lib/theme/card';
 import { InkColors } from '@/lib/theme/colors';
 import { Gap, Space } from '@/lib/theme/layout';
+import { AppStyles, AppTypography } from '@/lib/theme/appDesign';
 
 /** A category owns its title, content and actions. Rows keep their own padding in flush mode. */
 export function SectionGroup({
-  title, description, icon, action, footer, children, flush = false, style, contentStyle, groupId,
+  title, description, icon, action, footer, children, flush = false, style, contentStyle, groupId, legacy = false,
 }: {
   title?: string;
   description?: string;
@@ -20,26 +21,28 @@ export function SectionGroup({
   style?: StyleProp<ViewStyle>;
   contentStyle?: StyleProp<ViewStyle>;
   groupId?: string;
+  /** Keep deferred billing and brand surfaces on their existing presentation. */
+  legacy?: boolean;
 }) {
   const instance = useId();
   const key = groupId ?? `section-${instance.replace(/[^A-Za-z0-9_-]/g, '')}`;
   // Untitled containers are surfaces, not independently labelled category groups.
   const marker = title ? key : undefined;
   return (
-    <View style={[styles.group, style]} testID={marker && `design-group-${marker}`}>
+    <View style={[styles.group, !legacy && AppStyles.group, !legacy && flush && AppStyles.groupFlush, style]} testID={marker && `design-group-${marker}`}>
       {title && (
-        <View style={[styles.header, flush && styles.flushHeader]}>
+        <View style={[styles.header, !legacy && AppStyles.groupHeader, flush && styles.flushHeader, !legacy && flush && AppStyles.groupFlushHeader]}>
           <View style={styles.heading}>
             <View style={styles.titleRow}>
               {icon && <Ionicons name={icon} size={20} color={InkColors.ink2} />}
-              <Text accessibilityRole="header" style={styles.title} testID={`design-group-title-${key}`}>{title}</Text>
+              <Text accessibilityRole="header" style={[styles.title, !legacy && AppTypography.group]} testID={`design-group-title-${key}`}>{title}</Text>
             </View>
-            {description && <Text style={styles.description}>{description}</Text>}
+            {description && <Text style={[styles.description, !legacy && AppTypography.detail]}>{description}</Text>}
           </View>
           {action && <View style={styles.action} testID={`design-group-action-${key}--header`}>{action}</View>}
         </View>
       )}
-      <View style={[!flush && styles.content, !flush && !title && styles.untitledContent, contentStyle]}>{children}</View>
+      <View style={[!flush && styles.content, !legacy && !flush && AppStyles.groupContent, !flush && !title && styles.untitledContent, !legacy && !flush && !title && AppStyles.groupUntitled, contentStyle]}>{children}</View>
       {footer && (
         <View style={styles.footer} testID={marker && `design-group-action-${key}--footer`}>{footer}</View>
       )}

@@ -125,7 +125,7 @@ if (applies) {
   for (const d of days('2026-07-01', '2026-09-30')) {
     for (const t of backfilled) if (applies(t, d) !== old(t, d)) bad.push(`${d}/${t.weekday ?? t.date}`);
   }
-  check('★골든: 2000-01-01 백필 행은 7~9월 내내 옛 판정과 같다(지난 급여 불변)', bad.length === 0, bad.slice(0, 5).join(' '));
+  check('★골든: 2000-01-01 백필 행은 7~9월 내내 옛 판정과 같다(지난 근무 불변)', bad.length === 0, bad.slice(0, 5).join(' '));
 }
 
 console.log('\n■ [1-2] planSeriesSave — "한 요일 반복은 하나"는 그날 적용 중인 행 기준');
@@ -255,7 +255,8 @@ check('직원 junior/schedule 의 겹침 판정(conflictOf)이 적용 기간을 
 
 check('ShiftQuickSheet: "이 날부터 계속"(기본) · "이 날만" 범위 선택이 있다', /이 날부터 계속/.test(quick) && /이 날만/.test(quick));
 check('ShiftQuickSheet: 지울 때도 "이 날부터 그만" · "이 날만 빼기"를 고른다', /이 날부터 그만/.test(quick) && /이 날만 빼기/.test(quick));
-check('ShiftQuickSheet: 지난 날짜 안내 문구가 있다', /지난 날짜부터 바꾸면 그 기간 급여도 바뀌어요\./.test(quick));
+check('ShiftQuickSheet: 지난 날짜 안내 문구가 있다', /지난 날짜부터 바꾸면 그 기간 근무 기록도 바뀌어요\./.test(quick) && /지난 날짜를 바꾸면 그날 근무 기록도 바뀌어요\./.test(quick));
+check('ShiftQuickSheet: 급여 문장이 없다', !/급여/.test(quick.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')));
 check('ShiftQuickSheet: 저장은 RPC 액션으로(updateTemplate · removeTemplate 직접 쓰기 없음)',
   !/updateTemplate|removeTemplate/.test(quick) && /editShiftFrom|overrideShiftDay|endShiftFrom|addShiftSeries/.test(quick));
 check('ShiftQuickSheet: 반복 저장 판정은 planSeriesSave(그날 적용 중인 행)', /planSeriesSave\(/.test(quick));
@@ -267,17 +268,19 @@ check('허브 직원 오늘 탭(fetchMyCrossSummary)이 기간을 주는 my_cros
 // 시트(Modal) 위에 확인창(Modal)을 띄우지 않는다(iOS) — 시트 안 확인 단계가 같은 문구(PAST_CHANGE_*)를 쓴다.
 check('ShiftQuickSheet: 지난 날짜는 확인 단계(같은 경고 문구)를 거친 뒤에만 p_confirm_past 를 보낸다',
   /PAST_CHANGE_TITLE/.test(quick) && /PAST_CHANGE_BODY/.test(quick) && /send\(true,/.test(quick) && !/confirmPastChange\(/.test(quick));
-check('경고창 문구 = "지난 기간이에요" · "그 기간 급여가 바뀌어요."',
-  /지난 기간이에요/.test(read('src/lib/utils/confirm.ts')) && /그 기간 급여가 바뀌어요\./.test(read('src/lib/utils/confirm.ts')));
+check('경고창 문구 = "지난 기간이에요" · "지난 근무 기록이 바뀌어요."',
+  /지난 기간이에요/.test(read('src/lib/utils/confirm.ts')) && /지난 근무 기록이 바뀌어요\./.test(read('src/lib/utils/confirm.ts')));
 
-check('MyShiftSheet: "이 날 하루만 바뀌어요. 사장님이 승인하면 급여에 반영돼요."',
-  /이 날 하루만 바뀌어요\. 사장님이 승인하면 급여에 반영돼요\./.test(mine));
+check('MyShiftSheet: "이 날 하루만 바뀌어요. 사장님이 승인하면 근무표에 반영돼요."',
+  /이 날 하루만 바뀌어요\. 사장님이 승인하면 근무표에 반영돼요\./.test(mine));
 check('MyShiftSheet: 지키지 않던 약속(‘직원 수정’으로 보이고)이 사라졌다', !/직원 수정’으로 보이고/.test(mine));
 check('MyShiftSheet: 저장 = 요청(requestShiftTime)', /requestShiftTime/.test(mine));
 check('db.ts: request_shift_time · decide_shift_time · shift_change_requests 읽기',
   /'request_shift_time'\s*,/.test(db) && /'decide_shift_time'\s*,/.test(db) && /from\(\s*'shift_change_requests'\s*\)/.test(db));
-check('알림: 시간 수정 요청은 사장에게(audience owners · ownerOnly)',
-  /audience:\s*'owners',\s*\n\s*ownerOnly:\s*true,[\s\S]{0,200}shift-time/.test(notify));
+// 0316 부터 매니저도 시간 수정 요청을 결정한다 → 관리자(사장+매니저)에게 간다. ownerOnly 가 없어야 맞다(notify.ts 주석).
+const shiftTimeNotify = notify.match(/export const notifyOwnersShiftTimeRequest[\s\S]*?\n {2}\}\);/)?.[0] ?? '';
+check('알림: 시간 수정 요청은 관리자에게(audience owners · ownerOnly 없음 · kind shift_time)',
+  /audience:\s*'owners'/.test(shiftTimeNotify) && /kind:\s*'shift_time'/.test(shiftTimeNotify) && !/ownerOnly/.test(shiftTimeNotify), shiftTimeNotify.slice(0, 80));
 check('사장 근무표: 시간 수정 요청 승인 칸(decideShiftTime · 지난 날짜는 경고창)',
   /decideShiftTime/.test(ownerSched) && /pendingTimeRequests/.test(ownerSched) && /confirmPastChange\(/.test(ownerSched));
 check('홈 다음 행동 수에 시간 수정 요청이 더해진다', /pendingTimeRequests/.test(dash) && /pendingTimeRequests|pendingShiftTimes/.test(dashScreen));

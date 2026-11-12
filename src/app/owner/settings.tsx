@@ -16,6 +16,7 @@ import { PLANS } from '@/lib/config/tiers';
 import { storeColor } from '@/lib/utils/storeColor';
 import { notifyAction } from '@/lib/utils/confirm';
 import { InkColors } from '@/lib/theme/colors';
+import { AppStyles } from '@/lib/theme/appDesign';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
 import { ShellTaskCleanupSheet } from '@/components/owner/quiz/ShellTaskCleanupSheet';
@@ -27,7 +28,7 @@ import { LoadErrorState } from '@/components/LoadErrorState';
 
 /**
  * 매장 설정(사장) — 사장 5탭의 설정 탭. "이 매장" 단위 설정만 담는다(2레이어 IA — F6 대칭 분리).
- * 초대코드·직원·급여·매장 닉네임·색·이 매장 알림(음소거·방해금지).
+ * 초대코드·직원·매장 닉네임·색·이 매장 알림(음소거·방해금지).
  * 계정 전역(프로필·푸시 수신 동의·요금제·글자 크기·약관·로그아웃·탈퇴)은 '전체 계정 설정'
  * (account-settings — 직원과 동일 화면)으로 이동했다. 직원 매장 설정(junior/settings)과 대칭.
  */
@@ -140,11 +141,11 @@ export default function OwnerSettings() {
       ) : prefsLoadError ? (
         <LoadErrorState title="매장 설정을 불러오지 못했어요" onRetry={() => void retryPrefs()} />
       ) : (
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
         {/* 매장 헤더 — 색 점 + 매장명 + (있으면) 내 별칭. 탭하면 개인화 시트(직원 매장 설정과 동일). */}
         <Pressable
           onPress={openPersonalize}
-          style={({ pressed }) => [styles.storeHead, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [styles.storeHead, AppStyles.sectionSpacing, pressed && { opacity: 0.7 }]}
           accessibilityRole="button"
           accessibilityLabel="내가 보는 매장 이름·색 설정"
         >
@@ -157,12 +158,11 @@ export default function OwnerSettings() {
         </Pressable>
 
         {/* 가게 초대코드 — 직원 합류용. 상시 확인·전달. */}
-        <InviteBlock code={inviteCode} from="settings" style={styles.inviteGap} />
+        <InviteBlock code={inviteCode} from="settings" style={[styles.inviteGap, AppStyles.sectionSpacing]} />
         {/* 2026-08-19: 코드 카드 아래 '직원 관리 · 합류 승인' 줄을 뺐다 — 바로 아래 '직원·초대코드 관리'와
             같은 화면(/owner/staff)으로 가는 중복 진입점이었다. 진입점은 매장 관리 섹션 한 곳으로 둔다. */}
         <SettingsSection icon="storefront-outline" title="매장 관리">
           <SettingsRow first icon="people-outline" label="직원·초대코드 관리" onPress={() => router.push('/owner/staff')} />
-          <SettingsRow icon="cash-outline" label="급여 설정" onPress={() => router.push('/owner/payroll')} />
           {/* 옛 퀴즈 구조(0110)가 만들어 둔 껍데기 할일 치우기. 한 번 쓰고 마는 도구라
               매일 보는 퀴즈 홈이 아니라 여기에 둔다(2026-08-11 결정). 치울 게 없으면 줄 자체가 없다. */}
           {shellLeft > 0 && (
@@ -177,7 +177,7 @@ export default function OwnerSettings() {
 
         {/* 본사 연결(P3, 정본 §4-E ②) — 연결됐거나 요청이 와 있을 때만. 초대제라 '연결하기' 진입점은 없다. */}
         {brandLink || brandInvites > 0 ? (
-          <SettingsSection icon="business-outline" title="본사 연결">
+          <SettingsSection legacy icon="business-outline" title="본사 연결">
             {brandLink ? (
               <SettingsRow
                 first
@@ -253,7 +253,7 @@ export default function OwnerSettings() {
         </SettingsSection>
 
         <Text style={styles.foot}>매장의 정석 · 스퀘어테이블</Text>
-        <View style={{ height: 16 }} />
+        <View style={[{ height: 16 }, AppStyles.screenEndSpacer]} />
       </ScrollView>
       )}
       {cleanupOpen && <ShellTaskCleanupSheet tasks={shellTasks} onClose={() => setCleanupOpen(false)} />}

@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, TextInput, Animated, Easing, type LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -231,7 +232,7 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
             }
           />
         ) : (
-          <ScrollView keyboardShouldPersistTaps="handled" style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <ScrollView keyboardShouldPersistTaps="handled" style={styles.scroll} contentContainerStyle={[styles.content, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
             {popular.length > 0 && (
               <Appear delay={stagger(0)} style={styles.block}>
                 <SectionLabel icon="flame-outline" title="인기 노하우" />

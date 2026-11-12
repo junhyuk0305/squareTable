@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
@@ -37,7 +38,7 @@ export default function JuniorOnboarding() {
     <SafeAreaView style={styles.safe}>
       <Stack.Screen options={{ headerShown: false }} />
       <KeyboardShift>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} keyboardShouldPersistTaps="handled">
         <Appear delay={stagger(0)}>
         <View style={styles.hero}>
           <View style={styles.iconWrap}>

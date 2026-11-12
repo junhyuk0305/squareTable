@@ -83,7 +83,6 @@
       "note": "노하우 탭(/owner/categories)과 같은 OwnerKnowhowBrowse 를 **뒤로가기 가능한 서브화면**으로 재사용한다(탭 루트로 리다이렉트하면 백버튼이 사라져 길이 막힌다). `?review=1` = 홈 '확인이 필요한 노하우' 착지점 → '안 쓰임' 칸" },
     { "id": "/owner/notifications", "file": "src/app/owner/notifications.tsx", "type": "B", "tier": 2, "maxAccepted": 5, "verdict": "todo" },
     { "id": "/owner/onboarding", "file": "src/app/owner/onboarding.tsx", "type": null, "tier": 2, "maxAccepted": 6, "verdict": "todo" },
-    { "id": "/owner/payroll", "file": "src/app/owner/payroll.tsx", "type": "A", "tier": 1, "maxAccepted": 2, "verdict": "todo" },
     { "id": "/owner/rooms", "file": "src/app/owner/rooms.tsx", "type": "A", "tier": 3, "maxAccepted": 3, "verdict": "todo" },
     { "id": "/owner/schedule", "file": "src/app/owner/schedule.tsx", "type": "A", "tier": 1, "maxAccepted": 4, "verdict": "todo",
       "note": "2026-08-07 주간 스트립(WeekStrip) + 좌측 시간 거터 행(GutterRow) 골격" },

@@ -5,6 +5,7 @@ import { RoleTabBar } from '@/components/RoleTabBar';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { OwnerKnowhowBrowse, type KnowhowSegKey } from '@/components/owner/OwnerKnowhowBrowse';
 import { InkColors } from '@/lib/theme/colors';
+import { AppStyles } from '@/lib/theme/appDesign';
 
 const SEG_KEYS: KnowhowSegKey[] = ['todo', 'knowhow'];
 // 2026-08-19 에 '안 쓰임' 칸이 '할 일'로 흡수됐다. 옛 딥링크(?seg=unused)는 죽이지 않고 그리로 착지시킨다.
@@ -28,7 +29,7 @@ export default function OwnerCategoriesScreen() {
   const openEntry = (id: string) => router.push({ pathname: '/owner/edit/[id]', params: { id } });
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, AppStyles.screen]}>
       {/* 네이티브 헤더를 끄고 제목을 직접 그린다 — 근거는 ScreenTitleHeader 주석(iOS 는 왼쪽 정렬 평문 제목이 불가). */}
       <Stack.Screen options={{ headerShown: false }} />
       <ScreenTitleHeader

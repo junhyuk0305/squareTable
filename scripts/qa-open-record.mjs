@@ -7,6 +7,7 @@
 //   누르면 "이미 출근 중이에요. 먼저 퇴근을 눌러 주세요."가 떴고, 퇴근 버튼은 어디에도 없었다.
 //   → 판정을 findOpenRecord(records, staffId) 하나로 모은다. 16시간이 넘게 열린 기록은 퇴근 깜빡으로 본다.
 // 실행: node scripts/qa-open-record.mjs   (Node 22.18+ — .ts 를 타입만 벗겨 읽는다)
+import { register } from 'node:module';
 
 let pass = 0, fail = 0;
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  PASS', n, extra)) : (fail++, console.log('  FAIL', n, extra)); };
@@ -80,5 +81,35 @@ check('빈 입력 → null', fn(completeHHMM) && call(completeHHMM, '') === null
 check('"18:30" → "18:30"', call(completeHHMM, '18:30') === '18:30', `→ ${call(completeHHMM, '18:30')}`);
 check('"01:05" → "01:05"', call(completeHHMM, '01:05') === '01:05', `→ ${call(completeHHMM, '01:05')}`);
 
+console.log('\n■ reconcileSchedule — 근무표와 출퇴근 기록이 어긋난 날만 말한다');
+// 2026-11-02 급여 제거 때 qa-payroll 에서 옮겼다. 대조는 src/lib/utils/reconcile.ts 에 있다.
+//   reconcile.ts 는 확장자 없는 상대 import 를 써서 별칭 로더로 읽는다.
+let RC = {};
+try {
+  register('./qa-alias-loader.mjs', import.meta.url);
+  RC = await import('../src/lib/utils/reconcile.ts');
+} catch (e) {
+  console.log('  FAIL reconcile.ts 를 읽지 못했다', String(e && e.code ? e.code : e));
+}
+const { reconcileSchedule, RECONCILE_THRESHOLD_MIN } = RC;
+const S = (date, start, end) => ({ date, start, end });
+const R = (date, ci, co) => ({ date, check_in: K(date, ci), check_out: co ? K(date, co) : null, work_minutes: 0 });
+const rc = (...a) => (fn(reconcileSchedule) ? reconcileSchedule(...a) : null);
+{
+  const ms = rc([], [R('2026-07-05', '09:00', '18:00')]);
+  check('★근무표에 없는 날 출근 → no_schedule 로 말한다', ms?.length === 1 && ms[0].kind === 'no_schedule', JSON.stringify(ms));
+}
+{
+  const ms = rc([S('2026-07-06', '12:00', '18:00')], []);
+  check('★근무표엔 있는데 출근 미기록 → no_record 로 말한다(급여 문장 없음)', ms?.length === 1 && ms[0].kind === 'no_record' && !/급여/.test(ms[0].message), JSON.stringify(ms));
+}
+{
+  const sh = [S('2026-07-07', '12:00', '18:00')];
+  const near = rc(sh, [R('2026-07-07', '12:00', '18:29')]);
+  check(`대조: ${RECONCILE_THRESHOLD_MIN}분 미만(29분) 차이는 조용하다`, near?.length === 0, JSON.stringify(near));
+  const far = rc(sh, [R('2026-07-07', '12:00', '19:10')]);
+  check('★대조: 30분 이상(70분) 차이는 time_diff 로 말한다', far?.length === 1 && far[0].kind === 'time_diff', JSON.stringify(far));
+}
+
 console.log(`\n── ${pass} PASS · ${fail} FAIL`);
-process.exit(fail > 0 || !fn(findOpenRecord) ? 1 : 0);
+process.exit(fail > 0 || !fn(findOpenRecord) || !fn(reconcileSchedule) ? 1 : 0);

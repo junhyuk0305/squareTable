@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 // /forgot-password — 비밀번호 찾기(2026-09-23 사용자 결정: **전화번호 인증**, 앱·웹 같은 화면).
 //
 //   사장님/직원 → 가입한 휴대폰 번호 → [인증번호 받기](엣지 otp send) → 인증번호 + 새 비밀번호 → [바꾸기]
@@ -124,7 +125,7 @@ export default function ForgotPasswordScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <ScreenTitleHeader title="이메일·비밀번호 찾기" backFallback="/login" />
       <KeyboardShift>
-        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={[styles.body, AppStyles.screenEnd]} keyboardShouldPersistTaps="handled">
           {done ? (
             <View style={styles.card} testID="forgot-done">
               <Ionicons name="checkmark-circle-outline" size={28} color={InkColors.ink} />

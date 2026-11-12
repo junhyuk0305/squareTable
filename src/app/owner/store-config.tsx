@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { SectionGroup } from '@/components/SectionGroup';
 import { useEffect, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
@@ -131,7 +132,7 @@ function StoreConfigForm() {
 
   return (
     <KeyboardShift>
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
       <Text style={styles.lead}>운영시간과 정기 휴무를 정해두면 근무표에 반영돼요.</Text>
 
       {/* 운영시간 — 이 화면의 최우선. 2026-08-06: 카드 껍데기를 벗겨 시각 자체가 화면에서 가장 큰
@@ -218,7 +219,7 @@ function StoreConfigForm() {
       {isOwner && stores.length > 1 ? (
         <View style={styles.dangerBox}>
           <Text style={styles.dangerLabel}>위험 구역</Text>
-          <Text style={styles.dangerDesc}>이 매장(“{storeName}”)을 완전히 삭제해요. 노하우·근무·급여 등 모든 데이터가 사라지고 되돌릴 수 없어요. (직원이 있으면 먼저 내보내야 해요.)</Text>
+          <Text style={styles.dangerDesc}>이 매장(“{storeName}”)을 완전히 삭제해요. 노하우·근무 기록 등 모든 데이터가 사라지고 되돌릴 수 없어요. (직원이 있으면 먼저 내보내야 해요.)</Text>
           <Pressable
             onPress={onDelete}
             disabled={deleting || checking}
@@ -232,7 +233,7 @@ function StoreConfigForm() {
         </View>
       ) : null}
 
-      <View style={{ height: 12 }} />
+      <View style={[{ height: 12 }, AppStyles.screenEndSpacer]} />
     </ScrollView>
     </KeyboardShift>
   );

@@ -1,14 +1,14 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, Pressable, TextInput, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { BrandColors, InkColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { InkColors } from '@/lib/theme/colors';
+import { loginStyles as styles, loginActivityColor, loginCompactActions } from '@/styles/login';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { Appear } from '@/components/Appear';
 import { Wordmark } from '@/components/Wordmark';
@@ -86,6 +86,31 @@ export default function LoginScreen() {
     router.replace('/');
   };
 
+  const accountActions = (
+    <>
+      {/* 이메일·비밀번호 찾기(09-23 · Q15) — 휴대폰 문자 인증. 앱·웹 같은 화면. */}
+      {HAS_SUPABASE ? (
+        <Pressable onPress={() => router.push('/forgot-password')} accessibilityRole="button" style={({ pressed }) => [styles.forgotRow, pressed && { opacity: 0.7 }]}>
+          <Text style={styles.forgotText}>이메일·비밀번호 찾기</Text>
+        </Pressable>
+      ) : null}
+
+      {loginCompactActions && (
+        <Pressable onPress={() => router.push('/signup')} accessibilityRole="button" style={({ pressed }) => [styles.signupBtn, pressed && { opacity: 0.85 }]}>
+          <Text style={styles.signupBtnText}>무료로 시작하기</Text>
+        </Pressable>
+      )}
+
+      {/* iOS 앱에는 구글 버튼이 없다(Guideline 4.8). 구글로 가입한 사람이 들어올 길을 알려 준다. */}
+      {HAS_SUPABASE && !SHOW_SOCIAL_LOGIN ? (
+        <Text style={styles.googleHint}>구글로 가입했다면 비밀번호 찾기에서 문자 인증으로 비밀번호를 만든 뒤 이메일로 로그인해 주세요.</Text>
+      ) : null}
+
+      {/* 소셜 로그인(구글) — 웹·안드 앱. iOS 앱과 데모 빌드에선 렌더 안 됨. */}
+      <SocialAuthButtons compact={loginCompactActions} />
+    </>
+  );
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       {/* 뒤로가기는 웹에서만 — 웹은 랜딩(welcome)에서 들어오니 돌아갈 곳이 있지만,
@@ -97,7 +122,7 @@ export default function LoginScreen() {
       )}
 
       <KeyboardShift>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} keyboardShouldPersistTaps="handled">
         <Appear delay={0}>
           <View style={styles.header}>
             <Wordmark size="lg" />
@@ -143,37 +168,24 @@ export default function LoginScreen() {
           />
 
           <Pressable disabled={busy} onPress={login} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}>
-            {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>로그인</Text>}
+            {busy ? <ActivityIndicator color={loginActivityColor} /> : <Text style={styles.primaryText}>로그인</Text>}
           </Pressable>
 
           {/* 안내/실패 문구 — 로그인 버튼 바로 아래. 실패는 빨강으로 시선 유도. */}
           {msg && <Text style={[styles.msg, msgErr && styles.msgErr]}>{msg}</Text>}
 
-          {/* 이메일·비밀번호 찾기(09-23 · Q15) — 휴대폰 문자 인증. 앱·웹 같은 화면. */}
-          {HAS_SUPABASE ? (
-            <Pressable onPress={() => router.push('/forgot-password')} accessibilityRole="button" style={({ pressed }) => [styles.forgotRow, pressed && { opacity: 0.7 }]}>
-              <Text style={styles.forgotText}>이메일·비밀번호 찾기</Text>
-            </Pressable>
-          ) : null}
-
-          {/* iOS 앱에는 구글 버튼이 없다(Guideline 4.8). 구글로 가입한 사람이 들어올 길을 알려 준다. */}
-          {HAS_SUPABASE && !SHOW_SOCIAL_LOGIN ? (
-            <Text style={styles.googleHint}>구글로 가입했다면 비밀번호 찾기에서 문자 인증으로 비밀번호를 만든 뒤 이메일로 로그인해 주세요.</Text>
-          ) : null}
-
-          {/* 소셜 로그인(구글) — 웹·안드 앱. iOS 앱과 데모 빌드에선 렌더 안 됨. */}
-          <SocialAuthButtons />
+          {loginCompactActions ? <View style={styles.actions}>{accountActions}</View> : accountActions}
         </View>
         </Appear>
 
-        <Appear delay={120}>
+        {!loginCompactActions && <Appear delay={120}>
           <View style={styles.signupBlock}>
             <Text style={styles.signupLead}>아직 매장의 정석이 처음이신가요?</Text>
             <Pressable onPress={() => router.push('/signup')} style={({ pressed }) => [styles.signupBtn, pressed && { opacity: 0.85 }]}>
               <Text style={styles.signupBtnText}>무료로 시작하기</Text>
             </Pressable>
           </View>
-        </Appear>
+        </Appear>}
 
         <Appear delay={180}>
           <Text style={styles.demoNote}>
@@ -185,64 +197,3 @@ export default function LoginScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  topbar: { height: 48, justifyContent: 'center' },
-  scroll: { flexGrow: 1, padding: Space.xl, paddingTop: Space.xs, justifyContent: 'center', gap: 28 },
-  header: { alignItems: 'center', gap: Space.md },
-  tagline: { fontSize: 13, lineHeight: 19, color: InkColors.ink3, textAlign: 'center' },
-
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.gutter,
-    gap: Space.sm,
-  },
-  seg: { flexDirection: 'row', backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.xs, marginBottom: 6 },
-  segBtn: { flex: 1, paddingVertical: 10, borderRadius: Radius.sm, alignItems: 'center' },
-  segBtnOn: { backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-  segText: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: InkColors.ink3 },
-  segTextOn: { color: InkColors.ink },
-
-  label: { fontSize: 13, lineHeight: 19, fontWeight: '700', color: InkColors.ink2, marginTop: Space.xs },
-  input: {
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: Radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 15,
-    color: InkColors.ink,
-    backgroundColor: '#FFFFFF',
-  },
-  primary: {
-    marginTop: Space.md,
-    backgroundColor: BrandColors.brand,
-    paddingVertical: 16,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-  },
-  primaryText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22, fontWeight: '800' },
-  msg: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, textAlign: 'center', marginTop: 2 },
-  msgErr: { color: BrandColors.accentText, fontWeight: '700' },
-  demoNote: { fontSize: 12, lineHeight: 18, color: InkColors.ink3, textAlign: 'center' },
-  forgotRow: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', paddingHorizontal: Space.sm },
-  forgotText: { fontSize: 13, fontWeight: '600', color: InkColors.ink2, textDecorationLine: 'underline' },
-  googleHint: { fontSize: 12, lineHeight: 18, color: InkColors.ink3, textAlign: 'center' },
-  signupBlock: { alignItems: 'center', gap: Space.md },
-  signupLead: { fontSize: 13, lineHeight: 19, color: InkColors.ink3 },
-  signupBtn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'stretch',
-    paddingVertical: 15,
-    borderRadius: Radius.md,
-    borderWidth: 1.5,
-    borderColor: InkColors.ink,
-    backgroundColor: '#FFFFFF',
-  },
-  signupBtnText: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
-});

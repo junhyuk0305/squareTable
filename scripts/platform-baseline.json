@@ -36,7 +36,8 @@
     "src/lib/theme/elevation.ts": 1,
     "src/lib/theme/textScale.ts": 1,
     "src/lib/utils/shareText.ts": 1,
-    "src/lib/voice/recorder.ts": 5
+    "src/lib/voice/recorder.ts": 5,
+    "src/components/PasswordInput.tsx": 1
   },
   "extensionSplit": [
     "src/components/VoiceRecorderBinder.web.tsx",
@@ -46,7 +47,12 @@
     "src/lib/media/pickImage.web.ts",
     "src/lib/push/nativepush.web.ts",
     "src/lib/storage/authStorage.web.ts",
+    "src/lib/theme/appDesign.web.ts",
     "src/lib/voice/recorder.web.ts",
-    "src/lib/web/marketingGuard.web.ts"
+    "src/lib/web/marketingGuard.web.ts",
+    "src/styles/hub.web.ts",
+    "src/styles/juniorHomeStyles.web.ts",
+    "src/styles/login.web.ts",
+    "src/styles/ownerDashboardStyles.web.ts"
   ]
 }

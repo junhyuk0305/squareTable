@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { SectionGroup } from '@/components/SectionGroup';
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
@@ -137,7 +138,7 @@ function WorkSettingsForm({ members, me, onSaved }: WorkSettingsPanelProps) {
             <Text style={s.backText}>업무 카테고리</Text>
           </Pressable>
 
-          <ScrollView keyboardShouldPersistTaps="handled" style={s.scroll} contentContainerStyle={s.scrollPad} showsVerticalScrollIndicator={false}>
+          <ScrollView keyboardShouldPersistTaps="handled" style={s.scroll} contentContainerStyle={[s.scrollPad, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
             <SectionGroup title="카테고리 이름" style={{ marginBottom: Space.xl }}>
             <TextInput
               value={open.label}
@@ -215,7 +216,7 @@ function WorkSettingsForm({ members, me, onSaved }: WorkSettingsPanelProps) {
         </>
       ) : (
         // ── 1단: 카테고리 목록 ────────────────────────────────────
-        <ScrollView keyboardShouldPersistTaps="handled" style={s.scroll} contentContainerStyle={s.scrollPad} showsVerticalScrollIndicator={false}>
+        <ScrollView keyboardShouldPersistTaps="handled" style={s.scroll} contentContainerStyle={[s.scrollPad, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
           <SectionGroup title="업무 카테고리" description="카테고리마다 매일 하는 업무와 담당자를 정해요. 저장하면 매장 전체에 적용돼요.">
 
           <View>

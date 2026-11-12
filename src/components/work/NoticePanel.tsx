@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useEffect, useRef, useState } from 'react';
 import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
 import { View, Text, Pressable, ScrollView, TextInput, StyleSheet, type TextStyle } from 'react-native';
@@ -106,7 +107,7 @@ export function NoticePanel({
 
   return (
     <KeyboardShift>
-      <ScrollView ref={listRef} keyboardShouldPersistTaps="handled" contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={listRef} keyboardShouldPersistTaps="handled" contentContainerStyle={[s.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
         {/* 빈 상태는 다음 행동을 알려준다(복잡도 원칙 P6).
             ★2026-08-26: 공지는 누구나 쓴다(0177) — 직원에게도 같은 다음 행동을 준다. */}
         {notices.length === 0 && (
@@ -138,7 +139,7 @@ export function NoticePanel({
           </Appear>
           </View>
         ))}
-        <View style={{ height: 8 }} />
+        <View style={[{ height: 8 }, AppStyles.screenEndSpacer]} />
       </ScrollView>
 
       {/* ★공지 작성은 누구나(0177). 전 매장 동시발송(targetRow)만 canBroadcast 로 사장에 남는다. */}

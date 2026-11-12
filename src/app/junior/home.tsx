@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { Text, Pressable, ScrollView } from 'react-native';
 import { NotificationPermissionSheet } from '@/components/NotificationPermissionSheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -105,7 +106,7 @@ export default function JuniorHomeScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <AppTopBar />
 
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} showsVerticalScrollIndicator={false}>
         <Text style={styles.greet}>{userName}님, 오늘도 화이팅이에요</Text>
 
         {!loaded ? (

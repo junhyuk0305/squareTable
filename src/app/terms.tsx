@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,7 +20,7 @@ export default function TermsScreen() {
     <SafeAreaView style={styles.safe} edges={[]}>
       <Stack.Screen options={{ headerShown: false, title: '이용약관', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
       <ScreenTitleHeader title="이용약관" backFallback />
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]}>
         <Text style={styles.h1}>매장의 정석 이용약관</Text>
         <Text style={styles.updated}>시행일: {TERMS_VERSION} · 운영: 스퀘어테이블</Text>
 
@@ -65,7 +66,7 @@ export default function TermsScreen() {
         >
           <Text style={styles.link}>이용약관 전문 보기</Text>
         </Pressable>
-        <View style={{ height: 24 }} />
+        <View style={[{ height: 24 }, AppStyles.screenEndSpacer]} />
       </ScrollView>
       <RoleTabBar role={canManage(role) ? 'owner' : 'junior'} />
     </SafeAreaView>

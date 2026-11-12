@@ -18,6 +18,7 @@ import { Collapse } from '@/components/Collapse';
 import { PressableScale } from '@/components/PressableScale';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Space, SCREEN_GUTTER, CONTENT_MAX_WIDTH, frameCapStyle } from '@/lib/theme/layout';
+import { AppStyles, appScreenEndWithOverlay } from '@/lib/theme/appDesign';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { PLANS, VAT_NOTE } from '@/lib/config/tiers';
 import { formatKrw } from '@/lib/config/billing';
@@ -68,7 +69,7 @@ export default function OwnerOnboardingScreen() {
   const [registeredCount, setRegisteredCount] = useState(0);
   const [registering, setRegistering] = useState(false);
   // 하단 고정 바 높이 — 글자가 커지면 바도 커진다. 스크롤 끝 빈칸을 그만큼 늘려 마지막 카드가 바 뒤에 숨지 않게 한다(기본은 168 그대로).
-  const [barH, setBarH] = useState(168);
+  const [barH, setBarH] = useState(0);
   // 더블탭으로 onRegister가 두 번 돌아 중복 적재되는 걸 막는다(setStep 반영 전 재호출 가드).
   const committed = useRef(false);
 
@@ -235,7 +236,7 @@ export default function OwnerOnboardingScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, appScreenEndWithOverlay(barH)]} showsVerticalScrollIndicator={false}>
         <Appear delay={stagger(0)} style={styles.intro}>
           <Text style={styles.introTitle}>직원이 물어볼 걸,{'\n'}미리 답을 담아둘게요</Text>
           <Text style={styles.introBody}>
@@ -338,12 +339,12 @@ export default function OwnerOnboardingScreen() {
           </Pressable>
         </Appear>
 
-        <View style={{ height: barH }} />
+        <View style={[{ height: Math.max(168, barH + Space.lg) }, AppStyles.screenEndSpacer]} />
       </ScrollView>
 
       {/* 하단 고정 액션 바 — 풀폭 1차 CTA + 그 아래 중앙 '건너뛰기' 고스트(계층 분리) */}
       <View style={styles.barWrap}>
-        <View style={[styles.bar, frameCapStyle]} onLayout={(e) => setBarH(Math.max(168, Math.ceil(e.nativeEvent.layout.height) + Space.lg))}>
+        <View style={[styles.bar, frameCapStyle]} onLayout={(e) => setBarH(Math.ceil(e.nativeEvent.layout.height))}>
           {selectedCount < MIN_RECOMMENDED && (
             <Text style={styles.barNudge}>최소 {MIN_RECOMMENDED}개는 담아두길 권해요 (지금 {selectedCount}개)</Text>
           )}

@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useState, useEffect, useRef } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Linking, TextInput } from 'react-native';
@@ -470,8 +471,8 @@ function BillingBody() {
         {/* ★2026-09-13: 여기 뒤로가기가 **없었다.** 웹 분기만 헤더를 갖고 있어서, 설정·매장 추가에서
             자발적으로 들어온 사장은 로그아웃 말고 나갈 길이 없는 막다른 길에 갇혔다.
             규칙은 웹 분기와 같다 — 페이월 모드(만료 강제 라우팅)는 뒤로 갈 유효한 화면이 없어 헤더 없음. */}
-        {entitledAtMount && <ScreenTitleHeader title="이용권" backFallback="/stores" />}
-        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}>
+        {entitledAtMount && <ScreenTitleHeader legacy title="이용권" backFallback="/stores" />}
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.scroll, AppStyles.screenEnd]}>
           {!ready ? (
             <ScreenLoading label="이용 상태를 불러오고 있어요…" />
           ) : (
@@ -578,9 +579,9 @@ function BillingBody() {
       <Stack.Screen options={{ headerShown: false, title: '요금제' }} />
       {/* ★페이월 모드(만료 강제 라우팅)에서는 상단바 자체를 안 그린다 — 뒤로 갈 유효한 화면이 없어서다.
           네이티브 헤더를 쓰던 시절의 `entitledAtMount ? 헤더 : 없음` 분기를 그대로 옮긴 것이다. */}
-      {entitledAtMount && <ScreenTitleHeader title="요금제" backFallback="/stores" />}
+      {entitledAtMount && <ScreenTitleHeader legacy title="요금제" backFallback="/stores" />}
       <KeyboardShift>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.scroll, AppStyles.screenEnd]} keyboardShouldPersistTaps="handled">
         {!ready ? (
           <ScreenLoading label="결제 상태를 불러오고 있어요…" />
         ) : (

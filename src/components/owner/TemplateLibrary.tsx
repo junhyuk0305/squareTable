@@ -1,3 +1,4 @@
+import { AppStyles } from '@/lib/theme/appDesign';
 import { useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -240,7 +241,7 @@ export function TemplateLibrary() {
   return (
     <ScrollView
       style={styles.flex}
-      contentContainerStyle={styles.scroll}
+      contentContainerStyle={[styles.scroll, AppStyles.screenEnd]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
@@ -347,7 +348,7 @@ export function TemplateLibrary() {
         </Appear>
       )}
 
-      <View style={{ height: 24 }} />
+      <View style={[{ height: 24 }, AppStyles.screenEndSpacer]} />
     </ScrollView>
   );
 }
