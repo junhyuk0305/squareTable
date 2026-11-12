@@ -534,10 +534,12 @@ async function deliverQuizSend(admin: Admin, r: QuizSendRow): Promise<DeliverRes
   });
   // 결과 기록. 인프라 실패(failed)면 null 로 둔다 — 그래야 재배달 패스가 집어 간다. 재배달 행은 이미 delivered=0 이라
   //   실패해도 0 그대로(=1회로 끝). 옛 DB 는 열이 없어 오류 → 로그만.
+  // L22(2026-11-12): 보낸 뒤 기록이 일시 오류로 실패하면 delivered 가 null 로 남아 재배달 패스가 같은 퀴즈를 한 번 더 보낸다.
+  //   기록 쓰기도 한 번 다시 시도한다(같은 값을 쓰는 update 라 두 번 써도 같다). 크론 스윕 4곳 결과 기록도 같다.
   if (!res.failed) {
-    const { error: recErr } = await admin.from('quiz_assignments')
+    const { error: recErr } = await readOnceRetry(() => admin.from('quiz_assignments')
       .update({ delivered: res.sent, suppressed: res.suppressed })
-      .eq('id', r.out_assignment_id);
+      .eq('id', r.out_assignment_id));
     if (recErr) {
       if (isMissingColumn(recErr)) console.error('[push] quiz_assignments delivered/suppressed 열 없음(옛 DB) → 기록 건너뜀');
       else console.error('[push] quiz_assignments record failed:', recErr.message);
@@ -644,9 +646,9 @@ async function sweepOwnerAlerts(token: string): Promise<{ swept: number; sent: n
       sent += res.sent;
       if (res.failed) { console.error(`[push] owner alert infra failure — id=${r.out_id} (delivered null 유지)`); continue; }
       // 실제 수를 남겨 사후에 구별한다. delivered 가 null 이 아니면 재선점되지 않는다.
-      const { error: recErr } = await admin.from('owner_alerts')
+      const { error: recErr } = await readOnceRetry(() => admin.from('owner_alerts')
         .update({ recipients: r.out_recipients.length, delivered: res.sent })
-        .eq('id', r.out_id);
+        .eq('id', r.out_id));   // L22: 기록 실패 = 재선점 중복 1회 → 한 번 다시 쓴다
       if (recErr) console.error('[push] owner_alerts record failed:', recErr.message);
     } catch (e) {
       console.error(`[push] owner alert row threw — id=${r.out_id}:`, (e as Error)?.message ?? String(e));
@@ -683,9 +685,9 @@ async function sweepUnitClosures(token: string): Promise<{ swept: number; sent: 
       });
       sent += res.sent;
       if (res.failed) { console.error(`[push] unit closure infra failure — id=${r.out_id} (delivered null 유지)`); continue; }
-      const { error: recErr } = await admin.from('unit_closure_alerts')
+      const { error: recErr } = await readOnceRetry(() => admin.from('unit_closure_alerts')
         .update({ recipients: r.out_recipients.length, delivered: res.sent })
-        .eq('id', r.out_id);
+        .eq('id', r.out_id));   // L22: 기록 실패 = 재선점 중복 1회 → 한 번 다시 쓴다
       if (recErr) console.error('[push] unit_closure_alerts record failed:', recErr.message);
     } catch (e) {
       console.error(`[push] unit closure row threw — id=${r.out_id}:`, (e as Error)?.message ?? String(e));
@@ -725,9 +727,9 @@ async function sweepMemberNotices(token: string): Promise<{ swept: number; sent:
       });
       sent += res.sent;
       if (res.failed) { console.error(`[push] member notice infra failure — id=${r.out_id} (delivered null 유지)`); continue; }
-      const { error: recErr } = await admin.from('member_notices')
+      const { error: recErr } = await readOnceRetry(() => admin.from('member_notices')
         .update({ delivered: res.sent })
-        .eq('id', r.out_id);
+        .eq('id', r.out_id));   // L22: 기록 실패 = 재선점 중복 1회 → 한 번 다시 쓴다
       if (recErr) console.error('[push] member_notices record failed:', recErr.message);
     } catch (e) {
       console.error(`[push] member notice row threw — id=${r.out_id}:`, (e as Error)?.message ?? String(e));
