@@ -23,6 +23,7 @@ import { runEduAskChecks } from './lib/qa-space-edu-ask.mjs';
 import { runMemberAskChecks } from './lib/qa-space-member-ask.mjs';
 import { runStoreAskChecks } from './lib/qa-store-ask-counts.mjs';
 import { runStoreEduLinkChecks } from './lib/qa-store-edu-link.mjs';
+import { runFix1112Checks } from './lib/qa-fix-1112.mjs';
 
 if (!process.argv.includes('--local')) { console.error('중단: 로컬 전용 하니스다(--local)'); process.exit(2); }
 const DB = process.env.QA_DB_CONTAINER || 'supabase_db_SquareTable';
@@ -1195,6 +1196,7 @@ rollback;
 
 runEduAskChecks({ DB, check }); // 3번 덩이 나머지 교육 링크 묻기(0401) · 별도 모듈
 await runMemberAskChecks({ DB, check, skipped }); // 야간 s1 멤버 묻기 · 이어받기 · 크론 재확인 · 공간 삭제 알림 · AI 예약(0551~0554) · 별도 모듈
+runFix1112Checks({ DB, check }); // 11-12 결함 수정 서버(0583~ · 계정 확인 · 나가면 링크 닫기 · 이어받기 · 사진 한 번 · uq_id · 대기 번호 · 손님 한도) · 별도 모듈
 
 // ── 4부: 공간 합류 · 멤버 요청 · 수락과 거절 · 내보내기 · 나가기(0460) ──────────────
 //   1부처럼 한 트랜잭션 안에서 심고 끝에 전부 되돌린다(흔적 0). 입구는 이 트랜잭션 안에서 끄고 허용 목록으로만 연다.

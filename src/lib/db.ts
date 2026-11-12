@@ -1670,7 +1670,7 @@ export async function fetchUnknownQueue(unitId: string | null = _unitId): Promis
 }
 
 /**
- * 대기 중 질문의 **진짜 개수**(서버 집계).
+ * 대기 중 질문의 **진짜 개수**(서버 집계). 승인 대기(in_review)는 뺀 수 = 답할 질문(isTodoQuestion)과 같은 정의.
  *
  * ★목록 길이로 세면 상한(PAGE_LIMIT)에 걸린 순간 화면이 거짓말을 한다 —
  *  2026-08-08 실측: 서버 1,200건인데 홈 히어로와 '답할 질문' 라벨이 둘 다 "1000건"이라고 했다.
@@ -1682,7 +1682,10 @@ export async function fetchPendingQuestionCount(unitId: string | null = _unitId)
     .from('unknown_queries')
     .select('id', { count: 'exact', head: true })
     .eq('unit_id', unitId)
-    .eq('status', 'pending_owner_answer');
+    .eq('status', 'pending_owner_answer')
+    // ★승인 대기(서버 계산 칸 uq_in_review · 0520)는 서버에서 뺀다. 받은 목록(상한 1000)에서 빼면 상한 밖을 못 뺐다(11-12 결함 12).
+    //   not.is.true = null(멤버 아님 판정)도 센다. 행은 이미 uq_select(RLS)를 지났다.
+    .not('uq_in_review', 'is', true);
   if (error) {
     readFail('fetchPendingQuestionCount', error);
     return null;
@@ -5203,8 +5206,8 @@ export async function fetchMySpaceNotifData(): Promise<DbResult<SpaceNotifRow[]>
   return { data: (r.data ?? []).map((x) => ({ unitId: x.unit_id, source: x.source, payload: x.payload ?? {} })), error: null };
 }
 
-/** 링크 화면(웹 · 로그인 없이)에서 이어받기 코드 받기. 6자 · 10분 · 한 번. key = 그 브라우저의 손님 열쇠(없으면 null · 물은 적 없는 사람).
- *  코드 = link_closed · handoff_busy. ★코드·토큰·열쇠는 계측에 싣지 않는다. */
+/** 링크 화면(웹 · 로그인 없이)에서 이어받기 코드 받기. 6자 · 10분 · 한 번. key = 그 브라우저의 손님 열쇠(첫 질문 때 생김).
+ *  코드 = link_closed · handoff_busy · handoff_needs_question(0585 · 손님 행 없는 열쇠). ★코드·토큰·열쇠는 계측에 싣지 않는다. */
 export async function eduLinkHandoffCode(token: string, key: string | null): Promise<DbResult<{ code: string; expiresAt: string }>> {
   if (!HAS_SUPABASE) return { data: null, error: { message: 'no_backend' } };
   const r = await spaceRpc<any[]>('edu_link_handoff_code', { p_token: token, p_key: key }, 'eduLinkHandoffCode');

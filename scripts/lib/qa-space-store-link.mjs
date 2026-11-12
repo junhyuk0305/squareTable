@@ -367,7 +367,7 @@ commit;`;
 // ════════════════════════════════════════════════════════════════════════════
 // 실세션(매직링크)으로 실제 엣지를 부른다. 이 모듈 함수는 동기라 같은 파일을 자식 프로세스로 띄워 비동기 검사를 돌린다.
 // 띄우는 법: st-db 슬롯에서 `npx -y supabase@2 functions serve --env-file <스크래치>` (verify_jwt 는 config.toml 값).
-const PHOTO_EDGE_CASES = 12;   // 아래 childPhotoEdge 의 검사 줄 수(엣지가 없으면 이 수만큼 skip 으로 적는다)
+const PHOTO_EDGE_CASES = 14;   // 아래 childPhotoEdge 의 검사 줄 수(엣지가 없으면 이 수만큼 skip 으로 적는다)
 
 function runPhotoCopyEdgeChecks({ check }) {
   console.log('\n[5-3] 사진 복사 엣지(knowhow-photo-copy · 실세션)');
@@ -489,6 +489,14 @@ async function childPhotoEdge() {
     const r7 = await callEdge(who.G.token, { suggestionId: SGM });
     made.files.push(...(r7.body?.photos ?? []));
     out(r7.status === 200 && (r7.body?.photos ?? []).length === 1, '매니저가 자기 제안 승인 = 200 · 1장', JSON.stringify(r7.body));
+    // ★0586(11-12 결함 6): 사장이 사본 노하우 사진을 다 지운 뒤 다시 불러도 되살리지 않는다(한 번 적었다는 표시로 판정).
+    const before = (await admin.storage.from(BUCKET).list(X, { limit: 100 })).data?.length ?? -1;
+    must(await admin.from('playbook_entries').update({ photos: [] }).eq('id', E1), 'clear photos');
+    const r8 = await callEdge(who.D.token, { suggestionId: SA });
+    const { data: e1b } = await admin.from('playbook_entries').select('photos').eq('id', E1).maybeSingle();
+    out(r8.status === 200 && (r8.body?.photos ?? []).length === 0 && (e1b?.photos ?? []).length === 0, '사장이 사진을 다 지운 뒤 다시 불러도 빈 채', JSON.stringify({ r: r8.body, e: e1b?.photos }));
+    const after = (await admin.storage.from(BUCKET).list(X, { limit: 100 })).data?.length ?? -2;
+    out(before === after, '다시 불러도 매장 폴더에 새 사본 파일 없음', `${before} → ${after}`);
   } catch (e) {
     console.log(`QE|no|사진 엣지 셋업|${String(e.message).replace(/[|\r\n]/g, ' ').slice(0, 200)}`);
   } finally {

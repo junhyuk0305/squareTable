@@ -6,7 +6,7 @@
 //   ② 권한 — _edu_link_open_for = anon·authenticated 실행 거절 · _edu_link_open_for_me = authenticated 됨 · anon 거절.
 //   ③ 손님 — 허용 목록 밖이 만든 링크(이미 있는 행) · 만든 사람이 빈 링크 = 닫힘 · edu_links+edu_guest 켜면 열림(트랜잭션 안에서 켰다 끔).
 //   ④ 본사 사본 — 만들기·고치기 RPC · 표 update 로 새로 담기 거절 · 본사 사본으로 답한 질문은 링크에 안 담김.
-//   ⑤ 알림(N3) — 매장 손님 보내기 → 링크 만든 사람 1 · 동료·사장 0 · 만든 사람이 나가면 사장 전원 · 경로 /owner/coach?uqId= ·
+//   ⑤ 알림(N3) — 매장 손님 보내기 → 링크 만든 사람 1 · 동료·사장 0 · 만든 사람이 매니저에서 내려가면 사장 전원 · 나가면 링크 닫힘(0584) · 경로 /owner/coach?uqId= ·
 //      미응답 숫자·벨에 들어옴 · 매장 AI 한도(ai_quota_reserve)에서 깎임.
 //   ⑥ my_kind_features — ('store'|'space','edu_links') 두 줄 = 나에게 판정 · 나머지 매장 줄은 표 그대로.
 // 방식: 한 트랜잭션 안에서 계정·매장·링크를 심고 끝에 rollback 한다(공유 로컬 DB 흔적 0 · 데모 매장 안 씀).
@@ -162,13 +162,16 @@ ${call('사장 미응답 숫자에 들어옴', 'O', 'authenticated', `select una
 ${call('직원 J 벨에도 도와줄 질문으로 보임(파생 · 푸시 아님)', 'J', 'authenticated', `select count(*)::text from public.my_units_notif_data() d where d.unit_id = ${q(X1)} and d.source = 'uq' and d.payload->>'link_id' = {V:lm:1}`, 'ok|1')}
 ${call('손님 AI 예약 = 그 매장 자리(ai_quota_reserve · 손님 요청 키 · 엣지와 같은 호출)', null, 'service_role', `select r.allowed::text from public.ai_quota_reserve(${q(X1)}, 1, 'edu:' || {V:g1:2}, true) r`, 'ok|true')}
 ${val('매장 AI 한도에서 깎임(이번 달 사용량 1)', `select coalesce((select used from public.ai_usage_monthly where unit_id = ${q(X1)} and month = to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM')), 0)::text`, '1')}
-delete from public.unit_members where unit_id = ${q(X1)} and user_id = ${q(U.M)};
-${call('만든 사람 M 이 나간 뒤 손님 묻기', null, 'anon', ask(V('lm', 2), '하늘', '마감 정산은요'), 'ok|gk_*', 'g2')}
+-- ★0584: 만든 사람이 나가면 링크가 닫힌다. 사장 전원으로 돌리는 갈래는 매니저 → 직원 강등(아직 매장 사람 · 링크 열림)으로 잰다.
+update public.unit_members set role = 'junior' where unit_id = ${q(X1)} and user_id = ${q(U.M)};
+${call('만든 사람 M 이 직원으로 내려간 뒤 손님 묻기', null, 'anon', ask(V('lm', 2), '하늘', '마감 정산은요'), 'ok|gk_*', 'g2')}
 ${call('보내기 → true', null, 'anon', `select public.edu_link_send({V:lm:2}, {V:g2:1}, {V:g2:2}, false)::text`, 'ok|true')}
-${val('M 나감 → 사장 전원(O 1 · P 1) · M 그대로 1 · J 0', `select ${notes(U.M)} || '/' || ${notes(U.O)} || '/' || ${notes(U.P)} || '/' || ${notes(U.J)}`, '1/1/1/0')}
+${val('M 강등 → 사장 전원(O 1 · P 1) · M 그대로 1 · J 0', `select ${notes(U.M)} || '/' || ${notes(U.O)} || '/' || ${notes(U.P)} || '/' || ${notes(U.J)}`, '1/1/1/0')}
 ${call('O 링크 손님 질문 → O 한 명', null, 'anon', ask(V('lo', 2), '바다', '컵 세척은요'), 'ok|gk_*', 'g3')}
 ${call('보내기', null, 'anon', `select public.edu_link_send({V:lo:2}, {V:g3:1}, {V:g3:2}, false)::text`, 'ok|true')}
 ${val('O 링크 → O 2 · P 1 그대로', `select ${notes(U.O)} || '/' || ${notes(U.P)}`, '2/1')}
+delete from public.unit_members where unit_id = ${q(X1)} and user_id = ${q(U.M)};
+${call('0584 만든 사람 M 이 나가면 링크 닫힘(손님 묻기 = link_closed)', null, 'anon', ask(V('lm', 2), '구름', '나간 뒤 질문'), 'err:link_closed')}
 
 -- ── ④ 본사 사본으로 답하면 링크에 안 담김 · 매장 노하우는 담김 ──
 update public.unknown_queries set status = 'resolved_with_entry', resolved_with_entry_id = ${q(e(2))}

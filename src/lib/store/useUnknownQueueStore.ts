@@ -71,10 +71,8 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
     const epoch = currentTenantEpoch();
     const [{ data, error }, total] = await Promise.all([fetchUnknownQueue(), fetchPendingQuestionCount()]);
     if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 질문을 쓰지 않는다
-    // ★받은 질문 숫자 = 답할 질문(isTodoQuestion)과 같은 정의. 서버 개수는 승인 대기(in_review)도 세므로 받은 목록에서 그만큼 뺀다.
-    //   대기 목록은 오래된 순으로 상한까지 오니 상한 밖의 승인 대기는 못 뺀다(그때만 숫자가 조금 크다 · 1000건 넘는 매장).
-    const inReview = data.filter((u) => u.status === 'pending_owner_answer' && u.in_review === true).length;
-    set({ queue: data, loaded: true, loadError: error, pendingTotal: total === null ? null : Math.max(0, total - inReview) });
+    // ★받은 질문 숫자 = 답할 질문(isTodoQuestion)과 같은 정의. 승인 대기(in_review)는 서버 개수가 이미 뺀다(fetchPendingQuestionCount).
+    set({ queue: data, loaded: true, loadError: error, pendingTotal: total });
   }),
 
   // 알바 폰에서 질문이 들어오면 사장님 인박스가 실시간으로 갱신된다(학습순환의 핵심).

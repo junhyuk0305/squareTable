@@ -86,6 +86,8 @@ export function placeErrorCode(err: DbErr | null | undefined): string | null {
 Object.assign(MESSAGES, {
   practice_only: '공간 주인의 질문은 연습이라 저장하지 않아요.',
   handoff_busy: '잠시 뒤 다시 눌러 주세요.',
+  // 0585: 손님 행(첫 질문 때 생김)이 없는 열쇠에는 이어받기 코드를 안 낸다.
+  handoff_needs_question: '질문을 하나 보내면 앱에서 이어 볼 수 있어요.',
 } satisfies Record<string, string>);
 
 // night-1111 sb

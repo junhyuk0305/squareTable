@@ -6,7 +6,8 @@
 //        내 질문만 읽는다 · 답하면 질문한 멤버에게 알림 1(답 쓴 사람 본인·나간 멤버 0) · 벨 공급(my_space_notif_data).
 //   (다) 이어받기 코드(10분 · 한 번 · 해시만) · 틀린 코드 = invalid_code + 실패 1행 · 살아 있는 초대코드 = not_link_code(안 셈) ·
 //        직접 6번 → 6번째 too_many_attempts · 번호 미인증 = PHONE_NOT_VERIFIED · 닫힌 링크 = link_closed · 옮긴 뒤 답 → 그 계정 알림 1 ·
-//        내 링크 목록에 닫힌 링크 없음 · 기기 열쇠로 묻기·답 읽기 · 남의 링크 열쇠 = link_closed · 웹 가입 자동 옮기기 · 손님 없는 코드 20개.
+//        내 링크 목록에 닫힌 링크 없음 · 기기 열쇠로 묻기·답 읽기 · 남의 링크 열쇠 = link_closed · 웹 가입 자동 옮기기 ·
+//        ★0585 손님 행 없는 열쇠 = handoff_needs_question(링크당 20개 상한 없앰 · 같은 손님은 살아 있는 코드 1개).
 //   (라) 크론이 처리된 합류 요청을 안 보냄 · 공간 삭제 → 주인 아닌 멤버 알림 n · 알림 종류 목록.
 //   (마) AI 예약 R1(동시 두 번 → 하나만 · psql 두 개를 동시에) · R2 재시도 한 번 · R3 돌려주기 · R4 매장 무료 모드 · 권한.
 //        R5(공간 판정 불가 = 막음)는 엣지 코드 갈래라 여기서는 skip 으로 센다.
@@ -193,22 +194,25 @@ ${call('코드 넣기 → 옮김', 'Z', 'authenticated', claim('{V:h2}'), `ok|cl
 ${val('손님 행에 내 계정 · 질문 행 질문자 칸은 그대로 비움', `select (g.claimed_by = ${q(U.Z)}) || '/' || (g.claimed_at is not null) || '/' || coalesce(c.junior_id, '-') from public.edu_link_guests g join public.chat_queries c on c.id = {P2:g1} where g.link_id = ${q(L1)} and g.name = '이어받을손님'`, 'true/true/-')}
 ${val('성공 기록 1 · 틀린 시도 그대로', `select count(*) filter (where ok) || '/' || count(*) filter (where not ok) from public.join_attempts where uid = ${q(U.Z)}`, '1/1')}
 ${call('같은 코드 두 번째 = invalid_code(한 번만)', 'Z', 'authenticated', claim('{V:h2}'), 'ok|invalid_code/-/-')}
-${call('만료 코드 준비', null, 'anon', `select code from public.edu_link_handoff_code(${q(TK2)}, null)`, 'ok|*', 'h3')}
+${call('둘째 링크 손님 묻기(L2 · 0585 코드는 손님 행이 있어야 난다)', null, 'anon', ask(TK2, 'null', '둘째손님', '컵 뚜껑은요'), 'ok|gk_*', 'g4')}
+${call('만료 코드 준비', null, 'anon', `select code from public.edu_link_handoff_code(${q(TK2)}, {P1:g4})`, 'ok|*', 'h3')}
 update public.edu_link_handoffs set expires_at = now() - interval '1 second' where code_hash = encode(extensions.digest((select v from ma_v where k = 'h3'), 'sha256'), 'hex');
 ${call('10분 지난 코드 = invalid_code', 'K', 'authenticated', claim('{V:h3}'), 'ok|invalid_code/-/-')}
 ${val('앱 길: 틀린 코드 1번 = 실패 1행(합류 함수는 안 부른다)', fails('K'), '1')}
-${call('닫을 링크 코드(손님 없이)', null, 'anon', `select code from public.edu_link_handoff_code(${q(TK3)}, null)`, 'ok|*', 'h4')}
+${call('닫을 링크 손님 묻기', null, 'anon', ask(TK3, 'null', '닫을링크손님', '닫기 전 질문'), 'ok|gk_*', 'g5')}
+${call('닫을 링크 코드', null, 'anon', `select code from public.edu_link_handoff_code(${q(TK3)}, {P1:g5})`, 'ok|*', 'h4')}
 update public.edu_links set closed_at = now() where id = ${q(L3)};
 ${call('그사이 닫힌 링크 = link_closed', 'K', 'authenticated', claim('{V:h4}'), 'err:link_closed')}
 ${[1, 2, 3, 4, 5].map((n) => call(`없는 코드 직접 ${n}번째 = invalid_code`, 'L', 'authenticated', claim(`'ZZZZZ${n + 3}'`), 'ok|invalid_code/-/-')).join('\n')}
 ${call('6번째 = too_many_attempts(초대코드와 같은 잠금)', 'L', 'authenticated', claim(`'ZZZZZ9'`), 'err:too_many_attempts')}
-${call('맞는 이어받기 코드 준비(손님 없이 · L2)', null, 'anon', `select code from public.edu_link_handoff_code(${q(TK2)}, null)`, 'ok|*', 'h5')}
+${call('맞는 이어받기 코드 준비(L2 손님)', null, 'anon', `select code from public.edu_link_handoff_code(${q(TK2)}, {P1:g4})`, 'ok|*', 'h5')}
 ${call('잠긴 계정은 맞는 이어받기 코드도 거절', 'L', 'authenticated', claim('{V:h5}'), 'err:too_many_attempts')}
 insert into public.space_entry_allowlist(user_id, note) values (${q(U.L)}, 'qa');
 ${call('잠긴 계정은 공간 초대코드도 거절(같은 join 칸)', 'L', 'authenticated', `select count(*)::text from public.join_space_by_code({V:spcode})`, 'err:too_many_attempts')}
-${call('손님 없는 코드 20개(링크당 · 위 1개 + 19개)', null, 'anon', `select count(distinct x.c) from (select (select h.code from public.edu_link_handoff_code(${q(TK2)}, nullif(g::text, g::text)) h) as c from generate_series(1, 19) g) x`, 'ok|19')}
-${call('21번째 = handoff_busy', null, 'anon', `select code from public.edu_link_handoff_code(${q(TK2)}, null)`, 'err:handoff_busy')}
-${call('손님 있는 코드는 20개와 따로', null, 'anon', `select count(*) from public.edu_link_handoff_code(${q(TK1)}, {P1:g1})`, 'ok|1')}
+${call('0585 열쇠 없는 코드 = handoff_needs_question(손님 행 없음)', null, 'anon', `select code from public.edu_link_handoff_code(${q(TK2)}, null)`, 'err:handoff_needs_question')}
+${call('0585 같은 손님 21번 받기 = 다 됨(링크당 20개 상한 없음)', null, 'anon', `select count(distinct x.c) from (select (select h.code from public.edu_link_handoff_code(${q(TK2)}, {P1:g4} || left(g::text, 0)) h) as c from generate_series(1, 21) g) x`, 'ok|21')}
+${val('0585 같은 손님 살아 있는 코드 = 1', `select count(*) from public.edu_link_handoffs h join public.edu_link_guests g on g.id = h.guest_id where h.link_id = ${q(L2)} and g.name = '둘째손님' and h.used_at is null and h.expires_at > now()`, '1')}
+${call('손님 있는 코드 받기(L1)', null, 'anon', `select count(*) from public.edu_link_handoff_code(${q(TK1)}, {P1:g1})`, 'ok|1')}
 ${val('초대코드 발급이 살아 있는 이어받기 코드를 피한다(_new_join_code 본문)', `select (prosrc ~ 'edu_link_handoffs')::text from pg_proc where oid = 'public._new_join_code()'::regprocedure`, 'true')}
 
 -- 옮긴 뒤 답 → 그 계정 알림 · 앱 안 링크
