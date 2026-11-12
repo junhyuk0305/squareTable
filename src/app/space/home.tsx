@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,10 +37,14 @@ export default function SpaceHome() {
   const [capHit, setCapHit] = useState(false);
   const [failed, setFailed] = useState(false);
 
+  // L20: 마지막 요청의 응답만 쓴다. 화면을 떠났거나 공간이 바뀐 뒤 늦게 온 응답은 버린다.
+  const seq = useRef(0);
   const load = useCallback(async () => {
     if (!spaceId) return;
+    const my = ++seq.current;
     setFailed(false);
     const [c, q] = await Promise.all([unitQuestionCounts(spaceId), aiQuotaStatusAt(spaceId)]);
+    if (my !== seq.current) return;
     if (c.data) setCounts(c.data);
     else setFailed(true);
     // 사용량을 못 읽으면 상한 줄을 띄우지 않는다(다 썼다고 단정하지 않는다).
@@ -50,6 +54,7 @@ export default function SpaceHome() {
   useFocusEffect(
     useCallback(() => {
       void load();
+      return () => { seq.current++; };
     }, [load]),
   );
 

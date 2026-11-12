@@ -8,13 +8,13 @@ import { fetchStaffProfiles, removeStaffMember, subscribeStaff, fetchPendingMemb
 import { openJoinedAt, type MemberTenure } from '@/lib/utils/tenure';
 import { showToast } from '@/lib/store/useToastStore';
 import { PLANS } from '@/lib/config/tiers';
-import { subscribeDebounced } from '@/lib/store/realtimeSync';
+import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
-import { optimisticRemove } from '@/lib/store/crudHelpers';
 import { useSyncStore } from '@/lib/store/useSyncStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { router } from 'expo-router';
 import { showUpgradeHint } from '@/lib/config/store-policy';
+import { workErrorCode, workErrorMessage } from '@/lib/work/errors';
 
 const demoOwner = (usersData as any).owner as Owner;
 const demoStaff = (usersData as any).staff as Junior[];
@@ -24,6 +24,9 @@ const alreadyDecided = (get: () => StaffState) => {
   showToast('이미 처리된 신청이에요. 목록을 새로 불러올게요.');
   void get().hydrate();
 };
+
+/** 역할 변경이 서버에 가 있는 직원(M18) — 끝나기 전 다시 누름은 보내지 않는다(연타·옛 화면 값으로 두 번 바뀌는 것 방지). */
+const roleSaving = new Set<string>();
 
 /** 합류 신청자(승인 대기, 남용 #2) — 아직 소속 아님. 이름·전화뒷4만 노출. */
 export type PendingMember = { id: string; name: string; phone_last4: string; created_at: string };
@@ -109,7 +112,8 @@ export const useStaffStore = create<StaffState>((set, get) => ({
   loadError: false,
   fetchedAt: 0,
 
-  hydrate: async () => {
+  // ★겹친 재조회는 합친다(M12 · coalesce) — 포커스·승인 성공·실시간이 동시에 부르면 늦게 끝난 옛 응답이 새 명부를 덮었다.
+  hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
     // 화면 포커스·승인 성공·실시간 이벤트도 이 길로 다시 당긴다 — 전부 같은 가드를 지난다.
     const epoch = currentTenantEpoch();
@@ -127,20 +131,25 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     ]);
     if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 명부를 쓰지 않는다
     const tenures = tenRes.data;
-    set({
-      owner: staffRes.owner,
-      // 입사일 = 열린 재직 기간의 joined_at(이 매장에 들어온 날). 기간이 없으면 기존 값(profiles.created_at) 그대로.
-      staff: staffRes.staff.map((m) => ({ ...m, joined_at: openJoinedAt(tenures, m.id) ?? m.joined_at })),
+    // ★읽기가 실패하면 이전 값을 둔다(M11) — 빈 명부로 덮으면 "직원 0명"이 사실인 양 굳는다. 실패는 loadError 로 말한다.
+    //   역할 맵은 명부와 같은 멤버십 읽기에서 온다 — 그 읽기가 실패하면 명부도 실패(loadError)다.
+    set((s) => ({
+      ...(staffRes.error
+        ? null
+        : {
+            owner: staffRes.owner,
+            // 입사일 = 열린 재직 기간의 joined_at(이 매장에 들어온 날). 기간이 없으면 기존 값(profiles.created_at) 그대로.
+            staff: staffRes.staff.map((m) => ({ ...m, joined_at: openJoinedAt(tenures, m.id) ?? m.joined_at })),
+            roles: staffRes.roles,
+          }),
       tenures,
-      pending: pendingRes.data,
+      pending: pendingRes.error ? s.pending : pendingRes.data,
       joinNotices: joinRes.data,
       joinDone: doneRes.data,
-      // 역할 맵은 명부와 같은 멤버십 읽기에서 온다 — 그 읽기가 실패하면 명부도 실패(loadError)다.
-      roles: staffRes.roles,
       loaded: true,
       loadError: staffRes.error || pendingRes.error,
-    });
-  },
+    }));
+  }),
 
   applyMock: (demo) =>
     set(
@@ -151,8 +160,27 @@ export const useStaffStore = create<StaffState>((set, get) => ({
 
   getStaff: (id) => get().staff.find((s) => s.id === id),
 
+  // ★S5-2: 서버 staff_not_found = 이미 나간 직원(다른 기기에서 먼저 내보냄) → already. 원하던 상태라 되돌리지 않고 다시 읽는다.
+  //   그 밖의 실패만 원위치로 복원 + "못 했어요". 쓰기 중 매장이 바뀌었으면 복원하지 않는다(이전 매장 직원이다).
   removeStaff: (id) => {
-    optimisticRemove(set, get, 'staff', id, () => removeStaffMember(id), '직원 내보내기에 실패했어요. 다시 시도해 주세요.', currentTenantEpoch());
+    const arr = get().staff;
+    const idx = arr.findIndex((x) => x.id === id);
+    if (idx < 0) return;
+    const removed = arr[idx];
+    const epoch = currentTenantEpoch();
+    set((s) => ({ staff: s.staff.filter((x) => x.id !== id) }));
+    void removeStaffMember(id).then((d) => {
+      if (d === 'ok') return;
+      if (d === 'already') { void get().hydrate(); return; }
+      if (!isStaleEpoch(epoch))
+        set((s) => {
+          if (s.staff.some((x) => x.id === id)) return s;
+          const next = s.staff.slice();
+          next.splice(Math.min(idx, next.length), 0, removed);
+          return { staff: next };
+        });
+      useSyncStore.getState().noteError('직원 내보내기에 실패했어요. 다시 시도해 주세요.');
+    });
   },
 
   // 승인: 신청자를 낙관적으로 pending에서 빼고 승인 RPC 호출. 성공하면 로스터를 재조회(새 직원 반영),
@@ -191,12 +219,17 @@ export const useStaffStore = create<StaffState>((set, get) => ({
   setRole: (id, role) => {
     const before = get().roles;
     if ((before[id] ?? 'junior') === role) return;
+    if (roleSaving.has(id)) return; // M18: 진행 중이면 다음 누름을 막는다
+    roleSaving.add(id);
     const epoch = currentTenantEpoch(); // approve 와 같은 이유 — 이전 매장 역할 맵으로 되돌리지 않는다
     set({ roles: { ...before, [id]: role } });
-    void setMemberRoleDb(id, role).then((ok) => {
-      if (!ok) {
+    void setMemberRoleDb(id, role).then((err) => {
+      roleSaving.delete(id);
+      if (err) {
         if (!isStaleEpoch(epoch)) set({ roles: before });
-        useSyncStore.getState().noteError('역할 변경에 실패했어요. 다시 시도해 주세요.');
+        // staff_not_found = 그 사이 나간 직원(S5-1 문구 표) · 그 밖은 지금 문구
+        useSyncStore.getState().noteError(workErrorMessage(err, '역할 변경에 실패했어요. 다시 시도해 주세요.'));
+        if (workErrorCode(err) === 'staff_not_found' && !isStaleEpoch(epoch)) void get().hydrate();
         return;
       }
       const name = get().staff.find((s) => s.id === id)?.name || '직원';

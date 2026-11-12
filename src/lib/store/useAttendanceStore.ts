@@ -3,7 +3,8 @@ import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import { todayStr, minutesBetween, nowISO, MAX_SHIFT_MIN, findOpenRecord, replaceMonthRecords, keepLoadedMonths } from '@/lib/utils/attendance';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchAttendance, fetchAttendanceMonth, upsertAttendance, deleteAttendance, subscribeAttendance } from '@/lib/db';
+import { fetchAttendance, fetchAttendanceMonth, upsertAttendance, deleteAttendance, subscribeAttendance, attendanceCheckIn, attendanceCheckOut, attendanceEditTimes } from '@/lib/db';
+import { showToast } from '@/lib/store/useToastStore';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { genId } from '@/lib/utils/id';
 import { addDays, isOvernight } from '@/lib/utils/schedule';
@@ -173,9 +174,24 @@ export const useAttendanceStore = create<State>((set, get) => ({
     const now = new Date().toISOString();
     const rec: AttendanceRecord = { id: genId(`att_${staffId}`), staff_id: staffId, date, check_in: now, check_out: null, work_minutes: 0 };
     set((s) => ({ records: [rec, ...s.records] }));
+    // ★M1(0632): 출근은 attendance_check_in. 열린 기록은 (매장, 직원)당 하나다 — 다른 기기에서 먼저 출근했으면 already 와 그 기록 id 가 온다.
+    //   그때는 낙관 행을 서버 id 로 바꾸고(같은 id 가 이미 목록에 있으면 낙관 행만 뺀다) 다시 읽어 시각을 맞춘다. 오류가 아니다.
+    const result = attendanceCheckIn(rec.id, date).then((r) => {
+      if (!r) return false;
+      if (r.status === 'already') {
+        set((s) => ({
+          records: s.records.some((x) => x.id === r.id && x !== rec)
+            ? s.records.filter((x) => x !== rec)
+            : s.records.map((x) => (x === rec ? { ...rec, id: r.id } : x)),
+        }));
+        showToast('이미 출근 중이에요.', 'info');
+        void get().hydrate();
+      }
+      return true;
+    });
     saveRecord(
       rec,
-      upsertAttendance(rec),
+      result,
       () => set((s) => ({ records: s.records.filter((r) => r !== rec) })),
       '출근 기록 저장에 실패했어요. 다시 시도해 주세요.',
     );
@@ -196,9 +212,17 @@ export const useAttendanceStore = create<State>((set, get) => ({
     // 퇴근 깜빡으로 24h 초과 시 절상(남용 #12) — 자동 펀치가 비현실적 급여를 만들지 않게.
     const updated: AttendanceRecord = { ...open, check_out: out, work_minutes: Math.min(MAX_SHIFT_MIN, minutesBetween(open.check_in!, out)) };
     set((s) => ({ records: s.records.map((r) => (r.id === open.id ? updated : r)) }));
+    // ★M2(0632): 퇴근은 attendance_check_out — check_out 한 칸만 쓴다(행 통째 upsert 는 그 사이 고친 출근 시각을 옛 값으로 덮었다).
+    //   근무 분은 서버 값(24시간 상한)으로 바꾼다. already = 다른 기기가 먼저 퇴근 → 다시 읽는다(오류 아님).
+    const result = attendanceCheckOut(open.id).then((r) => {
+      if (!r) return false;
+      if (r.status === 'already') { void get().hydrate(); return true; }
+      set((s) => ({ records: s.records.map((x) => (x === updated ? { ...updated, check_out: r.check_out, work_minutes: r.work_minutes } : x)) }));
+      return true;
+    });
     saveRecord(
       updated,
-      upsertAttendance(updated),
+      result,
       () => set((s) => ({ records: s.records.map((r) => (r === updated ? open : r)) })),
       '퇴근 기록 저장에 실패했어요. 다시 시도해 주세요.',
     );
@@ -228,10 +252,21 @@ export const useAttendanceStore = create<State>((set, get) => ({
       return { records: [saved, ...s.records] };
     });
     // edited_by 포함해 영속(0006 마이그레이션 컬럼). 자동 펀치는 edited_by 없음 → null.
+    // ★M2(0632): 기존 기록의 시간 고치기는 attendance_edit_times — 넘긴 칸만 쓰고 고친 사람·근무 분·이력은 서버가 정한다. 서버 행으로 바꾼다.
+    //   퇴근을 지우는(다시 여는) 수정과 새 기록 추가는 지금처럼 upsert 다(그 함수는 null = 그대로라 퇴근을 못 지운다).
+    const reopen = !!before?.check_out && !check_out;
+    const write = (rec: AttendanceRecord): Promise<boolean> =>
+      wasNew || reopen
+        ? upsertAttendance(rec)
+        : attendanceEditTimes(rec.id, rec.check_in, rec.check_out).then((r) => {
+            if (!r) return false;
+            set((s) => ({ records: s.records.map((x) => (x === rec ? { ...rec, ...r } : x)) }));
+            return true;
+          });
     if (saved)
       saveRecord(
         saved,
-        upsertAttendance(saved),
+        write(saved),
         () =>
           set((s) =>
             wasNew

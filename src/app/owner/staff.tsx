@@ -26,7 +26,8 @@ import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
 import { ButtonStyles, ButtonTextStyles, TouchSize, hitTrim } from '@/lib/theme/button';
 import { EmptyStyles } from '@/lib/theme/empty';
-import { fmtDuration, todayStr, liveMinutes, staffWorkStatus } from '@/lib/utils/attendance';
+import { fmtDuration, liveMinutes, staffWorkStatus } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import { showToast } from '@/lib/store/useToastStore';
 import { rotateInviteCode } from '@/lib/db';
 import { friendlyError } from '@/lib/utils/userError';
@@ -101,7 +102,8 @@ export default function OwnerStaffScreen() {
 
   // 직원별 이번 달 시간·근무상태 — 구 attendance 화면의 집계를 직원 목록에 합친다.
   // 기간은 달력 월(1일~말일)이다(2026-11-02 급여 제거 · 사용자 결정).
-  const today = todayStr();
+  // ★useToday(결함 8): 몸통에서 todayStr() 를 부르면 React Compiler 가 첫 렌더 값에 묶어 자정을 넘기면 어제를 오늘로 센다.
+  const today = useToday();
   const ym = today.slice(0, 7);
   const perStaff = useMemo(() => {
     const map: Record<string, { min: number; status: 'out' | 'working' | 'done' | 'forgot' }> = {};
@@ -135,6 +137,7 @@ export default function OwnerStaffScreen() {
 
   // 초대코드 재발급(남용 #31) — 새 6자리(만료 없음 · 0282 C6). 이전 코드는 즉시 무효(유출 차단).
   const confirmRotate = async () => {
+    if (rotating) return; // L18: 진행 중 다시 누름은 코드를 두 번 바꾼다
     setRotating(true);
     const res = await rotateInviteCode();
     setRotating(false);

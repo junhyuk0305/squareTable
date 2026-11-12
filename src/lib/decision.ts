@@ -18,6 +18,7 @@ const ALREADY_CODES = [
   'swap_already_decided',  // swap_requests 트리거(0258)
   'swap_cancel_status_only', // 취소는 status 만(0293) — 다른 칸이 바뀌었다 = 그 사이 남이 처리했다
   'already_proposed',      // propose_to_store(0490) — 같은 노하우가 같은 매장에 대기 중(suggestion_not_pending 은 not_pending 이 품는다)
+  'staff_not_found',       // remove_staff(0246) — 이미 나간 직원(다른 기기에서 먼저 내보냄 · S5-2). set_member_role 은 writeErr 길이라 여기를 안 지난다
 ] as const;
 
 const BLOCKED_CODES = [

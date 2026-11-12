@@ -12,11 +12,13 @@ import {
   fetchDone,
   fetchDoneRange,
   doneWindowStart,
-  setDone,
-  clearDone,
+  completeTask,
+  uncompleteTask,
   fetchFeed,
   upsertFeed,
-  deleteFeed,
+  insertFeedErr,
+  deleteFeedItemRpc,
+  repostNotice,
   markFeedRead as dbMarkFeedRead,
   markAllFeedRead as dbMarkAllFeedRead,
   toggleFeedReaction as dbToggleFeedReaction,
@@ -60,6 +62,7 @@ import {
 import type { QuizAssignment, TrainingCourse as TrainingCourseRow } from '@/lib/quiz/types';
 import { isBrandHidden } from '@/lib/brand/copy';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
+import { workErrorMessage } from '@/lib/work/errors';
 import { coalesce, subscribeDebouncedKeyed, settleWithin, HYDRATE_TIMEOUT_MS, pendingNames, reportHydrate, syncStats } from '@/lib/store/realtimeSync';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import { genId } from '@/lib/utils/id';
@@ -1409,23 +1412,16 @@ export const useWorkStore = create<State>((set, get) => ({
     const key = `${date}:${templateId}`;
     const current = s.done[date]?.[templateId];
     const tpl = s.templates.find((t) => t.id === templateId);
-    // 합성 루틴(dpr_)은 tpl 조회가 안 되므로 호출부가 넘긴 task 로 문구/방을 채운다('할일' 폴백 회피).
-    const taskText = task?.text ?? (tpl ? tpl.text : '할일');
     if (current) {
       const removed = s.feed.find((f) => f.kind === 'task_done' && f.date === date && f.refId === templateId);
       commitDone(
         key,
         { date, templateId, mark: null, feedRemoveId: removed?.id },
         { date, templateId, mark: current, feedAdd: removed },
-        // ★결과 분류(P2 ⑦): 0행(already) = 다른 기기가 먼저 해제했다 — 실패가 아니다. 화면은 이미 미완료라 그대로 두고
+        // ★H3(0630): 완료 해제와 완료 글 지우기는 서버 함수 한 번(uncomplete_task)이다. 예전엔 요청 둘이라 가운데서 끊기면 고아 완료 글이 남았다.
+        //   결과 분류(P2 ⑦): already = 다른 기기가 먼저 해제했다 — 실패가 아니다. 화면은 이미 미완료라 그대로 두고
         //   서버 상태만 다시 읽는다(K5-d · commitDone). failed 만 되돌리고 "못 했어요"를 말한다.
-        () =>
-          Promise.all([clearDone(date, templateId), removed ? deleteFeed(removed.id) : Promise.resolve('ok' as const)]).then(
-            ([a, b]) => {
-              if (a === 'failed' || b === 'failed') return false;
-              return a === 'already' || b === 'already' ? 'already' : true;
-            },
-          ),
+        () => uncompleteTask(date, templateId).then((d) => (d === 'failed' || d === 'blocked' ? false : d === 'already' ? 'already' : true)),
         '완료 해제 저장에 실패했어요.',
       );
       return;
@@ -1433,37 +1429,30 @@ export const useWorkStore = create<State>((set, get) => ({
     const now = new Date().toISOString();
     const room = task?.roomId ?? tpl?.roomId ?? curRoom(); // 완료마크는 그 할일의 방(없으면 활성 방)에 묶인다.
     const mark: DoneMark = { by: staffId, byName: staffName, at: now, ...(photoUrl ? { photoUrl } : null) };
-    const doneItem: FeedItem = {
-      // ★완료 피드는 완료 기록(날짜·할일) 1건당 1행 — id 를 그 키에서 결정적으로 만든다(2026-10-16 F5).
-      //   랜덤 id(genId)였을 때 두 창이 동시에 완료하면 work_done 은 PK 로 1행인데 피드는 2행이 쌓였다.
-      //   서버 쓰기는 ignoreDuplicates(ON CONFLICT DO NOTHING) — 남의 행은 wf_update 정책(작성자만)에 막히므로
-      //   먼저 적힌 완료 알림이 남고 늦은 쪽은 조용히 비긴다(오류 아님).
-      id: `fdone_${date}_${templateId}`,
-      date,
-      kind: 'task_done',
-      text: `${staffName} · ${taskText} 완료`,
-      authorId: staffId,
-      authorName: staffName,
-      authorRole: role,
-      createdAt: now,
-      refId: templateId,
-      // ★완료 알림은 **매장 단위**다(roomId 없음, 2026-08-19 판정 Ⓐ). 할일에는 방 개념이 없으니
-      //   완료도 특정 방의 것이 아니다. 어느 방 스트림에 그릴지는 화면이 담당자 멤버십으로 판정한다
-      //   (담당자가 있으면 그 사람이 있는 방 · 없으면 기본방). 방마다 피드 행을 복제하지 않는다 —
-      //   복제하면 완료 해제·수정이 배로 복잡해진다.
-      ...(photoUrl ? { photoUrl } : null),
-    };
+    // ★H3(0630): 완료 마크와 완료 글(fdone_<날짜>_<할 일> · "<이름> · <할 일> 완료")은 서버가 complete_task 한 번으로 쓴다.
+    //   앱은 완료 글을 만들지 않는다 — 예전엔 앱이 만든 글과 work_done 이 따로 저장돼, 두 창 동시 완료에서 완료자와 글 이름이 어긋났다.
+    //   완료 글은 realtime 으로 들어온다(매장 단위 · 방 없음 · 2026-08-19 판정 Ⓐ).
     commitDone(
       key,
-      { date, templateId, mark, feedAdd: doneItem },
-      { date, templateId, mark: null, feedRemoveId: doneItem.id },
-      // ★먼저 저장한 사람이 완료자(2026-10-16 F5 · 사용자 결정). setDone 은 있는 행을 덮지 않는다(DO NOTHING) → 0행 = already
-      //   → commitDone 이 내 이름 패치를 버리고 서버를 다시 읽어 **먼저 저장한 사람 이름**을 보인다. 피드도 같은 규칙(위 ignoreDuplicates).
+      { date, templateId, mark },
+      { date, templateId, mark: null },
+      // ★먼저 저장한 사람이 완료자(2026-10-16 F5 · 사용자 결정). already = 다른 기기가 먼저 → 서버가 준 완료자 이름을 바로 보인다.
+      //   (commitDone 이 내 패치를 버리고 다시 읽는다. 그 사이에도 내 이름이 남지 않게 여기서 서버 이름으로 바꾼다.)
       //   사진 완료(photoUrl)도 이 길이라 늦은 쪽 사진은 서버에 남지 않는다. failed 만 되돌리고 "못 했어요".
       () =>
-        Promise.all([setDone(date, templateId, mark, room), upsertFeed(doneItem, { ignoreDuplicates: true })]).then(([a, b]) => {
-          if (a === 'failed' || !b) return false;
-          return a === 'already' ? 'already' : true;
+        completeTask(date, templateId, room, photoUrl).then((r) => {
+          if (r.decision === 'already') {
+            if (r.by && r.byName !== null) {
+              const winner: DoneMark = { by: r.by, byName: r.byName, at: now };
+              useWorkStore.setState((st) => applyDonePatch(st.done, st.feed, { date, templateId, mark: winner }));
+            }
+            return 'already';
+          }
+          if (r.decision !== 'ok') {
+            if (r.code === 'task_not_found') useSyncStore.getState().noteError(workErrorMessage(r.code));
+            return false;
+          }
+          return true;
         }),
       '완료 체크 저장에 실패했어요.',
     );
@@ -1483,8 +1472,14 @@ export const useWorkStore = create<State>((set, get) => ({
       const bumped: FeedItem = { ...dup, createdAt: new Date().toISOString(), read_by: [], important };
       set((s) => ({ feed: s.feed.map((f) => (f.id === dup.id ? bumped : f)) }));
       // 공지는 푸시·벨 알림이 없다(2026-10-16 사용자 결정) — 저장만 한다.
+      // ★M14(0635): 행을 통째로 쓰지 않는다 — repost_notice 가 시각·읽음·중요만 바꾼다. 남의 공지도 된다(예전 upsert 는 남의 행이라 42501).
+      //   시각은 서버 값으로 맞춘다.
       void guardWrite(
-        upsertFeed(bumped),
+        repostNotice(dup.id, important).then((r) => {
+          if (!r) return false;
+          set((s) => ({ feed: s.feed.map((f) => (f.id === dup.id ? { ...f, createdAt: r.createdAt } : f)) }));
+          return true;
+        }),
         () => set((s) => ({ feed: s.feed.map((f) => (f.id === before.id ? before : f)) })),
         '공지 재게시에 실패했어요.',
       );
@@ -1519,7 +1514,8 @@ export const useWorkStore = create<State>((set, get) => ({
     const epoch = currentTenantEpoch();
     const { data, error } = await dbBroadcastNotice(unitIds, text.trim(), important);
     if (error || !data) {
-      useSyncStore.getState().noteError('공지 발송에 실패했어요. 다시 시도해 주세요.');
+      // no_targets(받을 직원 없음) 같은 서버 코드는 문구 표가 고른다(S5-1 · src/lib/work/errors.ts).
+      useSyncStore.getState().noteError(workErrorMessage(error, '공지 발송에 실패했어요. 다시 시도해 주세요.'));
       return { ok: false, sent: 0 };
     }
     const fresh = await fetchFeed();
@@ -1602,12 +1598,13 @@ export const useWorkStore = create<State>((set, get) => ({
     };
     set((s) => ({ feed: [...s.feed, item] }));
     // 저장 성공 후에만 멘션 웹푸시(본인 제외, 서버가 같은 매장 검증) — 실패 시 유령 멘션 알림 방지.
-    void guardWrite(
-      upsertFeed(item),
-      () => set((s) => ({ feed: s.feed.filter((f) => f.id !== item.id) })),
-      '댓글 등록에 실패했어요.',
-    ).then((ok) => {
-      if (!ok) return;
+    // ★M14(0635): 그 사이 글이 지워졌으면 서버가 feed_parent_gone 으로 막는다 → 그 사실을 말한다(문구 표 src/lib/work/errors.ts).
+    void insertFeedErr(item).then((err) => {
+      if (err) {
+        set((s) => ({ feed: s.feed.filter((f) => f.id !== item.id) }));
+        useSyncStore.getState().noteError(workErrorMessage(err, '댓글 등록에 실패했어요.'));
+        return;
+      }
       // 댓글 멘션은 그 공지(refId)로 착지한다 — 댓글은 공지 카드 안에 있다.
       for (const uid of mentions ?? []) if (uid !== authorId) notifyUserMention(uid, authorName, text, item.id);
     });
@@ -1642,8 +1639,9 @@ export const useWorkStore = create<State>((set, get) => ({
     if (removed.length === 0) return;
     const epoch = currentTenantEpoch(); // s.feed 는 이전 매장 피드 전체일 수 있다 — 매장이 바뀌었으면 되돌리지 않는다
     set({ feed: s.feed.filter((f) => f.id !== id && f.refId !== id) });
-    // already(이미 지워짐)는 실패가 아니다 — 지우려던 결과와 같다.
-    const ok = Promise.all(removed.map((r) => deleteFeed(r.id))).then((rs) => rs.every((d) => d !== 'failed'));
+    // ★M14(0635): 서버 함수 한 번(delete_feed_item). 댓글은 서버 트리거가 같이 지운다 — 예전엔 글·댓글을 하나씩 지워 가운데서 끊기면 고아 댓글이 남았다.
+    //   already(이미 지워짐)는 실패가 아니다 — 지우려던 결과와 같다.
+    const ok = deleteFeedItemRpc(id).then((d) => d === 'ok' || d === 'already');
     void guardWrite(ok, () => { if (!isStaleEpoch(epoch)) set({ feed: s.feed }); }, '삭제에 실패했어요.');
   },
 

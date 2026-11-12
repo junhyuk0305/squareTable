@@ -162,11 +162,15 @@ console.log('\n[D12] 노하우 개선 제안은 실제로 고쳐 저장해야 �
   check('★수정 화면은 저장이 성공한 뒤에만 제안을 승인한다', /sugId\?: string/.test(edit) && iOk > 0 && iApprove > iOk, `ok=${iOk} approve=${iApprove}`);
 
   const store = strip(read('src/lib/store/useSuggestionStore.ts'));
-  const ap = storeMethod(store, 'approve'), rj = storeMethod(store, 'reject');
-  check('★반영되면 제안한 사람에게 알린다(저장 성공 뒤)', /\.then\(\(ok\) => \{[^}]*notifyUserSuggestionResult\(before\.proposer_id, true, before\.text\)/.test(ap), ap.slice(0, 300));
-  // 069f146: 반려 알림 본문은 resultBody(before)(공간에서 온 노하우는 제목 · 그 밖은 before.text) 다.
-  check('★반려되면 제안한 사람에게 알린다(저장 성공 뒤)', /\.then\(\(ok\) => \{[^}]*notifyUserSuggestionResult\(before\.proposer_id, false, (before\.text|resultBody\(before\))\)/.test(rj)
-    && (!/resultBody\(before\)/.test(rj) || /const resultBody = \(s: PlaybookSuggestion\): string =>[^;]*: s\.text;/.test(store)), rj.slice(0, 300));
+  // ★0631 H4: approve·reject 는 review() 하나가 review_suggestion RPC 를 부른다. 알림은 서버가 이번에 바꿨을 때(decision 'ok')만.
+  //   already(다른 관리자가 먼저 처리)면 알림을 보내지 않는다. 반려 본문은 resultBody(before)(069f146 · 공간 노하우는 제목).
+  const rv = (store.match(/const review = async \([\s\S]*?\n  \};/) || [''])[0];
+  const okBranch = (rv.match(/else if \(result\.decision === 'ok'\) \{[\s\S]*?\n    \}/) || [''])[0];
+  check('★반영되면 제안한 사람에게 알린다(서버가 이번에 바꿨을 때만)', /approve: \(id, resultingEntryId\) => review\(id, 'approved'/.test(store)
+    && /notifyUserSuggestionResult\(before\.proposer_id, status === 'approved', status === 'approved' \? before\.text : resultBody\(before\)\)/.test(okBranch), okBranch.slice(0, 300));
+  check('★반려되면 제안한 사람에게 알린다(같은 갈래 · 본문 resultBody)', /reject: \(id, note\) => review\(id, 'rejected'/.test(store)
+    && /const resultBody = \(s: PlaybookSuggestion\): string =>[^;]*: s\.text;/.test(store)
+    && (rv.match(/notifyUserSuggestionResult\(/g) || []).length === 1, rv.slice(0, 300));
   const notify = strip(read('src/lib/push/notify.ts'));
   const nf = fnBody(notify, 'notifyUserSuggestionResult');
   // 주소·tag 는 레지스트리(P1 · 2026-10-16)가 정한다 — 헬퍼는 kind 만 말한다.

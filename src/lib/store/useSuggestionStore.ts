@@ -5,9 +5,10 @@ import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import type { PlaybookSuggestion } from '@/types';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { approveSpaceProposal, copyProposalPhotos, editSuggestion, fetchSuggestions, insertSuggestion, reviewSuggestion, subscribeSuggestions, withdrawSuggestion } from '@/lib/db';
-import type { DbErr } from '@/lib/db';
-import { optimisticAdd, optimisticPatch } from '@/lib/store/crudHelpers';
+import { approveSpaceProposal, copyProposalPhotos, editSuggestion, fetchSuggestions, insertSuggestion, reviewSuggestionRpc, subscribeSuggestions, withdrawSuggestion } from '@/lib/db';
+import type { DbErr, ReviewSuggestionResult } from '@/lib/db';
+import { guardWrite } from '@/lib/store/useSyncStore';
+import { optimisticAdd } from '@/lib/store/crudHelpers';
 import { genId } from '@/lib/utils/id';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { notifyOwnersSuggestion, notifyUserSuggestionResult } from '@/lib/push/notify';
@@ -68,10 +69,11 @@ type State = {
   retry: () => Promise<void>;
   subscribe: () => () => void;
   submit: (input: SuggestionInput) => Promise<boolean>;
-  /** 승인 — **서버 반영 성공 여부**를 돌려준다(#18). 조용히 롤백되면 제안은 pending 으로 돌아오는데
-   *  노하우는 이미 저장돼 있어, 사장이 다시 승인하면 **같은 노하우가 2건**이 된다. */
-  approve: (id: string, resultingEntryId?: string) => Promise<boolean>;
-  reject: (id: string, note?: string) => Promise<boolean>;
+  /** 승인 — **서버 결과**를 돌려준다(#18 · H4). 조용히 롤백되면 제안은 pending 으로 돌아오는데
+   *  노하우는 이미 저장돼 있어, 사장이 다시 승인하면 **같은 노하우가 2건**이 된다.
+   *  already = 다른 관리자가 먼저 처리했다(오류 아님 · 결과 알림 없음) → current·resultingEntryId 로 호출부가 자기 사본을 정리한다. */
+  approve: (id: string, resultingEntryId?: string) => Promise<ReviewSuggestionResult>;
+  reject: (id: string, note?: string) => Promise<ReviewSuggestionResult>;
   /** 공간에서 온 노하우(from_space) 승인(0490 approve_space_proposal → 0581 사진 복사 엣지 → 결과 알림).
    *  error = 승인 자체가 실패(문구는 placeErrorMessage). photoFailed = 노하우는 남았고 사진만 못 옮겼다. skipped = 원본이 없어 뺀 사진 수. */
   approveFromSpace: (id: string) => Promise<{ error: DbErr; skipped: number; photoFailed: boolean }>;
@@ -84,7 +86,50 @@ type State = {
   applyMock: (demo: boolean) => void;
 };
 
-export const useSuggestionStore = create<State>((set, get) => ({
+export const useSuggestionStore = create<State>((set, get) => {
+  /**
+   * 승인·반려 공용(0631 review_suggestion · H4). 낙관 반영 → 서버 한 번.
+   *  ok      → 제안한 사람에게 결과 알림(저장 성공 뒤에만 · D12).
+   *  already → 다른 관리자가 먼저 처리했다. 알림을 보내지 않고 서버 상태(current)로 목록만 고친다(오류 문구 없음).
+   *  그 밖   → 되돌리고 "못 했어요".
+   */
+  const review = async (id: string, status: 'approved' | 'rejected', resultingEntryId: string | undefined, note: string | undefined): Promise<ReviewSuggestionResult> => {
+    const before = get().suggestions.find((x) => x.id === id);
+    if (!before) return { decision: 'failed', current: null, resultingEntryId: null, code: null };
+    const s = useSessionStore.getState();
+    const patch = {
+      status,
+      reviewed_at: new Date().toISOString(),
+      reviewed_by: s.userId,
+      ...(resultingEntryId ? { resulting_entry_id: resultingEntryId } : null),
+      ...(note ? { owner_note: note } : null),
+    };
+    const restore = () => set((st) => ({ suggestions: st.suggestions.map((x) => (x.id === id ? before : x)) }));
+    set((st) => ({ suggestions: st.suggestions.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+    let result: ReviewSuggestionResult = { decision: 'failed', current: null, resultingEntryId: null, code: null };
+    await guardWrite(
+      reviewSuggestionRpc(id, status, resultingEntryId, note).then((r) => {
+        result = r;
+        return r.decision === 'ok' || r.decision === 'already';
+      }),
+      restore,
+      status === 'approved' ? '승인 처리에 실패했어요.' : '반려 처리에 실패했어요.',
+    );
+    if (result.decision === 'already') {
+      const current = result.current;
+      const won = result.resultingEntryId;
+      if (current) set((st) => ({
+        suggestions: st.suggestions.map((x) => (x.id === id ? { ...before, status: current, ...(won ? { resulting_entry_id: won } : null) } : x)),
+      }));
+      else restore();
+      void get().hydrate();
+    } else if (result.decision === 'ok') {
+      notifyUserSuggestionResult(before.proposer_id, status === 'approved', status === 'approved' ? before.text : resultBody(before));
+    }
+    return result;
+  };
+
+  return {
   suggestions: HAS_SUPABASE ? [] : [...seed],
   loaded: !HAS_SUPABASE,
   loadError: false,
@@ -126,35 +171,10 @@ export const useSuggestionStore = create<State>((set, get) => ({
     return result;
   },
 
-  approve: (id, resultingEntryId) => {
-    const s = useSessionStore.getState();
-    const patch = {
-      status: 'approved' as const,
-      reviewed_at: new Date().toISOString(),
-      reviewed_by: s.userId,
-      ...(resultingEntryId ? { resulting_entry_id: resultingEntryId } : null),
-    };
-    const before = get().suggestions.find((x) => x.id === id);
-    const result = optimisticPatch(set, get, 'suggestions', id, patch, () => reviewSuggestion(id, patch), '승인 처리에 실패했어요.');
-    // 저장 성공 뒤에만 제안한 사람에게 알린다(D12). 결과를 모르면 다시 제안하지 않게 된다.
-    void result.then((ok) => { if (ok && before) notifyUserSuggestionResult(before.proposer_id, true, before.text); });
-    return result;
-  },
+  approve: (id, resultingEntryId) => review(id, 'approved', resultingEntryId, undefined),
 
-  reject: (id, note) => {
-    const s = useSessionStore.getState();
-    const patch = {
-      status: 'rejected' as const,
-      reviewed_at: new Date().toISOString(),
-      reviewed_by: s.userId,
-      ...(note ? { owner_note: note } : null),
-    };
-    const before = get().suggestions.find((x) => x.id === id);
-    const result = optimisticPatch(set, get, 'suggestions', id, patch, () => reviewSuggestion(id, patch), '반려 처리에 실패했어요.');
-    // 반려 사유는 알림 본문에 싣지 않는다. 직원은 '내가 보낸 제안'에서 사유를 본다(D12).
-    void result.then((ok) => { if (ok && before) notifyUserSuggestionResult(before.proposer_id, false, resultBody(before)); });
-    return result;
-  },
+  // 반려 사유는 알림 본문에 싣지 않는다. 직원은 '내가 보낸 제안'에서 사유를 본다(D12).
+  reject: (id, note) => review(id, 'rejected', undefined, note),
 
   // 공간에서 온 노하우 승인. 낙관적으로 바꾸지 않는다(사본을 서버가 만든다 · 실패하면 다시 읽어 지금 상태를 보인다).
   //   순서 = 승인 → 사진 복사(원본 사진이 있을 때만) → 보낸 사람에게 결과 알림. 사진 실패는 승인을 되돌리지 않는다(결정 9).
@@ -213,4 +233,5 @@ export const useSuggestionStore = create<State>((set, get) => ({
   getPending: () => get().suggestions.filter((x) => x.status === 'pending'),
   mineFor: (userId) => get().suggestions.filter((x) => x.proposer_id === userId),
   applyMock: (demo) => set({ suggestions: demo ? [...seed] : [], loaded: true, loadError: false }),
-}));
+};
+});

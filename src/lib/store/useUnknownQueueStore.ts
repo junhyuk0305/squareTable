@@ -4,9 +4,9 @@ import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import type { UnknownQuery, PlaybookSuggestion, PlaybookEntry } from '@/types';
 import seedData from '@/data/unknown-queries.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchUnknownQueue, fetchPendingQuestionCount, insertUnknown, bumpUnknownSimilar, resolveUnknown, answerUnknownQuery, answerUnknownQueryBySuggestion, subscribeUnknownQueue } from '@/lib/db';
+import { fetchUnknownQueue, fetchPendingQuestionCount, submitUnknownQuery, resolveUnknown, answerUnknownQuery, answerUnknownQueryBySuggestion, subscribeUnknownQueue } from '@/lib/db';
 import { friendlyError } from '@/lib/utils/userError';
-import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
+import { useSyncStore } from '@/lib/store/useSyncStore';
 import { blockedText, type Decision } from '@/lib/decision';
 import { notifyStoreQuestion, notifyUserQuestionAnswered } from '@/lib/push/notify';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -72,47 +72,34 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
     const [{ data, error }, total] = await Promise.all([fetchUnknownQueue(), fetchPendingQuestionCount()]);
     if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 질문을 쓰지 않는다
     // ★받은 질문 숫자 = 답할 질문(isTodoQuestion)과 같은 정의. 승인 대기(in_review)는 서버 개수가 이미 뺀다(fetchPendingQuestionCount).
-    set({ queue: data, loaded: true, loadError: error, pendingTotal: total });
+    // ★읽기가 실패하면 이전 목록을 둔다(M11) — 빈 배열로 덮으면 "받은 질문 없음"이 사실인 양 굳는다(useWorkStore 의 ok ? patch : onFail 과 같은 규칙).
+    set((s) => ({ queue: error ? s.queue : data, loaded: true, loadError: error, pendingTotal: total }));
   }),
 
   // 알바 폰에서 질문이 들어오면 사장님 인박스가 실시간으로 갱신된다(학습순환의 핵심).
   subscribe: () => subscribeDebounced(subscribeUnknownQueue, () => get().hydrate(), 300, 'unknownQueue'),
 
   // 같은 질문이 이미 대기 중이면 새로 쌓지 않고 유사 질문 수만 올린다(중복 방지).
+  // ★M13(0634): 합치기 판정과 +1 은 서버가 한다(submit_unknown_query 한 번). 예전엔 내 화면 목록으로 판정하고 "내 값 + 1" 을 써서
+  //   두 직원이 동시에 보내면 수가 1만 올랐고, 같은 첫 질문은 대기 행이 2개가 됐다. 화면은 서버 결과로만 고친다(낙관 반영 없음 —
+  //   호출부 registerToOwner 가 "보냈어요"를 먼저 보이고 실패하면 되돌린다).
   enqueue: async (uq) => {
-    const s = get();
-    const norm = uq.query_text.trim();
-    const idx = s.queue.findIndex(
-      (u) => u.status === 'pending_owner_answer' && u.query_text.trim() === norm,
-    );
-    if (idx >= 0) {
-      const target = s.queue[idx];
-      const bumped = target.similar_queries_count + 1;
-      set((st) => ({
-        queue: st.queue.map((u) => (u.id === target.id ? { ...u, similar_queries_count: bumped } : u)),
-      }));
-      return guardWrite(
-        bumpUnknownSimilar(target.id, bumped),
-        () =>
-          set((st) => ({
-            queue: st.queue.map((u) => (u.id === target.id ? { ...u, similar_queries_count: bumped - 1 } : u)),
-          })),
-        '유사 질문 반영에 실패했어요.',
-      );
-    }
-    set((st) => ({ queue: [uq, ...st.queue] }));
-    // 저장 성공 후에만 사장에게 웹푸시(답변 대기 질문 유입). 실패(롤백)·상한 초과 시 유령 알림 방지.
-    //   중복 유사질문(위 bump 경로)은 알리지 않는다.
-    // 결과 분류(P2 ⑦): 미해결 질문 상한(남용 #18 · 0033 트리거 too_many_pending)은 blocked — 전제를 사실대로 말한다.
+    const r = await submitUnknownQuery(uq);
+    // 결과 분류(P2 ⑦): 미해결 질문 상한(남용 #18 · too_many_pending)은 blocked — 전제를 사실대로 말한다.
     //   그 밖의 실패만 "못 했어요". 두 문구를 한 줄로 뭉치지 않는다.
-    const d = await insertUnknown(uq);
-    if (d !== 'ok') {
-      set((st) => ({ queue: st.queue.filter((u) => u.id !== uq.id) }));
-      useSyncStore.getState().noteError(d === 'blocked' ? blockedText('too_many_pending', '지금은 질문을 등록할 수 없어요.') : '질문을 등록하지 못했어요. 다시 시도해 주세요.');
+    if (r.decision !== 'ok' || !r.id) {
+      useSyncStore.getState().noteError(r.decision === 'blocked' ? blockedText('too_many_pending', '지금은 질문을 등록할 수 없어요.') : '질문을 등록하지 못했어요. 다시 시도해 주세요.');
       return false;
     }
-    // 저장 성공 후에만 웹푸시 — D4(③): 사장 + 같은 매장 직원 전체에게(누가 답하든 됨). 발송자 제외는 서버.
-    if (uq.status === 'pending_owner_answer') notifyStoreQuestion(uq.query_text, uq.id);
+    const id = r.id;
+    if (r.status === 'merged') {
+      // 같은 대기 질문에 합쳐졌다 — 유사 수는 서버 값. 사장 알림은 보내지 않는다(같은 질문이 이미 알려졌다).
+      set((st) => ({ queue: st.queue.map((u) => (u.id === id ? { ...u, similar_queries_count: r.similarCount } : u)) }));
+      return true;
+    }
+    set((st) => ({ queue: st.queue.some((u) => u.id === id) ? st.queue : [{ ...uq, status: 'pending_owner_answer' as const }, ...st.queue] }));
+    // 저장 성공 후에만 웹푸시 — D4(③): 사장 + 같은 매장 직원 전체에게(누가 답하든 됨). 발송자 제외는 서버. 새 질문(created)일 때만.
+    notifyStoreQuestion(uq.query_text, id);
     return true;
   },
   // 질문 해결 — resolved_with_entry 로 전이 + answered_by 기록(누가 답했나, 0071).

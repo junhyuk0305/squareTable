@@ -48,6 +48,7 @@ export default function OwnerCoachScreen() {
 
   const addEntry = usePlaybookStore((s) => s.add);
   const noteSaved = usePlaybookStore((s) => s.noteSaved);
+  const archiveEntry = usePlaybookStore((s) => s.archive);
   const resolve = useUnknownQueueStore((s) => s.resolve);
   const answer = useUnknownQueueStore((s) => s.answer);
   // 채팅 메시지 승격(§4.1)에서 넘어온 경우: 발행 성공 시 원본 메시지에 흔적을 남겨 재승격 넛지를 끈다.
@@ -183,7 +184,20 @@ export default function OwnerCoachScreen() {
       //   되돌아오는데 **노하우는 이미 저장돼 있었다** → 사장이 목록에서 다시 승인 → 같은 노하우 2건.
       //   노하우 저장 자체는 성공했으므로 실패로 되돌리지 않고, 무엇이 안 됐는지만 정확히 말한다.
       let approveOk = true;
-      if (sugId) approveOk = await approveSuggestion(sugId, entryIds[0]);
+      if (sugId) {
+        const r = await approveSuggestion(sugId, entryIds[0]);
+        approveOk = r.decision === 'ok' || r.decision === 'already';
+        // ★H4(0631): 다른 관리자가 같은 제안을 먼저 승인했으면(already · 이긴 쪽 노하우가 따로 있다) 방금 만든 내 사본을 보관한다.
+        //   안 지우면 같은 노하우가 2건이다. 서버가 노하우 만들기와 승인을 묶지 않은 이유 = 0631 머리말.
+        //   이긴 쪽 노하우가 내 것이면(재시도·0520 답 저장이 이미 승인) 지우지 않는다. 반려로 끝났으면 겹칠 노하우가 없어 남긴다.
+        if (r.decision === 'already' && r.current === 'approved' && r.resultingEntryId && !entryIds.includes(r.resultingEntryId)) {
+          for (const id of entryIds) archiveEntry(id);
+          setToastErr(false);
+          setToast('다른 분이 먼저 승인한 제안이에요. 방금 저장한 노하우는 겹쳐서 지웠어요.');
+          navAfter();
+          return true;
+        }
+      }
       // 완료 캡처(②) 출처 업무가 있으면 그 업무에 자동 첨부 — 업무→노하우 루프를 닫는다(발행 성공 시에만).
       if (srcTemplate) void attachKnowhow(srcTemplate, [entryIds[0]]);
       // 채팅 승격이면 원본 메시지에 흔적(promotedEntryId) → 칩/시트가 다시 안 뜬다(발행 성공한 경우만).
@@ -208,7 +222,7 @@ export default function OwnerCoachScreen() {
       else navAfter();
       return true;
     },
-    [answerable, realUq, resolve, answer, noteSaved, sugId, approveSuggestion, srcTemplate, attachKnowhow, feedId, markPromoted, navAfter, nudgeTargets, targetUnitId],
+    [answerable, realUq, resolve, answer, noteSaved, sugId, approveSuggestion, archiveEntry, srcTemplate, attachKnowhow, feedId, markPromoted, navAfter, nudgeTargets, targetUnitId],
   );
 
   // 이미 있는 노하우로 답하기 — 새 노하우를 만들지 않고 질문만 그 노하우로 해결한다.

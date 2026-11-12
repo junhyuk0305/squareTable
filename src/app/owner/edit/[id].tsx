@@ -150,7 +150,9 @@ function ConversationalEdit({ entry, sugId }: { entry: PlaybookEntry; sugId?: st
       //   사장은 저장됐다고 믿고 나가고, 실패 배너는 **다른 화면에서** 뒤늦게 떴다.
       if (!ok) return; // 실패 문구·롤백은 optimisticPatch(guardWrite)가 이미 처리한다
       // D12: 개선 제안에서 왔으면 저장이 된 뒤에야 반영(승인)한다. 그냥 나가면 제안은 검토 대기로 남는다.
-      if (sugId && !(await approveSuggestion(sugId, entry.id))) {
+      // H4(0631): already(다른 관리자가 먼저 처리)는 실패가 아니다. 고치기 승인은 기존 노하우라 지우지 않는다.
+      const approved = sugId ? (await approveSuggestion(sugId, entry.id)).decision : 'ok';
+      if (approved !== 'ok' && approved !== 'already') {
         showToast('노하우는 저장됐어요. 다만 제안 반영 표시에 실패했어요 — 제안함에서 다시 반영해 주세요.', 'warn');
       }
       setToast('수정 저장됨 (v' + (entry.version + 1) + ')');

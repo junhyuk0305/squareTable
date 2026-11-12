@@ -21,6 +21,8 @@ import { reopenKeepsRecords, type DeleteStorePreview, type DeleteStoreResult } f
 import { isMissingRpc } from '@/lib/utils/userError';
 import { TERMS_VERSION } from '@/lib/config/business';
 import { codeOf, decisionOfError, type Decision } from '@/lib/decision';
+import { workErrorCode } from '@/lib/work/errors';
+import type { SeriesSaveOp } from '@/lib/utils/schedule';
 // 훈련 v2(0107·0108). ★TrainingCourse 는 이 파일이 이미 0099 의 문자열 유니온으로 쓰고 있어(아래)
 // 이름이 겹친다 → 코스 테이블 행 타입은 TrainingCourseRow 로 별칭한다. 구조는 동일하므로
 // 다른 화면이 '@/lib/quiz/types' 에서 TrainingCourse 를 직접 import 해 넘겨도 그대로 맞는다.
@@ -1326,10 +1328,11 @@ export async function fetchMemberTenures(unitId: string | null = _unitId): Promi
 }
 
 // 사장이 직원을 매장에서 내보낸다(소속 해제 + 퇴사자 스냅샷 보관). RPC = 사장만·같은 매장 junior만.
-export async function removeStaffMember(staffId: string): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  // write() 헬퍼 경유 — 실패 시 reportError로 원격관측까지 남긴다(예전엔 console.warn만 남아 팀이 못 봄).
-  return write('removeStaffMember', supabase.rpc('remove_staff', { p_staff_id: staffId }));
+// ★staff_not_found = 이미 나갔다(다른 기기에서 먼저 내보냄 · 본인이 나감) → already(S5-2 · 분류표 decision.ts).
+//   rpcDecision 이 failed 는 reportError 로 원격관측까지 남긴다.
+export async function removeStaffMember(staffId: string): Promise<Decision> {
+  if (!HAS_SUPABASE) return 'ok';
+  return (await rpcDecision('removeStaffMember', 'remove_staff', { p_staff_id: staffId })).decision;
 }
 
 // ── 합류 승인(남용 #2) ─────────────────────────────────────
@@ -1381,6 +1384,23 @@ async function rpcDecision(label: string, fn: string, args: Record<string, unkno
   return { decision: 'ok', code: null };
 }
 
+/**
+ * jsonb `{status, …}` 를 돌려주는 레이스 함수(0630~0636)의 공용 결과. status 'already' = 다른 기기·사람이 먼저(오류 아님).
+ * 오류는 분류표(decision.ts)로 갈라지고 code = 서버 raise 코드 첫 낱말(문구 표 src/lib/work/errors.ts 가 고른다).
+ */
+export type StatusResult<T> = { decision: Decision; data: T | null; code: string | null };
+async function rpcStatus<T extends { status?: string }>(label: string, fn: string, args: Record<string, unknown>): Promise<StatusResult<T>> {
+  const { data, error } = await supabase.rpc(fn, args);
+  if (error) {
+    console.warn(`[db] ${label}:`, error.message);
+    const decision = decisionOfError(error.message);
+    if (decision === 'failed') reportError(`db.write:${label}`, error);
+    return { decision, data: null, code: codeOf(error.message) ?? workErrorCode(error.message) };
+  }
+  const row = (data ?? null) as T | null;
+  return { decision: row?.status === 'already' ? 'already' : 'ok', data: row, code: null };
+}
+
 export async function approveMember(uid: string): Promise<DecisionResult> {
   if (!HAS_SUPABASE) return { decision: 'ok', code: null };
   return rpcDecision('approveMember', 'approve_member', { p_uid: uid });
@@ -1396,9 +1416,10 @@ export async function rejectMember(uid: string): Promise<DecisionResult> {
 // 활성 매장 멤버들의 unit_members.role 은 fetchStaffProfiles 가 명부와 같이 돌려준다(roles).
 
 // 사장이 직원을 매니저로 지정/해제(0093). RPC = 매장 소유자 본인만·이 매장 junior/manager 대상만.
-export async function setMemberRoleDb(uid: string, role: 'manager' | 'junior'): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  return write('setMemberRole', supabase.rpc('set_member_role', { p_uid: uid, p_role: role }));
+// 실패면 서버 오류(코드 → src/lib/work/errors.ts · staff_not_found = 그 사이 나간 직원) · 성공이면 null.
+export async function setMemberRoleDb(uid: string, role: 'manager' | 'junior'): Promise<DbErr> {
+  if (!HAS_SUPABASE) return null;
+  return writeErr('setMemberRole', supabase.rpc('set_member_role', { p_uid: uid, p_role: role }), false);
 }
 
 // ── 초대코드 재발급(남용 #31) ──────────────────────────────
@@ -1595,14 +1616,17 @@ export async function insertSuggestion(s: PlaybookSuggestion): Promise<boolean> 
   return write('insertSuggestion', supabase.from('playbook_suggestions').insert(row));
 }
 
-// 승인/반려 등 검토 결과 반영. status + 검토 메타만 갱신.
-export async function reviewSuggestion(
-  id: string,
-  patch: Partial<Pick<PlaybookSuggestion, 'status' | 'owner_note' | 'resulting_entry_id' | 'reviewed_by' | 'reviewed_at'>>,
-): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  // 제안 승인/반려는 상태 전이(무결성) — 0행이면 유령 승인/반려 대신 실패로(P1-6).
-  return writeStrict('reviewSuggestion', supabase.from('playbook_suggestions').update(patch).eq('id', id).select('id'));
+/**
+ * 제안 승인·반려(0631 review_suggestion · H4). 대기 제안만 한 번 바뀐다. 검토한 사람·시각은 서버가 찍는다.
+ * already = 다른 관리자가 먼저 처리했다 → current(지금 상태) · resultingEntryId(이긴 쪽 노하우)를 같이 준다.
+ */
+export type ReviewSuggestionResult = { decision: Decision; current: PlaybookSuggestion['status'] | null; resultingEntryId: string | null; code: string | null };
+export async function reviewSuggestionRpc(id: string, status: 'approved' | 'rejected', resultingEntryId?: string, ownerNote?: string): Promise<ReviewSuggestionResult> {
+  if (!HAS_SUPABASE) return { decision: 'ok', current: status, resultingEntryId: resultingEntryId ?? null, code: null };
+  const r = await rpcStatus<{ status: string; current?: PlaybookSuggestion['status']; resultingEntryId?: string | null }>('reviewSuggestion', 'review_suggestion', {
+    p_id: id, p_status: status, p_resulting_entry_id: resultingEntryId ?? null, p_owner_note: ownerNote ?? null,
+  });
+  return { decision: r.decision, current: r.data?.current ?? null, resultingEntryId: r.data?.resultingEntryId ?? null, code: r.code };
 }
 
 /** 내 대기 제안 취소(0355). null = 성공. not_found·not_pending·forbidden → suggestionErrorMessage. */
@@ -1693,11 +1717,24 @@ export async function fetchPendingQuestionCount(unitId: string | null = _unitId)
   return count ?? null;
 }
 
-/** 질문 등록. 미해결 질문 상한(0033 트리거 too_many_pending)은 blocked 로 올라간다 — 호출부가 사실만 말한다. */
-export async function insertUnknown(uq: UnknownQuery): Promise<Decision> {
-  if (!HAS_SUPABASE) return 'ok';
-  const row = { ...uq, unit_id: (uq as any).unit_id || _unitId };
-  return writeDecision('insertUnknown', supabase.from('unknown_queries').insert(row)); // select 없음 — insert 는 0행 판정 대상이 아니다
+/**
+ * 질문 보내기(0634 submit_unknown_query · M13). 대기 중 같은 글이 있으면 서버가 유사 수를 +1 하고(merged · id = 그 질문),
+ * 없으면 새로 넣는다(created). 작성자·이름·상태 초기값은 서버 트리거가 찍는다.
+ * 미해결 질문 상한(too_many_pending)은 blocked 로 올라간다 — 호출부가 사실만 말한다.
+ */
+export type SubmitUnknownResult = { decision: Decision; status: 'created' | 'merged' | null; id: string | null; similarCount: number; code: string | null };
+export async function submitUnknownQuery(uq: UnknownQuery): Promise<SubmitUnknownResult> {
+  if (!HAS_SUPABASE) return { decision: 'ok', status: 'created', id: uq.id, similarCount: 0, code: null };
+  const r = await rpcStatus<{ status: 'created' | 'merged'; id: string; similar_queries_count: number }>('submitUnknownQuery', 'submit_unknown_query', {
+    p_id: uq.id,
+    p_query_text: uq.query_text,
+    p_unit_id: (uq as { unit_id?: string }).unit_id || _unitId,
+    p_presumed_category: uq.presumed_category ?? null,
+    p_best_match_confidence: uq.best_match_confidence ?? 0,
+    p_best_match_entry_id: uq.best_match_entry_id ?? null,
+    p_asked_at: uq.asked_at ?? null,
+  });
+  return { decision: r.decision, status: r.data?.status ?? null, id: r.data?.id ?? null, similarCount: r.data?.similar_queries_count ?? 0, code: r.code };
 }
 
 export async function bumpUnknownSimilar(id: string, count: number): Promise<boolean> {
@@ -3689,26 +3726,22 @@ export async function fetchDoneRange(from: string, to: string | null): Promise<R
   }
   return { data: out, error: false };
 }
-/** 완료 체크. ★먼저 저장한 사람이 완료자(2026-10-16 사용자 결정 · F5) — 이미 있는 행은 덮지 않는다(ON CONFLICT DO NOTHING).
- *  0행 = already(다른 기기가 먼저 완료) → 호출부는 서버의 완료자 이름을 다시 읽는다. 예전 upsert(DO UPDATE)는 마지막 저장이 덮어
- *  피드(먼저)와 완료자(나중)가 서로 달랐다. work_done_rw(0152)는 매장 조건만이라 남의 행에 비겨도 42501 이 아니라 0행이다. */
-export async function setDone(date: string, templateId: string, mark: DoneMark, roomId?: string): Promise<Decision> {
-  if (!HAS_SUPABASE) return 'ok';
-  return writeDecision(
-    'setDone',
-    supabase
-      .from('work_done')
-      .upsert({ unit_id: _unitId, work_date: date, template_id: templateId, room_id: roomId ?? null, data: mark }, { ignoreDuplicates: true })
-      .select('template_id'),
-  );
+/**
+ * 할 일 완료(0630 complete_task · H3). 완료 마크와 완료 글(fdone_<날짜>_<할 일> · "<이름> · <할 일> 완료")을 서버가 한 번에 쓴다.
+ * ★먼저 저장한 사람이 완료자(2026-10-16 F5). already = 다른 기기가 먼저 완료 → by·byName = 먼저 한 사람.
+ */
+export type CompleteTaskResult = { decision: Decision; by: string | null; byName: string | null; code: string | null };
+export async function completeTask(date: string, templateId: string, roomId?: string, photoUrl?: string): Promise<CompleteTaskResult> {
+  if (!HAS_SUPABASE) return { decision: 'ok', by: null, byName: null, code: null };
+  const r = await rpcStatus<{ status: string; by?: string; byName?: string }>('completeTask', 'complete_task', {
+    p_date: date, p_template_id: templateId, p_room_id: roomId ?? null, p_photo_url: photoUrl ?? null,
+  });
+  return { decision: r.decision, by: r.data?.by ?? null, byName: r.data?.byName ?? null, code: r.code };
 }
-/** 완료 해제. 0행 = already(다른 기기가 먼저 해제) — 실패가 아니다. 두 기기가 동시에 해제하면 둘째가 여기로 온다(K5-d). */
-export async function clearDone(date: string, templateId: string): Promise<Decision> {
+/** 할 일 완료 해제(0630 uncomplete_task). 완료 글도 서버가 같이 지운다. already = 다른 기기가 먼저 해제(실패 아님 · K5-d). */
+export async function uncompleteTask(date: string, templateId: string): Promise<Decision> {
   if (!HAS_SUPABASE) return 'ok';
-  return writeDecision(
-    'clearDone',
-    supabase.from('work_done').delete().eq('unit_id', _unitId).eq('work_date', date).eq('template_id', templateId).select('template_id'),
-  );
+  return (await rpcStatus('uncompleteTask', 'uncomplete_task', { p_date: date, p_template_id: templateId })).decision;
 }
 
 // ── 업무보드: 피드(공지/메시지/완료) ──────────────────────
@@ -3755,6 +3788,17 @@ export async function upsertFeed(item: FeedItem, opts?: { ignoreDuplicates: bool
     supabase
       .from('work_feed')
       .upsert({ id: item.id, unit_id: _unitId, feed_date: item.date, room_id: item.roomId ?? null, data }, { ignoreDuplicates: opts?.ignoreDuplicates }),
+  );
+}
+/** 새 피드 행 넣기(새 id 라 upsert 가 아니다) — 서버 raise 코드를 돌려준다(null = 성공). 댓글이 쓴다 — 지워진 글에 단 댓글은 0635 트리거가
+ *  feed_parent_gone 으로 막고, 화면이 그 사실을 말한다(src/lib/work/errors.ts). */
+export async function insertFeedErr(item: FeedItem): Promise<DbErr> {
+  if (!HAS_SUPABASE) return null;
+  const { sendState: _local, ...data } = item;
+  return writeErr(
+    'insertFeed',
+    supabase.from('work_feed').insert({ id: item.id, unit_id: _unitId, feed_date: item.date, room_id: item.roomId ?? null, data }),
+    false,
   );
 }
 /**
@@ -3816,10 +3860,17 @@ export async function editFeedText(feedId: string, text: string): Promise<boolea
   if (!HAS_SUPABASE) return true;
   return rpcBool('editFeedText', 'edit_feed_text', { p_feed_id: feedId, p_text: text });
 }
-/** 피드 행 삭제. 0행 = already(다른 기기가 먼저 지움 · 완료 해제의 피드 정리가 두 기기에서 겹칠 때). */
-export async function deleteFeed(id: string): Promise<Decision> {
+/** 피드 글 지우기(0635 delete_feed_item · M14). 댓글은 서버 트리거가 같이 지운다. already = 이미 지워짐(실패 아님). */
+export async function deleteFeedItemRpc(id: string): Promise<Decision> {
   if (!HAS_SUPABASE) return 'ok';
-  return writeDecision('deleteFeed', supabase.from('work_feed').delete().eq('id', id).select('id'));
+  return (await rpcStatus('deleteFeedItem', 'delete_feed_item', { p_id: id })).decision;
+}
+/** 같은 문구 공지 다시 올리기(0635 repost_notice · M14). 남의 공지도 된다(작성자 그대로 · 읽음 비움 · important 는 관리자만).
+ *  돌려주는 값 = 서버 시각(createdAt) · 실패면 null. */
+export async function repostNotice(id: string, important: boolean): Promise<{ createdAt: string } | null> {
+  if (!HAS_SUPABASE) return { createdAt: new Date().toISOString() };
+  const r = await rpcStatus<{ status: string; createdAt: string }>('repostNotice', 'repost_notice', { p_id: id, p_important: important });
+  return r.decision === 'ok' && r.data?.createdAt ? { createdAt: r.data.createdAt } : null;
 }
 /** 전 매장 동시 공지(S3 #3): 소유 매장들에 같은 공지를 한 번에. 소유검증·본문 구성은 RPC 내부(definer). 반환=broadcast_id+발송 매장 수. */
 export async function broadcastNotice(unitIds: string[], text: string, important: boolean): Promise<DbResult<{ broadcast_id: string; sent: number }>> {
@@ -3900,6 +3951,33 @@ export async function upsertAttendance(rec: AttendanceRecord): Promise<boolean> 
   if (!HAS_SUPABASE) return true;
   // 출퇴근 기록 무결성 경로 — 0행(RLS/경합)이면 유령 성공 대신 실패로 롤백·배너(P1-6).
   return writeStrict('upsertAttendance', supabase.from('attendance').upsert({ ...rec, unit_id: _unitId }).select('id'));
+}
+/** 출근(0632 attendance_check_in · M1). 열린 기록은 (매장, 직원)당 하나다. already = 열린 기록이 이미 있다(둘째 기기 · 재시도) → id = 그 기록.
+ *  실패면 null. */
+export async function attendanceCheckIn(id: string, date: string): Promise<{ status: 'ok' | 'already'; id: string } | null> {
+  if (!HAS_SUPABASE) return { status: 'ok', id };
+  const r = await rpcStatus<{ status: 'ok' | 'already'; id: string }>('attendanceCheckIn', 'attendance_check_in', { p_id: id, p_date: date });
+  return r.decision === 'failed' || r.decision === 'blocked' || !r.data?.id ? null : { status: r.data.status, id: r.data.id };
+}
+/** 퇴근(0632 attendance_check_out · M2). check_out 만 쓰고 근무 분은 서버 값(24시간 상한). already = 이미 닫혔다. 실패면 null. */
+export type CheckOutResult = { status: 'ok'; id: string; check_out: string; work_minutes: number } | { status: 'already' };
+export async function attendanceCheckOut(id: string): Promise<CheckOutResult | null> {
+  if (!HAS_SUPABASE) return { status: 'already' };
+  const r = await rpcStatus<{ status: 'ok' | 'already'; id?: string; check_out?: string; work_minutes?: number }>('attendanceCheckOut', 'attendance_check_out', { p_id: id });
+  if (r.decision === 'failed' || r.decision === 'blocked') return null;
+  if (r.decision === 'already' || !r.data?.id || !r.data.check_out) return { status: 'already' };
+  return { status: 'ok', id: r.data.id, check_out: r.data.check_out, work_minutes: r.data.work_minutes ?? 0 };
+}
+/** 기존 기록 시간 고치기(0632 attendance_edit_times · M2). 넘긴 열만 쓴다(null = 그대로). 고친 사람·근무 분·이력은 서버가 정한다.
+ *  돌려주는 값 = 서버 행 · 실패면 null. */
+export type EditTimesResult = Pick<AttendanceRecord, 'id' | 'check_in' | 'check_out' | 'work_minutes' | 'edited_by'>;
+export async function attendanceEditTimes(id: string, checkIn: string | null, checkOut: string | null): Promise<EditTimesResult | null> {
+  if (!HAS_SUPABASE) return null;
+  const r = await rpcStatus<{ status: string; id: string; check_in: string | null; check_out: string | null; work_minutes: number; edited_by: AttendanceRecord['edited_by'] }>(
+    'attendanceEditTimes', 'attendance_edit_times', { p_id: id, p_check_in: checkIn, p_check_out: checkOut },
+  );
+  if (r.decision !== 'ok' || !r.data?.id) return null;
+  return { id: r.data.id, check_in: r.data.check_in, check_out: r.data.check_out, work_minutes: r.data.work_minutes, edited_by: r.data.edited_by ?? null };
 }
 export async function deleteAttendance(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
@@ -4066,25 +4144,19 @@ export async function saveRegularDueDays(days: number): Promise<boolean> {
   );
 }
 
-export async function upsertScheduleConfig(c: StoreConfig): Promise<boolean> {
+export async function upsertScheduleConfig(c: Partial<StoreConfig>): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   // 운영시간·정기휴무는 근무표·dayparts 계산의 원천이다. 0행(RLS 차단·_unitId 드리프트)이면
   // 화면은 "저장됐어요 ✓" 후 나가는데 F5 하면 원래 값 — 유령 성공 금지(2026-08-25 감사).
-  return writeStrict(
-    'upsertScheduleConfig',
-    supabase
-      .from('schedule_config')
-      .upsert({
-        unit_id: _unitId,
-        open: c.open,
-        close: c.close,
-        closed_days: c.closedDays,
-        note: c.note,
-        dayparts: c.dayparts ?? null,
-        updated_at: new Date().toISOString(),
-      })
-      .select('unit_id'),
-  );
+  // ★바꾼 열만 쓴다(M15 · 2026-11-12). 통째로 쓰면 운영시간 화면과 업무 시간대 화면이 동시에 저장할 때 한쪽이 다른 쪽을 옛 값으로 덮었다.
+  //   행이 아직 없으면 안 보낸 열은 표 기본값(0016)이 들어간다.
+  const row: Record<string, unknown> = { unit_id: _unitId, updated_at: new Date().toISOString() };
+  if (c.open !== undefined) row.open = c.open;
+  if (c.close !== undefined) row.close = c.close;
+  if (c.closedDays !== undefined) row.closed_days = c.closedDays;
+  if (c.note !== undefined) row.note = c.note;
+  if ('dayparts' in c) row.dayparts = c.dayparts ?? null;
+  return writeStrict('upsertScheduleConfig', supabase.from('schedule_config').upsert(row).select('unit_id'));
 }
 
 // 0138: 한 행은 요일 반복(weekday) **이거나** 날짜 지정(shift_date)이다 — DB CHECK가 강제한다.
@@ -4139,19 +4211,23 @@ export async function insertShiftTemplate(t: ShiftTemplate): Promise<boolean> {
 // ── 반복 근무 기간 RPC(0242) — 관리자만 · 지난 날짜는 p_confirm_past(§8 Q4) ─────────────────────
 // 직접 UPDATE·DELETE 는 옛 앱 호환용 서버 트리거가 "오늘부터"로 바꿔 받는다. 새 앱은 사장이 고른 날부터 정확히 바꾸려고 RPC 를 쓴다.
 // 여러 행(지난 구간 복사본·예외·미결 교대)이 함께 바뀌므로 호출부는 성공 뒤 다시 읽는다.
-async function rpcResult(label: string, fn: string, args: Record<string, unknown>): Promise<{ ok: boolean; data: unknown }> {
+// ★code = 서버 raise 코드(S5-1 · 2026-11-12). 예전엔 boolean 만 줘서 문구 표(src/lib/work/errors.ts)가 있어도 화면에 닿지 않았다.
+async function rpcResult(label: string, fn: string, args: Record<string, unknown>): Promise<{ ok: boolean; data: unknown; code: string | null }> {
   const { data, error } = await supabase.rpc(fn, args);
   // 반복 근무를 지난달부터 바꾸려 하면(서버 past_month_locked · 2026-10-06 A1·A2) 던진다 — 스토어가 PAST_MONTH_LOCKED_TEXT 를 고른다.
   if (error && /past_month_locked/.test(error.message ?? '')) throw new Error('past_month_locked');
   if (error) {
     console.warn(`[db] ${label}:`, error.message);
     reportError(`db.write:${label}`, error);
-    return { ok: false, data: null };
+    return { ok: false, data: null, code: workErrorCode(error.message) };
   }
-  return { ok: true, data };
+  return { ok: true, data, code: null };
 }
-async function rpcOk(label: string, fn: string, args: Record<string, unknown>): Promise<boolean> {
-  return (await rpcResult(label, fn, args)).ok;
+/** 근무 쓰기 결과. code = 실패한 서버 raise 코드(성공·연결 실패는 null). 스토어가 workErrorMessage 로 문구를 고른다. */
+export type ShiftWrite = { ok: boolean; code: string | null };
+async function rpcOk(label: string, fn: string, args: Record<string, unknown>): Promise<ShiftWrite> {
+  const { ok, code } = await rpcResult(label, fn, args);
+  return { ok, code };
 }
 
 /** "{from}부터 매주 {weekday}" 반복 근무를 새로 넣는다. 돌려주는 값 = 새 행 id(실패면 null). */
@@ -4166,19 +4242,29 @@ export async function addShiftSeriesRpc(staffId: string, weekday: number, from: 
   }
   return data;
 }
+/**
+ * 반복 근무 저장 계획(SeriesSaveOp[] · planSeriesSave·planFromScope)을 서버 한 트랜잭션으로(0636 M17).
+ * 한 단계가 실패하면 서버가 전부 되돌린다 — 예전 runSeriesOps(RPC 여러 번)는 가운데서 끊기면 반쪽 근무표가 남았다.
+ */
+export async function applyShiftSeriesOpsRpc(staffId: string, ops: SeriesSaveOp[], start: string, end: string, confirmPast: boolean): Promise<ShiftWrite> {
+  if (!HAS_SUPABASE) return { ok: true, code: null };
+  return rpcOk('applyShiftSeriesOps', 'apply_shift_series_ops', { p_staff: staffId, p_ops: ops, p_start: start, p_end: end, p_confirm_past: confirmPast });
+}
+// ⚠️ addShiftSeriesRpc · editShiftFromRpc · endShiftFromRpc 는 앱이 더는 부르지 않는다(위 묶음 함수로 옮김 · 2026-11-12 S4).
+//   qa-shift-ui [3] 이 db.ts 의 이 세 호출 인자를 DB 와 대조하고 runSeriesOps 왕복에 같은 매핑을 쓴다 — 그 하니스를 고친 뒤 지운다.
 /** "이 날부터 계속" — from 앞 구간은 그대로 남고 from 부터 새 시각이다. */
 export async function editShiftFromRpc(id: string, from: string, start: string, end: string, confirmPast: boolean): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return rpcOk('editShiftFrom', 'edit_shift_from', { p_id: id, p_from: from, p_start: start, p_end: end, p_confirm_past: confirmPast });
+  return (await rpcOk('editShiftFrom', 'edit_shift_from', { p_id: id, p_from: from, p_start: start, p_end: end, p_confirm_past: confirmPast })).ok;
 }
 /** "이 날부터 그만" — from 앞 구간은 기록으로 남는다. */
 export async function endShiftFromRpc(id: string, from: string, confirmPast: boolean): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return rpcOk('endShiftFrom', 'end_shift_from', { p_id: id, p_from: from, p_confirm_past: confirmPast });
+  return (await rpcOk('endShiftFrom', 'end_shift_from', { p_id: id, p_from: from, p_confirm_past: confirmPast })).ok;
 }
 /** "이 날만" — 그날만 다른 시각으로 바꾸거나(start·end) 그날만 뺀다(null). */
-export async function overrideShiftDayRpc(id: string, date: string, start: string | null, end: string | null, confirmPast: boolean): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
+export async function overrideShiftDayRpc(id: string, date: string, start: string | null, end: string | null, confirmPast: boolean): Promise<ShiftWrite> {
+  if (!HAS_SUPABASE) return { ok: true, code: null };
   return rpcOk('overrideShiftDay', 'override_shift_day', { p_id: id, p_date: date, p_start: start, p_end: end, p_confirm_past: confirmPast });
 }
 
@@ -4294,10 +4380,10 @@ export async function notifyShiftChangedRpc(staffId: string, date: string, onwar
 
 /** 내 근무의 그날 시각을 바꿔 달라고 요청한다. 같은 날 앞 요청은 서버가 닫고 새로 낸다.
  *  성공하면 요청 id(서버 반환 · 사장 알림이 그 요청을 가리킨다) · 실패하면 null. */
-export async function requestShiftTimeRpc(templateId: string, date: string, start: string, end: string): Promise<string | null> {
-  if (!HAS_SUPABASE) return 'local';
-  const { ok, data } = await rpcResult('requestShiftTime', 'request_shift_time', { p_template: templateId, p_date: date, p_start: start, p_end: end });
-  return ok ? (typeof data === 'string' ? data : '') : null;
+export async function requestShiftTimeRpc(templateId: string, date: string, start: string, end: string): Promise<{ id: string | null; code: string | null }> {
+  if (!HAS_SUPABASE) return { id: 'local', code: null };
+  const { ok, data, code } = await rpcResult('requestShiftTime', 'request_shift_time', { p_template: templateId, p_date: date, p_start: start, p_end: end });
+  return { id: ok ? (typeof data === 'string' ? data : '') : null, code };
 }
 
 /**
@@ -4370,32 +4456,36 @@ export async function fetchSwaps(): Promise<ReadResult<SwapRequest[]>> {
   return { data: (data ?? []).map(mapSwapRow), error: false };
 }
 
-export async function insertSwap(r: SwapRequest): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  return write(
-    'insertSwap',
-    supabase.from('swap_requests').insert({
-      id: r.id,
-      unit_id: _unitId,
-      kind: r.kind,
-      requester_id: r.requester_id,
-      date: r.date,
-      template_id: r.template_id,
-      target_staff_id: r.target_staff_id ?? null,
-      // 지정 수신자 **목록**(0178) — 선착순. 단수 컬럼은 호환용으로 같이 남긴다.
-      target_staff_ids: r.target_staff_ids ?? null,
-      target_date: r.target_date ?? null,
-      target_template_id: r.target_template_id ?? null,
-      // 부분 교대 구간(0178) — 둘 다 null 이면 근무 전체(기존 동작).
-      part_start: r.part_start ?? null,
-      part_end: r.part_end ?? null,
-      note: r.note,
-      status: r.status,
-      accepted_by: r.accepted_by ?? null,
-      created_at: r.created_at,
-      updated_at: r.updated_at,
-    }),
-  );
+/** 교대 요청 넣기. ★같은 (근무, 날짜)에 진행 중 요청은 하나다(0633 swap_requests_one_live_uq) — 둘째 = 23505 → already(M3).
+ *  호출부는 실패 문구 없이 "이미 요청한 근무예요" + 다시 읽기. */
+export async function insertSwap(r: SwapRequest): Promise<Decision> {
+  if (!HAS_SUPABASE) return 'ok';
+  const { error } = await supabase.from('swap_requests').insert({
+    id: r.id,
+    unit_id: _unitId,
+    kind: r.kind,
+    requester_id: r.requester_id,
+    date: r.date,
+    template_id: r.template_id,
+    target_staff_id: r.target_staff_id ?? null,
+    // 지정 수신자 **목록**(0178) — 선착순. 단수 컬럼은 호환용으로 같이 남긴다.
+    target_staff_ids: r.target_staff_ids ?? null,
+    target_date: r.target_date ?? null,
+    target_template_id: r.target_template_id ?? null,
+    // 부분 교대 구간(0178) — 둘 다 null 이면 근무 전체(기존 동작).
+    part_start: r.part_start ?? null,
+    part_end: r.part_end ?? null,
+    note: r.note,
+    status: r.status,
+    accepted_by: r.accepted_by ?? null,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+  });
+  if (!error) return 'ok';
+  if (error.code === '23505') return 'already';
+  console.warn('[db] insertSwap:', error.message);
+  reportError('db.write:insertSwap', error);
+  return 'failed';
 }
 
 /**
@@ -5018,10 +5108,11 @@ export async function approveSpaceProposal(
 
 /** 묻기 결과. guestKey = 처음 물은 사람에게만 새 열쇠(나머지는 null). aiReady = AI 를 돌려도 됨. sent = AI 를 다 써서 바로 보냈다. */
 export type EduAskResult = { cqId: string; guestKey: string | null; aiReady: boolean; sent: boolean };
-export async function askEduLink(token: string, key: string | null, name: string, text: string): Promise<DbResult<EduAskResult>> {
+/** req = 요청 열쇠(한 질문에 한 번 · 다시 보내기에도 같은 값). 응답만 끊겨 다시 보내면 서버가 앞 질문을 돌려준다(0681). */
+export async function askEduLink(token: string, key: string | null, name: string, text: string, req?: string): Promise<DbResult<EduAskResult>> {
   if (!HAS_SUPABASE) return { data: null, error: { message: 'no_backend' } };
   const { data, error } = await supabase
-    .rpc('edu_link_ask', { p_token: token, p_key: key, p_name: name, p_text: text })
+    .rpc('edu_link_ask', { p_token: token, p_key: key, p_name: name, p_text: text, p_req: req ?? null })
     .single();
   if (error) {
     reportError('db.rpc:askEduLink', error);

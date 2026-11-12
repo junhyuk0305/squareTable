@@ -31,6 +31,7 @@ import {
 import { placeErrorMessage, placeErrorCode } from '@/lib/place/errors';
 import { markSpaceLeft } from '@/lib/place/spaceTarget';
 import { friendlyError, isMissingRpc } from '@/lib/utils/userError';
+import { workErrorMessage } from '@/lib/work/errors';
 import { sessionReadFailAction } from './sessionReadFail';
 import { sessionBootFault } from './sessionBootFault';
 import { deriveStoreRole } from './sessionRole';
@@ -1258,7 +1259,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       return { error: null };
     }
     const { error } = await rpcLeaveStore();
-    if (error) return { error: friendlyError(error.message, '매장에서 나가지 못했어요. 잠시 후 다시 시도해 주세요.') };
+    // owner_cannot_leave 같은 서버 코드는 문구 표(src/lib/work/errors.ts)가 고른다(S5-1). 모르는 코드는 지금 문구.
+    if (error) return { error: friendlyError(error.message, workErrorMessage(error, '매장에서 나가지 못했어요. 잠시 후 다시 시도해 주세요.')) };
     const uid = get().userId;
     if (uid) await loadSession(set, uid, get().email);
     return { error: null };

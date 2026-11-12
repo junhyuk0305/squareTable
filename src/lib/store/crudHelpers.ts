@@ -54,9 +54,11 @@ export function optimisticPatch<S>(
   const before = (get()[key] as unknown as WithId[]).find((x) => x.id === id);
   if (!before) return Promise.resolve(false); // 대상 없음 = 쓸 수 없었다(성공이 아니다)
   set((s) => ({ [key]: (s[key] as unknown as WithId[]).map((x) => (x.id === id ? { ...x, ...patch } : x)) } as unknown as Partial<S>));
+  // ★실패 되돌리기는 **고친 키만** 옛 값으로(L14). 행 통째로 되돌리면 그 사이 realtime·다른 쓰기가 바꾼 다른 칸까지 옛 값이 된다.
+  const undo = Object.fromEntries(Object.keys(patch).map((k) => [k, (before as Record<string, unknown>)[k]]));
   return guardWrite(
     db(),
-    () => set((s) => ({ [key]: (s[key] as unknown as WithId[]).map((x) => (x.id === id ? before : x)) } as unknown as Partial<S>)),
+    () => set((s) => ({ [key]: (s[key] as unknown as WithId[]).map((x) => (x.id === id ? { ...x, ...undo } : x)) } as unknown as Partial<S>)),
     failMsg,
   );
 }

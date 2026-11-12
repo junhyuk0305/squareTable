@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,10 +34,14 @@ export default function SpaceTeach() {
   const [questions, setQuestions] = useState<UnknownQuery[] | null>(null);
   const [failed, setFailed] = useState(false);
 
+  // L20: 마지막 요청의 응답만 쓴다. 화면을 떠났거나 공간이 바뀐 뒤 늦게 온 응답은 버린다.
+  const seq = useRef(0);
   const load = useCallback(async () => {
     if (!spaceId) return;
+    const my = ++seq.current;
     setFailed(false);
     const { data, error } = await fetchUnknownQueue(spaceId);
+    if (my !== seq.current) return;
     if (error) setFailed(true);
     else setQuestions(data.filter((q) => q.status === 'pending_owner_answer'));
   }, [spaceId]);
@@ -45,6 +49,7 @@ export default function SpaceTeach() {
   useFocusEffect(
     useCallback(() => {
       void load();
+      return () => { seq.current++; };
     }, [load]),
   );
 

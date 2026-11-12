@@ -70,13 +70,14 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
     // ★레지스트리 조회가 실패하면 customCategories 를 **건드리지 않는다**(#21). 빈 배열로 덮으면
     //   카테고리 편집 화면이 "커스텀 0건"을 사실로 믿고, 저장 시 레지스트리를 통째로 덮어써
     //   커스텀 카테고리가 영구 삭제된다. 실패는 categoryLoadError 로 말하고 편집 진입을 막는다.
+    // ★노하우 읽기가 실패하면 이전 목록을 둔다(M11) — 빈 배열로 덮으면 "노하우 없음"이 사실인 양 굳는다.
     if (rawCats.error) {
-      set({ entries: data, loaded: true, loadError: error, categoryLoadError: true });
+      set((s) => ({ entries: error ? s.entries : data, loaded: true, loadError: error, categoryLoadError: true }));
       return;
     }
     const customCategories = resolveCustomCategories(rawCats.data);
     setCustomCategoryRegistry(customCategories); // getCategoryMeta 인자 생략 호출부(대시보드 등)용
-    set({ entries: data, loaded: true, loadError: error, customCategories, categoryLoadError: false });
+    set((s) => ({ entries: error ? s.entries : data, loaded: true, loadError: error, customCategories, categoryLoadError: false }));
   }),
 
   // 커스텀 카테고리 저장 — sanitize 후 DB 반영이 성공했을 때만 상태/레지스트리 갱신(실패 시 기존 유지).

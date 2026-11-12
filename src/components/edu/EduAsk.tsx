@@ -85,6 +85,7 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard }: {
   // 착지 카드 — 한 착지에 한 번만 알린다(그 뒤 새로 물어 목록이 밀려도 화면을 다시 끌어당기지 않는다).
   const focusRef = useRef<View>(null);
   const focused = useRef('');
+  const reqRef = useRef<{ text: string; id: string } | null>(null);
 
   const refresh = useCallback(async (g: EduGuest | null) => {
     if (!g) return;
@@ -119,7 +120,11 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard }: {
     const nm = (guest?.name ?? name).trim();
     if (!q || !nm || busy) return;
     setBusy(true);
-    const r = await askEduLink(token, guest?.key ?? null, nm, q);
+    // 요청 열쇠 — 응답만 끊겨 같은 글을 다시 보내면 같은 열쇠를 실어 서버가 앞 질문을 돌려준다(0681 · 2건 쌓임 방지).
+    if (reqRef.current?.text !== q) {
+      reqRef.current = { text: q, id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}` };
+    }
+    const r = await askEduLink(token, guest?.key ?? null, nm, q, reqRef.current.id);
     if (r.error || !r.data) {
       setBusy(false);
       showToast(r.error ? placeErrorMessage(r.error, EDU_ASK.askFail) : EDU_ASK.askFail, 'warn');
@@ -127,6 +132,7 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard }: {
     }
     const g: EduGuest = r.data.guestKey ? { key: r.data.guestKey, name: nm } : (guest as EduGuest);
     if (r.data.guestKey && !me) { await saveEduGuest(token, g); setGuest(g); }
+    reqRef.current = null;
     setText('');
     setBusy(false);
     if (r.data.sent) setCapNote(true);

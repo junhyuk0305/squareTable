@@ -261,7 +261,8 @@ check('ShiftQuickSheet: 저장은 RPC 액션으로(updateTemplate · removeTempl
   !/updateTemplate|removeTemplate/.test(quick) && /editShiftFrom|overrideShiftDay|endShiftFrom|addShiftSeries/.test(quick));
 check('ShiftQuickSheet: 반복 저장 판정은 planSeriesSave(그날 적용 중인 행)', /planSeriesSave\(/.test(quick));
 check('ShiftQuickSheet: "이 날부터 계속·그만"은 planFromScope(뒤 구간까지)로 계획한다', /planFromScope\(/.test(quick));
-check('스토어 applySeriesOps 가 runSeriesOps(schedule.ts · 하네스가 검증하는 그 함수)로 보낸다', /runSeriesOps\(/.test(store));
+// ★0636 M17: 단계별 RPC 여러 번(runSeriesOps) → 묶음 RPC 한 번(apply_shift_series_ops · 한 단계 실패면 전부 되돌림).
+check('스토어 applySeriesOps 가 묶음 RPC 한 번(applyShiftSeriesOpsRpc)으로 보낸다', /applyShiftSeriesOpsRpc\(/.test(store) && !/runSeriesOps\(/.test(store));
 check('근무표 RPC 가 실패해도 다시 읽는다(앞 단계는 저장됐을 수 있다)', !/if \(ok && !isStaleEpoch\(epoch\)\) void get\(\)\.hydrate\(\)/.test(store)
   && /isStaleEpoch\(epoch\)\)\s*void get\(\)\.hydrate\(\)/.test(store));
 check('허브 직원 오늘 탭(fetchMyCrossSummary)이 기간을 주는 my_cross_summary_v2 를 읽는다', /rpc\(\s*'my_cross_summary_v2'/.test(fnBody(db, 'fetchMyCrossSummary')));

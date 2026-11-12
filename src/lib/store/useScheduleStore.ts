@@ -17,10 +17,9 @@ import {
   upsertScheduleConfig,
   fetchShiftTemplates,
   insertShiftTemplate,
-  addShiftSeriesRpc,
-  editShiftFromRpc,
-  endShiftFromRpc,
+  applyShiftSeriesOpsRpc,
   overrideShiftDayRpc,
+  type ShiftWrite,
   fetchShiftTimeRequests,
   fetchScheduleNotices,
   notifyShiftChangedRpc,
@@ -38,7 +37,8 @@ import { blockedText, type Decision } from '@/lib/decision';
 import { optimisticAdd } from '@/lib/store/crudHelpers';
 import { genId } from '@/lib/utils/id';
 import { todayStr } from '@/lib/utils/attendance';
-import { nextDateForWeekday, fmtDateKo, runSeriesOps, swapApprovable, PAST_MONTH_LOCKED_TEXT, type SeriesSaveOp } from '@/lib/utils/schedule';
+import { nextDateForWeekday, fmtDateKo, swapApprovable, PAST_MONTH_LOCKED_TEXT, type SeriesSaveOp } from '@/lib/utils/schedule';
+import { workErrorMessage } from '@/lib/work/errors';
 import {
   notifyStaffSwapRequest,
   notifyUserSwapRequest,
@@ -291,18 +291,19 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
    * 끝나면 다시 읽는다. ★실패해도 읽는다: 여러 단계 저장은 앞 단계가 이미 저장됐을 수 있다.
    * 그 사이 매장이 바뀌었으면 다시 읽지 않는다(새 매장 hydrate 가 채운다).
    */
-  const runShiftRpc = async (call: () => Promise<boolean>, failMsg: string): Promise<boolean> => {
+  const runShiftRpc = async (call: () => Promise<ShiftWrite>, failMsg: string): Promise<boolean> => {
     const epoch = currentTenantEpoch();
-    // 지난달 근무(past_month_locked)는 그 이유를 말한다. 그 밖의 실패는 지금 문구.
-    let locked = false;
-    const res = call().catch((e: unknown) => {
-      if (/past_month_locked/.test(String((e as Error)?.message ?? ''))) { locked = true; return false; }
-      throw e;
-    });
-    const ok = await guardWrite(res, () => {}, failMsg);
-    if (!ok && locked) useSyncStore.getState().noteError(PAST_MONTH_LOCKED_TEXT);
+    // 지난달 근무(past_month_locked)는 그 이유를 말한다. ★서버 코드가 문구 표에 있으면 그 문구(S5-1 · src/lib/work/errors.ts).
+    //   그 밖의 실패는 지금 문구(failMsg).
+    let r: ShiftWrite;
+    try {
+      r = await call();
+    } catch (e: unknown) {
+      r = { ok: false, code: /past_month_locked/.test(String((e as Error)?.message ?? '')) ? 'past_month_locked' : null };
+    }
+    if (!r.ok) useSyncStore.getState().noteError(r.code === 'past_month_locked' ? PAST_MONTH_LOCKED_TEXT : workErrorMessage(r.code, failMsg));
     if (!isStaleEpoch(epoch)) void get().hydrate();
-    return ok;
+    return r.ok;
   };
 
   // ★D9: 사장 · 매니저가 근무를 바꾸면 그 직원에게 알린다(저장이 성공한 뒤에만 · 본인이면 서버가 넣지 않는다).
@@ -368,8 +369,8 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
   subscribe: () => subscribeDebounced(subscribeSchedule, () => get().hydrate()),
 
   setConfig: (patch) => {
-    // ★조회가 실패한 상태에서는 저장을 거부한다(#48). 이 upsert 는 config 전체를 쓰므로,
-    //   못 불러온 값(=기본값)을 그대로 올리면 **서버의 실제 운영시간·정기휴무·비고가 지워진다.**
+    // ★조회가 실패한 상태에서는 저장을 거부한다(#48). 저장은 바꾼 열만 쓴다(M15). 그래도 화면의 나머지 값이
+    //   기본값이라 사장이 그 위에서 고치면 **서버의 실제 운영시간·정기휴무·비고를 덮을 수 있다.**
     if (get().configLoadError) {
       useSyncStore.getState().noteError('매장 정보를 불러오지 못해 저장할 수 없어요. 새로고침 후 다시 시도해 주세요.');
       return Promise.resolve(false);
@@ -381,7 +382,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     set({ config: next });
     // 낙관적 반영은 그대로 두되 결과를 돌려준다 — 화면이 "저장됐어요"를 서버 확인 뒤에 띄우게 하기 위함.
     return guardWrite(
-      upsertScheduleConfig(next),
+      upsertScheduleConfig(patch),
       () => { if (!isStaleEpoch(epoch)) set({ config: before }); },
       '매장 정보 저장에 실패했어요. 다시 시도해 주세요.',
     );
@@ -402,9 +403,10 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     const edited = ops.flatMap((o) => (o.kind === 'add' ? [] : [o.id]))[0];
     const who = staffId || get().templates.find((t) => t.id === edited)?.staff_id;
     const from = ops.map((o) => o.from).sort()[0];
-    // 한 단계가 실패하면 거기서 멈춘다. 앞 단계는 이미 저장됐으므로 runShiftRpc 가 다시 읽어 화면을 서버와 맞춘다.
+    // ★M17(0636): 계획 전체를 서버 한 트랜잭션(apply_shift_series_ops)으로 보낸다. 한 단계가 실패하면 서버가 전부 되돌린다 —
+    //   예전엔 RPC 를 차례로 보내 가운데서 끊기면 반쪽 근무표가 남았다. 끝나면 runShiftRpc 가 다시 읽는다.
     return runShiftRpc(
-      () => runSeriesOps({ add: addShiftSeriesRpc, edit: editShiftFromRpc, end: endShiftFromRpc }, staffId, ops, start, end, confirmPast),
+      () => applyShiftSeriesOpsRpc(staffId, ops, start, end, confirmPast),
       '근무 저장에 실패했어요. 다시 시도해 주세요.',
     ).then((ok) => {
       if (ok) notifyShiftChanged(who, from, true);
@@ -450,12 +452,17 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     set((s) => ({ swaps: [req, ...s.swaps] }));
     // 저장 성공 후에만 웹푸시(실패·롤백 시 유령 교대요청 알림 방지).
     //   맞교환(swap)은 지정 상대에게만, 대타(cover)는 매장 직원 전체(발송자 제외는 서버).
-    void guardWrite(
-      insertSwap(req),
-      () => set((s) => ({ swaps: s.swaps.filter((r) => r.id !== req.id) })),
-      '교대 요청 등록에 실패했어요. 다시 시도해 주세요.',
-    ).then((ok) => {
-      if (!ok) return;
+    // ★M3(0633): 같은 근무·날짜의 진행 중 요청은 서버가 하나만 받는다. 다른 기기가 먼저 올렸으면 already —
+    //   실패 문구가 아니라 "이미 요청한 근무예요" + 다시 읽기(그 요청이 목록에 온다). 알림은 먼저 올린 쪽이 보냈다.
+    void insertSwap(req).then((d) => {
+      if (d !== 'ok') {
+        set((s) => ({ swaps: s.swaps.filter((r) => r.id !== req.id) }));
+        if (d === 'already') {
+          showToast('이미 요청한 근무예요.');
+          void get().hydrate();
+        } else useSyncStore.getState().noteError('교대 요청 등록에 실패했어요. 다시 시도해 주세요.');
+        return;
+      }
       // ★지정 발송이면 **수신자 전원**에게. 한 명이라도 못 받으면 그 사람에겐 요청이 없는 것과 같다.
       const targets = input.target_staff_ids?.length
         ? input.target_staff_ids
@@ -525,7 +532,11 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
   requestShiftTime: async (templateId, date, start, end) => {
     let requestId: string | null = null; // 서버가 돌려준 요청 id — 사장 알림이 그 요청 카드를 가리킨다(역 ⑤)
     const ok = await runShiftRpc(
-      async () => { requestId = await requestShiftTimeRpc(templateId, date, start, end); return requestId !== null; },
+      async () => {
+        const r = await requestShiftTimeRpc(templateId, date, start, end);
+        requestId = r.id;
+        return { ok: r.id !== null, code: r.code };
+      },
       '근무 시간 수정 요청에 실패했어요. 내 근무가 맞는지 확인해 주세요.',
     );
     // 저장 성공 뒤에만 알린다(실패 시 유령 알림 금지). 승인은 사장만 한다(0243).
