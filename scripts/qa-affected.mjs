@@ -15,6 +15,7 @@
 // 함수·표 하나에 하니스가 WIDE 개 넘게 걸리면 그것으로는 고르지 않고 알려만 준다(셋업에 쓰는 join_by_invite · units 같은 것).
 //
 // 돌리는 법: 고정 계정·브라우저를 쓰는 하니스는 한 번에 하나, 나머지는 JOBS 개씩 같이. 하니스당 15분 넘으면 죽인다.
+//   전화번호 접두(0107… 처럼 시각을 붙이는 앞 4자리)가 겹치는 하니스는 같이 돌리지 않는다.
 //   로컬 대상에서는 로컬 도커의 주소·키를 env 로 넘긴다. --local 을 지원하거나 셸 env 를 먼저 읽는 하니스,
 //   백엔드를 안 쓰는 하니스가 돈다. 나머지(.env 파일만 읽는 것)는 skip 으로 센다.
 // 같이 돌 때 실패한 하니스는 끝에 혼자 한 번 다시 돌린다. 그때 통과하면 PASS 로 세고 FLAKY 에도 센다(숨기지 않는다).
@@ -75,6 +76,13 @@ const harness = Object.keys(npmName).map((file) => {
     shellEnv: /{ ...process.env }/.test(t), // 셸 env 를 .env 파일보다 먼저 읽는다 → 로컬 주소·키를 env 로 넘기면 로컬로 간다
     pure: !/SUPABASE|lib\/cdp|QA_ORIGIN|localhost:8081/.test(t),
     serial: /lib\/(cdp|qa-fixed-accounts)|owner@|staff2?@|hq@pilot|\.0812/.test(t),
+    // 전화번호 = 접두 4자리 + 시각 앞 7자리(100ms 단위). 같은 때 시작한 두 하니스가 접두를 같이 쓰면 번호가 같아져
+    // 한쪽 가입의 번호가 비고 합류가 막힌다(qa-room-matrix·qa-room-isolation 의 approve_member not_pending). 그래서 접두를 모은다.
+    phones: new Set([
+      ...[...t.matchAll(/`(01\d{2})\$\{s\.slice\(0, ?7\)\}`/g)].map((m) => m[1]),
+      ...[...t.matchAll(/\[([^\]]*)\]\.map\(\(p\) => `\$\{p\}\$\{s\.slice\(0, ?7\)\}`\)/g)].flatMap((m) => [...m[1].matchAll(/'(\d{4})'/g)].map((y) => y[1])),
+      ...[...t.matchAll(/['"`](010\d{8})['"`]/g)].map((m) => m[1]),
+    ]),
     ai: /functions\/v1\/ai\b|invoke\(\s*['"`]ai['"`]/.test(t),
     heavy: map.heavy.includes(id),
   };
@@ -170,7 +178,22 @@ if (!LIST && todo.length) {
     if (!r || r.status === 503) console.log('  ※ 로컬 엣지 함수가 꺼져 있다. 엣지를 부르는 하니스는 503 으로 실패한다. 띄우는 법: npx -y supabase@2.122.1 functions serve --env-file <VAPID_PUBLIC_KEY·VAPID_PRIVATE_KEY 를 적은 파일>');
   }
   const queue = todo.filter((p) => !p.h.serial);
-  await Promise.all(Array.from({ length: JOBS }, async () => { while (queue.length) await runOne(queue.shift(), false); }));
+  // 전화번호 접두가 겹치는 하니스는 같이 돌리지 않는다(위 phones).
+  const running = new Set();
+  const clash = (p) => [...running].some((r) => [...p.h.phones].some((x) => r.h.phones.has(x)));
+  await new Promise((all) => {
+    const next = () => {
+      if (!queue.length && !running.size) return all();
+      while (running.size < JOBS) {
+        const i = queue.findIndex((p) => !clash(p));
+        if (i < 0) break;
+        const p = queue.splice(i, 1)[0];
+        running.add(p);
+        runOne(p, false).then(() => { running.delete(p); next(); });
+      }
+    };
+    next();
+  });
   for (const p of [...todo.filter((x) => x.h.serial), ...retry]) await runOne(p, true);
 }
 const head = LIST ? 'LIST' : count.fail ? 'RED' : 'GREEN';
