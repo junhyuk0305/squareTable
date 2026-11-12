@@ -99,6 +99,7 @@
     "qa:quiz-understanding-race:local": "node scripts/qa-quiz-understanding-race.mjs",
     "qa:quiz-progress": "node scripts/qa-quiz-progress.mjs",
     "qa:scheduler-recheck:local": "node scripts/qa-scheduler-recheck.mjs --local",
+    "qa:race:local": "node scripts/qa-race.mjs --local",
     "qa:store-retention:local": "node scripts/qa-store-retention.mjs --local",
     "qa:kh03-knowhow-paging:local": "node scripts/qa-kh03-knowhow-paging.mjs --local",
     "qa:card-billing": "node scripts/qa-card-billing.mjs",

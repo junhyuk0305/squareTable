@@ -10,6 +10,7 @@
 //   ④ 마감 날짜가 어제인 행이 후보인가 · 선점하면 due_on 이 어제로 찍히는가.
 // ⚠️ due_quiz_sends 는 전역 함수이고 맨 앞에서 enqueue_knowhow_rechecks 를 전역으로 돈다. 이 매장 행만 선점한다(④ 한 건).
 // 사용: node scripts/qa-scheduler-recheck.mjs --local
+import { spawnSync } from 'node:child_process';
 import { localEnv, makeLocal, makeWorld, cleanupWorld, kstDay, ok } from './lib/qa-fz-local.mjs';
 
 const env = localEnv();
@@ -20,7 +21,7 @@ console.log(`— 대상 로컬 ${env.URL_} · schema_migrations 최고 ${MIG} ·
 if (Number(MIG) >= 348) console.log(`  · 0348(11-04 main 머지) 이후 DB 다. ①퀴즈·②·④ 는 0348 이 고쳤으므로 재현 안 됨이 정상이다. 수정 전 RED 를 보려면 0348 이전 DB 가 필요하다.`);
 
 let pass = 0, fail = 0, skip = 0, executed = 0, ref = 0; // ref = 단언 없이 사실만 찍은 참고 줄(통과로 안 센다)
-const PLANNED = 6;
+const PLANNED = 10;   // ⑤~⑧ 4개를 더했다(2026-11-12 S0)
 const check = (n, reproduced, extra = '') => { executed++; reproduced ? (fail++, console.log('  ✗ 재현됨 ·', n, extra)) : (pass++, console.log('  ✓ 재현 안 됨 ·', n, extra)); };
 const skipped = (n, why) => { executed++; skip++; console.log('  - skip ·', n, '·', why); };
 const worlds = [];
@@ -122,6 +123,61 @@ async function multiStore() {
   else check('④b: 선점하면 due_on 이 이미 지난 날짜로 찍힌다', past4, `due_on ${r4.due_on} · 오늘 ${kstDay()}`);
 }
 
+// ── ⑤~⑧ 구성원 알림·사장 알림 스윕이 보내는 시점에 다시 보는가(결함 전수 점검 S0 · 2026-11-12 · 레이스지도 M8·M9·M10) ──
+// 스윕 함수는 전역으로 200행까지 선점한다. 다른 세션의 행을 건드리지 않게 트랜잭션 안에서 부르고 되돌린다(rollback).
+// 행은 실제 생산자가 넣는 모양 그대로 심는다(swap_confirmed = put_schedule_notice · role_changed · question = space_question_send · ai_cap = 0193).
+async function sweeps() {
+  const w = await makeWorld(L, env, { tag: 'x5', staffN: 2, courses: [] });
+  worlds.push(w);
+  const [s1, s2] = w.staff;
+  const sq = (s) => `'${String(s).replace(/'/g, "''")}'`;
+  const inTx = (sql) => {
+    const r = spawnSync('docker', ['exec', '-i', env.DB_CONTAINER, 'psql', '-U', 'postgres', '-tA', '-q', '-v', 'ON_ERROR_STOP=1'], { input: `begin;\n${sql}\nrollback;`, encoding: 'utf8' });
+    if (r.status !== 0) throw new Error(`스윕 실행 실패: ${r.stderr}`);
+    return r.stdout.trim();
+  };
+  const notice = (uid, kind, title, body = 'QA', url = '/junior/schedule') => Number(psql(`with x as (insert into public.member_notices (user_id, unit_id, kind, store_name, title, body, url)
+    values (${sq(uid)}, ${sq(w.unit)}, ${sq(kind)}, 'QA', ${sq(title)}, ${sq(body)}, ${sq(url)}) returning id) select id from x`));
+  // 스윕은 한 틱에 200행이다. 공유 로컬 DB 에 다른 세션의 미발송 행이 밀려 있으면 이 매장 행이 창 밖으로 밀린다.
+  //   → 같은 트랜잭션 안에서 다른 매장 행을 먼저 선점 처리한다(rollback 으로 되돌아간다).
+  //   대조군 = 아직 매장에 있는 직원의 같은 종류 알림. 대조군이 안 나가면 skip(통과로 세지 않는다).
+  const sweptMember = (ids) => inTx(`update public.member_notices set claimed_at = now() where claimed_at is null and unit_id <> ${sq(w.unit)};
+select coalesce(string_agg(out_id::text, ','), '') from public.sweep_member_notices() where out_id in (${ids.join(',')});`).split(',').filter(Boolean).map(Number);
+
+  console.log('— ⑤ 나간 직원에게 쌓여 있던 근무 알림 —');
+  const n5 = notice(s1.id, 'swap_confirmed', '대타가 확정됐어요');
+  const c5 = notice(s2.id, 'swap_confirmed', '대타가 확정됐어요');
+  psql(`delete from public.unit_members where unit_id = ${sq(w.unit)} and user_id = ${sq(s1.id)}`);
+  const got5 = sweptMember([n5, c5]);
+  if (!got5.includes(c5)) skipped('⑤(M8)', '대조군(매장에 있는 직원)도 안 나갔다');
+  else check('⑤(M8): 매장을 나간 직원의 대기 알림을 스윕이 보낸다', got5.includes(n5));
+
+  console.log('— ⑥ 역할을 두 번 바꾼 뒤 쌓인 역할 알림 —');
+  const n6a = notice(s2.id, 'role_changed', '매니저가 됐어요');
+  const n6b = notice(s2.id, 'role_changed', '직원이 됐어요');
+  const got6 = sweptMember([n6a, n6b]);
+  if (!got6.includes(n6b)) skipped('⑥(M8)', '지금 역할 알림(대조군)도 안 나갔다');
+  else check('⑥(M8): 지금 역할과 다른 옛 역할 알림까지 보낸다', got6.includes(n6a), `보낸 수 ${got6.length}/2`);
+
+  console.log('— ⑦ 이미 답한 질문의 알림 —');
+  const uq = `uq_x7_${w.s}`, uqc = `uq_x7c_${w.s}`;
+  psql(`insert into public.unknown_queries(id, unit_id, query_text, status) values (${sq(uq)}, ${sq(w.unit)}, 'QA 질문', 'answered_direct'), (${sq(uqc)}, ${sq(w.unit)}, 'QA 대조 질문', 'pending_owner_answer')`);
+  const n7 = notice(w.owner.id, 'question', 'QA님의 질문', 'QA 질문', `/space/answer/${uq}?space=${w.unit}`);
+  const c7 = notice(w.owner.id, 'question', 'QA님의 질문', 'QA 대조 질문', `/space/answer/${uqc}?space=${w.unit}`);
+  const got7 = sweptMember([n7, c7]);
+  if (!got7.includes(c7)) skipped('⑦(M9)', '대기 중인 질문 알림(대조군)도 안 나갔다');
+  else check('⑦(M9): 답이 끝난 질문의 알림을 스윕이 보낸다', got7.includes(n7));
+
+  console.log('— ⑧ 요금제를 올린 뒤 쌓여 있던 AI 한도 알림 —');
+  const month = psql(`select to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM')`);
+  const a8 = Number(psql(`with x as (insert into public.owner_alerts (unit_id, kind, period, step, title, body) values (${sq(w.unit)}, 'ai_cap', ${sq(month)}, 1, 'AI 질문을 거의 다 썼어요', 'QA') returning id) select id from x`));
+  await ok(admin.rpc('admin_activate_store', { p_unit_id: w.unit, p_days: 30, p_plan: 'multi' }), 'admin_activate_store');
+  const used = Number(psql(`select coalesce((select used from public.ai_usage_monthly where unit_id = ${sq(w.unit)} and month = ${sq(month)}), 0)`));
+  const cap = Number(psql(`select cap from public.unit_ai_cap(${sq(w.unit)})`));
+  const got8 = Number(inTx(`select count(*) from public.sweep_owner_alerts() where out_id = ${a8};`));
+  check('⑧(M10): 한도에 한참 못 미치는데(사용 ' + used + ' / 상한 ' + cap + ') 한도 알림을 보낸다', got8 === 1);
+}
+
 let crashed = null;
 // 무료 모드(app_config.billing_free_mode)가 켜져 있으면 effective_plan 이 free 로 안 떨어져 ① 셋업이 안 선다.
 // ① 동안만 끄고 되돌린다(qa-quiz-resend (m) · qa-store-slots 와 같은 방식 · 2026-11-12). 로컬 전용 하니스다.
@@ -130,6 +186,7 @@ try {
   if (freeModeWas === 'true') psql(`update public.app_config set value = 'false' where key = 'billing_free_mode'`);
   try { await seatLock(); } finally { if (freeModeWas === 'true') psql(`update public.app_config set value = 'true' where key = 'billing_free_mode'`); }
   await multiStore();
+  await sweeps();
 } catch (e) { crashed = e; console.error('  ✗ 예외:', e?.stack ?? e); }
 const cl = await cleanupWorld(L, env, worlds).catch((e) => ({ units: 0, users: 0, left: -1, detail: [String(e.message)] }));
 const notRun = crashed ? PLANNED - executed - ref : 0;
