@@ -814,7 +814,8 @@ async function slotRuleChecks() {
     await R.c.rpc('delete_store', { p_unit_id: A });
     check('셋업 ⑲-d A 삭제 → 구독 슬롯 반환', (await openSlots(R.uid)).length === 1, '');
     await evt(R, t, 'CANCELLATION', 'single_1_monthly', 'single', 1, iso(days(30)), { p_reason: 'CUSTOMER_SUPPORT' });
-    const live = (await openSlots(R.uid)).filter((x) => new Date(x.paid_until).getTime() > Date.now());
+    // 환불은 슬롯을 서버 now() 로 끝낸다. 이 PC 시계가 서버보다 조금 늦으면 방금 끝난 슬롯이 살아 보인다 → 5초 여유(살아 있는 슬롯은 30일 뒤다).
+    const live = (await openSlots(R.uid)).filter((x) => new Date(x.paid_until).getTime() > Date.now() + 5000);
     check('★★⑲-d 환불 뒤 돌려받은 슬롯이 쓸 수 없게 끝난다', live.length === 0, JSON.stringify(live));
     const C = await tryStore(R, 'QA⑲d 3호점');
     check('★⑲-d 환불된 몫으로 새 매장을 열 수 없다', !C.unit && /no_store_slot/.test(C.err), C.err || `열려버림 ${C.unit}`);

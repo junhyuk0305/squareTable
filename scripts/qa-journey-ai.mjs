@@ -634,7 +634,8 @@ return rows.find(r=>r.includes(F))??rows[0]??'';})()`);
     let bad = await readSS(w.page, '__qa_bad');
     // G② 의 의도한 거부(0033 too_many_pending → unknown_queries insert 400) 1건만 뺀다. 그 밖의 ≥400 은 전부 센다.
     if (name === 'J' && g2Blocked) {
-      const i = bad.findIndex((b) => b.s === 400 && /\/unknown_queries$/.test(b.u));
+      // 0634(M13) 뒤 새 앱은 rpc/submit_unknown_query 로 보낸다 — 같은 거부가 그 주소로 온다.
+      const i = bad.findIndex((b) => b.s === 400 && /\/(unknown_queries|rpc\/submit_unknown_query)$/.test(b.u));
       if (i >= 0) bad = bad.filter((_, k) => k !== i);
     }
     log(`${name}: 콘솔 에러 ${w.page.errors.length} · ≥400 ${bad.length}${bad.length ? ' ' + JSON.stringify(bad.slice(0, 5)) : ''}`);
