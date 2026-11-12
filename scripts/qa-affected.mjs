@@ -17,7 +17,8 @@
 // 돌리는 법: 고정 계정·브라우저를 쓰는 하니스는 한 번에 하나, 나머지는 JOBS 개씩 같이. 하니스당 15분 넘으면 죽인다.
 //   로컬 대상에서는 로컬 도커의 주소·키를 env 로 넘긴다. --local 을 지원하거나 셸 env 를 먼저 읽는 하니스,
 //   백엔드를 안 쓰는 하니스가 돈다. 나머지(.env 파일만 읽는 것)는 skip 으로 센다.
-// 마지막 줄: GREEN|RED — PASS n · FAIL n · SKIP n · KNOWN n · UNMAPPED n. FAIL 이 있으면 종료 코드 1.
+// 같이 돌 때 실패한 하니스는 끝에 혼자 한 번 다시 돌린다. 그때 통과하면 PASS 로 세고 FLAKY 에도 센다(숨기지 않는다).
+// 마지막 줄: GREEN|RED — PASS n · FAIL n · SKIP n · KNOWN n · FLAKY n · UNMAPPED n. FAIL 이 있으면 종료 코드 1.
 //   KNOWN = qa-known-red.json 에 적힌 하니스의 실패. UNMAPPED = src·supabase 파일인데 걸리는 하니스가 없는 것.
 import { execFileSync, spawn } from 'node:child_process';
 import { createWriteStream, existsSync, mkdirSync, readFileSync } from 'node:fs';
@@ -128,10 +129,11 @@ for (const n of notes) console.log(`  ※ ${n}`);
 if (unmapped.length) console.log(`  걸리는 하니스 없음(${unmapped.length}): ${unmapped.slice(0, 10).join(', ')}${unmapped.length > 10 ? ' …' : ''}`);
 
 // ── 5. 돌리기 ────────────────────────────────────────────────
-const count = { pass: 0, fail: 0, skip: plan.filter((p) => p.skip).length, known: 0 };
+const count = { pass: 0, fail: 0, skip: plan.filter((p) => p.skip).length, known: 0, flaky: 0 };
+const retry = []; // 같이 돌 때 실패한 것. 끝에 혼자 다시 돌린다.
 const logDir = join(tmpdir(), `qa-affected-${Date.now().toString(36)}`);
 let childEnv = process.env;
-const runOne = (p) => new Promise((done) => {
+const runOne = (p, alone) => new Promise((done) => {
   const log = join(logDir, `${p.h.id}.log`);
   const out = createWriteStream(log);
   const child = spawn(process.execPath, [join(SCRIPTS, p.h.file), ...p.args], { cwd: ROOT, env: childEnv });
@@ -149,8 +151,10 @@ const runOne = (p) => new Promise((done) => {
     out.end();
     const ok = code === 0 && !timedOut;
     const isKnown = !ok && known.has(p.h.id);
+    if (!ok && !alone && !isKnown && !timedOut) { console.log(`다시 ${p.h.id} — 같이 돌 때 실패. 끝에 혼자 다시 돌린다.`); retry.push(p); return done(); }
+    if (ok && retry.includes(p)) count.flaky++;
     if (ok) count.pass++; else if (isKnown) count.known++; else count.fail++;
-    const label = ok ? 'PASS' : timedOut ? 'FAIL(15분 초과)' : isKnown ? 'KNOWN' : code === 2 ? 'FAIL(환경)' : 'FAIL';
+    const label = ok ? (retry.includes(p) ? 'PASS(혼자서는 통과)' : 'PASS') : timedOut ? 'FAIL(15분 초과)' : isKnown ? 'KNOWN' : code === 2 ? 'FAIL(환경)' : 'FAIL';
     console.log(`${label} ${p.h.id} — ${last.slice(0, 120)}${ok ? '' : `\n     로그: ${log}`}`);
     done();
   });
@@ -161,9 +165,9 @@ if (!LIST && todo.length) {
   if (REMOTE && !existsSync(join(ROOT, '.env'))) { console.error('중단: --allow-remote 는 키가 있는 main 체크아웃에서만 쓴다.'); process.exit(2); }
   if (!REMOTE && todo.some((p) => !p.h.pure)) childEnv = { ...process.env, ...localEnv() }; // 로컬 도커의 주소·키(supabase status)
   const queue = todo.filter((p) => !p.h.serial);
-  await Promise.all(Array.from({ length: JOBS }, async () => { while (queue.length) await runOne(queue.shift()); }));
-  for (const p of todo.filter((x) => x.h.serial)) await runOne(p);
+  await Promise.all(Array.from({ length: JOBS }, async () => { while (queue.length) await runOne(queue.shift(), false); }));
+  for (const p of [...todo.filter((x) => x.h.serial), ...retry]) await runOne(p, true);
 }
 const head = LIST ? 'LIST' : count.fail ? 'RED' : 'GREEN';
-console.log(`\n${head} — PASS ${count.pass} · FAIL ${count.fail} · SKIP ${count.skip} · KNOWN ${count.known} · UNMAPPED ${unmapped.length}`);
+console.log(`\n${head} — PASS ${count.pass} · FAIL ${count.fail} · SKIP ${count.skip} · KNOWN ${count.known} · FLAKY ${count.flaky} · UNMAPPED ${unmapped.length}`);
 process.exit(count.fail ? 1 : 0);
