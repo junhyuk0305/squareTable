@@ -66,6 +66,13 @@ begin
       end if;
       if g.id is null then
         -- 앞 응답이 끊겨 열쇠를 못 받았다. 그 손님 열쇠를 새로 만든다(앞 열쇠를 받은 사람은 없다).
+        -- 그 전제는 "이 요청이 손님을 만든 첫 질문"일 때만 맞다. 질문이 더 있거나 이어받은(claimed · 다른 열쇠) 손님이면
+        --   이미 열쇠를 쓰는 사람이 있다 → 열쇠를 바꾸지 않고 거절한다(/cso M-1 · 요청 열쇠가 남의 열쇠를 다시 받는 길을 막는다).
+        if exists (select 1 from public.edu_guest_questions q where q.guest_id = v_pair.guest_id and q.cq_id <> v_cq)
+           or exists (select 1 from public.edu_link_guests x where x.id = v_pair.guest_id and x.claimed_by is not null)
+           or exists (select 1 from public.edu_link_guest_keys k where k.guest_id = v_pair.guest_id) then
+          raise exception 'invalid_argument';
+        end if;
         v_key := 'gk_' || encode(extensions.gen_random_bytes(24), 'hex');
         update public.edu_link_guests set key_hash = encode(extensions.digest(v_key, 'sha256'), 'hex')
          where id = v_pair.guest_id;

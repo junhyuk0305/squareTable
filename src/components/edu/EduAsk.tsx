@@ -86,6 +86,7 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard }: {
   const focusRef = useRef<View>(null);
   const focused = useRef('');
   const reqRef = useRef<{ text: string; id: string } | null>(null);
+  const sendingRef = useRef(false);
 
   const refresh = useCallback(async (g: EduGuest | null) => {
     if (!g) return;
@@ -118,14 +119,19 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard }: {
   const ask = useCallback(async () => {
     const q = text.trim();
     const nm = (guest?.name ?? name).trim();
-    if (!q || !nm || busy) return;
+    if (!q || !nm || busy || sendingRef.current) return;
+    sendingRef.current = true; // 렌더 전 두 번 누름도 막는다(busy 는 다음 렌더에 바뀐다 · /cso L-2)
     setBusy(true);
     // 요청 열쇠 — 응답만 끊겨 같은 글을 다시 보내면 같은 열쇠를 실어 서버가 앞 질문을 돌려준다(0681 · 2건 쌓임 방지).
     if (reqRef.current?.text !== q) {
-      reqRef.current = { text: q, id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}` };
+      const rnd = () => Math.random().toString(36).slice(2).padEnd(10, '0').slice(0, 10);
+      reqRef.current = { text: q, id: `${Date.now().toString(36)}${rnd()}${rnd()}` }; // 28자 · 서버 형식 16~64자
     }
     const r = await askEduLink(token, guest?.key ?? null, nm, q, reqRef.current.id);
+    sendingRef.current = false;
     if (r.error || !r.data) {
+      // 서버가 요청 열쇠를 더 받지 않으면(10분 지남 등) 다음 누름은 새 열쇠로 보낸다(/cso L-3).
+      if (r.error?.message === 'invalid_argument') reqRef.current = null;
       setBusy(false);
       showToast(r.error ? placeErrorMessage(r.error, EDU_ASK.askFail) : EDU_ASK.askFail, 'warn');
       return;

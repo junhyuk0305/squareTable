@@ -8,6 +8,7 @@
 //   D 다른 손님 열쇠로 남의 요청 열쇠를 쓰면 invalid_argument.
 //   E '전체 읽음'에서 한 건을 먼저 읽어 둔 뒤 두 건을 요청 → 2(S5-3 · 0681 전 = 1).
 //   F 못 보는 방의 행은 여전히 세지 않는다(0).
+//   H 열쇠 가진 손님의 둘째 질문 요청 열쇠를 열쇠 없이 다시 보내면 거절 · 앞 열쇠 그대로(/cso M-1).
 //   G submit_unknown_query(0634) 가 남의 자리 id 를 받으면 잠그기 전에 not_member(찾은결함 I1-3).
 // 쓰는 법: node scripts/qa-ask-once.mjs --local
 import { spawnSync } from 'node:child_process';
@@ -20,7 +21,7 @@ const KS = ['O', 'J'];
 const U = Object.fromEntries(KS.map((k, i) => [k, `00000000-0000-4000-c${rnd.slice(0, 3)}-${rnd}${String(i).padStart(4, '0')}`]));
 const S = Object.fromEntries(KS.map((k, i) => [k, `00000000-0000-4000-d${rnd.slice(0, 3)}-${rnd}${String(i).padStart(4, '0')}`]));
 const SP = `qa_aosp_${rnd}`, ST = `qa_aost_${rnd}`, LK = `qa_aol_${rnd}`, TK = `qa_aotok_${rnd}_aaaaaaaaaaaa`;
-const REQ1 = `req1${rnd}aaaaaaaaaaaa`, REQ2 = `req2${rnd}bbbbbbbbbbbb`;
+const REQ1 = `req1${rnd}aaaaaaaaaaaa`, REQ2 = `req2${rnd}bbbbbbbbbbbb`, REQ3 = `req3${rnd}cccccccccccc`;
 const ROOM = `qa_aoroom_${rnd}`, F1 = `qa_aof1_${rnd}`, F2 = `qa_aof2_${rnd}`, F3 = `qa_aof3_${rnd}`;
 
 const as = (who, role, body) => `pg_temp.ao_do(${who ? q(U[who]) + '::uuid' : 'null'}, ${who ? q(S[who]) + '::uuid' : 'null'}, ${q(role)}, ${q(body)})`;
@@ -101,6 +102,10 @@ ${out('D', `${as(null, 'anon', `select cq_id from public.edu_link_ask(${q(TK)}, 
 select ${as('J', 'authenticated', `select public.mark_feed_read(${q(F1)})::text`)};
 ${out('E', `${as('J', 'authenticated', `select public.mark_all_feed_read(array[${q(F1)}, ${q(F2)}])::text`)}`)}
 ${out('F', `${as('J', 'authenticated', `select public.mark_all_feed_read(array[${q(F3)}])::text`)}`)}
+-- H 열쇠(k2)를 가진 손님의 둘째 질문 요청 열쇠를 열쇠 없이 다시 보내면 거절 · k2 는 그대로 쓸 수 있다(/cso M-1)
+select ${as(null, 'anon', `select cq_id from public.edu_link_ask(${q(TK)}, {V:k2}, '하늘', '둘째 질문', ${q(REQ3)})`)};
+${out('H', `${as(null, 'anon', `select cq_id from public.edu_link_ask(${q(TK)}, null, '하늘', '둘째 질문', ${q(REQ3)})`)}`)}
+${out('H 앞 열쇠 그대로', `${as(null, 'anon', `select count(*)::text from public.edu_link_answers(${q(TK)}, {V:k2})`)}`)}
 -- G 남의 공간 id 로 질문 보내기(J 는 SP 멤버가 아니다)
 ${out('G', `${as('J', 'authenticated', `select public.submit_unknown_query('qa_aouq_${rnd}', '남의 공간 질문', ${q(SP)})::text`)}`)}
 rollback;
@@ -125,6 +130,8 @@ check('C 요청 열쇠 없음(옛 앱) = 0550 그대로 2건', got['C 옛 앱 �
 check('D 남의 요청 열쇠 = invalid_argument', /invalid_argument/.test(got.D ?? ''), got.D);
 check('E 먼저 한 건 읽고 전체 읽음 2건 = 2', got.E === '2', got.E);
 check('F 못 보는 방 = 0', got.F === '0', got.F);
+check('H 둘째 질문 요청 열쇠를 열쇠 없이 = invalid_argument(열쇠 안 바꿈)', /invalid_argument/.test(got.H ?? ''), got.H);
+check('H 앞 열쇠로 그대로 읽는다(질문 셋)', Number(got['H 앞 열쇠 그대로']) >= 2, got['H 앞 열쇠 그대로']);
 check('G 남의 공간 id 로 질문 보내기 = 잠그기 전에 not_member(I1-3)', /not_member/.test(got.G ?? ''), got.G);
 console.log(`\n${fail ? 'RED' : 'GREEN'} — pass ${pass} · fail ${fail} · skip 0 (AI 호출 0회)`);
 process.exit(fail ? 1 : 0);
