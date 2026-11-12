@@ -238,11 +238,11 @@ try {
   }
   if (LOCAL) {
     const out = psql(`select (select relrowsecurity from pg_class where oid = 'public.user_reports'::regclass)::text
-      || ',' || (select count(*) from pg_policies where schemaname = 'public' and tablename = 'user_reports')::text
+      || ',' || (select count(*) from pg_policies where schemaname = 'public' and tablename = 'user_reports' and permissive = 'PERMISSIVE')::text -- 0335 가 모든 표에 붙인 restrictive 정책(account_access_allowed)은 권한을 주지 않아 빼고 센다
       || ',' || has_table_privilege('authenticated', 'public.user_reports', 'SELECT,INSERT,UPDATE,DELETE')::text
       || ',' || has_table_privilege('service_role', 'public.user_reports', 'SELECT')::text
       || ',' || has_table_privilege('service_role', 'public.user_reports', 'UPDATE')::text`);
-    check('3-7 RLS on · 정책 0개 · authenticated 권한 없음 · service_role 읽기·고치기', out === 'true,0,false,true,true', out);
+    check('3-7 RLS on · 허용 정책 0개 · authenticated 권한 없음 · service_role 읽기·고치기', out === 'true,0,false,true,true', out);
   }
 } catch (e) {
   fail++;

@@ -1,0 +1,37 @@
+# 푸시마다 도는 기본 검사 (2026-11-12)
+#
+# 왜: 커밋 훅은 main 체크아웃에서만 돌고, 슬롯 브랜치 커밋은 막지 않는다.
+#   그래서 래칫(디자인 숫자·무경계 읽기)이 늘어도 main 에 머지하기 전까지 아무도 모른다.
+#   키가 필요 없는 검사만 올린다. 라이브 백엔드를 치는 하니스는 여기 넣지 않는다.
+#
+# 앞 검사가 실패해도 뒤 검사를 돌린다(!cancelled()). 어느 것이 빨간지 한 번에 보인다.
+
+name: checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch: {}
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: 타입 검사
+        run: npm run typecheck
+      - name: 린트
+        if: ${{ !cancelled() }}
+        run: npm run lint
+      - name: 디자인 숫자 래칫
+        if: ${{ !cancelled() }}
+        run: npm run check:design-literals
+      - name: 무경계 읽기 래칫
+        if: ${{ !cancelled() }}
+        run: npm run check:select-bounds
+      # check:client-trust 는 넣지 않는다. 로컬 도커 DB(pg_policies)를 읽어서 CI 에서는 시작하자마자 멈춘다(2026-11-12 실측).

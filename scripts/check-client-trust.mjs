@@ -107,6 +107,7 @@ const FULL_UPDATE_REVIEWED = {
   work_feed: '트리거(work_feed_stamp_author)가 작성자·읽음·반응을 정한다',
   work_templates: '작성자 · 관리자', work_done: '트리거(work_done_stamp)가 by 를 정한다',
   task_understanding: '본인 행(옛 테이블 · 앱 쓰기 없음)',
+  edu_links: 'manage_links 권한자 전용 · 트리거(tg_edu_links_stamp)가 unit_id·token·created_at 를 고정하고 created_by 는 바꾸지 못한다(지우기만 된다) · 닫힌 링크를 못 다시 연다 · entry_ids 는 같은 매장 노하우만',
   playbook_embeddings: '관리자 전용(0321) · 색인 본문은 ai 엣지(service_role)가 쓴다',
 };
 const fullUpdate = psql(`select c.relname from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'r'

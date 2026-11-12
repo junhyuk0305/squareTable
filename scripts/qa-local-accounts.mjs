@@ -40,10 +40,35 @@ async function ensureUser(client, email, meta) {
 }
 
 // 0088 게이트 라이브 — 고정 계정 번호를 '인증됨'으로 선등록해야 create_store/join 통과.
-const qaPhones = ['01099990001', '01099990011', '01099990012'];
+const SOLO_PHONE = '01099990021';
+const qaPhones = ['01099990001', '01099990011', '01099990012', SOLO_PHONE];
+
+// 다른 매장 사장(owner-solo@pilot · lib/qa-fixed-accounts.mjs 의 FIXED.other).
+// qa-roles·qa-user-reports 가 로그인하고, qa-review-security 가 매장 번호 store_solo_local 을 쓴다.
+// 라이브에는 있고 로컬 시드에는 없어서 여기서 만든다. 매장 번호를 정해야 해서 create_store 를 쓰지 않고 service_role 로 넣는다.
+const SOLO_EMAIL = 'owner-solo@pilot.squaretable.app', SOLO_PW = 'pilot1234', SOLO_UNIT = 'store_solo_local';
+async function ensureSoloOwner() {
+  let { data: { users } } = await admin.auth.admin.listUsers({ perPage: 1000 });
+  let u = users.find((x) => x.email === SOLO_EMAIL);
+  if (!u) {
+    const { data, error } = await admin.auth.admin.createUser({
+      email: SOLO_EMAIL, password: SOLO_PW, email_confirm: true,
+      user_metadata: { name: '솔로사장', role: 'owner', birth_date: '1990-01-01' },
+    });
+    if (error) throw new Error(`owner-solo 생성 실패: ${error.message}`);
+    u = data.user;
+  }
+  // 매장 insert 트리거(trg_units_phone_verified)가 사장 번호 인증을 본다. 번호는 위 qaPhones 로 인증해 둔다.
+  await admin.from('profiles').update({ phone: SOLO_PHONE, role: 'owner', name: '솔로사장' }).eq('id', u.id).throwOnError();
+  await admin.from('units').upsert({ id: SOLO_UNIT, store_name: '솔로 매장(로컬)', industry: '카페·디저트', owner_id: u.id, kind: 'store' }, { onConflict: 'id' }).throwOnError();
+  await admin.from('unit_members').upsert({ user_id: u.id, unit_id: SOLO_UNIT, role: 'owner' }, { onConflict: 'user_id,unit_id' }).throwOnError();
+  await admin.from('profiles').update({ unit_id: SOLO_UNIT, active_unit_id: SOLO_UNIT }).eq('id', u.id).throwOnError();
+  console.log(`다른 매장 사장: ${SOLO_EMAIL} → ${SOLO_UNIT}`);
+}
 
 async function main() {
   await seedVerifiedPhones(URL_, SRV, qaPhones);
+  await ensureSoloOwner();
   const owner = mk();
   const o = await ensureUser(owner, OWNER, { name: 'QA사장', role: 'owner', phone: '01099990001', store_name: 'QA', industry: '카페·디저트' });
   console.log(`사장 ${o.isNew ? '생성' : '기존'}: ${OWNER}`);
