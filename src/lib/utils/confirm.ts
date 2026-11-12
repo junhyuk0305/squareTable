@@ -4,9 +4,9 @@ import type { Ionicons } from '@expo/vector-icons';
 import { useDialogStore } from '@/lib/store/useDialogStore';
 
 type IconName = keyof typeof Ionicons.glyphMap;
-type ConfirmOptions = { destructive?: boolean; icon?: IconName; cancelLabel?: string; accent?: string };
+type ConfirmOptions = { destructive?: boolean; icon?: IconName; cancelLabel?: string; accent?: string; requireChoice?: boolean };
 
-/** 확인/취소 두 버튼. 확인=true, 취소·바깥탭=false. */
+/** 확인/취소 두 버튼. 확인=true, 취소·바깥탭=false(requireChoice 면 바깥탭으로 안 닫힌다). */
 export function confirmAction(
   title: string,
   message: string,

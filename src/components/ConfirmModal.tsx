@@ -22,6 +22,7 @@ export function ConfirmModal({
   accent,
   busy = false,
   hideCancel = false,
+  requireChoice = false,
   onConfirm,
   onCancel,
 }: {
@@ -37,14 +38,16 @@ export function ConfirmModal({
   busy?: boolean;
   /** 정보 고지용 — 취소 버튼을 숨기고 확인 버튼만 풀폭으로 보여준다. */
   hideCancel?: boolean;
+  /** 바깥탭·뒤로가기로 닫지 않는다(버튼으로만 닫힘). */
+  requireChoice?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={requireChoice ? () => {} : onCancel}>
       {/* 딤·시트를 모바일 프레임 안에 가둔다 — 웹 와이드에서 좌우로 새지 않도록. */}
       <View style={[frameCapStyle, { flex: 1 }]}>
-        <Pressable style={styles.backdrop} onPress={busy ? undefined : onCancel}>
+        <Pressable style={styles.backdrop} onPress={busy || requireChoice ? undefined : onCancel}>
           <Pressable style={styles.card} onPress={() => {}}>
             {icon ? (
               <View style={[styles.iconCircle, destructive && styles.iconCircleDanger]}>

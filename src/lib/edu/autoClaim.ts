@@ -32,6 +32,8 @@ async function run(uid: string): Promise<string[]> {
   const yes = await confirmAction(LINK_IN_APP.claimTitle, LINK_IN_APP.claimBody, LINK_IN_APP.claimYes, {
     cancelLabel: LINK_IN_APP.claimNo,
     icon: 'chatbubbles-outline',
+    // [옮기지 않기] 는 열쇠를 지워 되돌릴 수 없다. 바깥탭·뒤로가기로 잘못 닫혀 지워지지 않게 버튼으로만 닫는다.
+    requireChoice: true,
   });
   if (!yes) {
     await forgetEduGuests(todo.map((g) => g.slot));

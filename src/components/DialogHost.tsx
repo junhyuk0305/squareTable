@@ -20,6 +20,7 @@ export function DialogHost() {
       icon={current?.icon}
       accent={current?.accent}
       hideCancel={current?.hideCancel}
+      requireChoice={current?.requireChoice}
       onConfirm={() => close(true)}
       onCancel={() => close(false)}
     />

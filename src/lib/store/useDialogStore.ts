@@ -17,6 +17,8 @@ export type DialogRequest = {
   accent?: string;
   /** 정보 고지(단일 '확인' 버튼) — 취소 버튼을 숨긴다. */
   hideCancel?: boolean;
+  /** 바깥탭·뒤로가기로 닫지 않는다. 두 버튼 중 하나를 눌러야 닫힌다(취소가 되돌릴 수 없는 동작일 때 · 1112 fix 5). */
+  requireChoice?: boolean;
 };
 
 type DialogState = {
