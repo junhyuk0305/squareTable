@@ -450,7 +450,10 @@ async function main() {
   // 로컬에서만 잠깐 끄고 끝에 되돌린다(qa-store-slots 와 같은 방식 · 2026-11-12). 라이브 스위치는 건드리지 않는다.
   const { data: fmRow } = LOCAL ? await admin.from('app_config').select('value').eq('key', 'billing_free_mode').maybeSingle() : { data: null };
   const freeModeWas = fmRow?.value === 'true' ? fmRow.value : null;
-  if (freeModeWas) await admin.from('app_config').update({ value: 'false' }).eq('key', 'billing_free_mode');
+  if (freeModeWas) {
+    const { error: fmErr } = await admin.from('app_config').update({ value: 'false' }).eq('key', 'billing_free_mode');
+    if (fmErr) throw new Error(`무료 모드 끄기 실패: ${fmErr.message}`); // 못 끄면 (m) 이 잠금을 못 만든다
+  }
   try {
     // 유료일 때 직원이 다 들어왔다 → 이용 기간이 끝나 무료가 됐다(잠금이 실제로 생기는 길 · st-qa 재현과 같음).
     // 좌석 순위 = unit_members.created_at → user_id 순(seat_rank). 셋업에서 합류 시각을 모두 같게 당겼으므로 m 을 가장 늦은 합류로 되돌린다.

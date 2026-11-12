@@ -11,7 +11,7 @@
 //   - 그 함수 폴더에 커밋 안 된 변경이 있다(기록한 커밋과 올라간 코드가 달라진다)
 // CLI 는 2.x 로 고정한다(맨 npx supabase 는 3.0 이 받아져 config.toml 에서 죽는다 · AGENTS.md).
 import { execFileSync, spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -44,6 +44,7 @@ if (DRY) { console.log('--dry-run: 배포·기록 안 함'); process.exit(0); }
 
 const r = spawnSync('npx', cmd, { cwd: ROOT, stdio: 'inherit', shell: true });
 if (r.status !== 0) { console.error(`배포 실패(종료 코드 ${r.status}). 기록 안 함`); process.exit(r.status ?? 1); }
+mkdirSync(dirname(LOG), { recursive: true });
 if (!existsSync(LOG)) appendFileSync(LOG, '# 엣지 함수 배포 기록\n\n`npm run deploy:fn <이름>` 이 배포에 성공하면 한 줄씩 붙인다.\n\n');
 appendFileSync(LOG, line);
 console.log(`기록함: ${LOG}`);
