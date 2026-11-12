@@ -6,8 +6,8 @@
 //
 // 행동(정본 경로를 그대로 탄다)
 //   owner_send   사장 세션 upsert = db.ts insertQuizAssignments(onConflict course_id,user_id,scheduled_on · ignoreDuplicates)
-//   owner_remind src/app/owner/quiz/[id].tsx remind() 의 결정(완료 전 사람 · 안 나간 행 있으면 건너뜀 · 오늘 행 있으면 내일 ·
-//                고정 마감은 fixedDue >= on 일 때만). 판정 함수(latestQuizAssignments·personState·todayKst·addDaysKst)는
+//   owner_remind src/app/owner/quiz/[id].tsx remind() = 대상(지금 직원 · 한 번도 다 풀지 않음 · 최신 발송 미완료)을 골라
+//                사장 세션 quiz_resend 를 부른다(0348 뒤 · 2026-11-12 에 맞춤). 판정 함수(latestQuizAssignments·personState·isCurrentStaff·doneBefore)는
 //                src 에서 AST 로 뽑아 vm 으로 돌린다(복제 금지). 화면 안의 분기 몇 줄은 원문 표식을 정규식으로 확인한 뒤 옮겨 적었다.
 //   tick         service_role due_quiz_sends() → 행마다 claim_quiz_send (supabase/functions/push/index.ts sweepQuizSends 순서 · deliver 는 안 부른다)
 //                ★이 매장 행만 선점한다. due_quiz_sends 는 전역이라 다른 로컬 매장 행도 돌려주지만 손대지 않는다(enqueue_knowhow_rechecks 는 전역으로 돈다).
@@ -63,20 +63,16 @@ function loadPure() {
   vm.runInContext(mOut, mCtx);
   // remind() 는 화면 컴포넌트 안의 화살표 함수라 뽑을 수 없다. 옮겨 적은 분기의 원문 표식이 그대로인지 먼저 본다.
   const screen = fs.readFileSync(here('../src/app/owner/quiz/[id].tsx'), 'utf8');
+  // 0348(11-04) 뒤 remind() 는 행을 직접 넣지 않고 quiz_resend 하나를 부른다. 옛 표식(오늘 행이면 내일 · 고정 마감)은 서버로 갔다.
   const marks = [
-    /latestSend = useMemo\(\s*\(\) => \[\.\.\.sends\]\.sort\(\(x, y\) => x\.scheduledOn\.localeCompare\(y\.scheduledOn\)\)\.at\(-1\)/,
-    /const fixedDue = latestSend\?\.dueDate \?\? null;/,
     /const latestSends = useMemo\(\(\) => latestQuizAssignments\(sends\)/,
     /state: personState\(a, quizAnswers\)/,
-    /const notDone = people\.filter\(\(p\) => p\.state === 'in_progress' \|\| p\.state === 'not_started'\);/,
-    /if \(mine\.some\(\(a\) => !a\.sentAt\)\) continue;/,
-    /const on = mine\.some\(\(a\) => a\.scheduledOn === today\) \? addDaysKst\(today, 1\) : today;/,
-    /insertQuizAssignments\(id, userIds, on, fixedDue && fixedDue >= on \? fixedDue : null\)/,
-    /if \(!ok\) break;/,
+    /const notDone = people\.filter\(\(p\) => isCurrentStaff\(p\.id, memberIds\) && !doneBefore\(sends, p\.id\) && \(p\.state === 'in_progress' \|\| p\.state === 'not_started'\)\);/,
+    /const res = await resendQuiz\(id, notDone\.map\(\(p\) => p\.id\)\);/,
   ];
   const drift = marks.filter((re) => !re.test(screen));
   if (drift.length) throw new Error(`[id].tsx remind 규칙 원문이 바뀌었다(${drift.length}곳) — 하니스를 다시 맞춰야 한다: ${drift.map(String).join(' | ')}`);
-  return { ...ctx.api, personState: mCtx.exports.personState };
+  return { ...ctx.api, personState: mCtx.exports.personState, isCurrentStaff: mCtx.exports.isCurrentStaff, doneBefore: mCtx.exports.doneBefore };
 }
 const P = loadPure();
 
@@ -173,34 +169,20 @@ class Runner {
         break;
       }
       case 'owner_remind': {
+        // 화면 remind() = notDone 을 골라 서버 quiz_resend 하나를 부른다(0348). 행·날짜·마감은 서버가 정한다.
         const id = this.course(a.c);
         const sends = await this.ownerRows(id);
-        const latestSend = [...sends].sort((x, y) => x.scheduledOn.localeCompare(y.scheduledOn)).at(-1) ?? null;
-        const fixedDue = latestSend?.dueDate ?? null;
         const latestSends = P.latestQuizAssignments(sends);
         const allUserIds = [...new Set(sends.map((s) => s.userId))];
+        const memberIds = new Set(Object.entries(this.staff).filter(([k]) => this.members[k]).map(([, s]) => s.id));
         const people = allUserIds.map((uid) => ({ id: uid, state: P.personState(latestSends.find((x) => x.userId === uid), []) }));
-        const notDone = people.filter((p) => p.state === 'in_progress' || p.state === 'not_started');
+        const notDone = people.filter((p) => P.isCurrentStaff(p.id, memberIds) && !P.doneBefore(sends, p.id) && (p.state === 'in_progress' || p.state === 'not_started'));
         if (!notDone.length) { out.skip = 'notDone 0'; break; }
-        const today = P.todayKst();
-        const byDay = new Map();
-        for (const p of notDone) {
-          const mine = sends.filter((s) => s.userId === p.id);
-          if (mine.some((s) => !s.sentAt)) continue;
-          const on = mine.some((s) => s.scheduledOn === today) ? P.addDaysKst(today, 1) : today;
-          byDay.set(on, [...(byDay.get(on) ?? []), p.id]);
-        }
-        if (!byDay.size) { out.skip = '이미 보내는 중'; break; }
-        out.buckets = {};
-        for (const [on, userIds] of byDay) {
-          const r = await this.insertLikeApp(id, userIds, on, fixedDue && fixedDue >= on ? fixedDue : null);
-          out.buckets[on] = { n: userIds.length, ...r };
-          if (!r.ok) {
-            const gone = userIds.filter((u) => !Object.entries(this.staff).some(([k, s]) => s.id === u && this.members[k]));
-            this.obs.push({ step: this.step, kind: 'remind_fail', error: r.error, removed_recipients: gone.length });
-            this.viol('R1', { on, error: r.error, recipients: userIds.length, removed_recipients: gone.length });
-            break;
-          }
+        const { data, error } = await this.w.owner.c.rpc('quiz_resend', { p_course_id: id, p_user_ids: notDone.map((p) => p.id) });
+        out.resend = error ? { error: error.message } : data;
+        if (error) {
+          this.obs.push({ step: this.step, kind: 'remind_fail', error: error.message });
+          this.viol('R1', { error: error.message, recipients: notDone.length });
         }
         break;
       }
@@ -408,7 +390,8 @@ async function main() {
     { t: 'staff_answer', s: 'A', c: 0, i: 0, ok: true }, { t: 'staff_answer', s: 'A', c: 0, i: 1, ok: true },
     { t: 'staff_complete', s: 'A', c: 0 }, { t: 'advance_day' }, { t: 'tick' }];
   const F = await freshRun(fixed, {});
-  const remindMade = F.log[2]?.out?.buckets && Object.values(F.log[2].out.buckets).some((b) => b.ok);
+  // quiz_resend 사람별 결과(0348): sent = 바로 나감 · queued = 줄에 섬. 둘 다 다시 알리기가 선 것이다.
+  const remindMade = Array.isArray(F.log[2]?.out?.resend) && F.log[2].out.resend.some((r) => r.result === 'sent' || r.result === 'queued');
   const completed = (F.log[5]?.out?.r ?? []).includes(true);
   result.fixed = { actions: fixed.map(fmt), log: F.log, violations: F.violations };
   if (!remindMade || !completed) { skip++; console.log('  - 고정 시나리오 셋업이 안 섰다(skip)', JSON.stringify({ remindMade, completed })); }

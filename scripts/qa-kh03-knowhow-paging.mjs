@@ -31,6 +31,8 @@ function loadDbFns(supabase, unitId) {
   const sf = ts.createSourceFile(p, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const found = [];
   sf.forEachChild((n) => { if (ts.isFunctionDeclaration(n) && DB_FNS.includes(n.name?.text)) found.push(n.getText(sf).replace(/^export /, '')); });
+  // readAllPages 가 쓰는 상수(M1 · 2026-11-04 에 생겼다). 함수만 잘라 오면 PAGE_SIZE is not defined 로 죽는다.
+  sf.forEachChild((n) => { if (ts.isVariableStatement(n) && n.declarationList.declarations.some((d) => d.name.getText(sf) === 'PAGE_SIZE')) found.unshift(n.getText(sf)); });
   const js = ts.transpileModule(found.join('\n') + '\nmodule.exports = { fetchEntries, fetchOwnerKnowhowEntries };', { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const mod = { exports: {} };
   const fails = [];

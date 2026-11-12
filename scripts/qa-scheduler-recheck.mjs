@@ -123,7 +123,14 @@ async function multiStore() {
 }
 
 let crashed = null;
-try { await seatLock(); await multiStore(); } catch (e) { crashed = e; console.error('  ✗ 예외:', e?.stack ?? e); }
+// 무료 모드(app_config.billing_free_mode)가 켜져 있으면 effective_plan 이 free 로 안 떨어져 ① 셋업이 안 선다.
+// ① 동안만 끄고 되돌린다(qa-quiz-resend (m) · qa-store-slots 와 같은 방식 · 2026-11-12). 로컬 전용 하니스다.
+const freeModeWas = psql(`select value from public.app_config where key = 'billing_free_mode'`);
+try {
+  if (freeModeWas === 'true') psql(`update public.app_config set value = 'false' where key = 'billing_free_mode'`);
+  try { await seatLock(); } finally { if (freeModeWas === 'true') psql(`update public.app_config set value = 'true' where key = 'billing_free_mode'`); }
+  await multiStore();
+} catch (e) { crashed = e; console.error('  ✗ 예외:', e?.stack ?? e); }
 const cl = await cleanupWorld(L, env, worlds).catch((e) => ({ units: 0, users: 0, left: -1, detail: [String(e.message)] }));
 const notRun = crashed ? PLANNED - executed - ref : 0;
 if (crashed) fail++;
