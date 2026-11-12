@@ -14,7 +14,7 @@ import { storeColor } from '@/lib/utils/storeColor';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { assignedTodayCount } from '@/lib/utils/crossStoreNotifs';
 import { roleNoun } from '@/lib/utils/roles';
-import { todayStr } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import { fetchOwnerOverview, fetchMyLockedUnits, fetchMyCanAddStore, fetchMyEduLinks, type MyEduLink, type MyUnitRow, type OwnerOverviewRow } from '@/lib/db';
 import { askClaimEduGuests } from '@/lib/edu/autoClaim';
 import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
@@ -160,7 +160,7 @@ export default function StoresHub() {
   const crossData = useCrossNotifStore((s) => s.data);
   // [공간] 칸 숫자 = 내 공간에 온 대기 합류 신청(벨과 같은 파생 행 · fetchJoinNotices).
   const spaceRequests = useCrossNotifStore((s) => s.joinNotices.filter((n) => n.kind === 'space_join_request').length);
-  const today = todayStr();
+  const today = useToday();
   const todoByUnit = useMemo(() => {
     const m: Record<string, number> = {};
     if (!isOwner) for (const d of crossData) m[d.unitId] = assignedTodayCount(d, userId, today);

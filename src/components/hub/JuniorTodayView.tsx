@@ -15,7 +15,7 @@ import type { MyCrossSummaryRow } from '@/lib/db';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
 import { useForegroundRefresh } from '@/lib/app/useForegroundRefresh';
 import { storeColor } from '@/lib/utils/storeColor';
-import { todayStr } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import { isPendingAssignment, isUnreadMention } from '@/lib/utils/notifications';
 import { Section } from '@/components/Screen';
 import { FocusCard } from '@/components/blocks/FocusCard';
@@ -73,7 +73,7 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
     void hydratePrefs();
   });
 
-  const today = todayStr();
+  const today = useToday();
 
   const labelOf = (uid: string) =>
     prefFor(uid).nickname || myCross.find((r) => r.unit_id === uid)?.store_name || '매장';

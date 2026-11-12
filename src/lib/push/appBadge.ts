@@ -16,7 +16,7 @@ import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useManageNotifArgs } from '@/lib/hooks/useManageNotifArgs';
-import { todayStr } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import { accountAckAt, juniorUnreadCount, manageUnreadCount } from '@/lib/utils/notifications';
 import { canManage } from '@/lib/utils/roles';
 
@@ -111,7 +111,7 @@ export function useAppBadgeSync(): void {
   // 관리 화면 세트 입력은 벨·알림 목록과 같은 훅 하나(useManageNotifArgs · 매니저 본인 퀴즈 포함).
   const manage = useManageNotifArgs();
 
-  const today = todayStr();
+  const today = useToday();
 
   useEffect(() => {
     if (!signedIn || !me) {

@@ -12,5 +12,8 @@
     ["^src/lib/(place|edu)/|^src/app/space/|^src/components/(space|place|edu)/", ["qa-space-isolation"]],
     ["^src/(app|components)/", ["qa-journey-join", "qa-journey-task", "qa-journey-quiz", "qa-journey-ai", "qa-crawl"]]
   ],
+  "migrations": [
+    ["^supabase/migrations/", ["qa-old-client-compat", "qa-definer-filters"]]
+  ],
   "heavy": ["qa-journey-join", "qa-journey-task", "qa-journey-quiz", "qa-journey-ai", "qa-crawl"]
 }

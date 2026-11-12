@@ -34,4 +34,11 @@ jobs:
       - name: 무경계 읽기 래칫
         if: ${{ !cancelled() }}
         run: npm run check:select-bounds
+      - name: DB 함수 레이스 표식 래칫
+        if: ${{ !cancelled() }}
+        run: npm run check:race-markers
+      - name: 클라 쓰기 레이스 래칫
+        if: ${{ !cancelled() }}
+        run: npm run check:client-writes
       # check:client-trust 는 넣지 않는다. 로컬 도커 DB(pg_policies)를 읽어서 CI 에서는 시작하자마자 멈춘다(2026-11-12 실측).
+      # check:once-rows 도 같은 이유로 넣지 않는다(로컬 DB 인덱스를 읽는다 · 로컬 기본 게이트로만 돈다).

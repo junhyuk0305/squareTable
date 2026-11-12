@@ -12,7 +12,7 @@ import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
-import { todayStr } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import { accountAckAt, juniorUnreadCount, manageUnreadCount } from '@/lib/utils/notifications';
 import { useLegacyQuizOpen } from '@/lib/hooks/useLegacyQuizOpen';
 import { useManageNotifArgs } from '@/lib/hooks/useManageNotifArgs';
@@ -62,7 +62,7 @@ export function NotificationBell({ edge = true }: { edge?: boolean } = {}) {
   const queue = useUnknownQueueStore((s) => s.queue);
   const unitId = useSessionStore((s) => s.unitId);
   const ackAt = useMemberPrefsStore((s) => (unitId ? (s.ackByUnit[unitId] ?? null) : null));
-  const today = todayStr();
+  const today = useToday();
 
   // 안 푼 퀴즈(P1 역 ④)도 배지 축 — 목록(junior/notifications.tsx)과 같은 발송 원장. 합류 결과(0247)도 같은 목록의 축.
   const assignments = useWorkStore((s) => s.assignments);

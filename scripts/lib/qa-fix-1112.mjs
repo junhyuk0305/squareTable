@@ -198,6 +198,23 @@ insert into public.ai_usage_monthly(unit_id, month, used) values (${q(X)}, ${M_}
   on conflict (unit_id, month) do update set used = 200;
 ${call('17 무료 모드 · 다 찬 매장 · 직원 예약 = 됨', null, 'service_role', `select allowed::text from public.ai_quota_reserve(${q(X)}, 1, null, false)`, 'ok|true')}
 ${call('17 무료 모드 · 다 찬 매장 · 손님 예약 = 안 됨', null, 'service_role', `select allowed || '/' || cap_count from public.ai_quota_reserve(${q(X)}, 1, 'edu:qa_fx_${rnd}', true)`, 'ok|false/200')}
+
+-- ════ 0680 · 링크를 만들 권한을 잃은 사람의 링크는 손님에게 안 열린다(닫지는 않는다) ════
+--   G = 위 3번에서 직원으로 강등됨 · H = 남은 매니저 · SO = 공간 주인(대조군)
+${call('0680 강등된 G 링크 손님 열기 = 안 열림', null, 'anon', open('G'), 'ok|false')}
+${call('0680 강등된 G 링크 손님 묻기 = link_closed', null, 'anon', ask('G', 'null', '손님', '강등 뒤'), 'err:link_closed')}
+${val('0680 강등된 G 링크는 닫지 않는다', closed('G'), 'false')}
+update public.unit_members set role = 'manager' where unit_id = ${q(X)} and user_id = ${q(U.G)};
+${call('0680 G 다시 매니저 = 다시 열림', null, 'anon', open('G'), 'ok|true')}
+${call('0680 대조: 공간 주인 SO 링크 열림', null, 'anon', open('SO'), 'ok|true')}
+${call('0680 대조: 매니저 H 링크 열림(잠그기 전)', null, 'anon', open('H'), 'ok|true')}
+-- 무료 모드를 끄고 직원 3명(G · H · SO) > 무료 상한 2 · 사장이 G · SO 를 남김 → H 좌석 잠김
+update public.app_config set value = 'false' where key = 'billing_free_mode';
+insert into public.unit_kept_seats(unit_id, user_id) values (${q(X)}, ${q(U.G)}), (${q(X)}, ${q(U.SO)});
+${val('0680 전제: H 좌석 잠김', `select public.seat_locked_for(${q(X)}, ${q(U.H)}::uuid)::text`, 'true')}
+${call('0680 좌석 잠긴 매니저 H 링크 손님 열기 = 안 열림', null, 'anon', open('H'), 'ok|false')}
+${call('0680 좌석 잠긴 매니저 H 링크 손님 묻기 = link_closed', null, 'anon', ask('H', 'null', '손님', '잠긴 뒤'), 'err:link_closed')}
+${call('0680 남은 매니저 G 링크는 열림', null, 'anon', open('G'), 'ok|true')}
 rollback;
 `;
 

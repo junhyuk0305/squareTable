@@ -8,7 +8,7 @@
 //   npm run qa:affected -- --allow-remote [--allow-ai]   라이브 대상(main 체크아웃에서만) · AI 호출 하니스는 --allow-ai 가 있어야 돈다
 //
 // 고르는 법(하니스 본문을 읽어 자동으로 잇는다):
-//   마이그레이션  → 그 파일이 만든·바꾼 함수 이름이 나오는 하니스 + 표를 .from()/rest 로 읽는 하니스
+//   마이그레이션  → 그 파일이 만든·바꾼 함수 이름이 나오는 하니스 + 표를 .from()/rest 로 읽는 하니스 + qa-map.json 의 migrations 표
 //   엣지 함수     → functions/v1/<이름> 을 부르는 하니스
 //   src 파일      → 그 경로를 본문에 적은 하니스(정적 검사) + qa-map.json 의 src 표
 //   하니스·lib    → 그 하니스 자신 · 그 lib 을 import 하는 하니스
@@ -110,6 +110,8 @@ for (const f of changed) {
     };
     for (const fn of fns) pickOrNote('함수', fn, harness.filter((h) => new RegExp(`\\b${fn}\\b`).test(h.t)));
     for (const tb of tables) pickOrNote('표', tb, harness.filter((h) => h.tables.has(tb)));
+    // 마이그레이션이면 늘 도는 것(옛 앱 호환 · 정의자 함수 필터) = qa-map.json 의 migrations 표.
+    for (const [re, ids] of map.migrations ?? []) if (new RegExp(re).test(f)) for (const h of harness) if (ids.includes(h.id)) pick(h, `표 ${re.slice(0, 30)}`);
   } else if (/^supabase\/functions\/([\w-]+)\//.test(f)) {
     const name = f.split('/')[2];
     for (const h of harness) if (h.edges.has(name)) pick(h, `엣지 ${name}`);

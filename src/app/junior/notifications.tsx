@@ -20,7 +20,7 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { NotificationList, JUNIOR_KIND_UI } from '@/components/NotificationList';
 import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { SegmentTabs } from '@/components/SegmentTabs';
-import { todayStr } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import { accountAckAt, buildJuniorNotifications } from '@/lib/utils/notifications';
 import { InkColors, Surface } from '@/lib/theme/colors';
 import { useLegacyQuizOpen } from '@/lib/hooks/useLegacyQuizOpen';
@@ -77,7 +77,7 @@ export default function JuniorNotificationsScreen() {
   // '도와줄 수 있는 질문'(D4) — 같은 이유로 레이아웃이 당긴다(벨에서 바로 들어와도 큐가 비어 있지 않다).
   const queue = useUnknownQueueStore((s) => s.queue);
   const queueLoaded = useUnknownQueueStore((s) => s.loaded);
-  const today = todayStr();
+  const today = useToday();
   // '모두 읽기' 기준 시각(0078) — read 개념이 없는 배정·교대의 배지·강조 해제 축.
   const unitId = useSessionStore((s) => s.unitId);
   const ackNotifs = useMemberPrefsStore((s) => s.ackNotifs);
