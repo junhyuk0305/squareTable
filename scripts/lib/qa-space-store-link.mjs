@@ -9,7 +9,7 @@
 import { spawnSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-export function runStoreLinkChecks({ DB, check }) {
+export function runStoreLinkChecks({ DB, check, skipped }) {
   console.log('\n[5] 매장과 연결하기(0490) · 제안·승인·거절');
   const rnd = Math.random().toString(16).slice(2, 10);
   const K = ['A', 'B', 'M', 'J', 'G', 'D', 'E'];
@@ -249,7 +249,7 @@ rollback;
     }
   }
   runStoreLinkRaceChecks({ DB, check });   // night-1111 sb
-  runPhotoCopyEdgeChecks({ check });       // night-1111 sb
+  runPhotoCopyEdgeChecks({ check, skipped });       // night-1111 sb
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -369,14 +369,15 @@ commit;`;
 // 띄우는 법: st-db 슬롯에서 `npx -y supabase@2 functions serve --env-file <스크래치>` (verify_jwt 는 config.toml 값).
 const PHOTO_EDGE_CASES = 14;   // 아래 childPhotoEdge 의 검사 줄 수(엣지가 없으면 이 수만큼 skip 으로 적는다)
 
-function runPhotoCopyEdgeChecks({ check }) {
+function runPhotoCopyEdgeChecks({ check, skipped }) {
   console.log('\n[5-3] 사진 복사 엣지(knowhow-photo-copy · 실세션)');
   const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), '--photo-edge-child'], { encoding: 'utf8', timeout: 240_000 });
   const lines = (r.stdout ?? '').split(/\r?\n/).filter((l) => l.startsWith('QE|'));
   const skip = lines.find((l) => l.startsWith('QE|skip|'));
   if (skip) {
+    // ★건너뛴 줄을 최종 skip 수에 더한다. 예전엔 찍기만 해서 엣지가 꺼져도 최종 줄이 'skip 0 · PASS' 였다(S5 · 11-12).
     const [, , n, why] = skip.split('|');
-    console.log(`  - skip ${n} (${why})`);
+    for (let i = 0; i < Number(n); i++) skipped(`사진 엣지 ${i + 1}/${n}`, why);
     return;
   }
   if (lines.length === 0) {

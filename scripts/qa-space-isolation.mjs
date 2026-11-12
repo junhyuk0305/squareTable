@@ -983,7 +983,7 @@ console.log('\n[3] 속도 · auth_member_unit_id 1,000회 (3번 중 가장 빠�
   }
 }
 
-runStoreLinkChecks({ DB, check }); // 5번 덩이 매장과 연결하기(0490) · 별도 모듈
+runStoreLinkChecks({ DB, check, skipped }); // 5번 덩이 매장과 연결하기(0490) · 별도 모듈
 
 // ── 2부: 실세션(PostgREST) ──────────────────────────────────────────────────
 console.log('\n[4] 실세션 · 공간만 있는 계정');

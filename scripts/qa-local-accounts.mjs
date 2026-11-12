@@ -66,9 +66,61 @@ async function ensureSoloOwner() {
   console.log(`다른 매장 사장: ${SOLO_EMAIL} → ${SOLO_UNIT}`);
 }
 
+// 공간 주인(qa.space@example.com) + 공간 1개 · 2026-11-12 S5.
+// 공간 화면 브라우저 하니스·크롤러의 'space' 세션이 쓴다. 사장 계정은 owner_cannot_create_space 라 따로 만든다.
+// 입구는 허용 목록(space_entry_allowlist)에 넣어 연다. 전화 게이트는 컷오프 이전 계정으로 면제한다(qa-space-isolation 과 같은 방식).
+// 공간은 create_space 를 그 계정 세션으로 부른다(번호·주인 칸을 서버가 정한다). 이미 있으면 그대로 쓴다.
+const SPACE_EMAIL = 'qa.space@example.com', SPACE_NAME = 'QA 공간(로컬)';
+async function ensureSpaceOwner() {
+  const { data: { users } } = await admin.auth.admin.listUsers({ perPage: 1000 });
+  let u = users.find((x) => x.email === SPACE_EMAIL);
+  if (!u) {
+    const { data, error } = await admin.auth.admin.createUser({
+      email: SPACE_EMAIL, password: PW, email_confirm: true,
+      user_metadata: { name: 'QA공간주인', role: 'junior', birth_date: '1994-03-03' },
+    });
+    if (error) throw new Error(`공간 주인 생성 실패: ${error.message}`);
+    u = data.user;
+  }
+  await admin.from('profiles').update({ name: 'QA공간주인', created_at: '2020-01-01' }).eq('id', u.id).throwOnError();
+  await admin.from('space_entry_allowlist').upsert({ user_id: u.id, note: 'qa-local-accounts' }, { onConflict: 'user_id', ignoreDuplicates: true }).throwOnError();
+  const c = mk();
+  const { error: le } = await c.auth.signInWithPassword({ email: SPACE_EMAIL, password: PW });
+  if (le) throw new Error(`공간 주인 로그인 실패: ${le.message}`);
+  const { data: own } = await admin.from('unit_members').select('unit_id, units!inner(kind)').eq('user_id', u.id).eq('role', 'space_owner').eq('units.kind', 'space');
+  let spaceId = own?.[0]?.unit_id;
+  if (!spaceId) {
+    const { data, error } = await c.rpc('create_space', { p_name: SPACE_NAME }).single();
+    if (error) throw new Error(`create_space 실패: ${error.message}`);
+    spaceId = data.space_id;
+  }
+  const { error: ee } = await c.rpc('enter_space', { p_space: spaceId });
+  if (ee) throw new Error(`enter_space 실패: ${ee.message}`);
+  // 크롤러 표본(/l/[token] · /link/[id] · /space/answer/[qid]) — 열린 링크 1개와 답 기다리는 질문 1개를 둔다.
+  const LINK_TITLE = 'QA 고정 링크';
+  const nowIso = new Date().toISOString();
+  let { data: lk } = await admin.from('edu_links').select('id, token').eq('unit_id', spaceId).eq('title', LINK_TITLE).is('closed_at', null).gt('expires_at', nowIso).limit(1);
+  let link = lk?.[0];
+  if (!link) {
+    const { data, error } = await c.rpc('edu_link_create', { p_unit: spaceId, p_title: LINK_TITLE, p_entry_ids: [], p_days: 30 });
+    if (error) throw new Error(`edu_link_create 실패: ${error.message}`);
+    link = Array.isArray(data) ? data[0] : data;
+  }
+  const { count: waiting } = await admin.from('unknown_queries').select('id', { count: 'exact', head: true }).eq('unit_id', spaceId).eq('status', 'pending_owner_answer');
+  if (!waiting) {
+    const g = mk(); // 손님 = 로그인 없음
+    const { data: a, error: ae } = await g.rpc('edu_link_ask', { p_token: link.token, p_key: null, p_name: 'QA손님', p_text: '고정 질문: 마감 때 무엇을 먼저 하나요?' }).single();
+    if (ae) throw new Error(`edu_link_ask 실패: ${ae.message}`);
+    const { error: se } = await g.rpc('edu_link_send', { p_token: link.token, p_key: a.guest_key, p_cq: a.cq_id, p_unhelpful: false });
+    if (se) throw new Error(`edu_link_send 실패: ${se.message}`);
+  }
+  console.log(`공간 주인: ${SPACE_EMAIL} → ${spaceId} · 링크 ${link.id} · 답 기다리는 질문 ${waiting || 1}개`);
+}
+
 async function main() {
   await seedVerifiedPhones(URL_, SRV, qaPhones);
   await ensureSoloOwner();
+  await ensureSpaceOwner();
   const owner = mk();
   const o = await ensureUser(owner, OWNER, { name: 'QA사장', role: 'owner', phone: '01099990001', store_name: 'QA', industry: '카페·디저트' });
   console.log(`사장 ${o.isNew ? '생성' : '기존'}: ${OWNER}`);
