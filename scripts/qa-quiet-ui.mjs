@@ -27,7 +27,12 @@ const PW_LOCAL = 'QaTest1234!';
 const SPACE_EMAIL = 'qa.space@example.com', OWNER_EMAIL = 'qa.owner@example.com';
 const JUNIOR_EMAIL = 'staff2@pilot.squaretable.app', JUNIOR_PW = 'pilot1234';
 const RUN = `s5${Date.now().toString(36)}`;
-const WATCHDOG = setTimeout(() => { console.log('FAIL: 12분 상한 — 멈춤'); process.exit(1); }, 12 * 60 * 1000);
+// 상한에 걸려도 정리는 한다(process.exit 는 finally 를 건너뛴다 · 11-12 개발 서버가 꺼진 채 돌아 링크 7개가 남았다).
+const WATCHDOG = setTimeout(async () => {
+  console.log('FAIL: 12분 상한 — 멈춤');
+  try { for (const w of opened) await w.close(); await cleanup(); } catch { /* 정리 실패는 다음 실행 시작 정리가 걷는다 */ }
+  process.exit(1);
+}, 12 * 60 * 1000);
 
 let pass = 0, fail = 0, skip = 0, defect = 0;
 const out = (tag, name, extra = '') => console.log(`  ${tag} ${name}${extra ? ` — ${extra}` : ''}`);
