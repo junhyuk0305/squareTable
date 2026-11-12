@@ -113,7 +113,6 @@ export function InviteBlock({
             <Text style={[s.code, expired && s.dim]} selectable>
               {code}
             </Text>
-            {expiry && <Text style={[s.expiry, expiry.state !== 'ok' && s.expiryWarn]}>{expiry.text}</Text>}
           </View>
           <Pressable
             onPress={sendCode}
@@ -127,6 +126,8 @@ export function InviteBlock({
           </Pressable>
           {action}
         </View>
+        {/* 만료 안내는 코드 칸 밖에 둔다 — 코드 칸은 줄지 않으므로, 안에 두면 이 문구 너비만큼 칸이 넓어져 버튼이 밀린다. */}
+        {expiry && <Text style={[s.expiry, expiry.state !== 'ok' && s.expiryWarn]}>{expiry.text}</Text>}
 
         <PressableScale
           onPress={sendLink}
