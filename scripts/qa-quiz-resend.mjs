@@ -446,7 +446,12 @@ async function main() {
 
   // ── (m) 좌석 잠긴 직원 · 오류 탐지 11-03 7번 ── 마지막에 둔다(매장을 무료로 바꾼다) ─────────
   console.log('— (m) 인원 한도를 넘어 잠긴 직원에게는 안 나간다 —');
-  {
+  // 무료 모드(app_config.billing_free_mode)가 켜져 있으면 seat_locked_for 가 늘 false 라 (m) 을 잴 수 없다.
+  // 로컬에서만 잠깐 끄고 끝에 되돌린다(qa-store-slots 와 같은 방식 · 2026-11-12). 라이브 스위치는 건드리지 않는다.
+  const { data: fmRow } = LOCAL ? await admin.from('app_config').select('value').eq('key', 'billing_free_mode').maybeSingle() : { data: null };
+  const freeModeWas = fmRow?.value === 'true' ? fmRow.value : null;
+  if (freeModeWas) await admin.from('app_config').update({ value: 'false' }).eq('key', 'billing_free_mode');
+  try {
     // 유료일 때 직원이 다 들어왔다 → 이용 기간이 끝나 무료가 됐다(잠금이 실제로 생기는 길 · st-qa 재현과 같음).
     // 좌석 순위 = unit_members.created_at → user_id 순(seat_rank). 셋업에서 합류 시각을 모두 같게 당겼으므로 m 을 가장 늦은 합류로 되돌린다.
     await admin.from('unit_members').update({ created_at: new Date().toISOString() }).eq('unit_id', UNIT).eq('user_id', P.m.id);
@@ -462,6 +467,8 @@ async function main() {
     check('(m) 다시 알리기 결과 = locked', !error && resultOf(data, 'm') === 'locked', error?.message ?? JSON.stringify(data));
     const { data: mRow } = await admin.from('quiz_assignments').select('resend_at').eq('id', m1).maybeSingle();
     check('(m) 잠긴 직원 행에는 resend_at 을 안 찍는다', !mRow?.resend_at, JSON.stringify(mRow));
+  } finally {
+    if (freeModeWas) await admin.from('app_config').update({ value: freeModeWas }).eq('key', 'billing_free_mode');
   }
 
   // ── 쓰기 경계 ─────────────────────────────────────────────────────────
