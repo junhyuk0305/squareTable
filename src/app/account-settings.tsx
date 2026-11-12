@@ -1,3 +1,4 @@
+import { compareStyles, DesignTokens } from '@/lib/theme/designComparison';
 import { useEffect, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { fetchMyIapSubscription, fetchMyPreviousUnits, fetchMyMarketingConsent, rpcSetMyMarketingConsent } from '@/lib/db';
@@ -310,7 +311,7 @@ export default function AccountSettings() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create(compareStyles({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, paddingTop: 16 },
   profile: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, marginBottom: 20 },
@@ -332,4 +333,8 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   billingCtaText: { fontSize: 14, fontWeight: '800', color: InkColors.bubbleText },
-});
+}, {
+  surface: { safe: DesignTokens.screen, profile: DesignTokens.card },
+  type: { pName: DesignTokens.body, pMeta: DesignTokens.detail, foot: DesignTokens.meta },
+  spacing: { profile: { marginBottom: 16 }, scroll: { paddingBottom: 16 } },
+}));

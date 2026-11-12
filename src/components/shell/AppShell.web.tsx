@@ -1,3 +1,4 @@
+import { designComparisonEnabled } from '@/lib/theme/designComparison';
 import { type ReactNode } from 'react';
 import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { usePathname } from 'expo-router';
@@ -51,6 +52,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { width } = useWindowDimensions();
   // 담당자 초대 링크(/hq/join)로 온 사람이 가입·로그인을 마치면 어느 화면에 있든 여기서 수락 → /hq.
   usePendingBrandJoin();
+
+  if (designComparisonEnabled && pathname === '/design-compare') return <View style={{ flex: 1 }}>{children}</View>;
 
   // 세션이 확정되기 전에 폰 프레임을 그리면, 사장·본사는 곧바로 넓은 셸로 갈아타며 한 번 튄다.
   // 확정될 때까지는 프레임 없는 빈 배경만 둔다 — 그 위를 스플래시가 덮으므로 보이는 것은 같다.

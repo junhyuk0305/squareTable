@@ -1,3 +1,4 @@
+import { compareStyles, designSelected, DesignTokens } from '@/lib/theme/designComparison';
 import { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
@@ -143,7 +144,7 @@ export default function LoginScreen() {
           />
 
           <Pressable disabled={busy} onPress={login} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}>
-            {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>로그인</Text>}
+            {busy ? <ActivityIndicator color={designSelected('surface') ? InkColors.ink : '#FFF'} /> : <Text style={styles.primaryText}>로그인</Text>}
           </Pressable>
 
           {/* 안내/실패 문구 — 로그인 버튼 바로 아래. 실패는 빨강으로 시선 유도. */}
@@ -186,7 +187,7 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create(compareStyles({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   topbar: { height: 48, justifyContent: 'center' },
   scroll: { flexGrow: 1, padding: Space.xl, paddingTop: Space.xs, justifyContent: 'center', gap: 28 },
@@ -245,4 +246,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   signupBtnText: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
-});
+}, {
+  surface: { safe: DesignTokens.screen, card: DesignTokens.card, signupBtn: DesignTokens.card, primary: DesignTokens.primary, primaryText: DesignTokens.primaryText },
+  type: { tagline: DesignTokens.detail, label: DesignTokens.meta, input: DesignTokens.body, primaryText: DesignTokens.buttonText, forgotText: DesignTokens.meta, signupLead: DesignTokens.detail, signupBtnText: DesignTokens.body },
+  spacing: { scroll: { gap: 16, paddingBottom: 32 }, card: { padding: 16 }, forgotRow: { minHeight: 48 } },
+}));

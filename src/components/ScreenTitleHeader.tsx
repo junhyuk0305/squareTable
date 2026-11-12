@@ -1,3 +1,4 @@
+import { compareStyles, designSelected } from '@/lib/theme/designComparison';
 import { type ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -73,7 +74,7 @@ export function ScreenTitleHeader({
   };
   const back = onBack ?? (backFallback ? goBack : undefined);
   return (
-    <View style={[styles.bar, { paddingTop: insets.top + Space.sm }]}>
+    <View style={[styles.bar, { paddingTop: insets.top + (designSelected('header') ? Space.xs : Space.sm) }]}>
       {back && (
         <Pressable
           onPress={back}
@@ -113,7 +114,7 @@ function StoreLine() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create(compareStyles({
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -134,4 +135,6 @@ const styles = StyleSheet.create({
   dot: { width: 6, height: 6, borderRadius: 3 },
   storeName: { fontSize: 11.5, fontWeight: '600', color: InkColors.ink3, maxWidth: 220 },
   right: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
-});
+}, {
+  header: { bar: { paddingBottom: 4 }, titleWrap: { minHeight: 48 } },
+}));

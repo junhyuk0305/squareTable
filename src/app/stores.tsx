@@ -1,3 +1,4 @@
+import { compareStyles, DesignTokens } from '@/lib/theme/designComparison';
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -344,7 +345,7 @@ function industryIcon(industry: string | null): keyof typeof Ionicons.glyphMap {
   return 'storefront-outline';
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create(compareStyles({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: Space.gutter, gap: Space.xl, paddingBottom: 40 },
 
@@ -412,4 +413,8 @@ const styles = StyleSheet.create({
     backgroundColor: BrandColors.yellow, paddingHorizontal: 22, paddingVertical: 14, borderRadius: Radius.pill, ...Elevation.ey,
   },
   emptyBtnText: { fontSize: 15, fontWeight: '900', color: InkColors.ink },
-});
+}, {
+  surface: { safe: DesignTokens.screen, card: DesignTokens.card, addCard: DesignTokens.card },
+  type: { title: DesignTokens.title, subtitle: DesignTokens.detail, storeName: DesignTokens.body, storeMeta: DesignTokens.detail, addTitle: DesignTokens.body, addSub: DesignTokens.detail },
+  spacing: { section: DesignTokens.stack, scroll: { paddingBottom: 32 } },
+}));

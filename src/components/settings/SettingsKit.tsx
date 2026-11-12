@@ -1,3 +1,4 @@
+import { compareStyles, DesignTokens } from '@/lib/theme/designComparison';
 // 설정 화면 공용 UI 키트 — 섹션 / 이동 행 / 토글 행 / 위험(파괴적) 행.
 // 오너·주니어 설정 화면이 같은 룩앤필을 공유하도록 한 곳에 모은다.
 import { View, Text, Pressable, StyleSheet } from 'react-native';
@@ -95,7 +96,7 @@ export function SettingsToggle({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create(compareStyles({
   // 섹션 사이 = 이 12 + SectionLabel 의 위 여백 12 = 24(앱 공통, 2026-09-03). 옛 18은 라벨 여백이 없던 때 값.
   section: { gap: 8, marginBottom: 12 },
   card: {
@@ -112,4 +113,8 @@ const styles = StyleSheet.create({
   rowLabelText: { fontSize: 15, fontWeight: '600', color: InkColors.ink },
   rowHint: { fontSize: 12, color: InkColors.ink3, marginTop: 2, fontWeight: '400' },
   rowValue: { fontSize: 14, color: InkColors.ink3, marginRight: 2 },
-});
+}, {
+  surface: { card: DesignTokens.card },
+  type: { rowLabelText: DesignTokens.body, rowHint: DesignTokens.detail, rowValue: DesignTokens.meta },
+  spacing: { section: { marginBottom: 16 }, row: DesignTokens.row },
+}));

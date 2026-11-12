@@ -1,3 +1,4 @@
+import { compareStyles, DesignTokens } from '@/lib/theme/designComparison';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -34,7 +35,7 @@ export function SectionLabel({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create(compareStyles({
   // 제목 달린 섹션 앞은 카드↔카드보다 한 단(md) 더 띈다(2026-09-03 웹 실측 피드백) — 화면마다 gap 을
   // 고치지 않고 라벨이 스스로 위 여백을 든다. 부모 gap(대개 md)과 합쳐 24 안팎이 된다.
   // 제목↔카드는 10 으로 통일한다(2026-10-14 사용자 결정). 부모 gap 은 대개 sm(8)이라 라벨이 아래 2를 더 든다.
@@ -43,4 +44,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink, letterSpacing: -0.2 },
   hint: { marginLeft: 'auto', fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
   trailing: { marginLeft: 'auto' },
-});
+}, {
+  type: { title: DesignTokens.group, hint: DesignTokens.meta },
+  spacing: { row: { marginTop: 0 } },
+}));
