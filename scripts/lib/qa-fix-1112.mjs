@@ -166,6 +166,13 @@ update public.playbook_entries set photos = '{}' where id = ${q(EP)};
 ${call('6 사장이 다 지운 뒤 다시 = 안 적음(빈 채)', null, 'service_role', `select coalesce(array_to_string(public._set_proposal_photos(${q(SA)}, array[${q(X + '/b.jpg')}]), ','), '')`, 'ok|')}
 ${val('6 결과 노하우 사진 = 빈 채', `select coalesce(cardinality(photos), 0) from public.playbook_entries where id = ${q(EP)}`, '0')}
 ${call('6 적은 뒤 복사할 경로 = 0(엣지가 복사하지 않음)', null, 'service_role', `select (public._proposal_photo_source(${q(SA)}, ${q(U.O)}::uuid) ->> 'status') || '/' || jsonb_array_length(public._proposal_photo_source(${q(SA)}, ${q(U.O)}::uuid) -> 'paths')`, 'ok|ok/0')}
+-- 6 · CSO Low: 승인 뒤 엣지가 못 돌았고 사장이 먼저 자기 사진을 넣었다 → 덮지 않고 "적었다"로 찍는다 → 다 지운 뒤 다시 불러도 안 되살아난다
+update public.playbook_suggestions set photos_written_at = null where id = ${q(SA)};
+update public.playbook_entries set photos = array[${q(X + '/own.jpg')}] where id = ${q(EP)};
+${call('6b 사장 사진이 있으면 덮지 않음', null, 'service_role', `select array_to_string(public._set_proposal_photos(${q(SA)}, array[${q(X + '/c.jpg')}]), ',')`, `ok|${X}/own.jpg`)}
+update public.playbook_entries set photos = '{}' where id = ${q(EP)};
+${call('6b 그 뒤 다 지우고 다시 = 안 적음(빈 채)', null, 'service_role', `select coalesce(array_to_string(public._set_proposal_photos(${q(SA)}, array[${q(X + '/c.jpg')}]), ','), '')`, 'ok|')}
+${val('6b 결과 노하우 사진 = 빈 채', `select coalesce(cardinality(photos), 0) from public.playbook_entries where id = ${q(EP)}`, '0')}
 
 -- ════ 3 · 나가면 그 사람 링크를 닫는다 ════
 update public.unit_members set role = 'junior' where unit_id = ${q(X)} and user_id = ${q(U.G)};

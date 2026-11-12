@@ -114,9 +114,14 @@ begin
   select e.photos into v_cur from public.playbook_entries e
    where e.id = s.resulting_entry_id and e.unit_id = s.unit_id for update;
   if not found then raise exception 'invalid_argument'; end if;
-  if (select ps.photos_written_at from public.playbook_suggestions ps where ps.id = s.id) is not null
-     or coalesce(cardinality(v_cur), 0) > 0 or v_n = 0 then
+  if (select ps.photos_written_at from public.playbook_suggestions ps where ps.id = s.id) is not null or v_n = 0 then
     return coalesce(v_cur, '{}'::text[]);
+  end if;
+  -- ★0586(CSO Low): 결과 노하우에 이미 사진이 있으면(사장이 먼저 넣음) 덮지 않는다. 이때도 "적었다"로 찍는다.
+  --   안 찍으면 사장이 그 사진을 다 지운 뒤 엣지 재호출로 스냅샷 사진이 되살아난다. 위 백필과 같은 판정이다.
+  if coalesce(cardinality(v_cur), 0) > 0 then
+    update public.playbook_suggestions set photos_written_at = now() where id = s.id;
+    return v_cur;
   end if;
 
   update public.playbook_entries set photos = v_paths where id = s.resulting_entry_id;
