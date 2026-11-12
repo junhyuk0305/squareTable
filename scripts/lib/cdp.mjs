@@ -79,14 +79,25 @@ export async function launch({ origin, storageKey, width = 1600, height = 1000, 
   let failing = new Set();
   /** 이름 → 응답 바꾸기 함수. 실제 응답을 받은 뒤 고쳐서 돌려준다(빈 상태·여러 곳 같은 파일럿에 없는 모양 실측용). */
   let mocks = new Map();
-  // 실패는 요청 단계, 바꾸기는 응답 단계에서 멈춘다. 둘 다 없으면 Fetch 를 끈다.
+  /** 서버까지 보내고 응답만 끊을 이름(RPC 이름 또는 엣지 함수 이름). 서버는 처리했는데 앱은 응답을 못 받은 상태를 만든다(2026-11-12 S5). */
+  let dropping = new Set();
+  /** 엣지 함수 이름 → { status, body }. 서버에 보내지 않고 그 상태로 돌려준다(402·429·5xx 문구 실측 · 2026-11-12 S5). */
+  let edgeStatus = new Map();
+  /** 엣지 함수 이름 → 이 요청 몇 번이 왔나(재시도 횟수 확인용). */
+  const edgeHits = new Map();
+  /** 상태를 대신 준 엣지 요청 = { fn, task }(본문의 task). 같은 질문에 어느 일을 몇 번 불렀나 본다. */
+  const edgeCalls = [];
+  // 실패·엣지 상태는 요청 단계, 바꾸기·끊기는 응답 단계에서 멈춘다. 다 없으면 Fetch 를 끈다.
   const syncFetch = async () => {
     const patterns = [];
     if (failing.size) patterns.push({ urlPattern: '*/rest/v1/rpc/*', requestStage: 'Request' });
-    if (mocks.size) patterns.push({ urlPattern: '*/rest/v1/rpc/*', requestStage: 'Response' });
+    if (mocks.size || dropping.size) patterns.push({ urlPattern: '*/rest/v1/rpc/*', requestStage: 'Response' });
+    if (dropping.size) patterns.push({ urlPattern: '*/functions/v1/*', requestStage: 'Response' });
+    if (edgeStatus.size) patterns.push({ urlPattern: '*/functions/v1/*', requestStage: 'Request' });
     if (patterns.length) await s('Fetch.enable', { patterns });
     else await s('Fetch.disable');
   };
+  const fnName = (url) => url.match(/\/functions\/v1\/([a-z0-9_-]+)/)?.[1] ?? null;
   listeners.push((m) => {
     if (m.sessionId !== sessionId) return;
     if (m.method === 'Network.requestWillBeSent') {
@@ -124,10 +135,31 @@ export async function launch({ origin, storageKey, width = 1600, height = 1000, 
       errors.push(m.params.args.map((a) => a.value ?? a.description).join(' ').slice(0, 300));
     }
     if (m.method === 'Fetch.requestPaused') {
-      const name = m.params.request.url.match(/\/rpc\/([a-z0-9_]+)/)?.[1];
+      const fn = fnName(m.params.request.url);
+      const name = fn ?? m.params.request.url.match(/\/rpc\/([a-z0-9_]+)/)?.[1];
+      const isPreflight = m.params.request.method === 'OPTIONS';
       // ★응답을 기다리는 사이 failRpc([]) 가 Fetch 를 끄면 이 호출이 'Fetch domain is not enabled' 로 거부된다 —
       //   잡지 않으면 하니스가 통째로 죽는다(2026-10-02 G 묶음). 꺼진 뒤엔 요청이 그대로 흘러가므로 버려도 된다.
-      if (m.params.responseStatusCode !== undefined) {
+      if (m.params.responseStatusCode !== undefined && name && dropping.has(name) && !isPreflight) {
+        // 응답 단계 = 서버는 이미 처리했다. 앱에는 연결이 끊긴 것으로 보인다.
+        void s('Fetch.failRequest', { requestId: m.params.requestId, errorReason: 'ConnectionReset' }).catch(() => {});
+      } else if (m.params.responseStatusCode === undefined && fn && edgeStatus.has(fn)) {
+        const cors = [{ name: 'Access-Control-Allow-Origin', value: '*' }, { name: 'Access-Control-Allow-Headers', value: '*' }, { name: 'Access-Control-Allow-Methods', value: 'POST, OPTIONS' }];
+        if (isPreflight) {
+          void s('Fetch.fulfillRequest', { requestId: m.params.requestId, responseCode: 204, responseHeaders: cors }).catch(() => {});
+        } else {
+          edgeHits.set(fn, (edgeHits.get(fn) ?? 0) + 1);
+          let task = null;
+          try { task = JSON.parse(m.params.request.postData ?? 'null')?.task ?? null; } catch { /* 본문 없음 */ }
+          edgeCalls.push({ fn, task });
+          const { status, body } = edgeStatus.get(fn);
+          void s('Fetch.fulfillRequest', {
+            requestId: m.params.requestId, responseCode: status,
+            responseHeaders: [{ name: 'Content-Type', value: 'application/json' }, ...cors],
+            body: Buffer.from(JSON.stringify(body ?? {})).toString('base64'),
+          }).catch(() => {});
+        }
+      } else if (m.params.responseStatusCode !== undefined) {
         // 응답 단계 — 바꾸기 대상이고 성공 응답일 때만 고친다. 나머지는 원래 응답 그대로.
         const id = m.params.requestId;
         if (name && mocks.has(name) && m.params.responseStatusCode === 200) {
@@ -180,6 +212,20 @@ export async function launch({ origin, storageKey, width = 1600, height = 1000, 
       mocks = new Map(Object.entries(map));
       await syncFetch();
     },
+    /** 이름(RPC 또는 엣지 함수)이 든 요청을 서버까지 보내고 응답만 끊는다(빈 배열 = 해제). */
+    async dropResponse(names) {
+      dropping = new Set(names);
+      await syncFetch();
+    },
+    /** { 엣지함수이름: { status, body } } — 서버에 보내지 않고 그 상태로 돌려준다. 빈 객체 = 해제. 횟수는 edgeHits. */
+    async mockEdge(map) {
+      edgeStatus = new Map(Object.entries(map));
+      edgeHits.clear();
+      edgeCalls.length = 0;
+      await syncFetch();
+    },
+    edgeHits(name) { return edgeHits.get(name) ?? 0; },
+    edgeTasks(name) { return edgeCalls.filter((c) => c.fn === name).map((c) => c.task); },
     async slowNetwork(latencyMs) {
       await s('Network.emulateNetworkConditions', { offline: false, latency: latencyMs, downloadThroughput: -1, uploadThroughput: -1 });
     },

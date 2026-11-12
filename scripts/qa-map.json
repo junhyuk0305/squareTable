@@ -10,7 +10,8 @@
     ["^src/components/schedule/|^src/app/owner/timesheet/", ["qa-shift-time", "qa-shift-ui", "qa-attendance-roundtrip"]],
     ["^src/lib/work/|^src/components/work/", ["qa-task-knowhow"]],
     ["^src/lib/(place|edu)/|^src/app/space/|^src/components/(space|place|edu)/", ["qa-space-isolation"]],
+    ["^src/components/edu/|^src/app/(l|link|space|billing-card)|^src/lib/payments/cardBilling|^src/lib/ai/client", ["qa-quiet-ui"]],
     ["^src/(app|components)/", ["qa-journey-join", "qa-journey-task", "qa-journey-quiz", "qa-journey-ai", "qa-crawl"]]
   ],
-  "heavy": ["qa-journey-join", "qa-journey-task", "qa-journey-quiz", "qa-journey-ai", "qa-crawl"]
+  "heavy": ["qa-quiet-ui", "qa-journey-join", "qa-journey-task", "qa-journey-quiz", "qa-journey-ai", "qa-crawl"]
 }

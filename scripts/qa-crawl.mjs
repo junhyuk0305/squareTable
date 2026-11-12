@@ -56,7 +56,7 @@ const BASELINE = join(ROOT, 'scripts', 'qa-crawl-baseline.json');
 const TMP = join(ROOT, 'tmp');
 mkdirSync(TMP, { recursive: true });
 const STORAGE_KEY = storageKeyFor(SB);
-const PORT = { owner: PORT_BASE, junior: PORT_BASE + 1 };
+const PORT = { owner: PORT_BASE, junior: PORT_BASE + 1, space: PORT_BASE + 2 };
 const VIEW = { width: 460, height: 900 };
 const MAX_SHOTS = 20;
 
@@ -74,7 +74,8 @@ const ROUTES = walk(join(ROOT, 'src', 'app'))
   .filter((rel) => !/\/(_layout|\+html)\.tsx$/.test(rel))
   .map((rel) => rel.replace(/\.tsx$/, '').replace(/\/index$/, '') || '/')
   .sort();
-const roleOf = (route) => (route.startsWith('/owner') ? 'owner' : route.startsWith('/junior') ? 'junior' : 'common');
+// /space/* = 공간 주인 층(2026-11-12 S5). 공간 계정이 없으면(라이브 고정 계정에 없음) 사장·직원이 경계 모드로만 돈다.
+const roleOf = (route) => (route.startsWith('/owner') ? 'owner' : route.startsWith('/junior') ? 'junior' : route.startsWith('/space') ? 'space' : 'common');
 
 // ── 세션(고정 계정 · 계정 신설 없음) ─────────────────────────────────────────
 async function passwordSession(email) {
@@ -90,6 +91,25 @@ const pre = await rolePrecondition(clients);
 if (pre) { console.error(`FAIL: 전제 불일치 — ${pre}`); process.exit(2); }
 const prevActive = { owner: await ensureActive(clients.owner), junior: await ensureActive(clients.junior) };
 const sessions = { owner: await passwordSession(FIXED.owner), junior: await passwordSession(FIXED.junior) };
+// 공간 주인 세션(선택) — 로컬은 qa-local-accounts 가 qa.space@example.com 을 만든다. 로그인이 안 되면 'space' 역할을 건너뛴다.
+const SPACE_EMAIL = env.QA_SPACE_EMAIL ?? 'qa.space@example.com';
+const SPACE_PW = env.QA_SPACE_PW ?? 'QaTest1234!';
+let spaceClient = null, SPACE_ID = null;
+try {
+  const { createClient } = await import('@supabase/supabase-js');
+  const c = createClient(SB, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data, error } = await c.auth.signInWithPassword({ email: SPACE_EMAIL, password: SPACE_PW });
+  if (!error && data?.user) {
+    // 들어가기 전에는 공간 멤버 표가 RLS 로 안 읽힌다 → 앱과 같은 my_spaces 로 찾는다.
+    const { data: rows } = await c.rpc('my_spaces');
+    SPACE_ID = (rows ?? []).find((x) => x.role === 'space_owner')?.id ?? null;
+    if (SPACE_ID && !(await c.rpc('enter_space', { p_space: SPACE_ID })).error) {
+      spaceClient = c;
+      sessions.space = { access_token: data.session.access_token, refresh_token: data.session.refresh_token, expires_at: data.session.expires_at, expires_in: data.session.expires_in, token_type: 'bearer', user: data.user };
+    }
+  }
+} catch { /* 공간 계정 없음 → 건너뜀 */ }
+if (!sessions.space) console.log(`공간 계정(${SPACE_EMAIL}) 없음 → 'space' 역할 건너뜀(사장·직원 경계 모드만)`);
 
 // ── 동적 세그먼트 표본 — 사장 권한 읽기(RLS)로 store_001 의 실제 id 하나 ─────────
 async function pick(q) {
@@ -107,6 +127,13 @@ const SAMPLE = {
   '/owner/quiz/guest/[sub]': { sub: (await pick(O.from('quiz_attempts').select('submission_id').eq('unit_id', UNIT).not('guest_name', 'is', null).not('submission_id', 'is', null).limit(1)))?.submission_id },
   '/legal/[doc]': { doc: legalKeys[0] },
   '/q/[token]': { token: (await pick(O.from('quiz_links').select('token').eq('unit_id', UNIT).is('revoked_at', null).gt('expires_at', nowIso).limit(1)))?.token },
+  // 교육 링크·공간 표본(2026-11-12 S5). 매장 링크는 사장 읽기, 나머지는 공간 주인 읽기(없으면 표본 없음).
+  '/owner/edu-link/[id]': { id: (await pick(O.from('edu_links').select('id').eq('unit_id', UNIT).is('closed_at', null).gt('expires_at', nowIso).limit(1)))?.id },
+  '/l/[token]': { token: spaceClient ? (await pick(spaceClient.from('edu_links').select('token').eq('unit_id', SPACE_ID).is('closed_at', null).gt('expires_at', nowIso).limit(1)))?.token : null },
+  '/link/[id]': { id: spaceClient ? (await pick(spaceClient.from('edu_links').select('id').eq('unit_id', SPACE_ID).is('closed_at', null).gt('expires_at', nowIso).limit(1)))?.id : null },
+  '/space/answer/[qid]': { qid: spaceClient ? (await pick(spaceClient.from('unknown_queries').select('id').eq('unit_id', SPACE_ID).eq('status', 'pending_owner_answer').limit(1)))?.id : null },
+  // 참여 중인 공간 = 멤버 화면. 주인이 열면 공간 홈으로 간다(그것도 "열림"이다 · 멤버 계정은 아직 없다).
+  '/space/joined/[id]': { id: SPACE_ID },
   // /hq/*/[id] — 고정 계정 둘 다 본사 담당자가 아니다 → 표본 없음(본사 화면은 qa:hq-structure 가 잰다).
   '/+not-found': { path: '/qa-crawl-missing-route' },
 };
@@ -156,7 +183,9 @@ function line(r) {
 
 /** 한 화면 방문. mode 'full' = 11규칙 · 'boundary' = R1+R10 만(다른 역할의 전용 화면). */
 async function visit(page, role, route, mode) {
-  const path = resolvePath(route);
+  let path = resolvePath(route);
+  // 공간 화면은 들어간 공간이 앱 상태에만 있다 → 주소로 바로 열 때 ?space= 로 알려 준다(space/_layout 문지기).
+  if (path && role === 'space' && route.startsWith('/space') && !route.startsWith('/space/joined')) path += `${path.includes('?') ? '&' : '?'}space=${SPACE_ID}`;
   const r = { route, role, path, mode, rules: {} };
   if (!path) { r.noSample = true; results.push(r); console.log(`${route} · ${role} · 표본 없음`); return; }
   await drain(page);
@@ -169,7 +198,7 @@ async function visit(page, role, route, mode) {
   await sleep(3000);
   const { errs, bad } = await drain(page);
   r.rules.R1 = r1(errs, bad);
-  const other = role === 'owner' ? '/junior' : '/owner';
+  const other = role === 'owner' ? '/junior' : '/owner'; // space 는 사장 층을 보면 안 된다
   const snap = await page.eval(PROBE).catch((e) => ({ error: e.message }));
   r.landed = snap.path ?? (await page.path().catch(() => '?'));
   if (mode === 'boundary' || roleOf(route) !== 'common') r.rules.R10 = r10({ forbidden: other, frames, finalPath: r.landed });
@@ -220,7 +249,7 @@ async function visit(page, role, route, mode) {
 async function runRole(role) {
   const { page, close } = await open(role);
   try {
-    await page.goto(role === 'owner' ? '/owner/dashboard' : '/junior/home');
+    await page.goto(role === 'owner' ? '/owner/dashboard' : role === 'space' ? `/space/home?space=${SPACE_ID}` : '/junior/home');
     await page.waitFor(SETTLED, 30000);
     await sleep(1500);
     for (const route of ROUTES) {
@@ -238,7 +267,7 @@ async function runRole(role) {
 console.log(`라우트 ${ROUTES.length}(사장 ${ROUTES.filter((r) => roleOf(r) === 'owner').length} · 직원 ${ROUTES.filter((r) => roleOf(r) === 'junior').length} · 공용 ${ROUTES.filter((r) => roleOf(r) === 'common').length}) · 뷰포트 ${VIEW.width}×${VIEW.height} · ${ORIGIN}`);
 console.log(`표본: ${Object.entries(SAMPLE).map(([k, v]) => `${k}=${Object.values(v)[0] ? '있음' : '없음'}`).join(' · ')}\n`);
 try {
-  await Promise.all((ONLY_ROLE ? [ONLY_ROLE] : ['owner', 'junior']).map(runRole));
+  await Promise.all((ONLY_ROLE ? [ONLY_ROLE] : ['owner', 'junior', ...(sessions.space ? ['space'] : [])]).map(runRole));
 } finally {
   if (TAG) {
     if (prevActive.owner || prevActive.junior) console.log(`나눠 돌리기: 활성 매장을 되돌리지 않았다(원래 값 owner=${prevActive.owner ?? '-'} junior=${prevActive.junior ?? '-'})`);
