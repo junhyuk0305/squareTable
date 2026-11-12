@@ -200,7 +200,8 @@ Deno.serve(async (req) => {
       }
       return json(200, { ok: true }, cors);
     }
-    if (claimErr.code !== 'PGRST202') return json(500, { ok: false, reason: 'db' }, cors);
+    // 없음 = PGRST202(스키마 캐시에 없음) 또는 42883(0603 을 되돌린 직후 캐시가 낡아 SQL 이 함수 없음을 돌려줌 · push isMissingRpc 와 같은 판정).
+    if (claimErr.code !== 'PGRST202' && claimErr.code !== '42883') return json(500, { ok: false, reason: 'db' }, cors);
 
     // ── 옛 길(0603 이 없는 DB 전용) ──
     const { data: row, error: selErr } = await admin

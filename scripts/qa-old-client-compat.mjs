@@ -9,6 +9,8 @@
 //     ④ 결과 모양(2026-11-12 S5): 옛 클라의 .from('표').select('열…') 열이 다 있는가 · 할 일·결제 호출을 옛 인자 그대로
 //        사장 세션(role authenticated + JWT claims)으로 실제 불러, 옛 코드가 `data as <타입>` 으로 읽는 필수 필드가 오는가.
 //        한 트랜잭션에서 부르고 롤백한다(남는 행 0). 고정 계정 owner@pilot 이 로컬에 없으면 FAIL 로 센다.
+//     ④-c 옛 앱 직접 쓰기(출근 upsert · 교대 insert · 제안 검토 update · 댓글 upsert)가 새 제약과 만날 때 서버가 기대대로 거절하는가.
+//     ① 은 helper 를 거친 호출(rpcBool·rpcDecision·rpcOk·rpcResult·rpcStatus('라벨', '함수', {…}))도 센다(2026-11-13 F-3).
 //   못 잡는 것: 뜻이 바뀐 경우(같은 필드에 다른 의미), RLS 로 행이 줄어든 경우. 그건 마이그레이션 머리말 '옛 앱 호환:' 근거와 도메인 하니스가 본다.
 //
 // 실행: 로컬 Supabase(도커) 를 새 마이그레이션까지 재생한 뒤
@@ -67,18 +69,26 @@ const objAt = (s, i) => {
 const rpcCalls = new Map(); // name → [{ file, keys|null, client }]
 const tables = new Map();   // name → file
 const storageBuckets = new Set(); // storage.from('버킷') 은 테이블이 아니다
+let helperCalls = 0;
 for (const f of files) {
   const s = git('show', `${OLD_REF}:${f}`);
-  for (const m of s.matchAll(/\.rpc\(\s*['"`](\w+)['"`]\s*(,\s*)?/g)) {
+  const addCall = (m, name, hasArgs, client) => {
     let keys = [];
-    if (m[2]) {
+    if (hasArgs) {
       const at = m.index + m[0].length;
       keys = s[at] === '{' ? topKeys(objAt(s, at) ?? '') : null; // 변수로 넘기면 인자 이름을 모른다
     }
+    if (!rpcCalls.has(name)) rpcCalls.set(name, []);
+    rpcCalls.get(name).push({ file: f, keys, client });
+  };
+  for (const m of s.matchAll(/\.rpc\(\s*['"`](\w+)['"`]\s*(,\s*)?/g)) {
     // 화면 코드는 사용자 권한. 엣지는 userClient(authz) 처럼 사용자 토큰 클라로 부를 때만 권한을 본다(0276: 엣지가 userClient 로 부르던 함수의 권한을 빼면 조용히 실패).
-    const client = f.startsWith('src/') || /user\w*\([^()]*\)\s*$/.test(s.slice(Math.max(0, m.index - 40), m.index));
-    if (!rpcCalls.has(m[1])) rpcCalls.set(m[1], []);
-    rpcCalls.get(m[1]).push({ file: f, keys, client });
+    addCall(m, m[1], m[2], f.startsWith('src/') || /user\w*\([^()]*\)\s*$/.test(s.slice(Math.max(0, m.index - 40), m.index)));
+  }
+  // helper 를 거친 호출: rpcBool·rpcDecision·rpcOk·rpcResult·rpcStatus('라벨', '함수', { 인자 }) (2026-11-13 F-3 · 옛 앱 1.1.1 = 14회)
+  for (const m of s.matchAll(/\brpc[A-Z]\w*(?:<[^()]*?>)?\(\s*['"`]\w+['"`]\s*,\s*['"`](\w+)['"`]\s*(,\s*)?/g)) {
+    helperCalls++;
+    addCall(m, m[1], m[2], f.startsWith('src/'));
   }
   for (const m of s.matchAll(/storage\s*\.from\(\s*['"`](\w[\w-]*)['"`]/g)) storageBuckets.add(m[1]);
   for (const m of s.matchAll(/\.from\(\s*['"`](\w+)['"`]\s*\)/g)) if (!tables.has(m[1])) tables.set(m[1], f);
@@ -103,16 +113,17 @@ const rows = psql(`
 const byName = new Map();
 for (const r of rows) { if (!byName.has(r.name)) byName.set(r.name, []); byName.get(r.name).push(r); }
 
-console.log(`[①②] 옛 클라(${OLD_REF}) 의 rpc ${names.length}개가 새 DB 에서 같은 인자로 불리는가`);
+const argSkip = []; // 인자를 변수·식으로 넘겨 인자 이름 대조를 못 한 호출(통과로 세지 않는다)
+console.log(`[①②] 옛 클라(${OLD_REF}) 의 rpc ${names.length}개(helper 경유 호출 ${helperCalls}회 포함)가 새 DB 에서 같은 인자로 불리는가`);
 for (const [name, calls] of [...rpcCalls].sort()) {
   const overloads = byName.get(name) || [];
   if (!overloads.length) { check(`${name} 이 있다`, false, `없음 · 호출 ${calls[0].file}`); continue; }
   const bad = [];
   for (const c of calls) {
-    if (c.keys === null || c.keys.includes('*')) continue; // 인자 이름을 정적으로 모름
+    if (c.client && !overloads.some((o) => o.exec)) bad.push(`${c.file} authenticated 실행 권한 없음(사용자 권한으로 부름)`);
+    if (c.keys === null || c.keys.includes('*')) { argSkip.push(name); continue; } // 인자 이름을 정적으로 모름 → 최종 줄 SKIP
     const ok = overloads.some((o) => c.keys.every((k) => o.inputs.includes(k)) && o.required.every((k) => c.keys.includes(k)));
     if (!ok) bad.push(`${c.file} {${c.keys.join(',')}} ↔ ${overloads.map((o) => `(${o.inputs.join(',')}; 필수 ${o.required.join(',') || '없음'})`).join(' | ')}`);
-    if (c.client && !overloads.some((o) => o.exec)) bad.push(`${c.file} authenticated 실행 권한 없음(사용자 권한으로 부름)`);
   }
   if (bad.length && contract.has(name) && bad.every((b) => b.includes('실행 권한 없음'))) {
     wait++; console.log(`  WAIT ${name} — 축소 단계 ${contract.get(name)} 가 닫는다. 그 파일의 '올리기 조건'이 맞을 때만 올린다`);
@@ -314,7 +325,61 @@ if (!ownerId) {
     // 옛 markAllFeedRead 는 숫자 = 요청 건수여야 성공
     check('mark_all_feed_read → 1', s('mark_all_feed_read') === 1, `받은 값 ${JSON.stringify(s('mark_all_feed_read'))}`);
   }
+
+  // ④-c 옛 앱 직접 쓰기가 새 제약(0631 트리거 · 0632·0633 부분 unique · 0635 댓글 부모 트리거)과 만날 때 (2026-11-13 F-3)
+  //   기대 결과는 머리말 '옛 앱 호환:' 이 적은 동작이다. 로컬에서 먼저 재서 정했다.
+  //   한 단계가 오류여도 다음 단계를 잇도록 하위 트랜잭션(DO … exception)으로 감싼다. 결과 = 영향 행 수 또는 'SQLSTATE 메시지'.
+  console.log('[④-c] 옛 앱 직접 쓰기가 새 제약과 만날 때 서버가 기대대로 거절하는가(사장 owner@pilot · 롤백)');
+  const tryDml = (name, sql) => `do $q$ declare n int; begin
+  begin ${sql}; get diagnostics n = row_count; perform set_config('qa.${name}', n::text, true);
+  exception when others then perform set_config('qa.${name}', sqlstate || ' ' || sqlerrm, true); end;
+end $q$;
+select 'STEP', '${name}', to_jsonb(current_setting('qa.${name}', true));`;
+  // 옛 upsertAttendance = 행 통째 upsert(on conflict id). 둘째 기기는 다른 id 로 같은 직원의 열린 출근을 넣는다. 직원 id 는 하니스 전용(기존 열린 기록과 안 겹치게).
+  const att = (id) => `insert into public.attendance (id, staff_id, date, check_in, check_out, work_minutes, unit_id)
+       values (${q(id)}, ${q(`${tag}_staff`)}, ${q(today)}, now(), null, 0, ${q(unit)})
+       on conflict (id) do update set staff_id = excluded.staff_id, date = excluded.date, check_in = excluded.check_in, check_out = excluded.check_out, work_minutes = excluded.work_minutes, unit_id = excluded.unit_id`;
+  // 옛 insertSwap = insert. 같은 근무·같은 날에 두 기기가 넣는다. 근무는 옛 앱 rpc add_shift_series 로 새로 만든다.
+  const swap = (id) => `insert into public.swap_requests (id, unit_id, kind, requester_id, date, template_id, target_staff_id, target_staff_ids, target_date, target_template_id, part_start, part_end, note)
+       values (${q(id)}, ${q(unit)}, 'cover', ${q(ownerId)}, ${q(today)}, current_setting('qa.tpl'), null, null, null, null, null, null, 'S5 옛 앱')`;
+  // 옛 reviewSuggestion = update(patch).eq('id')
+  const review = (status) => `update public.playbook_suggestions set status = ${q(status)}, owner_note = null, resulting_entry_id = null, reviewed_by = ${q(ownerId)}, reviewed_at = now() where id = ${q(`${tag}_ps`)}`;
+  // 옛 upsertFeed(댓글 = data.kind 'comment' · data.refId = 글 id)
+  const feedRow = (id, data) => `insert into public.work_feed (id, unit_id, feed_date, room_id, data) values (${q(id)}, ${q(unit)}, ${q(today)}, ${q(room)}, ${q(JSON.stringify({ ...data, id, date: today, authorId: ownerId, authorName: 'S5', authorRole: 'owner', createdAt: new Date().toISOString(), roomId: room }))}::jsonb)
+       on conflict (id) do update set unit_id = excluded.unit_id, feed_date = excluded.feed_date, room_id = excluded.room_id, data = excluded.data`;
+  const w = asOwner([
+    tryDml('att_1', att(`${tag}_a1`)),
+    tryDml('att_2', att(`${tag}_a2`)),
+    `select set_config('qa.tpl', public.add_shift_series(p_staff => ${q(ownerId)}, p_weekday => ${new Date(Date.now() + 9 * 3600e3).getUTCDay()}, p_from => ${q(today)}::date, p_start => '09:00', p_end => '13:00'), true) \\g /dev/null`,
+    tryDml('swap_1', swap(`${tag}_s1`)),
+    tryDml('swap_2', swap(`${tag}_s2`)),
+    tryDml('ps_insert', `insert into public.playbook_suggestions (id, unit_id, kind, proposer_id, proposer_name, text, status) values (${q(`${tag}_ps`)}, ${q(unit)}, 'new', ${q(ownerId)}, 'S5', 'S5 옛 앱 제안', 'pending')`),
+    tryDml('ps_review_1', review('approved')),
+    tryDml('ps_review_2', review('rejected')),
+    tryDml('post_insert', feedRow(`${tag}_p`, { kind: 'message', text: 'S5 글' })),
+    tryDml('comment_live', feedRow(`${tag}_c1`, { kind: 'comment', refId: `${tag}_p`, text: 'S5 댓글' })),
+    tryDml('post_delete', `delete from public.work_feed where id = ${q(`${tag}_p`)}`),
+    tryDml('comment_gone', feedRow(`${tag}_c2`, { kind: 'comment', refId: `${tag}_p`, text: 'S5 지운 글 댓글' })),
+  ].join('\n'));
+  const cases = [
+    ['att_1', '옛 출근 upsert(첫 기기) → 1행', (v) => v === '1'],
+    ['att_2', '옛 출근 upsert(둘째 기기 · 같은 직원 열린 기록) → 23505 attendance_one_open_uq(0632)', (v) => /^23505 .*attendance_one_open_uq/.test(v)],
+    ['swap_1', '옛 교대 insert(첫 기기) → 1행', (v) => v === '1'],
+    ['swap_2', '옛 교대 insert(둘째 기기 · 같은 근무·날짜) → 23505 swap_requests_one_live_uq(0633)', (v) => /^23505 .*swap_requests_one_live_uq/.test(v)],
+    ['ps_insert', '옛 제안 insert → 1행', (v) => v === '1'],
+    ['ps_review_1', '옛 제안 검토 update(대기) → 1행', (v) => v === '1'],
+    ['ps_review_2', '옛 제안 검토 update(이미 검토됨) → 0행(0631 트리거 · 옛 writeStrict 가 실패로 본다)', (v) => v === '0'],
+    ['post_insert', '옛 글 upsert → 1행', (v) => v === '1'],
+    ['comment_live', '옛 댓글 upsert(글 있음) → 1행', (v) => v === '1'],
+    ['post_delete', '옛 글 delete → 1행', (v) => v === '1'],
+    ['comment_gone', '옛 댓글 upsert(지운 글) → P0001 feed_parent_gone(0635)', (v) => /^P0001 feed_parent_gone/.test(v)],
+  ];
+  for (const [n, label, ok] of cases) {
+    if (w.err) { check(label, false, w.err); continue; }
+    const v = w.steps.get(n)?.[0];
+    check(label, typeof v === 'string' && ok(v), `받은 값 ${JSON.stringify(v)}`);
+  }
 }
 
-console.log(`\n${pass} PASS / ${fail} FAIL${wait ? ` / ${wait} WAIT` : ''}`);
+console.log(`\n${pass} PASS / ${fail} FAIL${wait ? ` / ${wait} WAIT` : ''}${argSkip.length ? ` / skip ${argSkip.length}(인자 이름 대조 못 함: ${[...new Set(argSkip)].sort().join(',')})` : ''}`);
 process.exit(fail ? 1 : 0);

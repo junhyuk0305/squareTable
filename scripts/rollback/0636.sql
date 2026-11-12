@@ -1,5 +1,7 @@
 -- rollback/0636.sql — 0636 을 되돌린다(묶음 함수를 지우고 add_shift_series 를 0242 본문으로).
 -- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0636.sql --linked
+-- 주의: 새 웹은 apply_shift_series_ops 를 부른다(src/lib/db.ts applyShiftSeriesOpsRpc). 지우면 새 웹의 반복 근무 저장이 함수 없음으로 실패한다. 옛 길로 돌아가지 않는다.
+-- 순서: 새 웹을 올린 뒤라면 웹을 36d5f2e 로 먼저 되돌린 뒤 이 파일을 돌린다. 되돌리기는 0682 → 0600 역순이다. 새 앱이 나간 뒤에는 쓰지 않는다.
 begin;
 drop function if exists public.apply_shift_series_ops(text, jsonb, text, text, boolean);
 create or replace function public.add_shift_series(
