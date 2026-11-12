@@ -77,7 +77,8 @@ const harness = Object.keys(npmName).map((file) => {
     pure: !/SUPABASE|lib\/cdp|QA_ORIGIN|localhost:8081/.test(t),
     // 전역 스위치(app_config.billing_free_mode)를 바꾸는 하니스도 혼자 돈다. 같이 돌던 하니스의 전제가 흔들린다.
     serial: /lib\/(cdp|qa-fixed-accounts)|owner@|staff2?@|hq@pilot|\.0812/.test(t)
-      || /(update|svcPatch|set value)[^\n]{0,80}billing_free_mode|billing_free_mode[^\n]{0,80}(\.update\(|svcPatch)/.test(t),
+      // 쓰는 방식이 파일마다 달라서(update·upsert·svcPatch·svcWrite·setConfig·setFreeMode·psql update) 스위치 이름 + 쓰기 동작이 한 파일에 있으면 혼자 돌린다.
+      || (/billing_free_mode/.test(t) && /\.update\(|\.upsert\(|svcPatch|svcWrite|setConfig|setFreeMode|update public\.app_config/.test(t)),
     // 전화번호 = 접두 4자리 + 시각 앞 7자리(100ms 단위). 같은 때 시작한 두 하니스가 접두를 같이 쓰면 번호가 같아져
     // 한쪽 가입의 번호가 비고 합류가 막힌다(qa-room-matrix·qa-room-isolation 의 approve_member not_pending). 그래서 접두를 모은다.
     phones: new Set([
