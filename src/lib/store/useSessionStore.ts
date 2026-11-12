@@ -1490,7 +1490,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const [feat, list] = await Promise.all([myKindFeatures(), mySpaces()]);
     if (gen !== _signOutGen || get().userId !== uid) return { error: null };
     // 입구를 못 읽으면 "못 쓴다"로 둔다(닫힌 쪽). 목록을 못 읽으면 지난 목록을 남긴다(공간이 사라진 듯 보이지 않게).
-    const open = feat.data ? spaceOpenOf(feat.data) : false;
+    // 한 번 읽은 뒤의 다시 읽기(복귀·포커스 · C-2)에서 입구를 못 읽으면 지난 값을 둔다. 바꾸는 건 읽기가 성공했을 때뿐이다.
+    //   닫힌 쪽으로 굳히면 공간 문지기가 연결이 잠깐 끊긴 것만으로 /stores 로 보낸다.
+    const open = feat.data ? spaceOpenOf(feat.data) : get().spacesLoaded ? (get().spaceOpen ?? false) : false;
     const spaces = list.data ?? get().spaces;
     const cur = get().spaceId ? spaces.find((x) => x.id === get().spaceId) : undefined;
     set({

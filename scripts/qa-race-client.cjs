@@ -494,6 +494,44 @@ async function main() {
     assert.deepEqual({ spaceId: g.spaceId, spaceName: g.spaceName, spaces: g.spaces.length, spacesLoaded: g.spacesLoaded }, { spaceId: '', spaceName: '', spaces: 0, spacesLoaded: false });
   });
 
+  // ── C-2 후속 복귀·포커스 다시 읽기에서 입구 읽기가 실패하면 지난 값을 둔다(2026-11-13 · verify) ──
+  console.log('— C-2 loadSpaces 입구 읽기 실패 —');
+  await test('C-2 입구 읽기 실패 = 한 번 읽은 뒤엔 지난 spaceOpen 유지 · 첫 읽기 실패는 닫힌 쪽 · 성공하면 바뀐다', async () => {
+    let feat = { data: null, error: { message: 'network' } };
+    const anyMod = () => new Proxy({}, { get: (_t, n) => (typeof n !== 'string' || n === '__esModule' || n === 'then' ? undefined : () => undefined) });
+    const s = setup('src/lib/store/useSessionStore.ts', {
+      myKindFeatures: async () => feat,
+      mySpaces: async () => ({ data: [{ id: 'spA', name: 'A 공간', role: 'space_owner' }], error: null }),
+      spaceOpenOf: (f) => f.some((x) => x.kind === 'space' && x.feature === 'enter' && x.enabled === true),
+    }, {
+      'react-native': { Platform: { OS: 'web' } },
+      '@/lib/store/useSessionStore': undefined,
+      '@/lib/place/errors': { placeErrorMessage: (_e, f) => f ?? '', placeErrorCode: () => null },
+      '@/lib/analytics/track': { track: () => {}, reportError: () => {}, setAnalyticsContext: () => {}, flushAnalyticsBeforeSignOut: async () => {} },
+      ...Object.fromEntries(['@/lib/utils/userError', '@/lib/work/errors', '@/lib/utils/subscription', '@/lib/config/tiers', '@/lib/config/store-policy',
+        '@/lib/auth/googleRedirect', '@/lib/auth/googleNative', '@/lib/push/signOutPush', '@/lib/storage/authStorage', '@/lib/otp', '@/lib/account/copy',
+        '@/lib/account/findEmail', '@/lib/config/site', '@/lib/account/storeCopy', '@/lib/config/consent', '@/lib/storage/pendingDraft'].map((k) => [k, anyMod()])),
+    });
+    const st = s.mod.useSessionStore;
+    // 첫 읽기 실패 = 닫힌 쪽(false)
+    st.setState({ userId: 'A', spaceOpen: null, spacesLoaded: false, spaces: [] });
+    await st.getState().loadSpaces();
+    assert.equal(st.getState().spaceOpen, false, '첫 읽기 실패 ' + st.getState().spaceOpen);
+    // 성공(열림) → true
+    feat = { data: [{ kind: 'space', feature: 'enter', enabled: true }], error: null };
+    await st.getState().loadSpaces();
+    assert.equal(st.getState().spaceOpen, true, '성공 뒤 ' + st.getState().spaceOpen);
+    // 복귀·포커스 다시 읽기에서 입구 읽기 실패 → 지난 값(true) 그대로(/stores 로 튕기지 않는다)
+    feat = { data: null, error: { message: 'network' } };
+    const r = await st.getState().loadSpaces();
+    assert.equal(st.getState().spaceOpen, true, '다시 읽기 실패에 spaceOpen ' + st.getState().spaceOpen);
+    assert.ok(r.error, '실패를 알리지 않았다');
+    // 성공(닫힘) → false 로 바뀐다
+    feat = { data: [{ kind: 'space', feature: 'enter', enabled: false }], error: null };
+    await st.getState().loadSpaces();
+    assert.equal(st.getState().spaceOpen, false, '닫힘 성공 뒤 ' + st.getState().spaceOpen);
+  });
+
   // ── C-4 공간 착지 기억은 그 계정의 것이다(2026-11-13) ──
   console.log('— C-4 pendingSpaceTarget —');
   await test('C-4 앞 계정이 남긴 착지 기억을 다음 계정이 받지 않는다 · 로그인 전 기억은 처음 계정이 이어받는다', async () => {

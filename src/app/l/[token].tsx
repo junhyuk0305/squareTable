@@ -25,6 +25,7 @@ import { EduLinkView } from '@/components/edu/EduLinkView';
 import { HandoffCode } from '@/components/edu/HandoffCode';
 import { openEduLink, fetchEduLinkEntries, type EduLinkEntry, type EduLinkInfo } from '@/lib/db';
 import { askClaimEduGuests } from '@/lib/edu/autoClaim';
+import { loadEduGuest } from '@/lib/edu/guestKey';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Gap, Space, screenScrollStyle } from '@/lib/theme/layout';
@@ -49,9 +50,22 @@ export default function EduLinkScreen() {
   //   열쇠가 없거나 이미 답했으면 묻지 않는다. 화면은 지금처럼 손님 열쇠로 돈다.
   const userId = useSessionStore((s) => s.userId);
   const signedIn = useSessionStore((s) => s.status === 'signed_in');
+  // 옮기기를 마친 뒤 이 링크 열쇠가 이 기기에서 지워졌으면(옮김 · 남의 것 · 옮기지 않기) EduAsk 를 새로 그린다(N-1).
+  //   EduAsk 는 처음 그릴 때 읽은 열쇠를 쥐고 있다. 그대로 두면 서버가 더 풀지 않는 열쇠로 묻다가 새 손님 행이 생긴다.
+  const [askGen, setAskGen] = useState(0);
   useEffect(() => {
-    if (signedIn && userId) void askClaimEduGuests(userId);
-  }, [signedIn, userId]);
+    if (!signedIn || !userId) return;
+    let alive = true;
+    void (async () => {
+      const had = tk ? await loadEduGuest(tk) : null;
+      await askClaimEduGuests(userId);
+      if (!alive || !had) return;
+      // 열쇠는 autoClaim 이 이미 지웠다(서버가 답한 열쇠 · 옮기지 않기). 남아 있으면 옮기기 실패라 화면을 그대로 둔다.
+      if (await loadEduGuest(tk)) return;
+      if (alive) setAskGen((n) => n + 1);
+    })();
+    return () => { alive = false; };
+  }, [signedIn, userId, tk]);
 
   useEffect(() => {
     if (!tk || openedFor.current === tk) return;
@@ -93,7 +107,7 @@ export default function EduLinkScreen() {
             entries={entries}
             askSlot={
               <View style={st.askStack}>
-                <EduAsk token={tk} place={info.placeKind} ownerName={info.ownerName} />
+                <EduAsk key={askGen} token={tk} place={info.placeKind} ownerName={info.ownerName} expiresAt={info.expiresAt} />
                 {/* 이어받기 코드(사용자 결정 3) — 웹에서만. 앱 안에서는 /link/[id] 가 같은 일을 한다. */}
                 {Platform.OS === 'web' ? <HandoffCode token={tk} /> : null}
               </View>

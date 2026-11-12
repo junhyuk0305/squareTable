@@ -83,10 +83,12 @@ function aiRows(a: EduAnswer): KnowhowRow[] {
  *   넘기면 이름 칸이 없고 기기 저장소를 읽거나 쓰지 않는다(계정이 바뀐 기기에 남의 열쇠가 남지 않게). 웹 손님 화면은 넘기지 않는다.
  * focusUq = 답 알림 착지(?uqId= · S16). 그 질문 카드가 그려지면 onFocusCard 로 한 번 알린다(화면이 스크롤한다 · 1112 fix 8).
  *   옛 서버(uq_id 칸 없음)면 맞는 카드가 없어 아무 일도 없다.
+ * expiresAt = 화면이 edu_link_open 으로 이미 받은 링크 마감(웹 손님 화면 /l/[token] 이 넘긴다 · null = 마감 없음).
+ *   빈 목록에 열쇠를 지울 때 "링크가 아직 열려 있다"를 이것으로 본다. 안 넘기면(모름) 지우지 않는다.
  */
-export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard }: {
+export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard, expiresAt }: {
   token: string; place: EduPlace | null; ownerName: string; me?: EduGuest;
-  focusUq?: string; onFocusCard?: (card: View) => void;
+  focusUq?: string; onFocusCard?: (card: View) => void; expiresAt?: string | null;
 }) {
   const owner = eduOwnerWord(place, ownerName);
   const [guest, setGuest] = useState<EduGuest | null>(me ?? null);
@@ -127,11 +129,15 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard }: {
       // ★0691(C-1): 웹 손님 열쇠는 첫 질문과 함께 생긴다. 그런데 서버가 질문을 하나도 안 주면 그 열쇠는 계정으로 옮겼거나 못 쓰는 열쇠다.
       //   이 기기에서 지우고 처음 화면(이름 칸)으로 둔다. 공용 기기의 다음 사람이 앞사람 이름으로 묻지 않게 한다. 앱 안 링크(me)는 대상이 아니다.
       if (!alive || me || !list || list.length > 0) return;
+      // 링크가 닫히거나 마감이 지나도 서버는 0행을 준다(0401 edu_link_answers). 그때는 열쇠 탓이 아니라 지우지 않는다.
+      //   열려 있나 = 화면이 가진 마감(expiresAt)으로 본다. 서버를 더 부르지 않는다.
+      const linkOpen = expiresAt !== undefined && (expiresAt === null || Date.parse(expiresAt) > Date.now());
+      if (!linkOpen) return;
       await forgetEduGuest(token);
       if (alive) setGuest(null);
     })();
     return () => { alive = false; };
-  }, [token, refresh, me]);
+  }, [token, refresh, me, expiresAt]);
 
   const sendToOwner = useCallback(async (g: EduGuest, cqId: string, unhelpful: boolean) => {
     setSendingId(cqId);
