@@ -460,6 +460,51 @@ async function main() {
     assert.equal(JSON.stringify(state.rows[0]), JSON.stringify({ id: 'a', status: 'pending', note: 'new' }));
   });
 
+  // ── C-3 로그아웃 없는 계정 바뀜(2026-11-13) — 앞 계정 공간 값이 남지 않는다 ──
+  console.log('— C-3 SIGNED_IN(다른 계정) —');
+  await test('C-3 다른 계정 SIGNED_IN 이면 앞 계정 공간 값(spaceId·spaceName·spaces)을 비운다', async () => {
+    let authCb = null;
+    const user = (id) => ({ id, email: `${id}@qa.local`, user_metadata: {} });
+    const anyMod = () => new Proxy({}, { get: (_t, n) => (typeof n !== 'string' || n === '__esModule' || n === 'then' ? undefined : () => undefined) });
+    const supa = { HAS_SUPABASE: true, supabase: { auth: {
+      getSession: async () => ({ data: { session: { user: user('A') } }, error: null }),
+      onAuthStateChange: (cb) => { authCb = cb; return { data: { subscription: { unsubscribe() {} } } }; },
+    } } };
+    const s = setup('src/lib/store/useSessionStore.ts', {
+      fetchSessionBootstrap: async () => ({ data: { profile: { name: 'qa', role: 'junior' }, unit_id: '', my_units: [] }, error: null }),
+    }, {
+      '@/lib/supabase': supa,
+      'react-native': { Platform: { OS: 'web' } },
+      '@/lib/store/useSessionStore': undefined,
+      '@/lib/place/errors': { placeErrorMessage: (_e, f) => f ?? '', placeErrorCode: () => null },
+      '@/lib/analytics/track': { track: () => {}, reportError: () => {}, setAnalyticsContext: () => {}, flushAnalyticsBeforeSignOut: async () => {} },
+      ...Object.fromEntries(['@/lib/utils/userError', '@/lib/work/errors', '@/lib/utils/subscription', '@/lib/config/tiers', '@/lib/config/store-policy',
+        '@/lib/auth/googleRedirect', '@/lib/auth/googleNative', '@/lib/push/signOutPush', '@/lib/storage/authStorage', '@/lib/otp', '@/lib/account/copy',
+        '@/lib/account/findEmail', '@/lib/config/site', '@/lib/account/storeCopy', '@/lib/config/consent', '@/lib/storage/pendingDraft'].map((k) => [k, anyMod()])),
+    });
+    const st = s.mod.useSessionStore;
+    await st.getState().init();
+    await flush();
+    assert.equal(st.getState().userId, 'A', 'A 로 로그인되지 않았다 · ' + st.getState().status);
+    st.setState({ spaceId: 'spA', spaceName: 'A 공간', spaceRole: 'space_owner', spaces: [{ id: 'spA', name: 'A 공간', role: 'space_owner' }], spacesLoaded: true, spaceOpen: true });
+    authCb('SIGNED_IN', { user: user('B') });
+    await flush(12);
+    const g = st.getState();
+    assert.equal(g.userId, 'B', 'B 로 바뀌지 않았다');
+    assert.deepEqual({ spaceId: g.spaceId, spaceName: g.spaceName, spaces: g.spaces.length, spacesLoaded: g.spacesLoaded }, { spaceId: '', spaceName: '', spaces: 0, spacesLoaded: false });
+  });
+
+  // ── C-4 공간 착지 기억은 그 계정의 것이다(2026-11-13) ──
+  console.log('— C-4 pendingSpaceTarget —');
+  await test('C-4 앞 계정이 남긴 착지 기억을 다음 계정이 받지 않는다 · 로그인 전 기억은 처음 계정이 이어받는다', async () => {
+    const t = load('src/lib/place/spaceTarget.ts', { 'react-native': { Platform: { OS: 'android' } } });
+    t.rememberSpaceTarget({ space: 'spA', path: '/space/joined/spA', href: '/space/joined/spA', uid: 'A' });
+    assert.equal(t.pendingSpaceTarget('B'), null, 'B 가 A 의 기억을 받았다');
+    t.rememberSpaceTarget({ space: 'spX', path: '/space/home', href: '/space/home?space=spX', uid: '' });
+    assert.equal(t.pendingSpaceTarget('A')?.space, 'spX', '로그인 전 기억을 잃었다');
+    assert.equal(t.pendingSpaceTarget('B'), null, '이어받은 뒤 다른 계정이 받았다');
+  });
+
   console.log(`\nqa-race-client: pass ${pass} · fail ${fail} · AI 호출 0회`);
   process.exitCode = fail ? 1 : 0;
 }

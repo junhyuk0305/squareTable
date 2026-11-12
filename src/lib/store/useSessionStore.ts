@@ -637,9 +637,13 @@ async function loadProfile(
     // 더 늦게 시작한 로드가 이미 반영됐으면 버린다(C3 · 원본 #65).
     if (seq < _appliedSeq) return;
     _appliedSeq = seq;
+    // 로그아웃 없이 다른 계정으로 바뀌었으면(웹 다른 탭의 매직 링크 → SIGNED_IN) 앞 계정의 공간 값을 같이 비운다(2026-11-13 C-3).
+    //   공간 값은 데이터 스토어가 아니라 tenantReset 이 못 비운다. 비우면 공간 _layout 이 새 계정 목록을 다시 읽는다.
+    const accountChanged = useSessionStore.getState().userId !== userId;
     setUnitId(unitId || null);
     setAnalyticsContext({ userId, unitId: unitId || null, role }); // 관측 이벤트에 매장/유저/역할 태깅
     set({
+      ...(accountChanged ? NO_SPACE : null),
       stores,
       status: 'signed_in',
       sessionCheck: 'ok',

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
-import { Stack, Redirect, usePathname, useGlobalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { Stack, Redirect, useFocusEffect, usePathname, useGlobalSearchParams } from 'expo-router';
 
+import { useForegroundRefresh } from '@/lib/app/useForegroundRefresh';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { showToast } from '@/lib/store/useToastStore';
@@ -64,16 +65,18 @@ export default function SpaceLayout() {
   const locPath = loc ? decodeURIComponent(loc.pathname) : '';
   const fromLoc = loc && locPath.startsWith('/space/') ? spaceTargetOf(locPath, new URLSearchParams(loc.search).get('space') ?? undefined) : '';
   const here = fromRouter || fromLoc;
+  // 기억에 계정을 붙인다. 로그인 확인 중의 userId 는 데모 값이라 '' 로 두고, 처음 로그인한 계정이 이어받는다(C-4).
+  const uid = status === 'signed_in' ? userId : '';
   if (fromRouter) {
     const q = new URLSearchParams(Object.entries(params).flatMap(([k, v]) => (k === 'id' ? [] : [[k, String(v)]]))).toString();
-    rememberSpaceTarget({ space: here, path: pathname, href: q ? `${pathname}?${q}` : pathname });
+    rememberSpaceTarget({ space: here, path: pathname, href: q ? `${pathname}?${q}` : pathname, uid });
   } else if (fromLoc && loc) {
-    rememberSpaceTarget({ space: here, path: locPath, href: loc.pathname + loc.search });
+    rememberSpaceTarget({ space: here, path: locPath, href: loc.pathname + loc.search, uid });
   }
   // 막 나온 공간(나가기·지우기·매장으로 돌아가기 직후)이면 다시 들어가지 않는다 — 화면은 이미 매장 목록으로 가는 중이다.
   const leaving = !!here && justLeftSpace(here);
   if (status === 'signed_out' || leaving) rememberSpaceTarget(null);
-  const pending = pendingSpaceTarget();
+  const pending = pendingSpaceTarget(uid);
   const target = here || pending?.space || '';
   /** 들어가지 못한 공간(같은 경로로 다시 시도하지 않는다). */
   const [failed, setFailed] = useState('');
@@ -90,6 +93,18 @@ export default function SpaceLayout() {
   useEffect(() => {
     if (status === 'signed_in' && userId && !spacesLoaded) void loadSpaces();
   }, [status, userId, spacesLoaded, loadSpaces]);
+  // 앱 복귀(30초 넘게 뒤)·화면 포커스 때 공간 목록을 다시 읽는다(C-2 · 매장 층 useForegroundRefresh 와 같은 장치).
+  //   내보내지거나 공간이 지워졌으면 loadSpaces 가 공간 밖으로 두고, 아래 문지기가 매장 목록으로 보낸다.
+  //   첫 읽기는 바로 위 effect 가 한다(spacesLoaded 전에는 여기서 부르지 않는다).
+  useForegroundRefresh(status === 'signed_in' && !!userId, () => {
+    if (useSessionStore.getState().spacesLoaded) void useSessionStore.getState().loadSpaces();
+  });
+  useFocusEffect(
+    useCallback(() => {
+      const s = useSessionStore.getState();
+      if (s.status === 'signed_in' && s.userId && s.spacesLoaded) void s.loadSpaces();
+    }, []),
+  );
 
   // 경로가 가리키는 공간에 먼저 들어간다. 이미 그 공간이면 아무것도 안 한다.
   const needEnter = ready && !leaving && !!target && target !== spaceId && target !== failed;
@@ -110,8 +125,15 @@ export default function SpaceLayout() {
   if (status === 'loading') return null;
   if (status === 'signed_out') return <Redirect href="/" />;
   if (!spacesLoaded) return null;
-  if (spaceOpen !== true) return <Redirect href="/stores" />;
-  if (pendingStart && pathname !== START) return <Redirect href={START} />;
+  // Redirect 갈래에서는 착지 기억을 지운다. 남기면 나중에 내 공간을 열 때 그 옛 공간으로 들어가려 한다(C-4).
+  if (spaceOpen !== true) {
+    rememberSpaceTarget(null);
+    return <Redirect href="/stores" />;
+  }
+  if (pendingStart && pathname !== START) {
+    rememberSpaceTarget(null);
+    return <Redirect href={START} />;
+  }
   if (target && target === failed) {
     rememberSpaceTarget(null);
     return <Redirect href="/stores" />;

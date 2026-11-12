@@ -20,12 +20,18 @@ export function justLeftSpace(id: string): boolean {
  * 확인 중에 공간을 가리키는 주소로 왔다(알림·벨·딥링크). 확인 중 공간 _layout 이 null 을 그리는 동안 경로가 /space 로 바뀌어
  * ?space= 와 /space/joined/<번호> 가 사라진다(11-11 실측). 레이아웃이 경로마다 다시 마운트돼 ref 로는 값이 사라진다 → 모듈에 둔다.
  */
-export type PendingSpace = { space: string; path: string; href: string };
+/** uid = 기억한 계정('' = 로그인 확인 전에 기억함 · 처음 로그인한 계정이 이어받는다). */
+export type PendingSpace = { space: string; path: string; href: string; uid: string };
 let pending: PendingSpace | null = null;
 export function rememberSpaceTarget(p: PendingSpace | null): void {
   pending = p;
 }
-export function pendingSpaceTarget(): PendingSpace | null {
+/** 지금 계정(uid)의 기억만 준다. 다른 계정이 남긴 기억은 지운다(2026-11-13 C-4 · 같은 기기 다음 계정이 옛 공간으로 가지 않게). */
+export function pendingSpaceTarget(uid: string): PendingSpace | null {
+  if (pending && uid) {
+    if (!pending.uid) pending = { ...pending, uid };
+    else if (pending.uid !== uid) pending = null;
+  }
   return pending;
 }
 
