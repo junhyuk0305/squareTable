@@ -70,6 +70,7 @@ begin
    order by a.check_in desc nulls last
    limit 1;
   if v_id is null then return jsonb_build_object('status', 'already'); end if;
+  -- race: 조건부 update(check_out is null)가 한 번만 닫는다. 진 쪽은 0행 → already.
   update public.attendance a set check_out = now()
    where a.id = v_id and a.check_out is null
   returning * into r;

@@ -20,6 +20,11 @@
     "handle_new_user": ["qa-onboarding"],
     "approve_member": ["qa-onboarding"]
   },
+  "table": {
+    "_": "마이그레이션이 이 표를 바꾸면 고른다. 표 이름을 본문에 적지 않아 자동으로 안 골라지는 하니스다(찾은결함 11).",
+    "attendance": ["qa-audit-attendance", "qa-open-record"],
+    "swap_requests": ["qa-audit-attendance", "qa-shift-requests", "qa-j15"]
+  },
   "migrations": [
     ["^supabase/migrations/", ["qa-old-client-compat", "qa-definer-filters"]]
   ],

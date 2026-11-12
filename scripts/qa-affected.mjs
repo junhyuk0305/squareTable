@@ -113,6 +113,8 @@ for (const f of changed) {
     // 넓어서 걸러지는 함수라도 꼭 돌릴 하니스(qa-map.json fn 표 · 예: 가입 함수 → qa-onboarding).
     for (const fn of fns) for (const id of map.fn?.[fn] ?? []) for (const h of harness) if (h.id === id) pick(h, `${tag} 함수 ${fn} (표)`);
     for (const tb of tables) pickOrNote('표', tb, harness.filter((h) => h.tables.has(tb)));
+    // 표 이름을 적지 않는 하니스라도 그 표를 바꾸면 꼭 돌릴 것(qa-map.json table 표 · 0632·0633 이 놓친 자리).
+    for (const tb of tables) for (const id of map.table?.[tb] ?? []) for (const h of harness) if (h.id === id) pick(h, `${tag} 표 ${tb} (표)`);
     // 마이그레이션이면 늘 도는 것(옛 앱 호환 · 정의자 함수 필터) = qa-map.json 의 migrations 표.
     for (const [re, ids] of map.migrations ?? []) if (new RegExp(re).test(f)) for (const h of harness) if (ids.includes(h.id)) pick(h, `표 ${re.slice(0, 30)}`);
   } else if (/^supabase\/functions\/([\w-]+)\//.test(f)) {

@@ -41,6 +41,7 @@ begin
     raise exception 'invalid_argument';
   end if;
 
+  -- race: 조건부 update(status = 'pending' · 자동 반려)가 한 번만 바꾼다. 진 쪽은 0행 → already.
   update public.playbook_suggestions ps
      set status = p_status,
          reviewed_at = now(),
