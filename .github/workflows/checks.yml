@@ -34,4 +34,10 @@ jobs:
       - name: 무경계 읽기 래칫
         if: ${{ !cancelled() }}
         run: npm run check:select-bounds
+      - name: 서버 오류 코드 문구 래칫
+        if: ${{ !cancelled() }}
+        run: npm run check:error-codes
+      - name: 푸시 경로·카드 알림 표 동기화
+        if: ${{ !cancelled() }}
+        run: npm run check:push-route-sync && npm run check:card-alert-sync
       # check:client-trust 는 넣지 않는다. 로컬 도커 DB(pg_policies)를 읽어서 CI 에서는 시작하자마자 멈춘다(2026-11-12 실측).
