@@ -127,6 +127,7 @@
     "qa:role-read:local": "node scripts/qa-role-read-boundary.mjs --local",
     "qa:notif-axis": "node --no-warnings scripts/qa-notif-axis.mjs",
     "qa:notif-ack": "node scripts/qa-notif-ack.mjs --allow-remote",
+    "qa:affected": "node scripts/qa-affected.mjs",
     "qa:core": "node scripts/qa-journey-join.mjs --allow-remote && node scripts/qa-journey-task.mjs --allow-remote && node scripts/qa-journey-quiz.mjs --allow-remote && node scripts/qa-journey-ai.mjs --allow-remote",
     "qa:owner-alerts": "node scripts/qa-owner-alerts.mjs --allow-remote",
     "qa:ai-units": "node scripts/qa-ai-units.mjs --allow-remote",

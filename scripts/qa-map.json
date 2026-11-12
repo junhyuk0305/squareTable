@@ -1,0 +1,16 @@
+{
+  "_": "qa-affected.mjs 가 읽는다. DB·엣지·src 경로를 직접 읽는 하니스는 자동으로 찾으니 여기 적지 않는다. 여기에는 자동으로 못 찾는 화면·클라 코드만 적는다. 왼쪽 = 바뀐 파일 경로 정규식, 오른쪽 = scripts/ 의 하니스 파일 이름(확장자 없이).",
+  "src": [
+    ["^src/lib/quiz/|^src/components/(work|owner)/quiz/|^src/app/(owner/quiz|q)/", ["qa-quiz-grading", "qa-training", "qa-quiz-junior", "qa-quiz-schedule", "qa-quiz-pick", "qa-pairing", "qa-quiz-ui-browser", "qa-quiz-formats-browser"]],
+    ["^src/lib/(notif|push)/", ["qa-notify-prefs", "qa-notif-axis", "qa-notif-ack", "qa-push"]],
+    ["^src/lib/(auth|invite|account)/", ["qa-onboarding", "qa-complete-profile", "qa-profile-update", "qa-session-readfail"]],
+    ["^src/lib/(ai|knowhow)/", ["qa-ai-core", "qa-knowhow-copy", "qa-knowhow-split"]],
+    ["^src/lib/(iap|payments)/", ["qa-billing-tiers", "qa-payment-claims", "qa-store-slots"]],
+    ["^src/lib/brand/|^src/(app|components)/hq/", ["qa-brand", "qa-brand-boundary"]],
+    ["^src/components/schedule/|^src/app/owner/timesheet/", ["qa-shift-time", "qa-shift-ui", "qa-attendance-roundtrip"]],
+    ["^src/lib/work/|^src/components/work/", ["qa-task-knowhow"]],
+    ["^src/lib/(place|edu)/|^src/app/space/|^src/components/(space|place|edu)/", ["qa-space-isolation"]],
+    ["^src/(app|components)/", ["qa-journey-join", "qa-journey-task", "qa-journey-quiz", "qa-journey-ai", "qa-crawl"]]
+  ],
+  "heavy": ["qa-journey-join", "qa-journey-task", "qa-journey-quiz", "qa-journey-ai", "qa-crawl"]
+}
