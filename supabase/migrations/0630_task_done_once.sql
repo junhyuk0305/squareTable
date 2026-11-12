@@ -58,6 +58,14 @@ begin
   end if;
   v_task := public._task_done_text(v_unit, p_template_id);
   if v_task is null then raise exception 'task_not_found'; end if;
+  -- ★호출자가 볼 수 없는 비공개 할 일은 없는 것으로 친다(I1 /cso · 2026-11-12). 정의자라 RLS 가 문구를 안 거른다.
+  --   판정은 wt_select_scope 정책과 같다. 안 막으면 work_done 에서 읽은 남의 비공개 할 일 id 로 그 문구가 매장 피드에 실린다.
+  if exists (select 1 from public.work_templates t
+              where t.id = p_template_id and t.unit_id = v_unit
+                and not (coalesce(t.scope, 'shared') = 'shared' or v_uid = any (t.owner_ids) or t.created_by = v_uid
+                         or (t.created_by is null and public.auth_is_owner()))) then
+    raise exception 'task_not_found';
+  end if;
 
   -- 완료 마크의 방: 할 일의 방 → 없으면 앱이 보낸 방(이 매장 방일 때만). 완료 글은 매장 단위(방 없음 · 2026-08-19 판정 Ⓐ).
   select t.room_id into v_room from public.work_templates t where t.id = p_template_id and t.unit_id = v_unit;

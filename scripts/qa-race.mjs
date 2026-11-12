@@ -524,6 +524,15 @@ def('H3A', 'complete_task 두 직원 동시 · uncomplete_task 권한과 두 행
   const rbu = R.psqlRun(`${R.as(B.id)}\nselect public.uncomplete_task(${q(today)}, ${q(tpl)}) ->> 'status';`);
   const left = n(`select (select count(*) from public.work_done where unit_id = ${q(w.unit)} and template_id = ${q(tpl)}) + (select count(*) from public.work_feed where unit_id = ${q(w.unit)} and data->>'refId' = ${q(tpl)})`);
   check('H3A', '완료자 해제 → 두 행 다 지움', rbu.status === 0 && left === 0, `${(rbu.stdout || rbu.stderr).trim().slice(-60)} · 남은 ${left}`);
+  // I1 /cso: 남의 비공개 할 일 id 로 완료 → task_not_found · 문구가 피드에 안 실린다. 본인(대상자)은 된다.
+  const ptpl = `wt_rcp_${w.s}`;
+  R.val(`insert into public.work_templates(id, unit_id, section, text, scope, owner_ids, created_by) values (${q(ptpl)}, ${q(w.unit)}, 'open', 'RC 비공개 문구', 'private', array[${q(A.id)}]::uuid[], ${q(A.id)}); select 1;`);
+  const rp = R.psqlRun(`${R.as(B.id)}\nselect public.complete_task(${q(today)}, ${q(ptpl)})::text;`);
+  const leak = n(`select count(*) from public.work_feed where unit_id = ${q(w.unit)} and data->>'text' like '%RC 비공개 문구%'`);
+  check('H3A', '남의 비공개 할 일 완료 = task_not_found · 피드 0', rp.status !== 0 && /task_not_found/.test(rp.stderr) && leak === 0, `${(rp.stderr || rp.stdout).trim().slice(0, 100)} · 피드 ${leak}`);
+  const ro = R.psqlRun(`${R.as(A.id)}\nselect public.complete_task(${q(today)}, ${q(ptpl)}) ->> 'status';`);
+  check('H3A', '대상자 본인 비공개 할 일 완료 = ok', ro.status === 0 && /ok\s*$/.test(ro.stdout), (ro.stdout || ro.stderr).trim().slice(-80));
+  R.val(`delete from public.work_feed where unit_id = ${q(w.unit)} and data->>'refId' = ${q(ptpl)}; delete from public.work_done where unit_id = ${q(w.unit)} and template_id = ${q(ptpl)}; delete from public.work_templates where id = ${q(ptpl)}; select 1;`);
 });
 
 def('H4A', 'review_suggestion 두 관리자 동시 승인 · 승인과 반려 동시 · 자동 반려 뒤 승인(0631)', async (W) => {
