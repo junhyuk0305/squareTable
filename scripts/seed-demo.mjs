@@ -203,7 +203,9 @@ async function main() {
   // work_templates 를 위에서 purge 했으므로 링크도 cascade 로 지워졌다 → 여기서 다시 건다.
   console.log('10-b) 업무↔노하우 링크(work_template_knowhow)');
   const link = (template_id, entry_id) => ({ unit_id: UNIT, template_id, entry_id, added_by: OWNER });
-  await step('work_template_knowhow', db.from('work_template_knowhow').upsert([
+  // pb_routine_17…·pb_knowhow_17… 는 라이브에서 앱으로 만든 노하우다. 로컬(seed.mjs 의 12개)에는 없어서
+  // 그대로 넣으면 entry_id 외래키로 죽는다. 있는 노하우에만 잇고 빠진 것은 찍는다.
+  const links = [
     link('demo_t_open_1', 'pb_routine_001'),                    // 오픈 루틴 — 7시 30분
     link('demo_t_open_1', 'pb_knowhow_001'),                    // 에스프레소 추출 — 손목 회전 한 번
     link('demo_t_open_3', 'pb_routine_1785477969221_0'),        // 포스 마감 정산 순서
@@ -212,7 +214,13 @@ async function main() {
     link('demo_t_close_1', 'pb_knowhow_1785470277654_4'),       // 마감 청소
     link('demo_t_close_2', 'pb_routine_1783177827478_0'),       // 바닥 청소 시 베이킹소다 활용
     link('demo_t_close_3', 'pb_routine_1785477969221_0'),       // 포스 마감 정산 순서
-  ], { onConflict: 'template_id,entry_id' }));
+  ];
+  const { data: haveRows, error: haveErr } = await db.from('playbook_entries').select('id').eq('unit_id', UNIT).in('id', [...new Set(links.map((l) => l.entry_id))]);
+  if (haveErr) throw haveErr;
+  const have = new Set(haveRows.map((r) => r.id));
+  const missing = [...new Set(links.filter((l) => !have.has(l.entry_id)).map((l) => l.entry_id))];
+  if (missing.length) console.log(`  · 이 DB 에 없는 노하우 ${missing.length}개는 잇지 않는다: ${missing.join(', ')}`);
+  await step('work_template_knowhow', db.from('work_template_knowhow').upsert(links.filter((l) => have.has(l.entry_id)), { onConflict: 'template_id,entry_id' }));
 
   // ════════════════════════════════════════════════════════
   console.log('11) 오늘 완료 체크(work_done) — 오픈 항목은 이수민이 완료, 마감은 미완료');
