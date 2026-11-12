@@ -73,6 +73,8 @@ async function withPage({ width = 1600, height = 1000, session = hqSession } = {
   const { page, close } = await launch({ origin: ORIGIN, storageKey: STORAGE_KEY, width, height });
   try {
     await page.seedSession(session);
+    // 전면 무료 스위치(billing_free_mode)가 켜진 백엔드(로컬 기본값)에선 무료 공지 모달이 화면을 덮는다 — 본 것으로 둔다(qa-journey-join 과 같은 방식 · L-3).
+    await page.send('Page.addScriptToEvaluateOnNewDocument', { source: `try{localStorage.setItem('sqt.notice.free-until.v3','1')}catch(e){}` });
     return await fn(page);
   } finally {
     await close();

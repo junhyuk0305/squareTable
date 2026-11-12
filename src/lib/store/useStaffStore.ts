@@ -118,7 +118,7 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     // 화면 포커스·승인 성공·실시간 이벤트도 이 길로 다시 당긴다 — 전부 같은 가드를 지난다.
     const epoch = currentTenantEpoch();
     set({ fetchedAt: Date.now() });
-    // 재직 기간은 사장에게만 행이 온다(RLS). 0246 이 없는 서버에서는 실패한다 — 실패는 명부 실패로 보지 않고 빈 기간으로 둔다.
+    // 재직 기간은 사장에게만 행이 온다(RLS). 0246 이 없는 서버에서는 실패한다 — 실패는 명부 실패로 보지 않고 이전 기간(처음이면 빈 기간)으로 둔다.
     const isOwner = useSessionStore.getState().role === 'owner';
     const [staffRes, pendingRes, tenRes, joinRes, doneRes] = await Promise.all([
       fetchStaffProfiles(),
@@ -130,10 +130,12 @@ export const useStaffStore = create<StaffState>((set, get) => ({
       isOwner ? fetchJoinHistory() : Promise.resolve({ data: [] as JoinDone[], error: false }),
     ]);
     if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 명부를 쓰지 않는다
-    const tenures = tenRes.data;
     // ★읽기가 실패하면 이전 값을 둔다(M11) — 빈 명부로 덮으면 "직원 0명"이 사실인 양 굳는다. 실패는 loadError 로 말한다.
     //   역할 맵은 명부와 같은 멤버십 읽기에서 온다 — 그 읽기가 실패하면 명부도 실패(loadError)다.
-    set((s) => ({
+    //   재직 기간·합류 결과·처리 내역도 실패면 이전 값을 둔다(L-4). loadError 에는 넣지 않는다(명부 실패가 아니다).
+    set((s) => {
+      const tenures = tenRes.error ? s.tenures : tenRes.data;
+      return {
       ...(staffRes.error
         ? null
         : {
@@ -144,11 +146,12 @@ export const useStaffStore = create<StaffState>((set, get) => ({
           }),
       tenures,
       pending: pendingRes.error ? s.pending : pendingRes.data,
-      joinNotices: joinRes.data,
-      joinDone: doneRes.data,
+      joinNotices: joinRes.error ? s.joinNotices : joinRes.data,
+      joinDone: doneRes.error ? s.joinDone : doneRes.data,
       loaded: true,
       loadError: staffRes.error || pendingRes.error,
-    }));
+      };
+    });
   }),
 
   applyMock: (demo) =>

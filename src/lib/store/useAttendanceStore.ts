@@ -108,6 +108,10 @@ type State = {
   applyMock: (demo: boolean) => void;
 };
 
+// 진행 중인 출근 요청(낙관 행 id → 서버 기록 id · 실패면 null). 끝나면 지운다.
+// ★퇴근이 출근 응답보다 먼저 서버에 닿으면 열린 기록이 아직 없어 already 로 조용히 넘어간다(L-4) — 퇴근은 이걸 기다린다.
+const checkInFlight = new Map<string, Promise<string | null>>();
+
 export const useAttendanceStore = create<State>((set, get) => ({
   records: HAS_SUPABASE ? [] : seed,
   loaded: !HAS_SUPABASE,
@@ -176,7 +180,11 @@ export const useAttendanceStore = create<State>((set, get) => ({
     set((s) => ({ records: [rec, ...s.records] }));
     // ★M1(0632): 출근은 attendance_check_in. 열린 기록은 (매장, 직원)당 하나다 — 다른 기기에서 먼저 출근했으면 already 와 그 기록 id 가 온다.
     //   그때는 낙관 행을 서버 id 로 바꾸고(같은 id 가 이미 목록에 있으면 낙관 행만 뺀다) 다시 읽어 시각을 맞춘다. 오류가 아니다.
-    const result = attendanceCheckIn(rec.id, date).then((r) => {
+    const call = attendanceCheckIn(rec.id, date);
+    const serverId = call.then((r) => r?.id ?? null, () => null);
+    checkInFlight.set(rec.id, serverId);
+    void serverId.then(() => checkInFlight.delete(rec.id));
+    const result = call.then((r) => {
       if (!r) return false;
       if (r.status === 'already') {
         set((s) => ({
@@ -214,10 +222,14 @@ export const useAttendanceStore = create<State>((set, get) => ({
     set((s) => ({ records: s.records.map((r) => (r.id === open.id ? updated : r)) }));
     // ★M2(0632): 퇴근은 attendance_check_out — check_out 한 칸만 쓴다(행 통째 upsert 는 그 사이 고친 출근 시각을 옛 값으로 덮었다).
     //   근무 분은 서버 값(24시간 상한)으로 바꾼다. already = 다른 기기가 먼저 퇴근 → 다시 읽는다(오류 아님).
-    const result = attendanceCheckOut(open.id).then((r) => {
+    //   출근 요청이 아직 진행 중이면 그 결과(서버 id)를 기다렸다가 보낸다(L-4). 출근이 실패했으면 퇴근도 없다 — 낙관 행만 뺀다(출근 실패 문구는 이미 떴다).
+    const pendingIn = checkInFlight.get(open.id);
+    const result = (pendingIn ?? Promise.resolve(open.id)).then(async (id) => {
+      if (!id) { set((s) => ({ records: s.records.filter((x) => x !== updated) })); return true; }
+      const r = await attendanceCheckOut(id);
       if (!r) return false;
       if (r.status === 'already') { void get().hydrate(); return true; }
-      set((s) => ({ records: s.records.map((x) => (x === updated ? { ...updated, check_out: r.check_out, work_minutes: r.work_minutes } : x)) }));
+      set((s) => ({ records: s.records.map((x) => (x === updated ? { ...updated, id: r.id, check_out: r.check_out, work_minutes: r.work_minutes } : x)) }));
       return true;
     });
     saveRecord(

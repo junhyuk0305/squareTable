@@ -178,6 +178,8 @@ async function open(port, session) {
   const w = await launch({ origin: ORIGIN, storageKey: STORAGE_KEY, width: 460, height: 900, port });
   await w.page.seedSession(session);
   await w.page.send('Page.addScriptToEvaluateOnNewDocument', { source: INJECT });
+  // 전면 무료 스위치(billing_free_mode)가 켜진 백엔드(로컬 기본값)에선 무료 공지 모달이 화면을 덮는다 — 본 것으로 둔다(qa-journey-join 과 같은 방식 · L-3).
+  await w.page.send('Page.addScriptToEvaluateOnNewDocument', { source: `try{localStorage.setItem('sqt.notice.free-until.v3','1')}catch(e){}` });
   w.page.errSeen = 0;
   return w;
 }
@@ -638,8 +640,9 @@ try {
     await go(S.page, 'S', '/owner/work?view=todo', '업무 탭(새로고침)');
     await readTodoRows(S.page);
   }
-  // K5-b1: 어느 창이 work_done 요청을 먼저 보냈는지 기록(같은 PC 시계) — 완료자 = 먼저 저장한 사람(10-16 사용자 결정)
-  const armReq = (p) => p.eval(`(()=>{const f=window.fetch;window.__qaReq=[];window.fetch=(...a)=>{try{if(String(a[0]&&a[0].url||a[0]).includes('/work_done'))window.__qaReq.push(Date.now());}catch(e){}return f(...a);};return true;})()`);
+  // K5-b1: 어느 창이 완료 요청을 먼저 보냈는지 기록(같은 PC 시계) — 완료자 = 먼저 저장한 사람(10-16 사용자 결정)
+  //   완료는 rpc/complete_task 한 번이다(H3 · 0630~). '/work_done' 을 보면 실시간 재조회 GET 이 먼저 잡혀 순서가 틀린다.
+  const armReq = (p) => p.eval(`(()=>{const f=window.fetch;window.__qaReq=[];window.fetch=(...a)=>{try{if(String(a[0]&&a[0].url||a[0]).includes('/rpc/complete_task'))window.__qaReq.push(Date.now());}catch(e){}return f(...a);};return true;})()`);
   await Promise.all([armReq(J.page), armReq(S.page)]);
   await Promise.all([clickJs(J.page, todoBoxJs(TXT_REPEAT), 'J 체크'), clickJs(S.page, todoBoxJs(TXT_REPEAT), 'S 체크')]);
   await Promise.all([dismiss(J.page), dismiss(S.page)]);

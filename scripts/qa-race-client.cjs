@@ -227,6 +227,37 @@ async function main() {
     assert.equal(s.db.count('upsertAttendance'), 0);
     assert.equal(a.getState().records[0].work_minutes, 77);
   });
+  await test('L-4b 출근 요청이 끝나기 전 퇴근 → 출근 결과를 기다렸다가 서버 id 로 한 번 보낸다', async () => {
+    let finishIn;
+    const s = setup('src/lib/store/useAttendanceStore.ts', {
+      attendanceCheckIn: () => new Promise((r) => { finishIn = r; }),
+      attendanceCheckOut: async (id) => ({ status: 'ok', id, check_out: '2026-11-12T01:00:00.000Z', work_minutes: 5 }),
+    });
+    const a = s.mod.useAttendanceStore; a.setState(attBase);
+    a.getState().checkIn('me');
+    a.getState().checkOut('me');
+    await flush();
+    assert.equal(s.db.count('attendanceCheckOut'), 0, '출근 응답 전에 퇴근을 보냈다');
+    finishIn({ status: 'already', id: 'att_srv' });
+    await flush();
+    assert.deepEqual(s.db.args('attendanceCheckOut'), [['att_srv']]);
+    const recs = a.getState().records;
+    assert.equal(recs.length, 1, 'records ' + recs.length);
+    assert.equal(recs[0].id, 'att_srv');
+    assert.equal(recs[0].work_minutes, 5);
+    assert.equal(s.errors(), null);
+  });
+  await test('L-4b 출근이 실패하면 퇴근을 보내지 않고 기록을 남기지 않는다', async () => {
+    let finishIn;
+    const s = setup('src/lib/store/useAttendanceStore.ts', { attendanceCheckIn: () => new Promise((r) => { finishIn = r; }) });
+    const a = s.mod.useAttendanceStore; a.setState(attBase);
+    a.getState().checkIn('me');
+    a.getState().checkOut('me');
+    finishIn(null);
+    await flush();
+    assert.equal(s.db.count('attendanceCheckOut'), 0);
+    assert.equal(a.getState().records.length, 0, 'records ' + a.getState().records.length);
+  });
   await test('M2-2 기존 기록 시간 고치기는 attendance_edit_times · 서버 값으로 바꾼다', async () => {
     const r0 = { id: 'att1', staff_id: 'me', date: D, check_in: '2026-11-12T00:00:00.000Z', check_out: '2026-11-12T02:00:00.000Z', work_minutes: 120 };
     const s = setup('src/lib/store/useAttendanceStore.ts', { attendanceEditTimes: async (id, cin, cout) => ({ id, check_in: cin, check_out: cout, work_minutes: 61, edited_by: 'owner' }) });
@@ -392,6 +423,21 @@ async function main() {
     assert.equal(st.getState().staff.length, 1);
     assert.equal(st.getState().pending.length, 1);
     assert.equal(st.getState().roles.jr, 'manager');
+  });
+  await test('L-4a 명부 다시 읽기에서 재직 기간·합류 결과·처리 내역 읽기 실패 → 이전 값', async () => {
+    const s = setup('src/lib/store/useStaffStore.ts', {
+      fetchStaffProfiles: async () => ({ owner: { id: 'me' }, staff, roles: {}, error: false }),
+      fetchPendingMembers: async () => ({ data: [], error: false }),
+      fetchMemberTenures: async () => ({ data: [], error: true }),
+      fetchJoinNotices: async () => ({ data: [], error: true }),
+      fetchJoinHistory: async () => ({ data: [], error: true }),
+    });
+    const st = s.mod.useStaffStore;
+    st.setState({ staff, pending: [], tenures: [{ id: 't1', member_id: 'jr' }], joinNotices: [{ id: 'jn1' }], joinDone: [{ id: 'jd1' }] });
+    await st.getState().hydrate();
+    assert.equal(st.getState().tenures.length, 1, 'tenures');
+    assert.equal(st.getState().joinNotices.length, 1, 'joinNotices');
+    assert.equal(st.getState().joinDone.length, 1, 'joinDone');
   });
   await test('M12 명부 재조회가 겹치면 합친다(coalesce)', async () => {
     const src = fs.readFileSync(path.join(root, 'src/lib/store/useStaffStore.ts'), 'utf8');
