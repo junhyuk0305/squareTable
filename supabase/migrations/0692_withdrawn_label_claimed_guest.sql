@@ -12,6 +12,8 @@
 --   relabel_withdrawn_author — 베이스 0359 본문 통째(정의 전수 0359 하나). ★0692 줄 셋:
 --     옮긴 손님 행 이름 · 그 손님 질문 짝(edu_guest_questions)이 가리키는 질문과 답할 질문의 이름 칸을 같은 표시 이름으로.
 --     표시 이름 = withdrawn_staff_label()(같은 계정의 다른 질문과 같다). 손님 이름 칸 CHECK(1~20자)에 맞는다.
+--     답할 질문 줄은 요청 신원을 잠깐 비우고 돈다. 질문 쓰기 가드(0382)가 junior_id 빈 행의 이름 바꾸기를 동료 수정으로 막아서다.
+--     가드 본문은 그대로다(동료가 남의 질문을 고치는 길은 열리지 않는다 · 본문 주석).
 --   이미 탈퇴해 30일 파기를 기다리는 계정 중 옮긴 손님 행이 있는 계정도 한 번 바꾼다(0359 와 같은 모양).
 --
 -- ── 바꾸지 않는 것 ──────────────────────────────────────────────────────────
@@ -29,6 +31,8 @@ returns void language plpgsql security definer set search_path = public as $$
 declare
   v_label text := public.withdrawn_staff_label();
   v_id    text := p_uid::text;
+  v_sub    text;   -- ★0692: 요청 신원 잠깐 비우기(아래 답할 질문 줄)
+  v_claims text;
 begin
   if p_uid is null then return; end if;
   update public.work_feed set data = jsonb_set(data, '{authorName}', to_jsonb(v_label))
@@ -59,9 +63,20 @@ begin
   update public.chat_queries c set junior_name = v_label
     from public.edu_guest_questions q join public.edu_link_guests g on g.id = q.guest_id
    where c.id = q.cq_id and g.claimed_by = p_uid and c.junior_name is distinct from v_label;
+  -- 답할 질문의 손님 행은 junior_id 가 비어, 질문 쓰기 가드(guard_unknown_query_write 0382)가 탈퇴하는 본인을 동료로 보고
+  --   junior_name 바꾸기를 UQ_PEER_UPDATE_DENIED 로 막는다(탈퇴가 통째로 실패 · qa-store-retention 2-0).
+  --   가드는 넓히지 않는다. 이 한 줄만 요청 신원을 비워(가드가 서버 쓰기로 통과시키는 길 · 0401 _edu_guest_session 과 같은 방법) 돌고 곧바로 되돌린다.
+  --   앱이 이 길을 못 쓴다: 이 함수는 클라 실행 0(아래 revoke · 자가점검)이고 delete_my_account(0430)가 자기 uid 로만 부른다.
+  --   바꾸는 행 = 이 계정이 옮긴 손님(claimed_by = p_uid)의 질문 짝 · 바꾸는 칸 = junior_name 하나 · 값 = 고정 문구.
+  v_sub    := current_setting('request.jwt.claim.sub', true);
+  v_claims := current_setting('request.jwt.claims', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+  perform set_config('request.jwt.claims', '', true);
   update public.unknown_queries u set junior_name = v_label
     from public.edu_guest_questions q join public.edu_link_guests g on g.id = q.guest_id
    where u.id = q.uq_id and g.claimed_by = p_uid and u.junior_name is not null and u.junior_name is distinct from v_label;
+  perform set_config('request.jwt.claim.sub', coalesce(v_sub, ''), true);
+  perform set_config('request.jwt.claims', coalesce(v_claims, ''), true);
 end $$;
 revoke all on function public.relabel_withdrawn_author(uuid) from public, anon, authenticated;
 
@@ -81,7 +96,8 @@ do $$
 declare d text := (select prosrc from pg_proc where oid = 'public.relabel_withdrawn_author(uuid)'::regprocedure);
 begin
   if d not like '%edu_link_guests set name = v_label%' or d not like '%edu_guest_questions%'
-     or d not like '%former_guest_name%' or d not like '%peer_answer_log%' then
+     or d not like '%former_guest_name%' or d not like '%peer_answer_log%'
+     or d not like '%set_config(''request.jwt.claims'', coalesce(v_claims, ''''), true)%' then
     raise exception '0692 자가점검 실패: relabel_withdrawn_author 본문이 0359 베이스 + 손님 줄이 아니다';
   end if;
   if has_function_privilege('authenticated', 'public.relabel_withdrawn_author(uuid)', 'execute')

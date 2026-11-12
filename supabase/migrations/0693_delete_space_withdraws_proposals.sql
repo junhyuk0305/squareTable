@@ -35,6 +35,7 @@ returns void language plpgsql security definer set search_path = public as $$
 declare
   r public.playbook_suggestions%rowtype;
 begin
+  -- race: 부르는 두 곳이 이 행을 먼저 for update 로 잠근다(suggestion_withdraw 한 줄 · delete_space 대기 제안 고리). 같은 트랜잭션 안이라 다시 잠그지 않는다.
   select * into r from public.playbook_suggestions where id = p_id;
   if not found then return; end if;
   insert into public.playbook_suggestions_withdrawn (
