@@ -112,8 +112,10 @@ const FN_TOKENS = {
   quiz_item_counts: ['archived_at is not null', 'brand_hidden_at is not null'],
   quiz_link_resolve: ['public.quiz_course_servable(l.unit_id, l.course_id)', 'revoked_at is null'],
   enqueue_knowhow_rechecks: ['archived_at is null', 'brand_hidden_at is null'],
-  archive_knowhow: ['auth_owns_unit', 'brand_copy_use_hide', "'draft'", 'archived_by', 'entry_not_found', 'restore_not_allowed'],
-  knowhow_usage: ['auth_owns_unit', 'quiz_attempts', 'work_template_knowhow', 'course_entries'],
+  // ★0376: 지우기 판정을 knowhow_delete_ok 한 곳으로 옮겼다(매장 = auth_owns_unit 그대로 · 공간 = 그 자리 write_knowhow).
+  archive_knowhow: ['public.knowhow_delete_ok(v_unit)', 'brand_copy_use_hide', "'draft'", 'archived_by', 'entry_not_found', 'restore_not_allowed'],
+  knowhow_usage: ['public.knowhow_delete_ok(', 'quiz_attempts', 'work_template_knowhow', 'course_entries'],
+  knowhow_delete_ok: ['auth_owns_unit(p_unit)', "auth_can(p_unit, 'write_knowhow')", "u.kind = 'space'"],
   // P5-3 0250(Q28 · Q29) — 사장은 자기 소유 매장의 끝난 연결만(180일) · 본사는 자기 브랜드의 끝난 매장만 · 다시 연결된 매장은 뺀다.
   my_brand_history: ['owner_id = auth.uid()', "status = 'ended'", "180 days", 'deleted_at is null'],
   brand_ended_units: ['auth_brand_id()', "status = 'ended'", "status = 'active'"],
@@ -259,6 +261,17 @@ console.log('\n[4] 0246 정의자 함수 전수 — 대상 표를 읽는데 표�
     recompute_playbook_stats: '노하우 사용 통계(개인 기록이 아니다)',
     purge_deleted_store: '0361 지운 매장 30일 파기 — 표시와 무관하게 그 매장 행을 전부 다룬다(근로기록은 남긴다)',
     relabel_withdrawn_author: '0359 탈퇴한 사람 이름 고쳐 쓰기 — 표시와 무관하게 그 사람 행 전부',
+    retained_scrub_names: '0361·0430 지운 매장·공간 파기 때 이름 지우기 — 표시와 무관하게 그 자리 행 전부',
+    // 0401 교육 링크 손님 질문. 손님 행은 junior_id 가 null 이고(edu_link_ask) 재직 보관은 junior_id 로만 찍힌다(0246 member_tenure_open).
+    //   그래서 손님 행에는 archived_tenure_id 가 붙지 않는다. 모두 edu_guest_questions(손님·링크) 짝을 먼저 확인하거나 그 짝의 cq 만 받는다.
+    edu_link_ask: '0401 손님 질문 넣기 — 손님 행(junior_id null)만 · 재직 보관 대상이 아니다',
+    edu_link_answers: '0401 손님 답 읽기 — edu_guest_questions 짝(손님·링크)으로만 읽는다',
+    edu_link_ai_context: '0401 손님 AI 재료 — edu_guest_questions 짝 확인 뒤 그 질문 행만',
+    edu_link_ai_result: '0401 손님 AI 결과 — edu_guest_questions 짝 확인 뒤 그 질문 행만',
+    edu_link_ai_release: '0401 손님 AI 대기 풀기 — edu_guest_questions 짝 확인 뒤 그 질문 행만',
+    edu_link_send: '0401 손님 질문 보내기 — edu_guest_questions 짝 확인 뒤 그 질문 행만',
+    edu_link_report: '0401 손님 신고 — edu_guest_questions 짝 확인 · 링크 단위 신고 수',
+    _edu_link_escalate: '0401 내부 — 손님 질문 행(edu_guest_questions 짝)을 답할 질문으로 넘긴다',
   };
   const re = `\\m(public\\.)?(${TENURE_TABLES.join('|')})\\M`;
   const out = psql(`select p.proname from pg_proc p
@@ -359,7 +372,11 @@ console.log('\n[6] 0248 노하우 보관 — 열 · 정책 · 트리거 · 권�
                              where p.pronamespace = 'public'::regnamespace and p.proname = 'tg_playbook_entry_soft_delete'), 'none')`) === 'true');
   const gd = fdef('tg_playbook_entry_archive_guard');
   check('가드 함수: service_role 예외(auth.uid() is null) · 소유주 · 본사 사본 거부 · 되살리기 거부',
-    ['auth.uid() is null', 'auth_owns_unit', 'brand_copy_use_hide', 'not_owner', 'restore_not_allowed'].every((t) => gd.includes(t)), gd ? '토큰 빠짐' : '없음');
+    // ★0376: 소유주 판정은 knowhow_delete_ok(매장 = auth_owns_unit) 로 옮겼다. 그 함수 본문은 FN_TOKENS 가 본다.
+    ['auth.uid() is null', 'public.knowhow_delete_ok(new.unit_id)', 'brand_copy_use_hide', 'not_owner', 'restore_not_allowed'].every((t) => gd.includes(t)), gd ? '토큰 빠짐' : '없음');
+  check('knowhow_delete_ok(text): anon·authenticated 실행 불가(내부 판정)',
+    psql(`select coalesce((select (not has_function_privilege('anon', 'public.knowhow_delete_ok(text)', 'execute')
+                                   and not has_function_privilege('authenticated', 'public.knowhow_delete_ok(text)', 'execute'))::text), 'none')`) === 'true');
   check('보관함 읽기 archived_knowhow() 가 없다(2026-10-05 삭제 = 되살릴 수 없음)', psql("select to_regprocedure('public.archived_knowhow()') is null") === 't');
   for (const fn of ['archive_knowhow(text, boolean)', 'knowhow_usage(text)']) {
     const exists = psql(`select to_regprocedure('public.${fn}') is not null`);

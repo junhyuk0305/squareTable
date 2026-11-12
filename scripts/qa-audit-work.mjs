@@ -79,7 +79,8 @@ console.log('\n[D3] 담당자가 모두 나간 "매장 전체" 할일도 알림�
 {
   const t = lastDef('due_task_reminders');
   const b = t.body;
-  const iFilter = b.search(/from unnest\(v_rec\) x\s+where exists \(\s*select 1 from public\.unit_members m\s+where m\.unit_id = t\.unit_id and m\.user_id = x::uuid\s*\);\s*end if;/);
+  // ★0352: 같은 거르기에 "좌석이 잠긴 직원 담당자도 뺀다"(seat_locked_for) 한 줄이 붙었다. 멤버 거르기 + 그 줄을 같이 본다.
+  const iFilter = b.search(/from unnest\(v_rec\) x\s+where exists \(\s*select 1 from public\.unit_members m\s+where m\.unit_id = t\.unit_id and m\.user_id = x::uuid\s+and \(m\.role not in \('junior', 'manager'\) or not public\.seat_locked_for\(t\.unit_id, m\.user_id\)\)\s*\);\s*end if;/);
   const iFall = b.search(/if cardinality\(t\.owner_ids\) = 0\s+or \(coalesce\(array_length\(v_rec, 1\), 0\) = 0 and t\.scope is distinct from 'private'\) then/);
   check('★담당자를 먼저 매장 멤버로 거르고, 다 빠지면 매장 전체 할일은 근무자 → 전원 갈래로 내려간다',
     iFilter > 0 && iFall > iFilter && /public\.workers_at\(/.test(b.slice(iFall)), `${t.file} filter=${iFilter} fall=${iFall}`);
@@ -137,7 +138,9 @@ console.log('\n[D11] 알림함 배선 — 배정 시각 기록 · 사장 알림�
   check('앱이 assigned_meta 를 읽는다(mapTemplateRow)', /assignedMeta: r\.assigned_meta/.test(db));
   for (const [p, re] of [
     ['src/app/owner/notifications.tsx', /buildOwnerNotifications\(ownerArgs, received\)/],
-    ['src/components/NotificationBell.tsx', /ownerUnreadCount\([^)]*alerts, received\b/],
+    // fab8d0a: 벨 배지는 manageUnreadCount 하나로 센다. 사장 갈래가 ownerUnreadCount(…alerts, received…) 를 부르는지는 아래에서 따로 본다.
+    ['src/components/NotificationBell.tsx', /manageUnreadCount\(role, ownerArgs, received\)/],
+    ['src/lib/utils/notifications.ts', /export function manageUnreadCount\([\s\S]*?return ownerUnreadCount\([^)]*a\.alerts, received\b/],
     ['src/lib/utils/crossStoreNotifs.ts', /buildOwnerNotifications\(ownerArgsOf\(d, me, nameOf, ackAt\), receivedArgsOf\(d, me, today, nameOf, ackAt\)\)/],
   ]) check(`★${p} 사장 목록·배지에 받은 공지·배정을 넣는다`, re.test(strip(read(p))));
   const board = strip(read('src/components/WorkBoard.tsx'));
@@ -161,7 +164,9 @@ console.log('\n[D12] 노하우 개선 제안은 실제로 고쳐 저장해야 �
   const store = strip(read('src/lib/store/useSuggestionStore.ts'));
   const ap = storeMethod(store, 'approve'), rj = storeMethod(store, 'reject');
   check('★반영되면 제안한 사람에게 알린다(저장 성공 뒤)', /\.then\(\(ok\) => \{[^}]*notifyUserSuggestionResult\(before\.proposer_id, true, before\.text\)/.test(ap), ap.slice(0, 300));
-  check('★반려되면 제안한 사람에게 알린다(저장 성공 뒤)', /\.then\(\(ok\) => \{[^}]*notifyUserSuggestionResult\(before\.proposer_id, false, before\.text\)/.test(rj));
+  // 069f146: 반려 알림 본문은 resultBody(before)(공간에서 온 노하우는 제목 · 그 밖은 before.text) 다.
+  check('★반려되면 제안한 사람에게 알린다(저장 성공 뒤)', /\.then\(\(ok\) => \{[^}]*notifyUserSuggestionResult\(before\.proposer_id, false, (before\.text|resultBody\(before\))\)/.test(rj)
+    && (!/resultBody\(before\)/.test(rj) || /const resultBody = \(s: PlaybookSuggestion\): string =>[^;]*: s\.text;/.test(store)), rj.slice(0, 300));
   const notify = strip(read('src/lib/push/notify.ts'));
   const nf = fnBody(notify, 'notifyUserSuggestionResult');
   // 주소·tag 는 레지스트리(P1 · 2026-10-16)가 정한다 — 헬퍼는 kind 만 말한다.

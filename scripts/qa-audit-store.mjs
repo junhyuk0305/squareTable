@@ -91,8 +91,17 @@ console.log('\n[C4] 닫힌(잠긴) 매장에는 할일·퀴즈 알림을 보내�
   const t = lastTouch('due_task_reminders');
   check('★할일 알림 후보에서 잠긴 매장을 뺀다(due_task_reminders)',
     /and not public\.unit_access_locked\(w\.unit_id\)/.test(t.text), t.file);
-  check('할일 알림 함수는 service_role 전용 그대로(anon 실행 불가 자가점검)',
-    /has_function_privilege\('anon', 'public\.due_task_reminders\(\)', 'execute'\)/.test(t.text));
+  // ★0352 가 다시 정의하면서 0301 의 자가점검 줄은 없어지고 revoke·grant 만 남았다. 마지막 정의 파일의 권한 줄과 로컬 DB 실제 권한을 본다.
+  check('할일 알림 함수는 service_role 전용 그대로(마지막 정의 파일의 revoke·grant)',
+    /revoke all on function public\.due_task_reminders\(\) from public, anon, authenticated;/.test(t.text)
+      && /grant execute on function public\.due_task_reminders\(\) to service_role;/.test(t.text), t.file);
+  let tGrant = '';
+  try {
+    tGrant = execFileSync('docker', ['exec', 'supabase_db_SquareTable', 'psql', '-U', 'postgres', '-At', '-c',
+      `select has_function_privilege('anon', 'public.due_task_reminders()', 'execute')::text || '/' || has_function_privilege('authenticated', 'public.due_task_reminders()', 'execute')::text || '/' || has_function_privilege('service_role', 'public.due_task_reminders()', 'execute')::text`],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  } catch { tGrant = 'DB 없음'; }
+  check('할일 알림 함수는 service_role 전용 그대로(anon·authenticated 실행 불가 · 로컬 DB 권한)', tGrant === 'false/false/true', tGrant);
   const q = lastTouch('due_quiz_sends');
   check('★퀴즈 발송 후보에서 잠긴 매장을 뺀다(due_quiz_sends)',
     /and not public\.unit_access_locked\(u\.id\)/.test(q.text), q.file);
@@ -204,7 +213,10 @@ console.log('\n[C2] 매장이 닫히면(unit_access_locked) 그 매장이 활성
   check('★db: fetchMyUnitLocked 가 my_unit_locked 를 부른다', /export async function fetchMyUnitLocked[\s\S]*?rpc\('my_unit_locked'\)/.test(db));
   const ss = strip(read('src/lib/store/useSessionStore.ts'));
   check('★세션이 unitLocked 를 들고, 사장 아닌 역할일 때 서버 판정으로 채운다(로그아웃 때 비운다)',
-    /unitLocked: boolean;/.test(ss) && /fetchMyUnitLocked\(\)/.test(ss) && /\n\s+unitLocked,\n/.test(ss) && /seatLocked: false, unitLocked: false/.test(ss));
+    // ★0354(b831713 M3): loadProfile 은 부팅 RPC 하나(session_bootstrap)로 읽는다. 잠금 값은 그 안의 my_unit_locked() 다.
+    /unitLocked: boolean;/.test(ss) && /if \(unitId && role !== 'owner'\) \{[\s\S]*?unitLocked = boot\.my_unit_locked === true;/.test(ss)
+      && /\n\s+unitLocked,\n/.test(ss) && /seatLocked: false, unitLocked: false/.test(ss)
+      && /'my_unit_locked',\s+public\.my_unit_locked\(\)/.test(lastDef('session_bootstrap').body), lastDef('session_bootstrap').file || 'session_bootstrap 없음');
   const scr = strip(read('src/components/StoreClosedScreen.tsx'));
   check('★차단 화면 문구 "사장님이 이 매장을 닫았어요" · 다른 매장이 있으면 매장 목록으로 가는 길',
     /사장님이 이 매장을 닫았어요/.test(scr) && /router\.replace\('\/stores'\)/.test(scr) && /stores\.length > 1/.test(scr));
@@ -335,7 +347,10 @@ console.log('\n[C9] 본사 연결이 살아 있는 매장은 삭제를 거부한
   const f = lastDef('delete_store');
   const g = f.body.match(/owner_can_end[\s\S]*?from public\.brand_units[\s\S]*?status = 'active'[\s\S]*?brand_linked/)?.[0] ?? '';
   check('★delete_store 가 활성 본사 연결을 보고 owner_can_end=false → brand_locked, true → brand_linked',
-    /owner_can_end/.test(g) && /brand_locked/.test(g) && f.body.indexOf('brand_linked') < f.body.indexOf('delete from public.units'), f.file);
+    // ★0358: 실삭제(delete from public.units)가 소프트 삭제(set deleted_at = now())로 바뀌었다. 본사 검사는 그 앞이고 직원 검사(0300)보다도 앞이다.
+    /owner_can_end/.test(g) && /brand_locked/.test(g) && f.body.indexOf('brand_linked') > 0
+      && f.body.indexOf('brand_linked') < f.body.search(/update public\.units\s+set deleted_at = now\(\)/)
+      && f.body.indexOf('brand_linked') < f.body.indexOf('store_has_staff'), f.file);
   check('delete_store 권한 유지(authenticated)', fileHas(f.file, 'grant execute on function public.delete_store(text) to authenticated;'));
   check('delete_store 의 기존 검사·몫 돌려주기는 그대로(last_store · store_has_staff · store_return_slot · 대기 신고 닫기)',
     /last_store/.test(f.body) && /store_has_staff/.test(f.body) && /store_return_slot\(p_unit_id\)/.test(f.body) && /reject_reason = 'store_deleted'/.test(f.body));
@@ -380,10 +395,24 @@ console.log('\n[C3] 보고 있는 매장은 로그인 세션(기기)마다 따�
     !!sw.file && /not_a_member/.test(sw.body) && /unit_access_locked\(p_unit_id\)/.test(sw.body) && /public\.session_unit_set\(p_unit_id\)/.test(sw.body)
       && /from auth\.sessions a where a\.id = v_sid and a\.user_id = v_uid/.test(su.body)
       && /on conflict \(session_id\) do update/.test(su.body) && /where s\.user_id = v_uid/.test(su.body), sw.file || '없음');
-  check('switch_session_unit · session_unit 은 authenticated 만 실행',
-    fileHas(sw.file, 'grant execute on function public.switch_session_unit(text) to authenticated;')
-      && fileHas(sw.file, 'grant execute on function public.session_unit() to authenticated;')
-      && fileHas(sw.file, 'revoke all on table public.session_active_units from public, anon, authenticated;'));
+  // ★0366 이 switch_session_unit 만 다시 정의했다(권한 줄도 같이). session_unit 과 session_active_units 권한은 0285 에 남아 있다.
+  //   그래서 객체마다 자기 마지막 정의 파일을 보고, 로컬 DB 실제 권한도 본다.
+  const suFn = lastDef('session_unit');
+  const tblFile = migFiles().filter((f) => /create table (if not exists )?public\.session_active_units/.test(read(`supabase/migrations/${f}`))).pop() ?? '';
+  const laterTblGrant = migFiles().some((f) => /grant [^;]* on (table )?public\.session_active_units to [^;]*(anon|authenticated)/.test(sqlStrip(read(`supabase/migrations/${f}`))));
+  check('switch_session_unit · session_unit 은 authenticated 만 실행(각 마지막 정의 파일의 revoke·grant)',
+    fileHas(sw.file, 'revoke all on function public.switch_session_unit(text) from public, anon, authenticated;')
+      && fileHas(sw.file, 'grant execute on function public.switch_session_unit(text) to authenticated;')
+      && fileHas(suFn.file, 'revoke all on function public.session_unit() from public, anon, authenticated;')
+      && fileHas(suFn.file, 'grant execute on function public.session_unit() to authenticated;')
+      && fileHas(tblFile, 'revoke all on table public.session_active_units from public, anon, authenticated;') && !laterTblGrant,
+    `${sw.file} ${suFn.file} ${tblFile}`);
+  if (dbUp) {
+    const pv = psql(`select 'R=' || has_function_privilege('anon', 'public.switch_session_unit(text)', 'execute') || '/' || has_function_privilege('authenticated', 'public.switch_session_unit(text)', 'execute')
+      || '/' || has_function_privilege('anon', 'public.session_unit()', 'execute') || '/' || has_function_privilege('authenticated', 'public.session_unit()', 'execute')
+      || '/' || has_table_privilege('anon', 'public.session_active_units', 'SELECT,INSERT,UPDATE,DELETE') || '/' || has_table_privilege('authenticated', 'public.session_active_units', 'SELECT,INSERT,UPDATE,DELETE');`);
+    check('switch_session_unit · session_unit = authenticated 만 · session_active_units 는 클라 권한 없음(로컬 DB 권한)', pv.includes('R=false/true/false/true/false/false'), tail(pv));
+  }
   const mu = lastDef('my_units'), ov = lastDef('owner_overview');
   check('★매장 목록·사장 현황의 "지금 보는 매장" 표시가 auth_unit_id() 기준이다',
     /\(u\.id = public\.auth_(member_)?unit_id\(\)\) as is_active/.test(mu.body) &&/\(u\.id = public\.auth_unit_id\(\)\) as is_active/.test(ov.body), `${mu.file} ${ov.file}`);
@@ -397,8 +426,12 @@ console.log('\n[C3] 보고 있는 매장은 로그인 세션(기기)마다 따�
     /export async function switchActiveUnit[\s\S]*?rpc\('switch_session_unit'/.test(db) && /export async function fetchSessionUnit[\s\S]*?rpc\('session_unit'\)/.test(db));
   check('★db: 업종 저장이 0행이면 실패로 돌려준다(.select)', /from\('units'\)\.update\(\{ industry \}\)\.eq\('id', unitId\)\.select\('id'\)/.test(db));
   const ss = strip(read('src/lib/store/useSessionStore.ts'));
-  check('★세션: loadProfile 의 매장 = 서버 세션 매장(fetchSessionUnit) · 함수가 없을 때만 profiles 값',
-    /fetchSessionUnit\(\)/.test(ss) && /isMissingRpc\(suErr\)/.test(ss) && !/let unitId = profile\?\.active_unit_id \|\| profile\?\.unit_id \|\| ''/.test(ss));
+  check('★세션: loadProfile 의 매장 = 서버 세션 매장(session_bootstrap 이 session_unit 을 먼저 부른다) · profiles 값으로 정하지 않는다',
+    // ★0354(b831713 M3): 부팅 RPC(session_bootstrap)가 맨 먼저 session_unit() 을 불러 그 값을 unit_id 로 돌려준다.
+    //   함수가 없을 때 profiles 로 떨어지던 갈래는 없어졌다(부팅 실패 = readFailed). profiles 값으로 매장을 정하는 줄이 돌아오면 안 된다.
+    /let unitId = boot\.unit_id \?\? '';/.test(ss) && /await fetchSessionBootstrap\(\)/.test(ss)
+      && !/profile\?\.active_unit_id/.test(ss) && !/let unitId = profile\?\.(active_)?unit_id/.test(ss)
+      && /v_unit := public\.session_unit\(\);[\s\S]*'unit_id',\s+v_unit/.test(lastDef('session_bootstrap').body), lastDef('session_bootstrap').file || 'session_bootstrap 없음');
   check('★세션: 늦게 끝난 옛 loadProfile 은 더 새로 시작한 로드가 반영된 뒤면 버린다',
     /const seq = \+\+_loadSeq/.test(ss) && /if \(seq < _appliedSeq\) return;/.test(ss) && /_appliedSeq = seq;/.test(ss));
   check('★세션: 매장 추가 뒤 이 기기를 새 매장으로 옮긴다(다른 기기가 바꾼 뒤라도)', /if \(!isOnboarding && row\?\.unit_id\) \{\s*const sw = await switchActiveUnit\(row\.unit_id\)/.test(ss));

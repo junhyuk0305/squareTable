@@ -214,7 +214,15 @@ check('owner/_layout: 잠긴 매니저 → /billing', /role === 'manager' && sea
   check('근무표: 시간 수정 요청을 매니저에게도(자기 요청 제외)', /pendingTimeRequests\(timeRequests\)\.filter\(\(r\) => isOwner \|\| r\.staff_id !== myId\)/.test(sch));
   check('0316: decide_shift_time = auth_can_manage + cannot_decide_self', /not public\.auth_can_manage\(\) then raise exception 'owner_only'[\s\S]*cannot_decide_self/.test(read('supabase/migrations/0316_manager_shift_time_and_role_notice.sql')));
 }
-for (const f of ['src/app/owner/_layout.tsx', 'src/app/junior/_layout.tsx']) check(`${f}: 내 멤버십 실시간 구독`, /subscribeMyMembership\(userId/.test(read(f)));
+// b831713(M3): 두 레이아웃의 구독 effect 를 useMembershipSync 한 훅으로 모았다. 레이아웃은 훅을 부르고, 훅이 멤버십을 구독한다.
+{
+  const hook = read('src/lib/app/useMembershipSync.ts');
+  check('src/lib/app/useMembershipSync.ts: 내 멤버십 실시간 구독(subscribeMyMembership)', /subscribeMyMembership\(userId/.test(hook));
+  for (const [f, role] of [['src/app/owner/_layout.tsx', 'owner'], ['src/app/junior/_layout.tsx', 'junior']]) {
+    check(`${f}: 내 멤버십 실시간 구독(useMembershipSync)`,
+      new RegExp(`useMembershipSync\\(\\{ enabled: status === 'signed_in', userId, role: '${role}' \\}\\)`).test(read(f)) || /subscribeMyMembership\(userId/.test(read(f)));
+  }
+}
 
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

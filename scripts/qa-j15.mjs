@@ -82,7 +82,8 @@ console.log('\n[4] 배선(주석 제외 코드)');
   // M4(2026-11-04): hydrate 는 축 러너(AXES)를 전부 돈다. carryUnsent 는 done+feed 를 묶은 `board` 축 안이어야 한다.
   const boardAxis = (store.match(/board: defineAxis\('board', \['done', 'feed'\][\s\S]*?\n  \}\),/) || [''])[0];
   check('★D4 hydrate 가 서버 피드에 실패·저장 중 메시지를 다시 얹는다(carryUnsent · board 축)',
-    /feed: carryUnsent\(live\.feed, useWorkStore\.getState\(\)\.feed, sendingIds\)/.test(boardAxis) && /const ALL_AXES[^\n]*'board'/.test(store));
+    // 3d40730(M4 2차): 다시 얹은 피드 위에 늦게 온 실시간 패치를 다시 깐다(replayLatePatches). carryUnsent 는 그 안쪽 그대로다.
+    /feed: (replayLatePatches\()?carryUnsent\(live\.feed, useWorkStore\.getState\(\)\.feed, sendingIds\)/.test(boardAxis) && /const ALL_AXES[^\n]*'board'/.test(store));
   const rm = (store.match(/retryMessage: \(id\) => \{[\s\S]*?\n  \},/) || [''])[0];
   check('★D4 다시 보내기가 지금 시각으로 새로 찍는다(restampForResend)', /restampForResend\(failed, new Date\(\)\.toISOString\(\), todayStr\(\)\)/.test(rm));
   const db = strip(read('src/lib/db.ts'));
