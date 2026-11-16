@@ -1,34 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Text, Pressable, StyleSheet } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 
 import { Screen, Section } from '@/components/Screen';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
+import { EmptyState } from '@/components/EmptyState';
 import { EduLinkRows } from '@/components/edu/EduLinkRows';
 import { useEduLinksOn } from '@/components/edu/LinkFormStore';
-import { formatRelative } from '@/components/coach/coachUtils';
+import { SpaceQuestionRows } from '@/components/place/SpaceQuestionRows';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { fetchEduLinks, fetchEntries, fetchUnknownQueue, subscribeUnknownQueue, type EduLinkRow } from '@/lib/db';
 import { subscribeDebounced } from '@/lib/store/realtimeSync';
-import { SPACE_KNOWHOW, SPACE_SCREEN, SPACE_WORDS, STORE_LINK_LIST } from '@/lib/place/words';
-import { InkColors, TextColor } from '@/lib/theme/colors';
-import { CardStyles } from '@/lib/theme/card';
-import { ButtonStyles, ButtonTextStyles, TouchSize } from '@/lib/theme/button';
-import { Space } from '@/lib/theme/layout';
-import { Radius } from '@/lib/theme/elevation';
-import { Type } from '@/lib/theme/type';
+import { SPACE_KNOWHOW, SPACE_SCREEN, STORE_LINK_LIST } from '@/lib/place/words';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import type { UnknownQuery } from '@/types';
-
-type Step = { key: 'write' | 'link' | 'answer'; title: string; hint: string; done: boolean };
 
 /**
  * S05 공간 교육 탭(주인) — 교육 링크 칸(+ 새 교육 링크 → S10 · 링크 줄 → S11) + "답할 질문" 목록(대기 중 · 오래 기다린 것부터 · 줄 → S09).
  * 교육 링크 칸은 공간 교육 링크 스위치(eduLinksOpenOf(features,'space') · 매장과 같은 판정)가 켜졌을 때만 그린다(2026-11-16 R-4).
- * 답할 질문이 없으면 처음 순서 안내: 노하우 쓰기 → 교육 링크 만들기 → 질문에 답하기. 지금 할 단계 하나만 주 버튼이다.
- *   링크가 아직 없으면 링크 칸을 따로 그리지 않는다(안내의 "교육 링크 만들기"와 같은 버튼이 둘 생긴다).
+ * 답할 질문이 없으면 빈 상태 + 다음 행동 버튼 하나(노하우 0개 = 노하우 쓰기 · 링크 0개 = 교육 링크 만들기 · 둘 다 있으면 버튼 없음).
+ *   처음 순서 안내(3단계)는 2026-11-17 홈 시작 카드 한 곳으로 옮겼다(화면조립표 7절 · 묶음 J-2).
+ *   링크가 아직 없으면 링크 칸을 따로 그리지 않는다(빈 상태의 "교육 링크 만들기"와 같은 버튼이 둘 생긴다).
  * 읽기 = fetchUnknownQueue · fetchEntries · fetchEduLinks(공간 번호). 매장 질문 스토어(useUnknownQueueStore)를 안 쓴다(매장 큐·앱 푸시와 섞이지 않게).
  * 탭에 돌아올 때마다 다시 읽는다(답한 질문이 바로 빠지고 만든 링크가 바로 보이게).
  * ★night-1111 g5: 새 질문·다른 기기에서 답한 질문도 실시간으로 맞춘다(subscribeUnknownQueue(공간 번호) · 300ms 묶음).
@@ -95,13 +89,8 @@ export default function SpaceTeach() {
   }
 
   const hasLinks = linksOn && links.length > 0;
-  const steps: Step[] = [
-    { key: 'write', title: SPACE_KNOWHOW.guideWrite, hint: SPACE_KNOWHOW.guideWriteHint, done: knowhowCount > 0 },
-    ...(linksOn ? [{ key: 'link' as const, title: SPACE_KNOWHOW.guideLink, hint: SPACE_KNOWHOW.guideLinkHint, done: links.length > 0 }] : []),
-    { key: 'answer', title: SPACE_KNOWHOW.guideAnswer, hint: SPACE_KNOWHOW.guideAnswerHint, done: false },
-  ];
-  const now = steps.find((s) => !s.done)?.key;
-  const primary = now === 'write' ? { label: SPACE_KNOWHOW.guideWrite, onPress: write } : now === 'link' ? { label: SPACE_KNOWHOW.guideLink, onPress: newLink } : null;
+  // 빈 상태의 다음 행동(홈 시작 카드와 같은 순서). 둘 다 했으면 할 일이 없으니 버튼 없이 문구만.
+  const next = knowhowCount === 0 ? { label: SPACE_KNOWHOW.guideWrite, onPress: write } : linksOn && links.length === 0 ? { label: SPACE_KNOWHOW.guideLink, onPress: newLink } : undefined;
 
   return (
     <Screen header={header} tabBar="space">
@@ -124,94 +113,18 @@ export default function SpaceTeach() {
       ) : null}
 
       {questions.length === 0 ? (
-        <Section title={SPACE_KNOWHOW.guideTitle}>
-          <View style={styles.card}>
-            {steps.map((s, i) => (
-              <View key={s.key} style={[styles.step, i > 0 && styles.rowLine]}>
-                <View style={[styles.stepNo, s.done && styles.stepNoDone, s.key === now && styles.stepNoNow]}>
-                  {s.done ? (
-                    <Ionicons name="checkmark" size={Type.desc.fontSize} color={InkColors.bubbleText} />
-                  ) : (
-                    <Text style={[styles.stepNoText, s.key === now && styles.stepNoTextNow]}>{i + 1}</Text>
-                  )}
-                </View>
-                <View style={styles.rowText}>
-                  <Text style={[styles.rowTitle, s.done && styles.doneTitle]}>{s.title}</Text>
-                  <Text style={styles.rowSub}>{s.hint}</Text>
-                </View>
-                {s.done ? <Text style={styles.doneTag}>{SPACE_KNOWHOW.guideDone}</Text> : null}
-              </View>
-            ))}
-            {/* 지금 할 단계 버튼은 안내 카드 안 맨 아래(R-14 · 버튼도 흰 카드 위). */}
-            {primary ? (
-              <Pressable
-                onPress={primary.onPress}
-                accessibilityRole="button"
-                accessibilityLabel={primary.label}
-                style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
-              >
-                <Text style={styles.primaryText}>{primary.label}</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </Section>
+        <EmptyState title={SPACE_KNOWHOW.queueEmptyTitle} body={SPACE_KNOWHOW.queueEmptyBody} cta={next} />
       ) : (
         <Section title={`${SPACE_KNOWHOW.queueTitle} ${questions.length}`}>
-          <View style={styles.card}>
-            {questions.map((q, i) => (
-              <Pressable
-                key={q.id}
-                onPress={() => router.push({ pathname: '/space/answer/[qid]', params: { qid: q.id } })}
-                accessibilityRole="button"
-                accessibilityLabel={q.query_text}
-                style={({ pressed }) => [styles.row, i > 0 && styles.rowLine, pressed && styles.pressed]}
-              >
-                <View style={styles.rowText}>
-                  <Text style={styles.rowTitle} numberOfLines={2}>{q.query_text}</Text>
-                  <Text style={styles.rowSub} numberOfLines={1}>
-                    {[
-                      q.junior_name || SPACE_WORDS.guest,
-                      formatRelative(q.asked_at),
-                      q.similar_queries_count > 0 ? SPACE_KNOWHOW.sameAsked(q.similar_queries_count + 1) : null,
-                    ]
-                      .filter(Boolean)
-                      .join(', ')}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={Type.body.fontSize} color={TextColor.iconMuted} />
-              </Pressable>
-            ))}
-          </View>
+          <SpaceQuestionRows questions={questions} onOpen={(q) => router.push({ pathname: '/space/answer/[qid]', params: { qid: q.id } })} />
         </Section>
       )}
     </Screen>
   );
 }
 
-const STEP_DOT = TouchSize.inlineFace - Space.sm;
-
 const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
-  card: { ...CardStyles.rows },
-  row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: TouchSize.inline, paddingVertical: Space.md },
-  rowLine: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: InkColors.line },
-  rowText: { flex: 1, gap: Space.xs },
-  rowTitle: { ...Type.body, fontWeight: '700' },
-  rowSub: { ...Type.desc },
-  // 순서 안내 한 줄 = 번호 원 + 제목·설명 + 끝난 단계면 "완료"(색만으로 구분하지 않는다).
-  step: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.md },
-  stepNo: {
-    width: STEP_DOT, height: STEP_DOT, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: InkColors.line,
-  },
-  stepNoNow: { borderColor: InkColors.ink },
-  stepNoDone: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  stepNoText: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
-  stepNoTextNow: { color: InkColors.ink },
-  doneTitle: { color: TextColor.secondary },
-  doneTag: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
-  primary: { ...ButtonStyles.primary, backgroundColor: InkColors.ink, marginBottom: Space.lg },
-  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   newLink: ButtonStyles.primaryYellow,
   newLinkText: ButtonTextStyles.primaryOnYellow,
 });

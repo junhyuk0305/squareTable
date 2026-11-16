@@ -195,9 +195,8 @@ export const SPACE_KNOWHOW = {
   queueEmptyTitle: '답할 질문이 없어요',
   queueEmptyBody: '노하우에 없는 질문이 오면 여기에 모여요.\n노하우를 늘려 두면 AI가 먼저 답해요.',
   sameAsked: (n: number) => `${n}명이 물었어요`,
-  // S05 교육 링크 칸 · 처음 순서 안내(2026-11-16 R-4 · 지금 할 단계만 주 버튼)
+  // S05 교육 링크 칸 · 처음 순서 안내(2026-11-16 R-4 · 지금 할 단계만 주 버튼 · 2026-11-17 안내는 홈 시작 카드 한 곳)
   linksTitle: '교육 링크',
-  guideTitle: '처음이면 이 순서로 해 보세요',
   guideWrite: '노하우 쓰기',
   guideWriteHint: '신입이 자주 묻는 일을 남겨요',
   guideLink: '교육 링크 만들기',
