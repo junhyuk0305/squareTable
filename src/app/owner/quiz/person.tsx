@@ -16,6 +16,7 @@ import { takenDayLabel } from '@/lib/quiz/guestResult';
 import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Space, screenScrollStyle } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
+import { EmptyStyles } from '@/lib/theme/empty';
 import { Type } from '@/lib/theme/type';
 
 /**
@@ -147,9 +148,11 @@ export default function QuizPersonResultScreen() {
             ) : null}
 
             {latest.length === 0 ? (
-              <Text style={st.noteText}>
-                {'문항별 기록이 없어요.\n이전 응시는 점수만 남아 있을 수 있어요.'}
-              </Text>
+              <View style={st.emptyCard}>
+                <Text style={st.noteText}>
+                  {'문항별 기록이 없어요.\n이전 응시는 점수만 남아 있을 수 있어요.'}
+                </Text>
+              </View>
             ) : (
               <Appear delay={120} style={{ gap: Space.sm }}>
                 <SectionLabel
@@ -208,5 +211,7 @@ const st = StyleSheet.create({
   tryScore: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
 
   list: attemptListStyle,
+  // 빈 상태 = 흰 빈 카드(R-14 · 2026-11-16).
+  emptyCard: EmptyStyles.box,
   noteText: { ...Type.desc, fontWeight: '600' },
 });

@@ -860,7 +860,7 @@ const st = StyleSheet.create({
   feedbackCta: { ...ButtonStyles.primary, marginTop: Space.sm, backgroundColor: InkColors.ink },
   feedbackCtaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 
-  thinBox: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.lg, gap: Space.sm, ...Elevation.e1 },
+  thinBox: { ...CardStyles.list, gap: Space.sm },
   thinTitle: { ...Type.body, fontWeight: '800', lineHeight: 22 },
   thinRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   thinName: { ...Type.body, flex: 1, minWidth: 0, fontWeight: '700' },

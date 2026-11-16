@@ -10,7 +10,7 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { Layout, Space, screenScrollStyle } from '@/lib/theme/layout';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
@@ -258,9 +258,8 @@ function AccountEditForm() {
             </Appear>
         )}
 
-        {/* 비밀번호 변경은 카드가 아니라 접힌 한 줄 — 이 화면에서 가장 드문 작업이고,
-            카드가 계속 이어지면 전부 같은 무게로 읽힌다(배치 규칙 ①). 2026-08-06
-            여는 줄과 펼친 칸은 한 묶음이라 섹션 간격(20)이 아니라 안쪽 간격으로 붙인다(pwGroup). */}
+        {/* 비밀번호 변경은 접힌 한 줄 — 이 화면에서 가장 드문 작업이다. 2026-08-06
+            여는 줄과 펼친 칸은 한 묶음이라 같은 카드 안에 붙인다(pwGroup · 2026-11-16 R-14). */}
         <View style={styles.pwGroup}>
         <Appear delay={stagger(4)}>
           <Pressable
@@ -481,20 +480,16 @@ const styles = StyleSheet.create({
   storeChipText: { ...Type.micro, fontWeight: '700', color: TextColor.secondary },
   storeRemain: { ...Type.tag, color: TextColor.secondary, fontWeight: '600' },
   // 비밀번호 여는 줄 + 펼친 칸 — 한 묶음(안쪽 간격 8).
-  pwGroup: { gap: Space.sm },
-  // 비밀번호 여는 줄 — 카드와 형태를 일부러 다르게 둔다(상하 보더만 있는 행 = 카드 아님).
+  // 2026-11-16 R-14: 여는 줄과 펼친 칸을 흰 카드 한 장에 담는다(내용 = 흰 카드 위).
+  pwGroup: { ...CardStyles.rows, gap: Space.sm },
   pwToggle: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
     minHeight: 52,
-    paddingHorizontal: Space.xs,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: InkColors.line,
   },
   pwToggleText: { ...Type.body, flex: 1, fontWeight: '800' },
-  pwPanel: { gap: Space.sm, paddingHorizontal: Space.xs, paddingBottom: Space.sm },
+  pwPanel: { gap: Space.sm, paddingBottom: Layout.cardPad },
   primary: { ...ButtonStyles.primary, marginTop: 12, backgroundColor: BrandColors.brand },
   primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   // 보조 버튼 — 주 버튼과 같은 모양(52 · 모서리 16 · 16/800), 흰 면 + 선.

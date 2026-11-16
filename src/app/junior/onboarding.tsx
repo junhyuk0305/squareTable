@@ -81,13 +81,10 @@ export default function JuniorOnboarding() {
           <Text style={styles.helpBody}>
             초대코드는 매장 사장님이 발급해요. 사장님께 “매장의 정석 초대코드 알려주세요”라고 요청해보세요.
           </Text>
+          <Pressable onPress={() => void logout()} style={styles.logoutRow}>
+            <Text style={styles.logoutText}>다른 계정으로 로그인</Text>
+          </Pressable>
         </View>
-        </Appear>
-
-        <Appear delay={stagger(3)}>
-        <Pressable onPress={() => void logout()} style={styles.logoutRow}>
-          <Text style={styles.logoutText}>다른 계정으로 로그인</Text>
-        </Pressable>
         </Appear>
       </ScrollView>
       </KeyboardShift>

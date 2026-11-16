@@ -551,6 +551,8 @@ function BillingBody() {
               renewsElsewhere={renewsElsewhere}
             />
           )}
+          {/* 새로고침·로그아웃 = 흰 카드 한 장(2026-11-16 R-14). */}
+          <View style={styles.card}>
           <Appear delay={stagger(4)}>
           <Pressable
             disabled={busy}
@@ -569,6 +571,7 @@ function BillingBody() {
             </Pressable>
             </Appear>
           )}
+          </View>
             </>
           )}
         </ScrollView>
@@ -936,12 +939,9 @@ function BillingBody() {
                   </View>
                 )}
 
-                {/* 세금계산서 — 필요한 사장만 편다. 기본 접힘(무료·개인 사장에게 불필요한 입력을 강요하지 않는다). */}
-                {!bizOpen ? (
-                  <Pressable onPress={() => setBizOpen(true)} style={({ pressed }) => [styles.promoToggle, pressed && { opacity: 0.6 }]}>
-                    <Text style={styles.promoToggleText}>세금계산서 신청</Text>
-                  </Pressable>
-                ) : (
+                {/* 세금계산서 — 필요한 사장만 편다. 기본 접힘(무료·개인 사장에게 불필요한 입력을 강요하지 않는다).
+                    접힌 여는 줄은 아래 동의 카드 맨 위에 둔다(2026-11-16 R-14 · 글자 버튼도 흰 카드 위). */}
+                {bizOpen && (
                   // 펼침의 정본은 Collapse 다 — Appear(등장)로 펼치면 아래 내용이 순간이동한다.
                   <Collapse>
                   <Section title="세금계산서">
@@ -974,6 +974,14 @@ function BillingBody() {
                     </View>
                   </Section>
                   </Collapse>
+                )}
+
+                {/* 동의·입금 완료·메일 = 흰 카드 한 장(2026-11-16 R-14). 순서는 그대로다. */}
+                <View style={styles.card}>
+                {!bizOpen && (
+                  <Pressable onPress={() => setBizOpen(true)} style={({ pressed }) => [styles.promoToggle, pressed && { opacity: 0.6 }]}>
+                    <Text style={styles.promoToggleText}>세금계산서 신청</Text>
+                  </Pressable>
                 )}
 
                 {/* 주문 시점 동의(0116) — 이 기록이 계약서를 대신한다. 서버도 없으면 거부한다. */}
@@ -1016,10 +1024,13 @@ function BillingBody() {
                   <Text style={styles.mailText}>메일로도 알리기 ({BILLING_INFO.contactValue})</Text>
                 </Pressable>
                 </Appear>
+                </View>
                 </>
                 )}
               </>
             )}
+            {/* 도입 문의·무료 이용 코드 여는 줄 = 흰 카드 한 장(2026-11-16 R-14). */}
+            <View style={styles.card}>
             {/* 도입 문의(0105) — 표준 3티어에 안 담기는 도입(다점포 대량·프랜차이즈 본사)의 상담 창구. */}
             <Pressable
               onPress={() => router.push('/inquiry')}
@@ -1029,11 +1040,13 @@ function BillingBody() {
             </Pressable>
 
             {/* 무료 이용 코드(0092) — 캠페인으로 받은 코드. 기본 접힘, 펼침은 아래로(레이아웃 규칙). */}
-            {!promoOpen ? (
+            {!promoOpen && (
               <Pressable onPress={() => setPromoOpen(true)} style={({ pressed }) => [styles.promoToggle, pressed && { opacity: 0.6 }]}>
                 <Text style={styles.promoToggleText}>무료 이용 코드 입력</Text>
               </Pressable>
-            ) : (
+            )}
+            </View>
+            {promoOpen && (
               <Section title="무료 이용 코드">
                 <View style={styles.card}>
                   <TextInput
@@ -1062,16 +1075,16 @@ function BillingBody() {
           </>
         )}
 
+        {/* 새로고침·로그아웃 = 흰 카드 한 장(2026-11-16 R-14). */}
         <Appear delay={stagger(7)}>
+        <View style={styles.card}>
         <Pressable disabled={busy} onPress={() => void recheck()} style={({ pressed }) => [styles.ghost, pressed && { opacity: 0.7 }, busy && { opacity: 0.6 }]}>
           {busy ? <ActivityIndicator color={InkColors.ink2} /> : <Text style={styles.ghostText}>이용 상태 새로고침</Text>}
         </Pressable>
-        </Appear>
-
-        <Appear delay={stagger(7)}>
         <Pressable onPress={() => void logout()} style={styles.logoutRow}>
           <Text style={styles.logoutText}>로그아웃</Text>
         </Pressable>
+        </View>
         </Appear>
           </>
         )}

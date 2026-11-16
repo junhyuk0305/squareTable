@@ -19,6 +19,7 @@ import { formatAsked } from '@/lib/utils/time';
 import { AI_ANSWER_LIMIT, fetchPeerAnswers, type AiAnswerRow as AiAnswer, type PeerAnswerRow } from '@/lib/db';
 
 import { CardStyles } from '@/lib/theme/card';
+import { EmptyStyles } from '@/lib/theme/empty';
 import { InkColors } from '@/lib/theme/colors';
 import { Layout, Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
@@ -240,7 +241,9 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
       {aiError && (
         <View style={styles.group}>
           <SectionLabel title="AI가 답한 질문" />
-          <Text style={styles.aiErr}>목록을 불러오지 못했어요. 연결을 확인하고 다시 들어와 주세요.</Text>
+          <View style={styles.aiErrBox}>
+            <Text style={styles.aiErr}>목록을 불러오지 못했어요. 연결을 확인하고 다시 들어와 주세요.</Text>
+          </View>
         </View>
       )}
       {!aiError && okAnswers.length > 0 && (
@@ -311,7 +314,7 @@ function PagedList<T>({ items, render, style }: {
           onPress={() => setShown((n) => n + PAGE)}
           accessibilityRole="button"
           accessibilityLabel={`${Math.min(rest, PAGE)}건 더 보기`}
-          style={({ pressed }) => [styles.moreRow, !!style && styles.rowLast, pressed && { opacity: 0.6 }]}
+          style={({ pressed }) => [styles.moreRow, !!style && styles.rowLast, !style && styles.moreCard, pressed && { opacity: 0.6 }]}
         >
           <Text style={styles.moreText}>{Math.min(rest, PAGE)}건 더 보기 · 남은 {rest}건</Text>
         </Pressable>
@@ -329,6 +332,8 @@ function heroMeta(uq: UnknownQuery) {
 }
 
 const styles = StyleSheet.create({
+  // 오류 = 흰 빈 카드(R-14 · 2026-11-16).
+  aiErrBox: EmptyStyles.box,
   aiErr: { ...Type.body, color: InkColors.ink2, paddingVertical: 8 },
   // 섹션 사이 = 화면 틀과 같은 20 · 제목 ↔ 내용 8(2026-11-02).
   root: { gap: Layout.sectionGap },
@@ -346,6 +351,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.lg, paddingVertical: Space.md,
     borderBottomWidth: 1, borderBottomColor: InkColors.line,
   },
+  // 카드(style) 없이 줄마다 카드인 목록 — '더 보기'도 혼자 흰 카드에 담는다(R-14 · 2026-11-16).
+  moreCard: CardStyles.list,
   moreText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
 
   // '동료가 답한 질문' 한 줄 — '더 보기'와 같은 인셋·구분선. 누르면 답으로 쓴 노하우를 연다.

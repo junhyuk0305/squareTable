@@ -10,12 +10,14 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { StepProgress } from '@/components/blocks/StepProgress';
 import { InfoDot } from '@/components/InfoDot';
 import { Appear } from '@/components/Appear';
+import { EmptyState } from '@/components/EmptyState';
 import { notifyAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Layout, Space, screenScrollStyle } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
+import { EmptyStyles } from '@/lib/theme/empty';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Type } from '@/lib/theme/type';
 
@@ -180,12 +182,12 @@ export function OwnerKnowhowImport() {
   // 단일 매장(복사할 상대가 없음) — 딥링크 방어. 진입 CTA 는 매장 2+개일 때만 노출된다.
   if (owned.length < 2) {
     return (
-      <View style={styles.emptyState}>
-        {/* 그림 이모지 금지(워딩 §1) — Ionicons 로 대체. 2026-08-07 QA #5-2 와 같은 규칙. */}
-        <Ionicons name="storefront-outline" size={30} color={InkColors.ink3} />
-        <Text style={styles.emptyTitle}>복사할 다른 매장이 없어요</Text>
-        <Text style={styles.emptyBody}>매장이 2개 이상일 때 한 매장의 노하우를 다른 매장으로 복사할 수 있어요.</Text>
-      </View>
+      // 공용 빈 상태(흰 카드 · R-14 2026-11-16). 부모(Screen scroll=false)에 화면 여백이 없어 screen 을 붙인다.
+      <EmptyState
+        screen
+        title="복사할 다른 매장이 없어요"
+        body="매장이 2개 이상일 때 한 매장의 노하우를 다른 매장으로 복사할 수 있어요."
+      />
     );
   }
 
@@ -274,14 +276,14 @@ export function OwnerKnowhowImport() {
             {loading ? (
               <View style={styles.center}><ActivityIndicator color={InkColors.ink3} /></View>
             ) : loadErr ? (
-              <View style={styles.center}>
+              <View style={styles.emptyCard}>
                 <Text style={styles.emptyBody}>목록을 불러오지 못했어요.</Text>
                 <Pressable onPress={() => { setLoadErr(false); setLoading(true); setNonce((n) => n + 1); }} hitSlop={8}>
                   <Text style={styles.retryLink}>다시 시도</Text>
                 </Pressable>
               </View>
             ) : rows && rows.length === 0 ? (
-              <View style={styles.center}>
+              <View style={styles.emptyCard}>
                 <Ionicons name="file-tray-outline" size={30} color={InkColors.ink3} />
                 <Text style={styles.emptyBody}>이 매장에는 발행된 노하우가 없어요.</Text>
                 <Pressable onPress={() => setStep(1)} hitSlop={8} accessibilityRole="button" accessibilityLabel="매장 다시 고르기">
@@ -290,6 +292,8 @@ export function OwnerKnowhowImport() {
               </View>
             ) : (
               <Appear delay={120} style={styles.block}>
+                {/* 찾기·개수·전체 선택 = 흰 카드 하나(R-14 · 2026-11-16). 줄마다 카드인 목록 바로 위 머리다. */}
+                <View style={styles.findCard}>
                 {/* 찾기 — 8건 미만이면 안 그린다. 단, 검색어가 남아 있으면 강제로 띄운다(끌 수 없는 거르기 금지). */}
                 {(rows?.length ?? 0) >= FILTER_MIN || filtering ? (
                   <View style={SearchStyles.box}>
@@ -324,8 +328,9 @@ export function OwnerKnowhowImport() {
                 {hiddenSelected > 0 ? (
                   <Text style={styles.hiddenNote}>지금 안 보이는 {hiddenSelected}개도 고른 상태예요. 함께 복사해요.</Text>
                 ) : null}
+                </View>
                 {visible.length === 0 ? (
-                  <View style={styles.center}>
+                  <View style={styles.emptyCard}>
                     <Text style={styles.emptyBody}>찾는 노하우가 없어요.</Text>
                     <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="검색어 지우기">
                       <Text style={styles.retryLink}>검색어 지우기</Text>
@@ -372,6 +377,8 @@ export function OwnerKnowhowImport() {
         {/* ── 3단계 · 복사 완료 ─────────────────────────────────────────────────── */}
         {step === 3 ? (
           <Appear delay={0} style={styles.block}>
+            {/* 완료 머리 = 흰 카드(R-14 · 2026-11-16). */}
+            <View style={styles.doneCard}>
             <View style={styles.doneHead}>
               <Ionicons name="checkmark-circle" size={22} color={BrandColors.goodText} />
               <Text style={styles.doneTitle}>
@@ -387,6 +394,7 @@ export function OwnerKnowhowImport() {
                 사진 {photoMissed}장은 옮기지 못했어요. 노하우는 다 갔어요 — 사진만 받는 매장에서 다시 올려 주세요.
               </Text>
             ) : null}
+            </View>
             <View style={styles.list}>
               {result.map((r, i) => (
                 <View key={`${r.title}-${i}`} style={styles.row}>
@@ -489,7 +497,8 @@ const styles = StyleSheet.create({
   stepOne: { gap: Layout.sectionGap },
 
   // 매장 칩(보내는 쪽·받는 쪽 같은 모양 — 다른 것은 위 라벨이 말한다)
-  sourceWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
+  // 칩 줄 = 흰 카드 안(R-14 · 2026-11-16).
+  sourceWrap: { ...CardStyles.list, flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   sourceChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%',
     backgroundColor: InkColors.bg, borderWidth: 1.5, borderColor: InkColors.line,
@@ -503,6 +512,9 @@ const styles = StyleSheet.create({
   // 방향 한 줄 — 2단계에서 "지금 어디서 어디로"를 잃지 않게 계속 보여준다.
   wayText: { fontSize: Type.desc.fontSize, fontWeight: '800', color: InkColors.ink2 },
   center: { paddingVertical: 40, alignItems: 'center', gap: 8 },
+  // 오류·빈 상태 = 흰 빈 카드(R-14 · 2026-11-16).
+  emptyCard: EmptyStyles.box,
+  findCard: { ...CardStyles.list, gap: Space.sm },
 
   hiddenNote: { ...Type.desc, fontWeight: '600' },
 
@@ -527,6 +539,7 @@ const styles = StyleSheet.create({
   retryLink: { fontSize: 13, fontWeight: '800', color: BrandColors.brand, textDecorationLine: 'underline' },
 
   // 3단계 완료
+  doneCard: { ...CardStyles.list, gap: Space.sm },
   doneHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   doneTitle: { flex: 1, fontSize: 16, fontWeight: '800', color: InkColors.ink, lineHeight: 23 },
   doneSub: { ...Type.desc, fontWeight: '600' },
@@ -552,8 +565,5 @@ const styles = StyleSheet.create({
   },
   backBtnText: { ...ButtonTextStyles.primary, color: InkColors.ink },
 
-  // 빈 상태(단일 매장)
-  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: Space.xl },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink2 },
   emptyBody: { fontSize: 15, color: InkColors.ink2, fontWeight: '600', textAlign: 'center', lineHeight: 22 },
 });

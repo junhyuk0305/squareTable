@@ -11,7 +11,7 @@ import { showToast } from '@/lib/store/useToastStore';
 import { notifyAction } from '@/lib/utils/confirm';
 import { storeColor } from '@/lib/utils/storeColor';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Space } from '@/lib/theme/layout';
+import { Layout, Space } from '@/lib/theme/layout';
 import { SettingsSection, SettingsRow, SettingsToggle, SettingsStoreHead } from '@/components/settings/SettingsKit';
 import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
 import { PersonalizeSheet } from '@/components/settings/PersonalizeSheet';
@@ -170,7 +170,9 @@ export default function StoreSettings() {
             }}
           />
         </SettingsSection>
-        {/* 되돌리기 어려운 동작이라 카드 밖에 따로 둔다(오탭 방지). 위 카드와는 섹션 간격(20)만큼 떨어진다. */}
+        {/* 되돌리기 어려운 동작이라 위 카드와 떼어 따로 둔다(오탭 방지). 위 카드와는 섹션 간격(20)만큼 떨어진다.
+            2026-11-16 R-14: 이 행도 흰 카드 위에 둔다(자기 카드 한 장). */}
+        <SettingsSection>
         <Pressable
           onPress={() => setLeaveModal(true)}
           disabled={busy}
@@ -181,6 +183,7 @@ export default function StoreSettings() {
           <Ionicons name="exit-outline" size={19} color={BrandColors.accent} style={styles.outIcon} />
           <Text style={[styles.outLabel, { color: BrandColors.accentText }]}>매장 나가기</Text>
         </Pressable>
+        </SettingsSection>
       </Screen>
 
       <PersonalizeSheet
@@ -220,8 +223,8 @@ export default function StoreSettings() {
 }
 
 const styles = StyleSheet.create({
-  // 카드 밖 '매장 나가기' 행 — 좌우 4는 SectionLabel과 같은 들여쓰기(카드 안 16이 아니다). 최소 높이는 터치 타깃 48dp.
-  outRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingHorizontal: Space.xs, paddingVertical: Space.md, minHeight: 48 },
+  // '매장 나가기' 행 — 자기 카드 안. 좌우는 카드 안 행과 같은 16. 최소 높이는 터치 타깃 48dp.
+  outRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingHorizontal: Layout.cardPad, paddingVertical: Space.md, minHeight: 48 },
   outIcon: { width: 22, textAlign: 'center' },
   outLabel: { fontSize: 15, fontWeight: '600', color: InkColors.ink },
 });

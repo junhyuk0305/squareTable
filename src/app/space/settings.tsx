@@ -192,7 +192,9 @@ export default function SpaceSettings() {
       ) : null}
 
       {membersFailed && !members ? (
-        <Text style={styles.fail}>{SPACE_MEMBERS.membersLoadFail}</Text>
+        <View style={styles.failCard}>
+          <Text style={styles.fail}>{SPACE_MEMBERS.membersLoadFail}</Text>
+        </View>
       ) : members ? (
         <Section title={SPACE_MEMBERS.membersTitle(members.length)}>
           <View style={styles.card}>
@@ -293,5 +295,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   solidText: { ...Type.desc, fontWeight: '800', color: InkColors.bg },
+  failCard: { ...CardStyles.list },
   fail: { ...Type.desc, color: TextColor.secondary },
 });

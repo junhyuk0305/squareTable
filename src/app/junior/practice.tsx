@@ -175,26 +175,28 @@ export default function JuniorTermPracticeScreen() {
                   ? `헷갈린다고 표시한 건 ${again.length}장이에요. 이 기록은 저장되지 않아요.`
                   : '전부 알았다고 표시했어요. 이 기록은 저장되지 않아요.'}
               </Text>
+              <View style={styles.doneActions}>
+                {again.length > 0 ? (
+                  <Pressable
+                    onPress={() => restart(again)}
+                    style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel="헷갈린 것 다시 보기"
+                  >
+                    <Text style={styles.primaryText}>{`헷갈린 것 ${again.length}장 다시 보기`}</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  onPress={() => restart(null)}
+                  style={({ pressed }) => [styles.softBtn, pressed && styles.pressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="처음부터 다시 보기"
+                >
+                  <Text style={styles.softText}>처음부터 다시 보기</Text>
+                </Pressable>
+              </View>
             </View>
           </Appear>
-          {again.length > 0 ? (
-            <Pressable
-              onPress={() => restart(again)}
-              style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel="헷갈린 것 다시 보기"
-            >
-              <Text style={styles.primaryText}>{`헷갈린 것 ${again.length}장 다시 보기`}</Text>
-            </Pressable>
-          ) : null}
-          <Pressable
-            onPress={() => restart(null)}
-            style={({ pressed }) => [styles.softBtn, pressed && styles.pressed]}
-            accessibilityRole="button"
-            accessibilityLabel="처음부터 다시 보기"
-          >
-            <Text style={styles.softText}>처음부터 다시 보기</Text>
-          </Pressable>
         </View>
       </SafeAreaView>
     );
@@ -290,7 +292,8 @@ const styles = StyleSheet.create({
   // 답 = 대표 숫자(Type.numHero 32/40/900).
   answer: { ...Type.numHero, color: InkColors.ink, textAlign: 'center' },
 
-  selfRow: { flexDirection: 'row', gap: Space.sm },
+  // 자가 채점 버튼 = 흰 카드 한 줄(R-14). 뒤집기 카드는 누르는 상자라 그 안에 버튼을 넣지 않는다(중첩 button).
+  selfRow: { ...CardStyles.list, flexDirection: 'row', gap: Space.sm },
   selfBtn: { flex: 1 },
 
   // 화면의 유일한 '채운' 버튼 — Primary 1개 규칙.
@@ -310,6 +313,7 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.85 },
 
   doneCard: { ...CardStyles.list, gap: Space.xs },
+  doneActions: { gap: Space.sm, marginTop: Space.md },
   doneTitle: { ...Type.title },
   doneBody: { ...Type.desc },
 });

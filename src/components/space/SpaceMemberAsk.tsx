@@ -265,27 +265,29 @@ export function SpaceMemberAsk({
 
   return (
     <View style={st.wrap}>
-      <TextInput
-        value={text}
-        onChangeText={setText}
-        maxLength={TEXT_MAX}
-        editable={!busy}
-        multiline
-        placeholder={SPACE_WORDS.askPlaceholder}
-        placeholderTextColor={TextColor.placeholder}
-        style={[st.input, st.askInput]}
-        accessibilityLabel={SPACE_WORDS.askPlaceholder}
-      />
-      <Pressable
-        onPress={() => void submit()}
-        disabled={!canAsk}
-        accessibilityRole="button"
-        accessibilityLabel={SPACE_ASK.ask}
-        accessibilityState={{ disabled: !canAsk, busy }}
-        style={({ pressed }) => [st.primary, pressed && st.pressed, !canAsk && st.disabled]}
-      >
-        {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={st.primaryText}>{SPACE_ASK.ask}</Text>}
-      </Pressable>
+      <View style={st.form}>
+        <TextInput
+          value={text}
+          onChangeText={setText}
+          maxLength={TEXT_MAX}
+          editable={!busy}
+          multiline
+          placeholder={SPACE_WORDS.askPlaceholder}
+          placeholderTextColor={TextColor.placeholder}
+          style={[st.input, st.askInput]}
+          accessibilityLabel={SPACE_WORDS.askPlaceholder}
+        />
+        <Pressable
+          onPress={() => void submit()}
+          disabled={!canAsk}
+          accessibilityRole="button"
+          accessibilityLabel={SPACE_ASK.ask}
+          accessibilityState={{ disabled: !canAsk, busy }}
+          style={({ pressed }) => [st.primary, pressed && st.pressed, !canAsk && st.disabled]}
+        >
+          {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={st.primaryText}>{SPACE_ASK.ask}</Text>}
+        </Pressable>
+      </View>
 
       {mine.map((t) => (
         <View key={t.id} style={st.card}>
@@ -297,7 +299,11 @@ export function SpaceMemberAsk({
       {(list.length > 0 || loadFailed) && (
         <View style={st.section} onLayout={(e) => setListY(e.nativeEvent.layout.y)}>
           <SectionLabel title={EDU_ASK.myQuestions} hint={list.length > 0 ? `${list.length}건` : undefined} />
-          {loadFailed ? <Text style={st.note}>{EDU_ASK.loadFail}</Text> : null}
+          {loadFailed ? (
+            <View style={st.card}>
+              <Text style={st.note}>{EDU_ASK.loadFail}</Text>
+            </View>
+          ) : null}
           {list.map((q) => (
             <View
               key={q.uqId}
@@ -319,7 +325,8 @@ export function SpaceMemberAsk({
 
 const st = StyleSheet.create({
   wrap: { gap: Space.sm },
-  // 회색 바탕 위에 카드 없이 놓인 칸 — 흰 면 + lineStrong(ui.md · EduAsk 와 같은 모양).
+  form: { ...CardStyles.list, gap: Space.sm },
+  // 흰 카드(form) 안 칸 — 흰 면 + lineStrong(ui.md · EduAsk 와 같은 모양).
   input: {
     ...Type.body,
     borderWidth: 1,

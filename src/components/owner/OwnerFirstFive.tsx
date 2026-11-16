@@ -86,7 +86,8 @@ export function OwnerFirstFive({
         <Appear delay={stagger(1)}>
           <InviteBlock code={inviteCode} from="onboarding" />
         </Appear>
-        <Appear delay={stagger(2)}>
+        {/* 다음 = 흰 카드 안(R-14 · 2026-11-16). InviteBlock 은 안에 버튼 자리가 없어 따로 카드에 담는다. */}
+        <Appear delay={stagger(2)} style={s.btnCard}>
           <PressableScale onPress={() => setStep('ask')} scaleTo={0.97} style={s.ghost} accessibilityRole="button" accessibilityLabel={OWNER_FIRST.next}>
             <Text style={s.ghostText}>{OWNER_FIRST.next}</Text>
           </PressableScale>
@@ -104,6 +105,8 @@ export function OwnerFirstFive({
           <Text style={s.desc}>{OWNER_FIRST.askBody}</Text>
         </Appear>
 
+        {/* 묻기 입력 + 저장 완료 줄 = 흰 카드 하나(R-14 · 2026-11-16). */}
+        <View style={s.askCard}>
         <View style={s.askRow}>
           <TextInput
             value={input}
@@ -127,6 +130,7 @@ export function OwnerFirstFive({
             <Text style={s.savedText}>{OWNER_FIRST.firstSaved}</Text>
           </View>
         )}
+        </View>
 
         {asked && hit && (
           <PackDraftCard item={hit.item} busy={busy} onConfirm={() => void confirm()} onEdit={() => openCoach(packDraftSeed(hit.item))} />
@@ -142,7 +146,9 @@ export function OwnerFirstFive({
           </View>
         )}
 
-        {/* 끝내기 — 초안 카드가 떠 있으면 Primary 는 [맞아요] 하나다. 카드가 없을 때만 끝내기가 Primary 다. */}
+        {/* 끝내기 — 초안 카드가 떠 있으면 Primary 는 [맞아요] 하나다. 카드가 없을 때만 끝내기가 Primary 다.
+            흰 카드 안(R-14 · 2026-11-16) — 초안 카드 아래 자리를 지키려고 따로 카드에 담는다. */}
+        <View style={s.btnCard}>
         <PressableScale
           onPress={onFinish}
           scaleTo={0.97}
@@ -152,6 +158,7 @@ export function OwnerFirstFive({
         >
           <Text style={asked && hit ? s.ghostText : s.primaryText}>{startAtAsk ? OWNER_FIRST.backToHub : OWNER_FIRST.finish}</Text>
         </PressableScale>
+        </View>
       </ScrollView>
     </KeyboardShift>
   );
@@ -161,6 +168,8 @@ const s = StyleSheet.create({
   intro: { gap: Gap.inline },
   title: { ...Type.title },
   desc: { ...Type.desc },
+  askCard: { ...CardStyles.list, gap: Gap.item },
+  btnCard: CardStyles.list,
   askRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   input: {
     ...Type.body,

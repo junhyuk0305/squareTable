@@ -19,6 +19,7 @@ import { Type } from '@/lib/theme/type';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
 import { FabSize } from '@/lib/theme/button';
 import type { PlaybookEntry } from '@/types';
 
@@ -285,7 +286,7 @@ const styles = StyleSheet.create({
   manageRowText: { ...Type.body, flex: 1, fontWeight: '700' },
 
   // 찾기 바
-  findBar: { gap: Space.sm },
+  findBar: { ...CardStyles.list, gap: Space.sm },
   findRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   // ★minWidth:0 없으면 웹 flexbox 의 min-width:auto 때문에 가로 스크롤이 안 생기고 부모를 밀어낸다.
   findScroll: { flex: 1, minWidth: 0 },
@@ -310,7 +311,7 @@ const styles = StyleSheet.create({
   moreText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
 
   // 빈 결과
-  emptyResult: { alignItems: 'center', gap: 6, paddingVertical: 36 },
+  emptyResult: { ...CardStyles.list, alignItems: 'center', gap: 6, paddingVertical: 36 },
   emptyResultText: { ...Type.body, fontWeight: '700', color: InkColors.ink2 },
   resetLink: { fontSize: 13, fontWeight: '800', color: BrandColors.brand, marginTop: 4, textDecorationLine: 'underline' },
 

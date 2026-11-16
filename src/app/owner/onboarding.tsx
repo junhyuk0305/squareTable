@@ -255,7 +255,7 @@ export default function OwnerOnboardingScreen() {
             </Appear>
           )}
 
-          <Appear delay={stagger(4)} style={styles.doneStretch}>
+          <Appear delay={stagger(4)} style={styles.doneCtaCard}>
             <PressableScale onPress={goDashboard} scaleTo={0.97} style={styles.primary}>
               <Text style={styles.primaryText}>홈으로 들어가기</Text>
             </PressableScale>
@@ -567,6 +567,8 @@ const styles = StyleSheet.create({
   },
   planTitle: { ...Type.body, fontWeight: '900' },
   planSub: { ...Type.desc, fontWeight: '600', marginTop: 1 },
-  primary: { ...ButtonStyles.primary, marginTop: Space.md, backgroundColor: InkColors.ink },
+  // 홈으로 들어가기 — 흰 카드 안(R-14 · 2026-11-16 · 버튼만 회색 위에 두지 않는다).
+  doneCtaCard: { ...CardStyles.list, alignSelf: 'stretch' },
+  primary: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
   primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

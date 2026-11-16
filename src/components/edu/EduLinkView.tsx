@@ -48,8 +48,10 @@ export function EduLinkView({ info, entries, askSlot }: { info: EduLinkInfo; ent
     return (
       <Appear style={st.fill}>
         <View style={st.center}>
-          <Ionicons name="lock-closed-outline" size={26} color={TextColor.iconMuted} />
-          <Text style={st.centerText}>{SPACE_WORDS.linkClosed}</Text>
+          <View style={EmptyStyles.box}>
+            <Ionicons name="lock-closed-outline" size={26} color={TextColor.iconMuted} />
+            <Text style={st.centerText}>{SPACE_WORDS.linkClosed}</Text>
+          </View>
         </View>
       </Appear>
     );
@@ -124,7 +126,7 @@ export function EduLinkView({ info, entries, askSlot }: { info: EduLinkInfo; ent
 const st = StyleSheet.create({
   // Appear 가 flex:1 자식(st.center)을 감쌀 때 높이를 넘겨주는 래퍼.
   fill: { flex: 1 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.md, paddingHorizontal: Space.xl },
+  center: { flex: 1, justifyContent: 'center', paddingHorizontal: Space.xl },
   centerText: { ...Type.body, fontWeight: '600', color: InkColors.ink2, textAlign: 'center', lineHeight: 23 },
 
   body: { gap: Gap.group },
@@ -132,8 +134,8 @@ const st = StyleSheet.create({
   kicker: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
   title: { ...Type.pageTitle, color: InkColors.ink },
 
-  askWrap: { gap: Space.sm },
-  // 회색 바탕 위에 카드 없이 놓인 칸 — 흰 면 + lineStrong(ui.md). 높이는 입력칸과 같은 52.
+  askWrap: { ...CardStyles.list, gap: Space.sm },
+  // 흰 카드(askWrap) 안 칸 — 흰 면 + lineStrong(ui.md). 높이는 입력칸과 같은 52.
   askBox: {
     flexDirection: 'row', alignItems: 'center', gap: Space.sm,
     minHeight: 52, paddingHorizontal: Space.md,

@@ -15,6 +15,7 @@ import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { CardStyles } from '@/lib/theme/card';
+import { EmptyStyles } from '@/lib/theme/empty';
 import { Type } from '@/lib/theme/type';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Space, screenScrollStyle } from '@/lib/theme/layout';
@@ -233,7 +234,8 @@ const st = StyleSheet.create({
   // 탭바 없는 하위 화면 — 아래 안전 영역은 SafeAreaView(bottom)가 든다. 바탕·스크롤 여백만 화면 틀 값을 쓴다.
   safe: { flex: 1, backgroundColor: Surface.screen },
   scroll: screenScrollStyle,
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.xl * 2 },
+  // 검색 결과 없음 = 흰 카드(EmptyStyles.box · 2026-11-16 R-14). 검색어 지우기 글자 버튼도 카드 안에 둔다.
+  center: EmptyStyles.box,
   centerText: { ...Type.body, color: TextColor.secondary, fontWeight: '600' },
   resetText: { fontSize: Type.body.fontSize, fontWeight: '800', color: InkColors.ink, textDecorationLine: 'underline' },
 

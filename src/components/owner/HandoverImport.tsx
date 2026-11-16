@@ -347,7 +347,11 @@ function HandoverImportBody() {
                 검토 대기 <Text style={{ fontWeight: '900' }}>노하우 {drafts.length}개</Text> — 추가할 것만 고르고, 카드를 눌러 내용을 다듬어 주세요. 추가 전에는 직원에게 보이지 않아요.
               </Text>
             </View>
-            {note && <Text style={styles.overflowNote}>{note}</Text>}
+            {note && (
+              <View style={styles.noteCard}>
+                <Text style={styles.overflowNote}>{note}</Text>
+              </View>
+            )}
             {groups.map((g) => (
               <View key={g.name} style={styles.sectionBlock}>
                 <View style={styles.sectionHead}>
@@ -373,6 +377,8 @@ function HandoverImportBody() {
                 </View>
               </View>
             ))}
+            {/* 글자 버튼 = 흰 카드 안(R-14 · 2026-11-16). */}
+            <View style={styles.backCard}>
             <PressableScale
               onPress={() => setPhase('input')}
               scaleTo={0.98}
@@ -383,6 +389,7 @@ function HandoverImportBody() {
               <Ionicons name="add" size={15} color={InkColors.ink2} />
               <Text style={styles.backLinkText}>인수인계서 더 올리기</Text>
             </PressableScale>
+            </View>
           </Appear>
         ) : phase === 'processing' ? (
           <Appear delay={0}>
@@ -409,6 +416,8 @@ function HandoverImportBody() {
               </Text>
             </View>
 
+            {/* 입력 카드 — PDF 올리기·붙여넣기·정리하기를 흰 카드 하나에 담는다(R-14 · 2026-11-16). */}
+            <View style={styles.inputCard}>
             {PDF_PICK_SUPPORTED && (
               <PressableScale
                 onPress={importPdf}
@@ -480,6 +489,7 @@ function HandoverImportBody() {
               <Ionicons name="document-text-outline" size={16} color={InkColors.bubbleText} />
               <Text style={styles.ctaText}>AI로 노하우 정리하기</Text>
             </PressableScale>
+            </View>
             <Text style={styles.hint}>* 정리된 항목은 사장님이 확인한 뒤에만 직원에게 보여요.</Text>
           </Appear>
         )}
@@ -782,6 +792,7 @@ const styles = StyleSheet.create({
   },
   errorText: { ...Type.desc, flex: 1, fontWeight: '700', color: BrandColors.badText },
 
+  inputCard: { ...CardStyles.list, marginBottom: Space.sm },
   // 주 버튼(52 · 모서리 16 · 16/800 · 2026-11-02).
   cta: {
     ...ButtonStyles.primary,
@@ -820,7 +831,8 @@ const styles = StyleSheet.create({
   },
   // 노랑 크림 띠 위 안내 문장 — 크기만 설명(13/19), 글자색은 띠 위 검정 그대로.
   reviewBannerText: { ...Type.desc, flex: 1, fontWeight: '700', color: InkColors.ink },
-  overflowNote: { ...Type.desc, fontWeight: '600', color: BrandColors.warnText, marginBottom: Space.sm },
+  noteCard: { ...CardStyles.list, marginBottom: Space.md },
+  overflowNote: { ...Type.desc, fontWeight: '600', color: BrandColors.warnText },
 
   sectionBlock: { marginBottom: Space.lg, gap: Space.sm },
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 2 },
@@ -919,6 +931,7 @@ const styles = StyleSheet.create({
   deleteLink: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', marginTop: 12, paddingVertical: 4 },
   deleteLinkText: { ...Type.tag, fontWeight: '800', color: BrandColors.badText },
 
+  backCard: CardStyles.rows,
   backLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
   backLinkText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
 

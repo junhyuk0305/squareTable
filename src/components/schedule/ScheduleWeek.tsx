@@ -153,7 +153,7 @@ export function ScheduleWeek({
 
   return (
     <View style={s.wrap}>
-      <View>
+      <View style={s.navCard}>
         {/* 주 이동 네비 */}
         {!hideNav && (
           <View style={s.nav}>
@@ -198,6 +198,8 @@ export function ScheduleWeek({
 const s = StyleSheet.create({
   // 요일 띠 묶음 ↔ 그날 목록 = 묶음 사이.
   wrap: { gap: Gap.group },
+  // 주 이동 줄 + 요일 띠 = 흰 카드 하나(R-14 · owner/schedule 과 같다).
+  navCard: { ...CardStyles.list },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4, marginBottom: 12 },
   // 주 이동 = 흰 원 버튼(ButtonStyles.iconCircle · 2026-11-02 결정). 누르는 상자 48(RN-web 은 hitSlop 을 무시한다).
   navBtn: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },

@@ -283,62 +283,68 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard, expi
 
   return (
     <View style={st.wrap}>
-      {!guest && (
-        <View style={st.field}>
-          <Text style={st.fieldLabel}>{EDU_ASK.nameLabel}</Text>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            maxLength={NAME_MAX}
-            editable={!busy}
-            placeholder={EDU_ASK.namePlaceholder}
-            placeholderTextColor={TextColor.placeholder}
-            style={st.input}
-            accessibilityLabel={EDU_ASK.nameLabel}
-          />
-          <Text style={st.note}>{EDU_ASK.nameNote(owner)}</Text>
-        </View>
-      )}
-      <TextInput
-        value={text}
-        onChangeText={setText}
-        maxLength={TEXT_MAX}
-        editable={!busy}
-        multiline
-        placeholder={SPACE_WORDS.askPlaceholder}
-        placeholderTextColor={TextColor.placeholder}
-        style={[st.input, st.askInput]}
-        accessibilityLabel={SPACE_WORDS.askPlaceholder}
-      />
-      <Pressable
-        onPress={() => void ask()}
-        disabled={!canAsk}
-        accessibilityRole="button"
-        accessibilityLabel={EDU_ASK.send}
-        style={({ pressed }) => [st.primary, pressed && st.pressed, !canAsk && st.disabled]}
-      >
-        {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={st.primaryText}>{EDU_ASK.send}</Text>}
-      </Pressable>
-      {/* 웹 손님(me 없음)에게만. 퀴즈 링크(q/[token])와 같은 모양이다. 앱 안 링크는 가입 때 동의했다. */}
-      {!me && (
-        <View>
-          <Text style={st.note}>{EDU_ASK.privacyNote}</Text>
-          <Pressable
-            onPress={() => router.push('/privacy')}
-            accessibilityRole="link"
-            accessibilityLabel={EDU_ASK.privacyLink}
-            style={({ pressed }) => [st.linkHit, pressed && st.pressed]}
-          >
-            <Text style={st.linkText}>{EDU_ASK.privacyLink}</Text>
-          </Pressable>
-        </View>
-      )}
-      {capNote ? <Text style={st.note}>{SPACE_WORDS.aiCapAsker(owner)}</Text> : null}
+      <View style={st.form}>
+        {!guest && (
+          <View style={st.field}>
+            <Text style={st.fieldLabel}>{EDU_ASK.nameLabel}</Text>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              maxLength={NAME_MAX}
+              editable={!busy}
+              placeholder={EDU_ASK.namePlaceholder}
+              placeholderTextColor={TextColor.placeholder}
+              style={st.input}
+              accessibilityLabel={EDU_ASK.nameLabel}
+            />
+            <Text style={st.note}>{EDU_ASK.nameNote(owner)}</Text>
+          </View>
+        )}
+        <TextInput
+          value={text}
+          onChangeText={setText}
+          maxLength={TEXT_MAX}
+          editable={!busy}
+          multiline
+          placeholder={SPACE_WORDS.askPlaceholder}
+          placeholderTextColor={TextColor.placeholder}
+          style={[st.input, st.askInput]}
+          accessibilityLabel={SPACE_WORDS.askPlaceholder}
+        />
+        <Pressable
+          onPress={() => void ask()}
+          disabled={!canAsk}
+          accessibilityRole="button"
+          accessibilityLabel={EDU_ASK.send}
+          style={({ pressed }) => [st.primary, pressed && st.pressed, !canAsk && st.disabled]}
+        >
+          {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={st.primaryText}>{EDU_ASK.send}</Text>}
+        </Pressable>
+        {/* 웹 손님(me 없음)에게만. 퀴즈 링크(q/[token])와 같은 모양이다. 앱 안 링크는 가입 때 동의했다. */}
+        {!me && (
+          <View>
+            <Text style={st.note}>{EDU_ASK.privacyNote}</Text>
+            <Pressable
+              onPress={() => router.push('/privacy')}
+              accessibilityRole="link"
+              accessibilityLabel={EDU_ASK.privacyLink}
+              style={({ pressed }) => [st.linkHit, pressed && st.pressed]}
+            >
+              <Text style={st.linkText}>{EDU_ASK.privacyLink}</Text>
+            </Pressable>
+          </View>
+        )}
+        {capNote ? <Text style={st.note}>{SPACE_WORDS.aiCapAsker(owner)}</Text> : null}
+      </View>
 
       {guest && (answers.length > 0 || loadFailed) && (
         <View style={st.section}>
           <SectionLabel title={EDU_ASK.myQuestions} hint={answers.length > 0 ? `${answers.length}개` : undefined} />
-          {loadFailed ? <Text style={st.note}>{EDU_ASK.loadFail}</Text> : null}
+          {loadFailed ? (
+            <View style={st.card}>
+              <Text style={st.note}>{EDU_ASK.loadFail}</Text>
+            </View>
+          ) : null}
           {answers.map((a) => (
             <View
               key={a.cqId}
@@ -396,15 +402,17 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard, expi
             </View>
           ))}
           {anyWaiting && (
-            <Pressable
-              onPress={() => void refresh(guest)}
-              accessibilityRole="button"
-              accessibilityLabel={EDU_ASK.refresh}
-              style={({ pressed }) => [st.linkHit, st.refresh, pressed && st.pressed]}
-            >
-              <Ionicons name="refresh" size={Type.desc.fontSize} color={InkColors.ink2} />
-              <Text style={st.linkText}>{EDU_ASK.refresh}</Text>
-            </Pressable>
+            <View style={st.card}>
+              <Pressable
+                onPress={() => void refresh(guest)}
+                accessibilityRole="button"
+                accessibilityLabel={EDU_ASK.refresh}
+                style={({ pressed }) => [st.linkHit, st.refresh, pressed && st.pressed]}
+              >
+                <Ionicons name="refresh" size={Type.desc.fontSize} color={InkColors.ink2} />
+                <Text style={st.linkText}>{EDU_ASK.refresh}</Text>
+              </Pressable>
+            </View>
           )}
         </View>
       )}
@@ -414,9 +422,10 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard, expi
 
 const st = StyleSheet.create({
   wrap: { gap: Space.sm },
+  form: { ...CardStyles.list, gap: Space.sm },
   field: { gap: Space.xs },
   fieldLabel: { ...Type.desc, fontWeight: '700' },
-  // 회색 바탕 위에 카드 없이 놓인 칸 — 흰 면 + lineStrong(ui.md · EduLinkView 자리 칸과 같은 모양).
+  // 흰 카드(form) 안 칸 — 흰 면 + lineStrong(ui.md · EduLinkView 자리 칸과 같은 모양).
   input: {
     ...Type.body,
     minHeight: 52,

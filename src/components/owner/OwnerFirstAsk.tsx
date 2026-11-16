@@ -221,7 +221,8 @@ const styles = StyleSheet.create({
   deflectBtnText: { fontSize: Type.body.fontSize, fontWeight: '800', color: InkColors.ink },
   deflectDoneText: { ...Type.desc, fontWeight: '700', marginTop: Space.xs },
 
-  loading: { paddingVertical: Space.md, alignItems: 'center' },
+  // 찾는 중 = 흰 카드 안(R-14 · 2026-11-16). 오류 줄(errorRow)은 경고색 면이라 그대로 카드로 친다.
+  loading: { ...CardStyles.list, alignItems: 'center' },
   loadingText: Type.desc,
 
   errorRow: {

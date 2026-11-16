@@ -104,6 +104,8 @@ function OfflineBoot() {
 
   return (
     <View style={styles.offlineRoot}>
+      {/* 안내·다시 시도·다른 계정 = 흰 카드 한 장(2026-11-16 R-14). */}
+      <View style={styles.offlineCard}>
       <Ionicons name="cloud-offline-outline" size={40} color={InkColors.ink3} />
       <Text style={styles.offlineText}>인터넷 연결이 불안정해요. 연결되면 바로 다시 들어가요.</Text>
       <Pressable
@@ -116,6 +118,7 @@ function OfflineBoot() {
       <Pressable onPress={() => void signOut()} hitSlop={8} style={styles.offerLogin}>
         <Text style={styles.offlineLink}>다른 계정으로 로그인</Text>
       </Pressable>
+      </View>
     </View>
   );
 }
@@ -386,7 +389,8 @@ const styles = StyleSheet.create({
   offerLoginStrong: { color: InkColors.ink, fontWeight: '800' },
 
   // ── 연결 안내(Q26) ──
-  offlineRoot: { flex: 1, backgroundColor: Surface.screen, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SCREEN_GUTTER, gap: Space.md },
+  offlineRoot: { flex: 1, backgroundColor: Surface.screen, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SCREEN_GUTTER },
+  offlineCard: { ...CardStyles.list, alignSelf: 'stretch', alignItems: 'center', gap: Space.md },
   offlineText: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: InkColors.ink, textAlign: 'center' },
   offlineLink: { fontSize: Type.body.fontSize, lineHeight: 20, fontWeight: '700', color: TextColor.secondary },
 

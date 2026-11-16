@@ -567,7 +567,8 @@ function PendingCard({
 }
 
 const styles = StyleSheet.create({
-  section: { gap: Space.sm },
+  // 주 이동 줄 + 요일 스트립 = 흰 카드 하나(R-14 · 2026-11-16).
+  section: { ...CardStyles.list, gap: Space.sm },
 
   badge: { minWidth: 22, height: 22, paddingHorizontal: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.accentSolid, alignItems: 'center', justifyContent: 'center' },
   badgeText: { ...Type.tag, fontWeight: '900', color: InkColors.bubbleText },

@@ -12,6 +12,7 @@ import { useWorkStore, useDayparts, isRoutineTaskId, occursOn, taskVisibleTo, as
 import { monthOutsideDoneWindow } from '@/lib/db';
 import { InkColors, BrandColors, CategoryColors, TextColor } from '@/lib/theme/colors';
 import { CardStyles } from '@/lib/theme/card';
+import { EmptyStyles } from '@/lib/theme/empty';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Layout, Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
@@ -367,7 +368,11 @@ export function TodoScreen({
 
       {/* 데이파트 그룹 */}
       <ScrollView ref={listRef} contentContainerStyle={s.listScroll} showsVerticalScrollIndicator={false}>
-        {groups.length === 0 && <Text style={s.empty}>이 날 할일이 없어요.</Text>}
+        {groups.length === 0 && (
+          <View style={s.emptyBox}>
+            <Text style={s.empty}>이 날 할일이 없어요.</Text>
+          </View>
+        )}
         {groups.map((g, gi) => {
           const isCol = collapsed[`${selected}:${g.key}`];
           return (
@@ -552,7 +557,9 @@ const s = StyleSheet.create({
   legendChipText: { ...Type.micro, fontWeight: '700', color: TextColor.secondary },
 
   listScroll: { paddingHorizontal: 13, paddingTop: 8, gap: 11 },
-  empty: { ...Type.body, textAlign: 'center', color: TextColor.secondary, marginTop: 30 },
+  // 빈 상태 = 흰 빈 카드(R-14 · 2026-11-16).
+  emptyBox: EmptyStyles.box,
+  empty: { ...Type.body, textAlign: 'center', color: TextColor.secondary },
   // 데이파트 그룹 = 행 목록 카드(좌우 16). 머리·행은 안쪽 8을 같이 둬 글자 줄을 맞춘다(내 할일 틴트가 그 8 안에 칠해진다).
   group: { ...CardStyles.rows },
   groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: Space.sm, minHeight: 46 },

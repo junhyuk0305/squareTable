@@ -129,8 +129,9 @@ function StoreConfigForm() {
       <Text style={styles.lead}>운영시간과 정기 휴무를 정해두면 근무표에 반영돼요.</Text>
 
       {/* 운영시간 — 이 화면의 최우선. 2026-08-06: 카드 껍데기를 벗겨 시각 자체가 화면에서 가장 큰
-          요소가 되게 했다(세 섹션이 전부 '제목→카드'라 한 종류의 나열로 읽히던 것을 여기서 끊는다). */}
-      <Section title="운영시간">
+          요소가 되게 했다(세 섹션이 전부 '제목→카드'라 한 종류의 나열로 읽히던 것을 여기서 끊는다).
+          2026-11-16 R-14: 입력·선택지는 흰 카드 위(사용자 규칙) — 세 섹션 모두 다시 카드에 담는다. */}
+      <Section title="운영시간" card>
         <View style={styles.timeRow}>
           <View style={styles.timeField}>
             <Text style={styles.timeLabel}>오픈</Text>
@@ -162,7 +163,7 @@ function StoreConfigForm() {
       </Section>
 
       {/* 정기 휴무 — 카드 없이 칩 줄. 선택 상태 요약(연중무휴·월·화)은 라벨 우측 hint 로 올렸다. */}
-      <Section title="정기 휴무" hint={closedDaysLabel(closedDays)}>
+      <Section title="정기 휴무" hint={closedDaysLabel(closedDays)} card>
         <View style={styles.dows}>
           {WEEKDAY_ORDER.map((wd) => {
             const on = closedDays.includes(wd);
@@ -190,12 +191,12 @@ function StoreConfigForm() {
             style={styles.noteInp}
             multiline
           />
+          {/* 저장 = 바로 위 카드 안 맨 아래(R-14 · 2026-11-16). 운영시간·휴무·비고를 한 번에 저장한다. */}
+          <Pressable onPress={() => { void save(); }} disabled={!valid || saving} style={({ pressed }) => [styles.saveBtn, (!valid || saving) && { opacity: 0.4 }, pressed && valid && !saving && { opacity: 0.85 }]}>
+            <Text style={styles.saveText}>{saved ? '저장됐어요 ✓' : saving ? '저장 중이에요' : '저장'}</Text>
+          </Pressable>
         </View>
       </Section>
-
-      <Pressable onPress={() => { void save(); }} disabled={!valid || saving} style={({ pressed }) => [styles.saveBtn, (!valid || saving) && { opacity: 0.4 }, pressed && valid && !saving && { opacity: 0.85 }]}>
-        <Text style={styles.saveText}>{saved ? '저장됐어요 ✓' : saving ? '저장 중이에요' : '저장'}</Text>
-      </Pressable>
 
       {/* C8(0283): 사업자등록번호 — 가입·매장 만들기에서 비워 둔 번호를 여기서 넣는다. 사장 전용. */}
       {isOwner ? <BizNoSection /> : null}
@@ -269,7 +270,7 @@ function BizNoSection() {
   };
 
   return (
-    <Section title="사업자등록번호">
+    <Section title="사업자등록번호" card>
       <TextInput
         value={bizNo}
         onChangeText={(v) => { setErr(null); setBizNo(formatBizNo(v)); }}

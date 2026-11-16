@@ -21,6 +21,7 @@ import { maskTail4, scoreText, takenDayLabel } from '@/lib/quiz/guestResult';
 import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Space, screenScrollStyle } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
+import { EmptyStyles } from '@/lib/theme/empty';
 import { Type } from '@/lib/theme/type';
 
 /**
@@ -98,7 +99,7 @@ export default function GuestQuizResultScreen() {
             <Text style={st.loadingText}>결과를 불러오는 중...</Text>
           </View>
         ) : failed ? (
-          <View style={st.loadingWrap}>
+          <View style={st.emptyCard}>
             <Text style={qst.emptyText}>결과를 불러오지 못했어요.</Text>
             <GhostButton label="다시 불러오기" onPress={() => setRetry((n) => n + 1)} />
           </View>
@@ -119,7 +120,9 @@ export default function GuestQuizResultScreen() {
             </Appear>
 
             {items.length === 0 ? (
-              <Text style={qst.emptyText}>{'문항별 기록이 없어요.\n예전 링크로 푼 결과는 점수만 남아 있어요.'}</Text>
+              <View style={st.emptyCard}>
+                <Text style={qst.emptyText}>{'문항별 기록이 없어요.\n예전 링크로 푼 결과는 점수만 남아 있어요.'}</Text>
+              </View>
             ) : (
               <View style={st.labeled}>
                 <SectionLabel title="문항별" hint={`${items.length}문제`} />
@@ -150,6 +153,8 @@ export default function GuestQuizResultScreen() {
 const st = StyleSheet.create({
   // 바탕 = Surface.screen · 첫 여백 16 · 좌우 20 · 블록 사이 20(2026-11-02 화면 틀 값).
   safe: { flex: 1, backgroundColor: Surface.screen },
+  // 오류·빈 상태 = 흰 빈 카드(R-14 · 2026-11-16).
+  emptyCard: EmptyStyles.box,
   loadingWrap: { alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.xl * 2 },
   loadingText: { fontSize: 13, fontWeight: '600', color: TextColor.secondary },
   scroll: { ...screenScrollStyle, flexGrow: 1 },

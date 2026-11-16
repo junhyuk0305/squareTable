@@ -627,7 +627,7 @@ export default function QuizNewScreen() {
             </View>
           ) : (
             <Appear>
-              <View style={st.stepBody}>
+              <View style={st.formCard}>
                 {/* 받는 쪽 — 여기서 갈려야 뒤 단계가 헛돌지 않는다. 외부는 보낼 계정이 없어 링크로 나간다. */}
                 <Text style={st.label}>응시 대상</Text>
                 <View style={st.chips}>
@@ -1000,6 +1000,7 @@ export default function QuizNewScreen() {
             ) : (
               <>
                 <Text style={st.label}>보내는 시점</Text>
+                <View style={st.formCard}>
                 <View style={st.chips}>
                   <Chip label="지금 바로" on={sendNow} onPress={() => setSendNow(true)} />
                   <Chip label="예약해서 보내기" on={!sendNow} onPress={() => setSendNow(false)} />
@@ -1019,8 +1020,10 @@ export default function QuizNewScreen() {
                     />
                   </Collapse>
                 )}
+                </View>
 
                 <Text style={st.label}>마감일</Text>
+                <View style={st.formCard}>
                 {dueAt ? (
                   <>
                     <MiniCalendar
@@ -1049,6 +1052,7 @@ export default function QuizNewScreen() {
                     <Text style={st.textActionText}>마감 없음 · 날짜를 정할래요</Text>
                   </Pressable>
                 )}
+                </View>
               </>
             )}
 
@@ -1316,9 +1320,7 @@ const st = StyleSheet.create({
   warnTitle: { ...Type.body, fontWeight: '800', color: BrandColors.warnText, lineHeight: 22 },
   warnBody: { ...Type.desc, fontWeight: '600', color: InkColors.ink },
 
-  thinBox: {
-    backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.lg, gap: Space.sm, ...Elevation.e1,
-  },
+  thinBox: { ...CardStyles.list, gap: Space.sm },
   thinTitle: { ...Type.body, fontWeight: '800', lineHeight: 22 },
   thinBody: { ...Type.desc, fontWeight: '600' },
   thinRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
@@ -1337,9 +1339,11 @@ const st = StyleSheet.create({
 
   // 단계 본문을 Appear 로 한 번에 감싸므로 단계 안의 간격은 여기서 준다(스크롤 gap 이 래퍼 밖으로 밀린다).
   stepBody: { gap: Space.md },
+  // 단계 안 입력·선택지를 담는 흰 카드(R-14 · 2026-11-16).
+  formCard: { ...CardStyles.list, gap: Space.md },
 
   // 찾기 바 — 노하우 화면과 같은 형태(검색 한 줄 + 카테고리 칩 가로 스크롤).
-  findBar: { gap: Space.sm },
+  findBar: { ...CardStyles.list, gap: Space.sm },
   chipRow: { flexDirection: 'row', gap: Space.xs, paddingRight: Space.lg },
   catChip: { ...ChipStyles.chip, flexDirection: 'row', alignItems: 'center', gap: 6 },
   catChipOn: ChipStyles.chipOn,

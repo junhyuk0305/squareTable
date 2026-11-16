@@ -23,6 +23,7 @@ import { Radius, Elevation } from '@/lib/theme/elevation';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Type } from '@/lib/theme/type';
 import { ChipStyles } from '@/lib/theme/chip';
+import { CardStyles } from '@/lib/theme/card';
 import type { Role } from '@/types';
 import { INDUSTRIES } from '@/lib/config/industry';
 import { askClaimEduGuests } from '@/lib/edu/autoClaim';
@@ -236,6 +237,8 @@ export default function SignupScreen() {
         <Text style={styles.roleSplit}>{ROLE_SPLIT_TEXT}</Text>
         </Appear>
 
+        {/* 입력 칸·업종 칩 = 흰 카드 한 장(2026-11-16 R-14). */}
+        <View style={styles.formCard}>
         <Appear delay={60}>
         <Field label="이름" value={name} onChange={setName} placeholder="홍길동" required />
         </Appear>
@@ -373,7 +376,7 @@ export default function SignupScreen() {
         </View>
         </Appear>
 
-        {role === 'owner' ? (
+        {role === 'owner' && (
           <>
             <Appear delay={120}>
             <Field label="매장 이름" value={storeName} onChange={setStoreName} placeholder="예: 우리 카페 신촌점" required />
@@ -412,7 +415,9 @@ export default function SignupScreen() {
             {/* 요금제 안내는 가입 폼에 두지 않는다(인지부하 축소). 가입은 무료로 시작하고,
                 가격 인지·업그레이드는 온보딩 완료 화면·설정(PricingTable)에서만 노출한다(SSOT=tiers.ts). */}
           </>
-        ) : (
+        )}
+        </View>
+        {role !== 'owner' && (
           <Appear delay={120}>
           <View style={styles.joinNote}>
             <Ionicons name="information-circle-outline" size={18} color={InkColors.ink2} />
@@ -428,6 +433,8 @@ export default function SignupScreen() {
         <ConsentChecklist role={role} checked={consent} onChange={setConsent} />
         </Appear>
 
+        {/* 오류·가입 버튼·소셜·로그인 줄 = 흰 카드 한 장(2026-11-16 R-14). */}
+        <View style={styles.actionCard}>
         {err && <Text style={styles.err}>{err}</Text>}
 
         {/* 버튼은 항상 누를 수 있게 둔다 — 미충족 항목은 start()의 순차 검증이 '무엇이 왜 안 되는지'
@@ -458,6 +465,7 @@ export default function SignupScreen() {
           <Text style={styles.loginText}>이미 계정이 있나요? <Text style={styles.loginStrong}>로그인</Text></Text>
         </Pressable>
         </Appear>
+        </View>
       </ScrollView>
       </KeyboardShift>
     </SafeAreaView>
@@ -539,10 +547,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   roleCheckMark: { ...Type.tag, color: InkColors.bubbleText, fontWeight: '900' },
+  formCard: { ...CardStyles.list, gap: Space.md },
+  actionCard: { ...CardStyles.list, gap: Space.sm },
   field: { gap: 6 },
   label: { fontSize: 13, fontWeight: '700', color: TextColor.secondary },
   req: { color: BrandColors.accentText, fontWeight: '900' },
-  // 카드 없이 회색 바탕(Surface.screen)에 바로 놓인 칸 — 흰 면 + 진한 선(lineStrong · 2026-11-02 결정).
+  // 흰 면 + 진한 선(lineStrong · 2026-11-02 결정). 2026-11-16 R-14 부터 흰 카드(formCard) 안에 놓인다.
   input: {
     ...Type.body,
     borderWidth: 1,

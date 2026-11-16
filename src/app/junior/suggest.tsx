@@ -151,6 +151,14 @@ export default function JuniorSuggestScreen() {
     showToast('제안을 취소했어요', 'good');
   }
 
+  // 주 버튼 — 보이는 입력 카드(고르기 또는 본문) 맨 아래에 둔다.
+  const cta = (
+    <Pressable onPress={send} disabled={!canSubmit || sending} style={({ pressed }) => [styles.cta, (!canSubmit || sending) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
+      <Ionicons name="paper-plane-outline" size={16} color={InkColors.bubbleText} />
+      <Text style={styles.ctaText}>{sending ? '보내는 중…' : '사장님께 제안 보내기'}</Text>
+    </Pressable>
+  );
+
   return (
     <Screen scroll={false} tabBar="junior" header={<ScreenTitleHeader title="노하우 제안" backFallback />}>
       <Stack.Screen options={{ title: '노하우 제안' }} />
@@ -225,7 +233,7 @@ export default function JuniorSuggestScreen() {
                   {entries.length === 0 ? '아직 등록된 노하우가 없어요. 위에서 "새 노하우 제안"으로 보내 주세요.' : '검색 결과가 없어요.'}
                 </Text>
               ) : (
-                <View style={styles.pickList}>
+                <View>
                   {filtered.map((e, i) => (
                     <Appear key={e.id} delay={stagger(i)}>
                     <Pressable
@@ -245,6 +253,7 @@ export default function JuniorSuggestScreen() {
                   )}
                 </View>
               )}
+              {cta}
             </View>
             </Appear>
           )}
@@ -271,16 +280,10 @@ export default function JuniorSuggestScreen() {
                 textAlignVertical="top"
               />
               <Text style={styles.hint}>구체적으로 적을수록 사장님이 반영하기 쉬워요. (최소 5자)</Text>
+              {cta}
               </View>
               </Appear>
           )}
-
-          <Appear delay={stagger(3)}>
-          <Pressable onPress={send} disabled={!canSubmit || sending} style={({ pressed }) => [styles.cta, (!canSubmit || sending) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
-            <Ionicons name="paper-plane-outline" size={16} color={InkColors.bubbleText} />
-            <Text style={styles.ctaText}>{sending ? '보내는 중…' : '사장님께 제안 보내기'}</Text>
-          </Pressable>
-          </Appear>
 
           {/* 내 제안 — 데드엔드 방지(보낸 제안의 상태를 본인이 추적) */}
           {mine.length > 0 && (
@@ -363,18 +366,16 @@ const styles = StyleSheet.create({
   changeBtn: { paddingHorizontal: Space.md, paddingVertical: Space.xs, borderRadius: Radius.pill, backgroundColor: Surface.card, borderWidth: 1, borderColor: '#EAD9B5' },
   changeText: { ...Type.tag, fontWeight: '800', color: BrandColors.warnText },
 
-  pickWrap: { gap: 10 },
+  pickWrap: { ...CardStyles.list, gap: 10 },
   pickEmpty: { ...Type.desc, paddingVertical: 8 },
-  // 고르기 목록 = 행 목록 카드(좌우 16은 카드가 든다).
-  pickList: { ...CardStyles.rows },
   pickRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingVertical: Space.md, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   catDot: { width: 9, height: 9, borderRadius: 5 },
   pickTitle: { ...Type.body, flex: 1, fontWeight: '600' },
 
   // 라벨 ↔ 입력칸 ↔ 안내 — 한 묶음 안 여백 하나.
-  field: { gap: Space.sm },
+  field: { ...CardStyles.list, gap: Space.sm },
   fieldLabel: { fontSize: 13, fontWeight: '800', color: TextColor.secondary },
-  // 카드 없이 회색 바탕(Surface.screen)에 바로 놓인 칸 — 흰 면 + 진한 선(lineStrong · 2026-11-02 결정).
+  // 흰 카드(field) 안 칸 — 흰 면 + 진한 선(lineStrong · 2026-11-02 결정).
   input: { minHeight: 130, borderWidth: 1, borderColor: InkColors.lineStrong, borderRadius: Radius.md, padding: 14, fontSize: 15, color: InkColors.ink, backgroundColor: Surface.input, lineHeight: 22 },
   hint: { ...Type.desc, fontWeight: '600' },
 

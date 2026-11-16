@@ -30,6 +30,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Gap, Space, screenScrollStyle } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
+import { EmptyStyles } from '@/lib/theme/empty';
 
 const CLOSED: EduLinkInfo = { ok: false, failed: false, placeKind: null, placeName: '', ownerName: '', title: '', entryCount: 0, expiresAt: null };
 
@@ -91,8 +92,11 @@ export default function EduLinkScreen() {
       {phase === 'failed' && (
         <Appear style={st.fill}>
           <View style={st.center}>
-            <Ionicons name="cloud-offline-outline" size={26} color={TextColor.iconMuted} />
-            <Text style={st.centerText}>지금은 불러오지 못했어요.{'\n'}연결을 확인하고 잠시 후 다시 열어 주세요.</Text>
+            {/* 오류 상태 = 흰 카드 위(2026-11-16 R-14). */}
+            <View style={st.centerCard}>
+              <Ionicons name="cloud-offline-outline" size={26} color={TextColor.iconMuted} />
+              <Text style={st.centerText}>지금은 불러오지 못했어요.{'\n'}연결을 확인하고 잠시 후 다시 열어 주세요.</Text>
+            </View>
           </View>
         </Appear>
       )}
@@ -126,6 +130,7 @@ const st = StyleSheet.create({
   scroll: { ...screenScrollStyle, paddingBottom: Space.xxl },
   fill: { flex: 1 },
   askStack: { gap: Gap.group },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.md, paddingHorizontal: Space.xl },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.xl },
+  centerCard: { ...EmptyStyles.box, alignSelf: 'stretch', gap: Space.md },
   centerText: { ...Type.body, fontWeight: '600', color: InkColors.ink2, textAlign: 'center', lineHeight: 23 },
 });

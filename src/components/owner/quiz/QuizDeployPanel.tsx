@@ -373,6 +373,7 @@ const st = StyleSheet.create({
   subName: { ...Type.body, fontWeight: '700' },
   subScore: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
 
-  cta: { gap: Space.xs },
+  // 링크 만들기 + 안내 = 흰 카드 안(R-14 · 2026-11-16).
+  cta: { ...CardStyles.list, gap: Space.xs },
   ctaHint: { ...Type.desc, fontWeight: '600', textAlign: 'center' },
 });

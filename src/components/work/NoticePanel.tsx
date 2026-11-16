@@ -8,6 +8,7 @@ import { type FeedItem } from '@/lib/store/useWorkStore';
 import { fetchBroadcastReadStatus } from '@/lib/db';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { CardStyles } from '@/lib/theme/card';
+import { EmptyStyles } from '@/lib/theme/empty';
 import { Radius } from '@/lib/theme/elevation';
 import { Type } from '@/lib/theme/type';
 import { BadgeStyles } from '@/lib/theme/badge';
@@ -120,7 +121,9 @@ export function NoticePanel({
         {/* 빈 상태는 다음 행동을 알려준다(복잡도 원칙 P6).
             ★2026-08-26: 공지는 누구나 쓴다(0177) — 직원에게도 같은 다음 행동을 준다. */}
         {notices.length === 0 && (
-          <Text style={s.empty}>아직 공지가 없어요. 아래에 첫 공지를 적어보세요.</Text>
+          <View style={s.emptyBox}>
+            <Text style={s.empty}>아직 공지가 없어요. 아래에 첫 공지를 적어보세요.</Text>
+          </View>
         )}
         {notices.map((n, i) => (
           <View
@@ -407,7 +410,9 @@ const s = StyleSheet.create({
   scroll: { padding: 13, gap: 11 },
   // 알림으로 들어온 공지 — 테두리만 강조(카드 안 레이아웃은 그대로).
   focusCard: { borderWidth: 2, borderColor: BrandColors.accentSolid, borderRadius: Radius.md },
-  empty: { ...Type.body, textAlign: 'center', color: TextColor.secondary, marginTop: 40 },
+  // 빈 상태 = 흰 빈 카드(R-14 · 2026-11-16).
+  emptyBox: EmptyStyles.box,
+  empty: { ...Type.body, textAlign: 'center', color: TextColor.secondary },
 
   card: { ...CardStyles.list },
   cardPinned: { borderColor: InkColors.ink3 },

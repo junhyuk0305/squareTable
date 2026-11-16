@@ -140,24 +140,26 @@ export default function SpaceKnowhowDetail() {
               </View>
             </Section>
           ) : null}
-          <Pressable
-            onPress={() => router.push({ pathname: '/space/write', params: { edit: entry.id } })}
-            accessibilityRole="button"
-            accessibilityLabel={SPACE_KNOWHOW.edit}
-            style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
-          >
-            <Text style={styles.primaryText}>{SPACE_KNOWHOW.edit}</Text>
-          </Pressable>
-          {connectOpen && entry.status === 'published' ? (
+          <View style={styles.actions}>
             <Pressable
-              onPress={() => router.push({ pathname: '/space/connect', params: { entry: entry.id } })}
+              onPress={() => router.push({ pathname: '/space/write', params: { edit: entry.id } })}
               accessibilityRole="button"
-              accessibilityLabel={CONNECT.sendToStore}
-              style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
+              accessibilityLabel={SPACE_KNOWHOW.edit}
+              style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
             >
-              <Text style={styles.secondaryText}>{CONNECT.sendToStore}</Text>
+              <Text style={styles.primaryText}>{SPACE_KNOWHOW.edit}</Text>
             </Pressable>
-          ) : null}
+            {connectOpen && entry.status === 'published' ? (
+              <Pressable
+                onPress={() => router.push({ pathname: '/space/connect', params: { entry: entry.id } })}
+                accessibilityRole="button"
+                accessibilityLabel={CONNECT.sendToStore}
+                style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
+              >
+                <Text style={styles.secondaryText}>{CONNECT.sendToStore}</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </>
       )}
     </Screen>
@@ -169,6 +171,8 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
   title: { ...Type.title },
   card: { ...CardStyles.list },
+  // 고치기·매장으로 보내기 = 흰 카드 하나(R-14). 위 섹션은 있을 때만 그려져 그 안에 넣지 않는다.
+  actions: { ...CardStyles.list, gap: Space.sm },
   body: { ...Type.body },
   steps: { gap: Space.sm },
   step: { flexDirection: 'row', gap: Space.sm },

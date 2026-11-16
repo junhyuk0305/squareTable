@@ -10,6 +10,7 @@ import { TERMS_VERSION } from '@/lib/config/business';
 import { formatKrw } from '@/lib/config/billing';
 import { cardSubscribe, cardUpdateCard, cardErrorText } from '@/lib/payments/cardBilling';
 import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
+import { CardStyles } from '@/lib/theme/card';
 import { CONTENT_MAX_WIDTH, Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
@@ -123,6 +124,8 @@ function ReturnBody() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <Stack.Screen options={{ headerShown: false, title: '카드 결제' }} />
       <View style={styles.wrap}>
+        {/* 결과 본문·버튼 = 흰 카드 한 장(2026-11-16 R-14). */}
+        <View style={styles.card}>
         <View style={styles.iconWrap}>
           {phase === 'working' ? (
             <ActivityIndicator color={InkColors.ink} />
@@ -141,6 +144,7 @@ function ReturnBody() {
             <Text style={styles.primaryText}>요금제 화면으로</Text>
           </Pressable>
         )}
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -148,7 +152,8 @@ function ReturnBody() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Surface.screen },
-  wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Space.gutter, gap: Space.md },
+  wrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Space.gutter },
+  card: { ...CardStyles.list, alignSelf: 'stretch', alignItems: 'center', gap: Space.md },
   iconWrap: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FBF3E2', alignItems: 'center', justifyContent: 'center' },
   title: { ...Type.title, textAlign: 'center' },
   body: { fontSize: Type.body.fontSize, color: TextColor.secondary, lineHeight: 22, textAlign: 'center', maxWidth: CONTENT_MAX_WIDTH },

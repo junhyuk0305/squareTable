@@ -8,7 +8,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { HqPage, HqButton, HqNotice, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
+import { HqPage, HqButton, HqNotice, HqEmpty, HqLoadError, HqCard } from '@/components/hq/HqKit';
 import { HqTable, Cell, type HqColumn } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -176,7 +176,7 @@ export default function HqKnowhowScreen() {
     <HqPage {...head}>
       {/* 등장은 섹션 단위로(ui.md ⑤) — 노하우 표 → 배포 상태 순서로. */}
       <Appear>
-        <View style={styles.bar}>
+        <HqCard style={styles.bar}>
           <Pressable
             onPress={() => setPicked(allPicked ? new Set() : new Set(list.map((r) => r.id)))}
             accessibilityRole="button"
@@ -199,7 +199,7 @@ export default function HqKnowhowScreen() {
                 ? `${picked.size}건 선택`
                 : '왼쪽 칸을 눌러 여러 건을 고른 뒤 한 번에 보낼 수 있어요.'}
           </Text>
-        </View>
+        </HqCard>
 
         <HqTable
           columns={columns}
@@ -338,7 +338,7 @@ function Check({ on, onPress, label }: { on: boolean; onPress: () => void; label
 }
 
 const styles = StyleSheet.create({
-  bar: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: 12 },
+  bar: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   barBtn: { paddingVertical: 8, paddingHorizontal: 13, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, minHeight: 40, justifyContent: 'center' },
   barBtnText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
   barNote: { fontSize: 13.5, color: InkColors.ink3 },

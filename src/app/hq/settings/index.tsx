@@ -33,15 +33,13 @@ export default function HqSettingsBrandScreen() {
 
   return (
     <HqPage {...head}>
-      <View style={styles.slabRow}>
-        <HqSlab title="기본 정보" />
+      <HqSlab title="기본 정보" />
+      <HqCard>
         <View style={styles.idBox}>
           <Text style={styles.idLabel}>브랜드 ID</Text>
           <View style={styles.idValue}><Text style={styles.idText} selectable>{brand.brand_id}</Text></View>
           {canCopyToClipboard() ? <HqButton label={copied ? '복사됨' : '복사'} onPress={() => void copy(brand.brand_id)} /> : null}
         </View>
-      </View>
-      <HqCard>
         <View style={styles.split}>
           <HqField label="브랜드 이름">{brand.brand_name}</HqField>
           <View style={styles.vline} />
@@ -62,8 +60,7 @@ export default function HqSettingsBrandScreen() {
 }
 
 const styles = StyleSheet.create({
-  slabRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.md, flexWrap: 'wrap' },
-  idBox: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: 9 },
+  idBox: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: Space.lg },
   idLabel: { fontSize: 13.5, fontWeight: '700', color: InkColors.ink2 },
   idText: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
   idValue: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: Space.md, paddingVertical: 8 },

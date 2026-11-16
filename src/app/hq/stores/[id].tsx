@@ -338,14 +338,14 @@ function QuizzesTab({ unitId }: { unitId: string }) {
 
 function Legend() {
   return (
-    <View style={styles.legend}>
+    <HqCard style={styles.legend}>
       {ORDER.map((k) => (
         <View key={k} style={styles.legendItem}>
           <HqPill tone={DEPLOY_STATUS[k].tone} label={DEPLOY_STATUS[k].label} />
           <Text style={styles.legendText}>{DEPLOY_STATUS[k].hint}</Text>
         </View>
       ))}
-    </View>
+    </HqCard>
   );
 }
 

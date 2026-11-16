@@ -190,13 +190,11 @@ export default function OwnerCreateStore() {
           >
             {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>매장 만들고 시작하기</Text>}
           </Pressable>
+          {/* 카드 밖 글자 버튼 금지(R-14 · 2026-11-16) — 폼 카드 안 맨 아래. */}
+          <Pressable onPress={() => void logout()} style={styles.logoutRow}>
+            <Text style={styles.logoutText}>다른 계정으로 로그인</Text>
+          </Pressable>
         </View>
-        </Appear>
-
-        <Appear delay={120}>
-        <Pressable onPress={() => void logout()} style={styles.logoutRow}>
-          <Text style={styles.logoutText}>다른 계정으로 로그인</Text>
-        </Pressable>
         </Appear>
       </ScrollView>
       </KeyboardShift>

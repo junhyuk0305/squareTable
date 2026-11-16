@@ -163,8 +163,10 @@ export default function OwnerSuggestionsScreen() {
           <Appear delay={stagger(2)}>
           <View style={styles.handledWrap}>
             <Text style={styles.handledHeader}>처리됨</Text>
-            {handled.map((s) => (
-              <View key={s.id} style={styles.handledRow}>
+            {/* 처리된 행 = 흰 행 목록 카드(R-14 · 2026-11-16). 머리글 "처리됨" 은 바탕 위. */}
+            <View style={styles.handledCard}>
+            {handled.map((s, i) => (
+              <View key={s.id} style={[styles.handledRow, i > 0 && styles.handledDivider]}>
                 <View style={[styles.statusChip, { backgroundColor: SUGGESTION_STATUS_CHIP[s.status].bg }]}>
                   <Text style={[styles.statusChipText, { color: SUGGESTION_STATUS_CHIP[s.status].fg }]}>
                     {SUGGESTION_STATUS_LABEL[s.status]}
@@ -175,6 +177,7 @@ export default function OwnerSuggestionsScreen() {
                 </Text>
               </View>
             ))}
+            </View>
           </View>
           </Appear>
         )}
@@ -381,7 +384,9 @@ const styles = StyleSheet.create({
 
   handledWrap: { marginTop: 6, gap: 8 },
   handledHeader: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
-  handledRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: InkColors.line },
+  handledCard: CardStyles.rows,
+  handledRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7 },
+  handledDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   statusChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.pill },
   statusChipText: { ...Type.micro, fontWeight: '800' },
   handledText: { ...Type.tag, flex: 1, color: TextColor.secondary, fontWeight: '600' },

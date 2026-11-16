@@ -10,7 +10,7 @@ import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { HqPage, HqButton, HqPill, HqSegment, HqEmpty, HqLoadError, HqSlab } from '@/components/hq/HqKit';
+import { HqPage, HqButton, HqPill, HqSegment, HqEmpty, HqLoadError, HqSlab, HqCard } from '@/components/hq/HqKit';
 import { HqTable, Cell, type HqColumn, type HqSort } from '@/components/hq/HqTable';
 import { AddStoreModal } from '@/components/hq/AddStoreModal';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -175,7 +175,7 @@ export default function HqStoresScreen() {
       ) : (
         // ★쪽·정렬을 바꿀 때는 다시 재생하지 않는다 — Appear 는 마운트 1회이고 표는 같은 자리에서 행만 바뀐다.
         <Appear>
-          <View style={styles.tool}>
+          <HqCard style={styles.tool}>
             <View style={styles.search}>
               <Ionicons name="search-outline" size={15} color={InkColors.ink3} />
               <TextInput
@@ -197,7 +197,7 @@ export default function HqStoresScreen() {
               value={query.visibility ?? 'all'}
               onChange={(v: 'all' | BrandVisibility) => setQuery({ visibility: v === 'all' ? null : v })}
             />
-          </View>
+          </HqCard>
 
           <HqTable
             columns={columns}
@@ -218,11 +218,11 @@ export default function HqStoresScreen() {
 
           {/* 쪽 넘김 — 쪽이 하나면 그리지 않는다(파일럿 규모에선 보이지 않는 게 정상). */}
           {pages > 1 ? (
-            <View style={styles.pager} testID="hq-stores-pager">
+            <HqCard style={styles.pager} testID="hq-stores-pager">
               <HqButton label="이전" icon="chevron-back" disabled={page === 0} testID="hq-stores-prev" onPress={() => setQuery({ offset: (page - 1) * HQ_STORES_PAGE_SIZE })} />
               <Text style={styles.pagerText}>{page + 1} / {pages}쪽</Text>
               <HqButton label="다음" icon="chevron-forward" disabled={page + 1 >= pages} testID="hq-stores-next" onPress={() => setQuery({ offset: (page + 1) * HQ_STORES_PAGE_SIZE })} />
-            </View>
+            </HqCard>
           ) : null}
 
           <Text style={styles.note}>
@@ -231,7 +231,9 @@ export default function HqStoresScreen() {
 
           {/* 연결 끝난 매장(0250 · Q28) — 점주가 해제 시트에서 고른 사유가 여기 온다. 끝난 뒤 운영 데이터는 서버가 주지 않는다. */}
           {endedError ? (
-            <Text style={styles.note} testID="hq-stores-ended-error">연결 끝난 매장을 불러오지 못했어요.</Text>
+            <HqCard testID="hq-stores-ended-error">
+              <Text style={styles.note}>연결 끝난 매장을 불러오지 못했어요.</Text>
+            </HqCard>
           ) : ended && ended.length > 0 ? (
             <View style={styles.ended}>
               <HqSlab title="연결 끝난 매장" hint="끝난 날과 사유만 남아요. 끝난 뒤 매장 데이터는 보이지 않아요." />

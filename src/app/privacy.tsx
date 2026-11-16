@@ -3,8 +3,8 @@ import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
-import { Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { canManage } from '@/lib/utils/roles';
@@ -44,13 +44,15 @@ export default function PrivacyScreen() {
 
         {/* 전문은 웹 정적 페이지가 정본이다. Apple 5.1.1(i)은 앱 안에서도 방침에 접근 가능할 것을
             요구하므로 이 링크가 그 요건을 채운다. ★앱 판(/app/privacy) — 홈·요금 링크가 없는 판(seo-postbuild LEGAL_VARIANTS). */}
-        <Pressable
-          onPress={() => void Linking.openURL('https://dochackchack.com/app/privacy').catch(() => {})}
-          accessibilityRole="link"
-          accessibilityLabel="개인정보처리방침 전문 보기"
-        >
-          <Text style={styles.link}>개인정보처리방침 전문 보기</Text>
-        </Pressable>
+        <View style={styles.card}>
+          <Pressable
+            onPress={() => void Linking.openURL('https://dochackchack.com/app/privacy').catch(() => {})}
+            accessibilityRole="link"
+            accessibilityLabel="개인정보처리방침 전문 보기"
+          >
+            <Text style={styles.link}>개인정보처리방침 전문 보기</Text>
+          </Pressable>
+        </View>
         <View style={{ height: 24 }} />
       </ScrollView>
       <RoleTabBar role={canManage(role) ? 'owner' : 'junior'} />
@@ -62,7 +64,10 @@ function Section({ title, children }: { title: string; children: string }) {
   return (
     <View style={styles.section}>
       <Text style={styles.h2}>{title}</Text>
-      <Text style={styles.body}>{children}</Text>
+      {/* 조항 제목 = 바탕 위 · 본문 = 흰 카드 위(2026-11-16 R-14). */}
+      <View style={styles.card}>
+        <Text style={styles.body}>{children}</Text>
+      </View>
     </View>
   );
 }
@@ -73,7 +78,8 @@ const styles = StyleSheet.create({
   h1: { fontSize: 22, fontWeight: '900', color: InkColors.ink },
   updated: { ...Type.tag, color: TextColor.secondary, marginTop: -8 },
   section: { gap: 5 },
+  card: CardStyles.list,
   h2: { fontSize: 15, fontWeight: '800', color: TextColor.secondary },
   body: { ...Type.body, color: TextColor.secondary, lineHeight: 22 },
-  link: { ...Type.body, fontWeight: '700', textDecorationLine: 'underline', marginTop: Space.sm },
+  link: { ...Type.body, fontWeight: '700', textDecorationLine: 'underline' },
 });

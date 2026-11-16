@@ -24,6 +24,7 @@ import { Radius } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Layout, Space, screenScrollStyle } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
+import { EmptyStyles } from '@/lib/theme/empty';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Type } from '@/lib/theme/type';
 
@@ -258,8 +259,8 @@ export function TemplateLibrary() {
       </View>
       </Appear>
 
-      {/* 검색창 — 주인공 */}
-      <Appear delay={stagger(1)}>
+      {/* 검색창 — 주인공. 흰 카드 안(R-14 · 2026-11-16). */}
+      <Appear delay={stagger(1)} style={styles.searchCard}>
       <View style={SearchStyles.box}>
         <Ionicons name="search" size={SEARCH_ICON.size} color={SEARCH_ICON.color} />
         <TextInput
@@ -366,7 +367,9 @@ const styles = StyleSheet.create({
   labeled: { gap: Space.sm },
 
   // 빠른검색 태그
-  tagWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  searchCard: CardStyles.list,
+  // 빠른 검색 칩 = 흰 카드 안(R-14 · 2026-11-16).
+  tagWrap: { ...CardStyles.list, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tag: { backgroundColor: BrandColors.yellowSoft, borderWidth: 1, borderColor: BrandColors.gold, borderRadius: Radius.pill, paddingVertical: 7, paddingHorizontal: 13 },
   tagText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
 
@@ -408,7 +411,8 @@ const styles = StyleSheet.create({
   importBtnDoneText: { ...ButtonTextStyles.primary, color: InkColors.ink3 },
 
   // 빈 결과
-  empty: { alignItems: 'center', gap: 6, paddingVertical: 40 },
+  // 검색 결과 없음 = 흰 빈 카드(R-14 · 2026-11-16).
+  empty: EmptyStyles.box,
   emptyText: { ...Type.body, fontWeight: '700', color: InkColors.ink2 },
   resetLink: { fontSize: 13, fontWeight: '800', color: BrandColors.brand, marginTop: 4, textDecorationLine: 'underline' },
 });

@@ -188,12 +188,16 @@ export default function SpaceFirst() {
             </View>
           ))}
           {isLoading ? (
-            <View style={styles.row}>
+            <View style={[styles.card, styles.row]}>
               <ActivityIndicator color={InkColors.ink3} />
               <Text style={styles.note}>{SPACE_WORDS.searching(ownerName(userName))}</Text>
             </View>
           ) : null}
-          {error ? <Text style={styles.err}>{SPACE_SCREEN.firstAskFail}</Text> : null}
+          {error ? (
+            <View style={styles.card}>
+              <Text style={styles.err}>{SPACE_SCREEN.firstAskFail}</Text>
+            </View>
+          ) : null}
           <ChatComposerBar>
             <TextInput
               value={input}
@@ -215,7 +219,9 @@ export default function SpaceFirst() {
               <Ionicons name="arrow-up" size={Type.title.fontSize} color={InkColors.bubbleText} />
             </Pressable>
           </ChatComposerBar>
-          <PrimaryButton label={SPACE_SCREEN.firstNext} onPress={() => setStep('link')} />
+          <View style={styles.card}>
+            <PrimaryButton label={SPACE_SCREEN.firstNext} onPress={() => setStep('link')} />
+          </View>
         </>
       ) : null}
 
@@ -262,7 +268,7 @@ const styles = StyleSheet.create({
   stepNo: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
   title: { ...Type.title },
   card: { ...CardStyles.list, gap: Space.md },
-  leadBox: { gap: Gap.inline },
+  leadBox: { ...CardStyles.list, gap: Gap.inline },
   lead: { ...Type.body },
   note: { ...Type.desc },
   count: { ...Type.numCell, color: InkColors.ink },
