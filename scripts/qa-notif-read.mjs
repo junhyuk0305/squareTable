@@ -163,6 +163,63 @@ await test('S6 notif_seen 조회만 실패해도 로컬에 있던 자리 시각�
   await s.getState().hydrate(); // TTL 을 건너뛰어 바로 다시 읽어야 한다
   if (n !== 2 || s.getState().ackByUnit.sp1 !== T2) throw new Error(`다시 안 읽음 n=${n}`);
 });
+await test('S7 줄 읽음(markRowRead) = 바로 끈다 · 서버 실패면 되돌린다', async () => {
+  let ok = true;
+  const { s } = setupPrefs({ markNotifRowsRead: async () => ok });
+  s.getState().markRowRead('qa_uq1|' + T1);
+  if (!s.getState().rowRead.has('qa_uq1|' + T1)) throw new Error('바로 안 꺼짐');
+  ok = false;
+  s.getState().markRowRead('sugres_9|' + T1);
+  await new Promise((r) => setTimeout(r, 0));
+  await new Promise((r) => setTimeout(r, 0));
+  if (s.getState().rowRead.has('sugres_9|' + T1)) throw new Error('실패인데 안 되돌림');
+  return s.getState().rowRead.has('qa_uq1|' + T1);
+});
+
+// ══ R 줄 읽음(실제 판정 코드 · 0811) — 목록과 숫자가 같은 줄 배열에서 센다 ══
+console.log('— R 줄 읽음(실제 판정 코드) —');
+{
+  const { installNotifHooks } = await import(new URL('./lib/qa-notif-hooks.mjs', import.meta.url).href);
+  installNotifHooks();
+  const NR = await import(new URL('../src/lib/utils/notifications.ts', import.meta.url).href);
+  const CR = await import(new URL('../src/lib/utils/crossStoreNotifs.ts', import.meta.url).href);
+  const JR = 'u_jr', OW = 'u_ow';
+  const answered = { id: 'uq1', unit_id: 'u1', junior_id: JR, junior_name: '이수민', query_text: '얼음 어디?', status: 'resolved_with_entry', answered_by: OW, asked_at: T1 };
+  const pendingQ = { id: 'uq2', unit_id: 'u1', junior_id: 'u_x', junior_name: '최민수', query_text: '마감 순서?', status: 'pending_owner_answer', asked_at: T1 };
+  const sugRes = { id: 'sg1', unit_id: 'u1', proposer_id: JR, status: 'approved', reviewed_at: T2, created_at: T0, title: '컵 세척', body: '' };
+  await test('R1 열쇠 = 줄 번호 + 시각 · 같은 번호라도 시각이 다르면 새 알림', () => {
+    const rows = [{ id: 'assign_t1', at: T1, unread: true }, { id: 'assign_t1', at: T2, unread: true }];
+    const out = NR.readOff(rows, new Set([NR.notifRowKey(rows[0])]));
+    return out[0].unread === false && out[1].unread === true;
+  });
+  await test('R2 직원: 눌러 본 줄은 목록·벨 숫자에서 같이 빠진다', () => {
+    const args = { feed: [], swaps: [], templates: [], nameOf: () => '사장', userId: JR, today: '2026-11-16', queue: [answered], suggestions: [sugRes], ackAt: null };
+    const before = NR.juniorNotifRows(args).filter((r) => r.unread);
+    if (before.length < 2) throw new Error('전제: 안 읽음 2줄 이상 ' + before.map((r) => r.id));
+    const rowRead = new Set([NR.notifRowKey(before[0])]);
+    const list = NR.buildJuniorNotifications({ ...args, rowRead }).filter((r) => r.unread).length;
+    const bell = NR.juniorNotifRows({ ...args, rowRead }).filter((r) => r.unread).length;
+    if (list !== before.length - 1 || bell !== list) throw new Error(`list=${list} bell=${bell} before=${before.length}`);
+  });
+  await test('R3 사장: 눌러 본 줄은 목록·벨 숫자(manageUnreadCount)에서 같이 빠진다', () => {
+    const ownerArgs = { queue: [pendingQ], suggestions: [], swaps: [], pending: [{ id: 'p1', user_id: 'u_new', name: '정하늘', created_at: T1 }], nameOf: () => '직원', feed: [], userId: OW, ackAt: null };
+    const recv = { feed: [], taskTemplates: [], done: {}, today: '2026-11-16', suggestions: [], userId: OW, nameOf: () => '직원', ackAt: null };
+    const rows = NR.buildOwnerNotifications(ownerArgs, recv).filter((r) => r.unread);
+    if (rows.length < 2) throw new Error('전제 ' + rows.map((r) => r.id));
+    const rowRead = new Set([NR.notifRowKey(rows[0])]);
+    const list = NR.buildOwnerNotifications({ ...ownerArgs, rowRead }, recv).filter((r) => r.unread).length;
+    const bell = NR.manageUnreadCount('owner', { ...ownerArgs, rowRead }, recv);
+    if (list !== rows.length - 1 || bell !== list) throw new Error(`list=${list} bell=${bell}`);
+  });
+  await test('R4 허브: 매장 숫자(storeUnreadCount) = 허브 목록(buildStoreNotifs) 안 읽음 · 눌러 본 줄 빠짐', () => {
+    const d = { unitId: 'u1', feed: [], swaps: [], taskTemplates: [], done: {}, names: { [OW]: '사장' }, queue: [answered], suggestions: [sugRes], pending: [], assignments: [], courses: [], scheduleNotices: [], claims: [], alerts: [], timeRequests: [], joinDone: [] };
+    const rows = CR.buildStoreNotifs(d, 'junior', JR, '2026-11-16', null).filter((r) => r.unread);
+    const rowRead = new Set([NR.notifRowKey(rows[0])]);
+    const list = CR.buildStoreNotifs(d, 'junior', JR, '2026-11-16', null, rowRead).filter((r) => r.unread).length;
+    const count = CR.storeUnreadCount(d, 'junior', JR, '2026-11-16', null, rowRead);
+    if (list !== rows.length - 1 || count !== list) throw new Error(`list=${list} count=${count} before=${rows.length}`);
+  });
+}
 
 // ══ B 서버(로컬 실세션) ══
 console.log('— B 서버(로컬 · 실세션) —');
@@ -294,7 +351,37 @@ if (space && owner && staff) {
       await space.c.removeAllChannels();
       if (!hit()) throw new Error(`10초 안에 못 받음(받은 이벤트 ${events.length})`);
     });
+    await test('B10 줄 읽음(0811): 내 열쇠만 쓴다 · 101개 = invalid_argument · 남의 열쇠는 안 보인다', async () => {
+      const key = `${tag}_row|${new Date().toISOString()}`;
+      const { error } = await staff.c.rpc('mark_notif_rows_read', { p_keys: [key, key] });
+      if (error) throw new Error(error.message);
+      const mine = (await staff.c.from('notif_row_read').select('row_key')).data ?? [];
+      if (!mine.some((r) => r.row_key === key)) throw new Error('안 써짐');
+      const big = await staff.c.rpc('mark_notif_rows_read', { p_keys: Array.from({ length: 101 }, (_, i) => `k${i}`) });
+      if (!/invalid_argument/.test(big.error?.message ?? '')) throw new Error('상한 안 막음');
+      const others = (await owner.c.from('notif_row_read').select('row_key')).data ?? [];
+      if (others.some((r) => r.row_key === key)) throw new Error('남의 열쇠가 보인다');
+      const w = await staff.c.from('notif_row_read').insert({ user_id: staff.uid, row_key: 'direct' });
+      return !!w.error;
+    });
+    await test('B11 줄 읽음 실시간: 다른 기기에서 누른 줄이 10초 안에 온다', async () => {
+      const other = await signIn('qa.staff1@example.com');
+      await staff.c.realtime.setAuth((await staff.c.auth.getSession()).data.session.access_token);
+      const key = `${tag}_rt|${new Date().toISOString()}`;
+      const got = [];
+      await new Promise((resolve) => {
+        staff.c.channel(`${tag}_rr`)
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notif_row_read', filter: `user_id=eq.${staff.uid}` }, (p) => got.push(p.new?.row_key))
+          .subscribe((st) => { if (st === 'SUBSCRIBED') resolve(); });
+      });
+      await new Promise((r) => setTimeout(r, 2000));
+      await other.c.rpc('mark_notif_rows_read', { p_keys: [key] });
+      for (let i = 0; i < 40 && !got.includes(key); i++) await new Promise((r) => setTimeout(r, 250));
+      await staff.c.removeAllChannels();
+      if (!got.includes(key)) throw new Error('못 받음');
+    });
   } finally {
+    psql(`delete from notif_row_read where row_key like '${tag}%';`);
     // 되돌리기 — 넣은 행 지우기 · 읽은 시각 원래대로
     psql(`delete from unknown_queries where id = '${qid}'; delete from work_feed where id = '${fid}';`);
     psql(`delete from notif_seen where user_id in (select id from auth.users where email in (${uidsSql}));`);

@@ -8,7 +8,7 @@
 import type { SpaceNotifRow } from '@/lib/db';
 import { NOTIF, linkAnsweredRoute, spaceAnsweredRoute, spaceQuestionRoute } from '@/lib/notif/registry';
 import { SPACE_WORDS } from '@/lib/place/words';
-import { isAfterAck, type AckOf } from '@/lib/utils/notifications';
+import { isAfterAck, readOff, type AckOf } from '@/lib/utils/notifications';
 
 export type SpaceBellKind = 'space_question' | 'space_q_answered' | 'link_q_answered' | 'space_deleted';
 
@@ -29,7 +29,7 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 /** 답한 사람 이름이 비면 공간 주인으로 부른다(서버 0551 제목과 같은 규칙 · 가결정 6). */
 const answerer = (name: string) => name.trim() || `공간 ${SPACE_WORDS.ownerRole}`;
 
-export function buildSpaceNotifRows(rows: SpaceNotifRow[], ackOf: AckOf): SpaceBellRow[] {
+export function buildSpaceNotifRows(rows: SpaceNotifRow[], ackOf: AckOf, rowRead?: ReadonlySet<string>): SpaceBellRow[] {
   const out: SpaceBellRow[] = [];
   for (const r of rows) {
     const ackAt = ackOf(r.unitId);
@@ -67,7 +67,7 @@ export function buildSpaceNotifRows(rows: SpaceNotifRow[], ackOf: AckOf): SpaceB
       });
     }
   }
-  return out;
+  return readOff(out, rowRead);
 }
 
 /**

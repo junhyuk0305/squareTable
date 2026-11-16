@@ -8,7 +8,8 @@ import { Stack, Redirect, useRouter, type Href } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
-import { MAX_NOTIFS } from '@/lib/utils/notifications';
+import { MAX_NOTIFS, notifRowKey } from '@/lib/utils/notifications';
+import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useStoreDisplay } from '@/components/StoreHeaderTitle';
 import { NotificationList, ALL_KIND_UI, type NotifRow } from '@/components/NotificationList';
@@ -60,6 +61,7 @@ export default function HubNotificationsScreen() {
   const spaceIds = useMemo(() => new Set(spaceRows.map((r) => r.id)), [spaceRows]);
   const onPress = (r: NotifRow) => {
     if (spaceIds.has(r.id)) {
+      useMemberPrefsStore.getState().markRowRead(notifRowKey(r)); // 눌러서 들어가면 그 줄은 읽음(0811)
       if (r.route) router.push(r.route as Href);
       return;
     }

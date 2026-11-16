@@ -11,7 +11,7 @@ import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { buildStoreNotifs, buildClosureNotifs, buildJoinCrossNotifs, mergeCrossNotifs, crossNotifTotal, storeUnreadCount } from '@/lib/utils/crossStoreNotifs';
-import { ackOfUnit } from '@/lib/utils/notifications';
+import { ackOfUnit, notifRowKey } from '@/lib/utils/notifications';
 import { buildSpaceNotifRows } from '@/lib/utils/spaceNotifications';
 import { storeColor } from '@/lib/utils/storeColor';
 import { todayStr } from '@/lib/utils/attendance';
@@ -36,16 +36,17 @@ export function useCrossNotifModel() {
 
   const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
   const ackOf = useMemo(() => ackOfUnit(ackByUnit), [ackByUnit]);
+  const rowRead = useMemberPrefsStore((s) => s.rowRead); // 눌러 본 줄(0811)
   // 공간 줄(야간 g4a · my_space_notif_data) — 계정 층 벨 목록과 허브 벨 숫자가 이 배열 하나를 본다(1112 fix 16).
   //   매장별 칩(unreadByUnit)에는 넣지 않는다. 공간은 매장 층 밖이다. 읽음 기준 = 그 공간의 읽은 시각.
-  const spaceRows = useMemo(() => buildSpaceNotifRows(spaceRaw, ackOf), [spaceRaw, ackOf]);
+  const spaceRows = useMemo(() => buildSpaceNotifRows(spaceRaw, ackOf, rowRead), [spaceRaw, ackOf, rowRead]);
   const spaceUnread = spaceRows.filter((r) => r.unread).length;
   const { rows, unreadByUnit, totalUnread, hiddenCount } = useMemo(() => {
     // 매장 목록(my_units) 도착 전엔 계산하지 않는다 — 매장별 역할을 모른 채 전역 role 로 세면
     // 찰나에 틀린 뱃지가 떴다 바뀌는 레이스가 생긴다. 목록이 오면(수 초 내) 자동 재계산돼 표시.
     if (sessionStores.length === 0) {
       // 계정 단위 축(합류 결과 · 공간 멤버 요청과 수락)은 역할을 안 본다 → 매장이 없는 계정(공간만 쓰는 사람)에게도 그린다(4번 덩이).
-      const joinOnly = buildJoinCrossNotifs(joinNotices, ackOf);
+      const joinOnly = buildJoinCrossNotifs(joinNotices, ackOf, rowRead);
       const unreadOnly: Record<string, number> = {};
       for (const r of joinOnly) if (r.unread) unreadOnly[r.unitId] = (unreadOnly[r.unitId] ?? 0) + 1;
       return {
@@ -56,14 +57,14 @@ export function useCrossNotifModel() {
     // 목록에 없는 매장은 직원 기준으로 센다(fail-closed) — 다른 매장의 역할을 빌려 쓰지 않는다.
     const rOf = (uid: string) => sessionStores.find((u) => u.unit_id === uid)?.role ?? 'junior';
     const unreadByUnit: Record<string, number> = {};
-    for (const d of crossData) unreadByUnit[d.unitId] = storeUnreadCount(d, rOf(d.unitId), me, today, ackOf(d.unitId));
-    const perStore = crossData.map((d) => buildStoreNotifs(d, rOf(d.unitId), me, today, ackOf(d.unitId)));
+    for (const d of crossData) unreadByUnit[d.unitId] = storeUnreadCount(d, rOf(d.unitId), me, today, ackOf(d.unitId), rowRead);
+    const perStore = crossData.map((d) => buildStoreNotifs(d, rOf(d.unitId), me, today, ackOf(d.unitId), rowRead));
     // 닫힌 매장 알림(0197) — 매장별 행에 얹는다. 카운트도 같은 행을 센다(배지·목록 같은 입력).
-    const closureRows = buildClosureNotifs(closures, ackOf);
+    const closureRows = buildClosureNotifs(closures, ackOf, rowRead);
     for (const r of closureRows) if (r.unread) unreadByUnit[r.unitId] = (unreadByUnit[r.unitId] ?? 0) + 1;
     perStore.push(closureRows);
     // 합류 결과(0247 · 0313) — 읽음 기준은 그 줄 자리의 읽은 시각(매장 벨과 같은 판정).
-    const joinRows = buildJoinCrossNotifs(joinNotices, ackOf);
+    const joinRows = buildJoinCrossNotifs(joinNotices, ackOf, rowRead);
     for (const r of joinRows) if (r.unread) unreadByUnit[r.unitId] = (unreadByUnit[r.unitId] ?? 0) + 1;
     perStore.push(joinRows);
     const merged = mergeCrossNotifs(perStore);
@@ -74,7 +75,7 @@ export function useCrossNotifModel() {
       // 목록에서 잘려나간 개수 — 0 이 아니면 화면이 "N건 더 있어요"를 말해야 한다(#13).
       hiddenCount: Math.max(0, crossNotifTotal(perStore) - merged.length),
     };
-  }, [crossData, closures, joinNotices, sessionStores, me, today, ackOf, spaceUnread]);
+  }, [crossData, closures, joinNotices, sessionStores, me, today, ackOf, rowRead, spaceUnread]);
 
   // 허브가 담는 자리 전부 — 허브 전체 읽음은 이 자리를 모두 읽음으로 한다(목록 상한에 잘린 줄의 자리도 포함).
   const hubUnitIds = useMemo(() => {
@@ -99,6 +100,7 @@ export function useCrossNotifRows() {
   const markFeedRead = useCrossNotifStore((s) => s.markFeedRead);
   const prefFor = useMemberPrefsStore((s) => s.prefFor);
   const markAllSeen = useMemberPrefsStore((s) => s.markAllSeen);
+  const markRowRead = useMemberPrefsStore((s) => s.markRowRead);
   const [switching, setSwitching] = useState(false);
   const { rows, spaceRows, unreadByUnit, totalUnread, hiddenCount, hubUnitIds } = useCrossNotifModel();
 
@@ -141,6 +143,7 @@ export function useCrossNotifRows() {
   const openRow = async (r: NotifRow) => {
     const row = r as NotifRow & { unitId?: string };
     if (switching || !row.unitId) return;
+    markRowRead(notifRowKey(row)); // 눌러서 들어가면 그 줄은 읽음(모든 종류 · 0811 · 닫힌 매장 안내도)
     // 닫힌 매장 알림 — 들어갈 매장이 없다(전환하면 unit_locked). 다음 행동은 문구가 말한다.
     if (row.kind === 'closure') {
       showToast(row.body ?? '사장님께 문의해 주세요.');

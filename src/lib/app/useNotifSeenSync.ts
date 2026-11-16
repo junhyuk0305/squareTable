@@ -13,9 +13,9 @@ export function useNotifSeenSync(): void {
   const signedIn = useSessionStore((s) => s.status === 'signed_in');
   useEffect(() => {
     if (!signedIn || !userId) return;
-    const { applySeen, retry, hydrate } = useMemberPrefsStore.getState();
+    const { applySeen, applyRowRead, retry, hydrate } = useMemberPrefsStore.getState();
     // 앱 배지·공간 벨은 알림 화면을 안 열어도 읽은 시각이 필요하다(없으면 전부 안 읽음으로 센다).
     void hydrate();
-    return subscribeMyNotifSeen(userId, applySeen, () => void retry());
+    return subscribeMyNotifSeen(userId, applySeen, () => void retry(), applyRowRead);
   }, [signedIn, userId]);
 }

@@ -3,7 +3,7 @@
 // 와 별개 축이다. 저장은 원자적 upsert RPC(saveMemberPrefs) 한 번 — 낙관적 반영 후 실패 시 롤백.
 import { create } from 'zustand';
 import { currentAccountEpoch, isStaleAccountEpoch } from '@/lib/store/tenantEpoch';
-import { fetchMemberPrefs, fetchNotifSeen, saveMemberPrefs, markNotifsSeen, type UnitMemberPrefsRow } from '@/lib/db';
+import { fetchMemberPrefs, fetchNotifSeen, fetchNotifRowRead, saveMemberPrefs, markNotifsSeen, markNotifRowsRead, type UnitMemberPrefsRow } from '@/lib/db';
 import { showToast } from '@/lib/store/useToastStore';
 import { tsMs } from '@/lib/utils/attendance';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -57,6 +57,12 @@ type State = {
   markAllSeen: (unitIds: string[], feedIds: string[]) => Promise<boolean>;
   /** 읽은 시각 하나 반영(실시간 · 다른 기기). 늦은 값만 받는다. */
   applySeen: (unitId: string, at: string) => void;
+  /** 눌러 본 알림 줄 열쇠(0811 · notifRowKey). 판정은 notifications.ts readOff 하나. */
+  rowRead: ReadonlySet<string>;
+  /** 줄 하나 읽음(눌러서 들어갈 때) — 바로 끄고 서버에 쓴다. 실패하면 되돌린다(다시 켜진다). */
+  markRowRead: (key: string) => void;
+  /** 줄 읽음 하나 반영(실시간 · 다른 기기). */
+  applyRowRead: (key: string) => void;
   /** 저장 — 낙관적 반영 후 실패 시 롤백하고 error 반환(무음 유실 방지). */
   save: (unitId: string, patch: Partial<MemberPref>) => Promise<{ error: string | null }>;
 };
@@ -68,6 +74,7 @@ const later = (a: string | null | undefined, b: string | null | undefined): stri
 export const useMemberPrefsStore = create<State>((set, get) => ({
   byUnit: {},
   ackByUnit: {},
+  rowRead: new Set<string>(),
   // 다른 스토어와 같은 관례 — 백엔드가 없으면(데모) 기다릴 것이 없으므로 처음부터 도착으로 친다.
   loaded: !HAS_SUPABASE,
   loadError: false,
@@ -77,7 +84,7 @@ export const useMemberPrefsStore = create<State>((set, get) => ({
     const now = Date.now();
     if (now - _lastHydrateAt < HYDRATE_TTL_MS) return;
     _lastHydrateAt = now;
-    const [{ data, error }, seen] = await Promise.all([fetchMemberPrefs(), fetchNotifSeen()]);
+    const [{ data, error }, seen, rows] = await Promise.all([fetchMemberPrefs(), fetchNotifSeen(), fetchNotifRowRead()]);
     if (isStaleAccountEpoch(epoch)) return;
     if (error || !data) {
       _lastHydrateAt = 0; // 실패는 TTL 미적용 — 다음 진입에서 즉시 재시도
@@ -105,9 +112,12 @@ export const useMemberPrefsStore = create<State>((set, get) => ({
     }
     // 0810 자리별 읽은 시각 — 멤버가 아닌 자리도 있다. 못 읽었으면 다음 진입에서 바로 다시 읽는다(TTL 미적용).
     //   그동안은 로컬에 이미 있던 값을 지킨다(위 합치기) — 없던 자리만 안 읽음으로 남는다.
-    if (seen.error) _lastHydrateAt = 0;
+    if (seen.error || rows.error) _lastHydrateAt = 0;
     for (const r of seen.data ?? []) ackByUnit[r.unit_id] = later(ackByUnit[r.unit_id], r.seen_at);
-    set({ byUnit, ackByUnit, loaded: true, loadError: false });
+    // 눌러 본 줄 — 로컬과 합친다(조회 사이에 누른 줄이 다시 켜지지 않게).
+    const rowRead = new Set(get().rowRead);
+    for (const k of rows.data ?? []) rowRead.add(k);
+    set({ byUnit, ackByUnit, rowRead, loaded: true, loadError: false });
   },
 
   retry: async () => {
@@ -135,6 +145,22 @@ export const useMemberPrefsStore = create<State>((set, get) => ({
     set({ ackByUnit: next });
     showToast('모두 읽음 처리했어요', 'good');
     return true;
+  },
+
+  markRowRead: (key) => {
+    if (!key || get().rowRead.has(key)) return;
+    const epoch = currentAccountEpoch();
+    set({ rowRead: new Set(get().rowRead).add(key) });
+    void markNotifRowsRead([key]).then((ok) => {
+      if (ok || isStaleAccountEpoch(epoch)) return;
+      const next = new Set(get().rowRead);
+      next.delete(key);
+      set({ rowRead: next });
+    });
+  },
+
+  applyRowRead: (key) => {
+    if (!get().rowRead.has(key)) set({ rowRead: new Set(get().rowRead).add(key) });
   },
 
   applySeen: (unitId, at) => {

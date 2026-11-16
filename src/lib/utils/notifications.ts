@@ -70,6 +70,14 @@ export const isAfterAck = (at: string | undefined, ackAt?: string | null): boole
  *  멤버가 아닌 자리(반려·내보냄·지운 공간)도 0810 notif_seen 에 시각이 있다 — 예전처럼 다른 매장 ack 를 빌리지 않는다. */
 export type AckOf = (unitId: string) => string | null;
 export const ackOfUnit = (ackByUnit: Record<string, string | null | undefined>): AckOf => (u) => ackByUnit[u] ?? null;
+/** 줄 읽음 열쇠(0811) = 줄 번호 + 줄 시각. 매일 반복되는 배정처럼 번호가 같아도 시각이 바뀌면 새 알림이다. */
+export const notifRowKey = (r: { id: string; at: string }): string => `${r.id}|${r.at}`;
+/** 눌러 본 줄(0811 notif_row_read)은 읽음 — 목록·벨·허브·앱 배지가 모두 이 함수를 거친 줄 배열에서 센다(같은 규칙을 두 곳에 쓰지 않는다). */
+export function readOff<T extends { id: string; at: string; unread: boolean }>(rows: T[], rowRead?: ReadonlySet<string>): T[] {
+  if (!rowRead || rowRead.size === 0) return rows;
+  return rows.map((r) => (r.unread && rowRead.has(notifRowKey(r)) ? { ...r, unread: false } : r));
+}
+
 /** 매장 안 화면(매장 벨·매장 알림)에 보일 합류 결과 = 그 매장 것만. 다른 자리 것은 허브가 보인다(허브가 맨 위 · 2026-11-16). */
 export const joinNoticesOfUnit = <T extends { unit_id: string }>(notices: T[], unitId: string | null | undefined): T[] =>
   unitId ? notices.filter((n) => n.unit_id === unitId) : [];
@@ -191,7 +199,12 @@ export function juniorUnreadCount(
 }
 
 /** 알림 목록(시간 역순, MAX_NOTIFS 상한). 멘션·받은 교대요청·내 교대요청 결과·합류 결과. */
-export function buildJuniorNotifications(args: {
+export function buildJuniorNotifications(args: Parameters<typeof juniorNotifRows>[0]): JuniorNotif[] {
+  return juniorNotifRows(args).sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_NOTIFS);
+}
+
+/** 직원 줄 전부(정렬·상한 전 · 눌러 본 줄은 읽음). 목록과 벨 숫자가 이 배열 하나를 본다. */
+export function juniorNotifRows(args: {
   feed: FeedItem[];
   swaps: SwapRequest[];
   templates: ShiftTemplate[];
@@ -222,6 +235,8 @@ export function buildJuniorNotifications(args: {
   joinNotices?: JoinNotice[];
   /** 합류 결과의 읽음 기준 = 그 줄 자리의 읽은 시각(ackOfUnit). 없으면 매장 ackAt. */
   joinAckOf?: AckOf;
+  /** 눌러 본 줄(0811). */
+  rowRead?: ReadonlySet<string>;
 }): JuniorNotif[] {
   const { feed, swaps, templates, nameOf, userId: me, today, taskTemplates = [], done = {}, ackAt, suggestions = [], queue = [], scheduleNotices = [], assignments = [], courses = [], quizProgress, legacyQuizIds, joinNotices = [], joinAckOf = () => ackAt ?? null } = args;
   const tplById = (id: string) => templates.find((t) => t.id === id);
@@ -383,7 +398,7 @@ export function buildJuniorNotifications(args: {
   // 합류 결과(0247) — 계정 단위 축. 매장 벨과 허브가 같은 행 빌더를 쓴다.
   out.push(...buildJoinNotifRows(joinNotices, joinAckOf));
 
-  return out.sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_NOTIFS);
+  return readOff(out, args.rowRead);
 }
 
 /** 매니저 지정·해제 행(0315 member_notices role_changed). 직원 벨·매니저 벨이 이 하나를 쓴다(역 ⑧ id = role_<행 id>).
@@ -402,7 +417,7 @@ function roleNoticeRow(n: ScheduleNotice, ackAt?: string | null): JuniorNotif {
 
 /** 합류 결과(0247 member_notices approved·rejected) 행 —서버가 승인·반려 때 넣은 행. 푸시는 같은 행을 크론이 보낸다.
  *  매장 이름이 제목에 들어간다(역 ⑧ id = kind_<행 id>). 읽음 기준 = 그 줄 자리(n.unit_id)의 읽은 시각(ackOfUnit) — 매장 벨·허브·배지가 이 하나를 본다. */
-export function buildJoinNotifRows(joinNotices: JoinNotice[], ackOf: AckOf): JuniorNotif[] {
+export function buildJoinNotifRows(joinNotices: JoinNotice[], ackOf: AckOf, rowRead?: ReadonlySet<string>): JuniorNotif[] {
   const out: JuniorNotif[] = [];
   for (const n of joinNotices) {
     // ★0460 공간(4번 덩이) — N7 대기 요청(파생) · N8 수락. 매장 승인(approved)과 다른 종류 값이라 아래 매장 갈래로 떨어지지 않게 먼저 거른다.
@@ -454,7 +469,7 @@ export function buildJoinNotifRows(joinNotices: JoinNotice[], ackOf: AckOf): Jun
       route: spec.route('junior'),
     });
   }
-  return out;
+  return readOff(out, rowRead);
 }
 
 // ── 사장 알림 (직원 모델과 동일 SSOT 구조) ───────────────────────────
@@ -611,9 +626,11 @@ export function ownerUnreadCount(
 
 /** 사장 알림 목록(시간 역순, MAX_NOTIFS 상한). */
 export function buildOwnerNotifications(args: Parameters<typeof ownerRows>[0], received?: ManagerReceivedArgs): OwnerNotif[] {
-  return [...ownerRows(args, received?.today), ...(received ? ownerReceivedRows(received) : [])]
-    .sort((a, b) => b.at.localeCompare(a.at))
-    .slice(0, MAX_NOTIFS);
+  return ownerNotifRows(args, received).sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_NOTIFS);
+}
+/** 사장 줄 전부(정렬·상한 전 · 눌러 본 줄은 읽음). 목록과 벨 숫자가 이 배열 하나를 본다. */
+function ownerNotifRows(args: Parameters<typeof ownerRows>[0], received?: ManagerReceivedArgs): OwnerNotif[] {
+  return readOff([...ownerRows(args, received?.today), ...(received ? ownerReceivedRows(received) : [])], args.rowRead ?? received?.rowRead);
 }
 
 /** 사장에게 온 배정(D11) — 매니저는 사장에게 할일을 배정한다.
@@ -678,6 +695,8 @@ function ownerRows(args: {
   timeRequests?: ShiftTimeRequest[];
   /** 처리한 합류 신청(0345 · 사장 매장). 없으면 내역 없음. */
   joinDone?: JoinDone[];
+  /** 눌러 본 줄(0811). 이 함수는 안 쓰고 감싸는 함수(ownerNotifRows·managerRows)가 거른다. */
+  rowRead?: ReadonlySet<string>;
 }, today?: string): OwnerNotif[] {
   const { queue, suggestions, swaps, pending, nameOf, feed = [], userId: me, ackAt, claims = [], alerts = [], assignments = [], courses = [], timeRequests = [], joinDone = [] } = args;
   const out: OwnerNotif[] = [];
@@ -869,6 +888,8 @@ export type ManagerReceivedArgs = {
   quizProgress?: QuizProgressRow[];
   /** 매니저 본인의 열린 옛 퀴즈 id(useLegacyQuizOpen). 없으면(허브) 발송 퀴즈만 센다. */
   legacyQuizIds?: readonly string[];
+  /** 눌러 본 줄(0811). */
+  rowRead?: ReadonlySet<string>;
 };
 
 /** ② 나에게 온 것 — 매니저가 열 수 있는 경로로. 카운트와 목록이 같은 배열을 보게 이 함수 하나만 쓴다. */
@@ -957,7 +978,7 @@ function managerPersonalRows(ownerArgs: Parameters<typeof ownerRows>[0], receive
 
 /** 매니저 행 전부(정렬·상한 전). 목록과 배지가 이 배열 하나를 본다. */
 const managerRows = (ownerArgs: Parameters<typeof ownerRows>[0], received: ManagerReceivedArgs): ManagerNotif[] =>
-  [...managerOwnerRows(ownerArgs, received.today), ...buildManagerReceived(received), ...managerPersonalRows(ownerArgs, received)];
+  readOff([...managerOwnerRows(ownerArgs, received.today), ...buildManagerReceived(received), ...managerPersonalRows(ownerArgs, received)], ownerArgs.rowRead ?? received.rowRead);
 
 /** 매니저 알림 목록 = ① 사장 축 중 행동할 수 있는 것 + ② 개인 수신 축. */
 export function buildManagerNotifications(
@@ -979,6 +1000,6 @@ export function managerUnreadCount(ownerArgs: Parameters<typeof ownerRows>[0], r
  *  매니저 = 매니저 목록과 같은 배열 · 사장 = 사장 카운터(예전 그대로). 같은 규칙을 두 곳에 쓰지 않는다. */
 export function manageUnreadCount(role: string, ownerArgs: Parameters<typeof ownerRows>[0], received: ManagerReceivedArgs): number {
   if (role === 'manager') return managerUnreadCount(ownerArgs, received);
-  const a = ownerArgs;
-  return ownerUnreadCount(a.queue, a.suggestions, a.swaps, a.pending, a.feed, a.userId, a.ackAt, a.claims, a.alerts, received, a.assignments, a.timeRequests);
+  // 사장 = 목록과 같은 배열의 안 읽음 수(눌러 본 줄 포함 · 0811). ownerUnreadCount 는 하니스가 같은 값인지 대조하는 옛 계산이다.
+  return ownerNotifRows(ownerArgs, received).filter((r) => r.unread).length;
 }

@@ -16,7 +16,7 @@ import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { buildJoinCrossNotifs } from '@/lib/utils/crossStoreNotifs';
 import { buildSpaceNotifRows, spaceBellCount } from '@/lib/utils/spaceNotifications';
 import { useToday } from '@/lib/hooks/useToday';
-import { ackOfUnit, joinNoticesOfUnit, juniorUnreadCount, manageUnreadCount } from '@/lib/utils/notifications';
+import { ackOfUnit, joinNoticesOfUnit, juniorNotifRows, manageUnreadCount } from '@/lib/utils/notifications';
 import { useLegacyQuizOpen } from '@/lib/hooks/useLegacyQuizOpen';
 import { useManageNotifArgs } from '@/lib/hooks/useManageNotifArgs';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -80,9 +80,14 @@ export function NotificationBell({ edge = true }: { edge?: boolean } = {}) {
   const joinNotices = useStaffStore((s) => s.joinNotices);
   // 합류 결과 = 이 매장 것만(목록 junior/notifications.tsx 와 같은 입력 · 다른 자리 것은 허브). 읽음 기준 = 줄 자리의 읽은 시각.
   const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
+  const rowRead = useMemberPrefsStore((s) => s.rowRead);
+  // 숫자 = 목록(junior/notifications.tsx)과 같은 줄 배열의 안 읽음 수(눌러 본 줄 포함 · 0811). 이름은 숫자에 안 쓰여 비워 둔다.
   const count = useMemo(
-    () => juniorUnreadCount(feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNoticesOfUnit(joinNotices, unitId), ackOfUnit(ackByUnit), quizProgress, courses, legacyQuizIds),
-    [feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, unitId, ackByUnit, quizProgress, courses, legacyQuizIds],
+    () => juniorNotifRows({
+      feed, swaps, templates: [], nameOf: () => '', userId, today, taskTemplates: templates, done, ackAt, suggestions, queue, scheduleNotices,
+      assignments, courses, quizProgress, legacyQuizIds, joinNotices: joinNoticesOfUnit(joinNotices, unitId), joinAckOf: ackOfUnit(ackByUnit), rowRead,
+    }).filter((r) => r.unread).length,
+    [feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, unitId, ackByUnit, quizProgress, courses, legacyQuizIds, rowRead],
   );
 
   return <BellButton count={count} edge={edge} onPress={() => router.push('/junior/notifications')} />;
@@ -111,6 +116,7 @@ export function SpaceNotificationBell({ edge = true }: { edge?: boolean } = {}) 
   const spaceRaw = useCrossNotifStore((s) => s.spaceRows);
   const joinNotices = useCrossNotifStore((s) => s.joinNotices);
   const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
+  const rowRead = useMemberPrefsStore((s) => s.rowRead);
   useFocusEffect(
     useCallback(() => {
       void useCrossNotifStore.getState().hydrate();
@@ -118,8 +124,8 @@ export function SpaceNotificationBell({ edge = true }: { edge?: boolean } = {}) 
   );
   const count = useMemo(() => {
     const ackOf = ackOfUnit(ackByUnit); // 그 공간의 읽은 시각(허브 전체 읽음이 옮긴다 · 매장 ack 를 빌리지 않는다)
-    return spaceBellCount(spaceId, buildSpaceNotifRows(spaceRaw, ackOf), buildJoinCrossNotifs(joinNotices, ackOf));
-  }, [spaceId, spaceRaw, joinNotices, ackByUnit]);
+    return spaceBellCount(spaceId, buildSpaceNotifRows(spaceRaw, ackOf, rowRead), buildJoinCrossNotifs(joinNotices, ackOf, rowRead));
+  }, [spaceId, spaceRaw, joinNotices, ackByUnit, rowRead]);
 
   return <BellButton count={count} edge={edge} onPress={() => router.push('/notifications')} />;
 }

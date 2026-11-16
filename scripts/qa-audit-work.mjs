@@ -140,8 +140,10 @@ console.log('\n[D11] 알림함 배선 — 배정 시각 기록 · 사장 알림�
     ['src/app/owner/notifications.tsx', /buildOwnerNotifications\(ownerArgs, received\)/],
     // fab8d0a: 벨 배지는 manageUnreadCount 하나로 센다. 사장 갈래가 ownerUnreadCount(…alerts, received…) 를 부르는지는 아래에서 따로 본다.
     ['src/components/NotificationBell.tsx', /manageUnreadCount\(role, ownerArgs, received\)/],
-    ['src/lib/utils/notifications.ts', /export function manageUnreadCount\([\s\S]*?return ownerUnreadCount\([^)]*a\.alerts, received\b/],
-    ['src/lib/utils/crossStoreNotifs.ts', /buildOwnerNotifications\(ownerArgsOf\(d, me, nameOf, ackAt\), receivedArgsOf\(d, me, today, nameOf, ackAt\)\)/],
+    // 2026-11-16(R-13 · 0811): 사장 배지 = 목록과 같은 줄 배열(ownerNotifRows = 사장 축 + 받은 배정)의 안 읽음 수.
+    ['src/lib/utils/notifications.ts', /export function manageUnreadCount\([\s\S]*?return ownerNotifRows\(ownerArgs, received\)/],
+    ['src/lib/utils/notifications.ts', /function ownerNotifRows\([\s\S]*?ownerReceivedRows\(received\)/],
+    ['src/lib/utils/crossStoreNotifs.ts', /buildOwnerNotifications\(ownerArgsOf\(d, me, nameOf, ackAt, rowRead\), receivedArgsOf\(d, me, today, nameOf, ackAt\)\)/],
   ]) check(`★${p} 사장 목록·배지에 받은 공지·배정을 넣는다`, re.test(strip(read(p))));
   const board = strip(read('src/components/WorkBoard.tsx'));
   check('★채팅을 보고 있으면 이 방의 나를 언급한 글을 읽음 처리한다',

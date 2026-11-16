@@ -22,7 +22,7 @@ import { MarkAllReadButton } from '@/components/MarkAllReadButton';
 import { NotificationList, ALL_KIND_UI } from '@/components/NotificationList';
 import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { SegmentTabs } from '@/components/SegmentTabs';
-import { buildManagerNotifications, buildOwnerNotifications } from '@/lib/utils/notifications';
+import { buildManagerNotifications, buildOwnerNotifications, notifRowKey } from '@/lib/utils/notifications';
 import { honorific } from '@/lib/utils/roles';
 import { InkColors, Surface } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -52,6 +52,7 @@ export default function OwnerNotificationsScreen() {
   // '모두 읽기' 기준 시각(0078) — 처리형 항목(합류·질문·제안·교대)의 배지·강조 해제 축.
   const unitId = useSessionStore((s) => s.unitId);
   const markAllSeen = useMemberPrefsStore((s) => s.markAllSeen);
+  const markRowRead = useMemberPrefsStore((s) => s.markRowRead);
 
   // ★'전체 매장' 탭에만 crossLoaded 게이트가 있고 '이 매장' 탭은 게이트가 없었다 — 그래서
   //   "지금 처리할 알림이 없어요"가 먼저 떴다. 이 목록은 7개 축을 합성해 만든다(rows) — 하나라도
@@ -191,7 +192,8 @@ export default function OwnerNotificationsScreen() {
             rows={rows}
             kindUI={KIND_UI}
             onPress={(r) => {
-              if (r.readFeedId) markNoticeRead(r.readFeedId, me); // 멘션은 탭하면 읽음 처리
+              if (r.readFeedId) markNoticeRead(r.readFeedId, me); // 멘션은 탭하면 읽음 처리(공지 읽음 현황 · read_by)
+              markRowRead(notifRowKey(r)); // 눌러서 들어가면 그 줄은 읽음(모든 종류 · 0811)
               if (r.route) router.push(r.route as Href);
             }}
             empty={{

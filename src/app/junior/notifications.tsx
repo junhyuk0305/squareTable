@@ -20,7 +20,7 @@ import { NotificationList, JUNIOR_KIND_UI } from '@/components/NotificationList'
 import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { SegmentTabs } from '@/components/SegmentTabs';
 import { useToday } from '@/lib/hooks/useToday';
-import { ackOfUnit, buildJuniorNotifications, joinNoticesOfUnit } from '@/lib/utils/notifications';
+import { ackOfUnit, buildJuniorNotifications, joinNoticesOfUnit, notifRowKey } from '@/lib/utils/notifications';
 import { InkColors, Surface } from '@/lib/theme/colors';
 import { useLegacyQuizOpen } from '@/lib/hooks/useLegacyQuizOpen';
 import { Radius } from '@/lib/theme/elevation';
@@ -79,6 +79,8 @@ export default function JuniorNotificationsScreen() {
   // '모두 읽기' 기준 시각(0078) — read 개념이 없는 배정·교대의 배지·강조 해제 축.
   const unitId = useSessionStore((s) => s.unitId);
   const markAllSeen = useMemberPrefsStore((s) => s.markAllSeen);
+  const markRowRead = useMemberPrefsStore((s) => s.markRowRead);
+  const rowRead = useMemberPrefsStore((s) => s.rowRead);
   const ackAt = useMemberPrefsStore((s) => (unitId ? (s.ackByUnit[unitId] ?? null) : null));
   // 합류 결과 = 이 매장 것만(다른 자리 것은 허브가 보인다 · 허브가 맨 위 · 2026-11-16). 읽음 기준 = 그 줄 자리의 읽은 시각.
   const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
@@ -120,8 +122,9 @@ export default function JuniorNotificationsScreen() {
         legacyQuizIds,
         joinNotices: storeJoinNotices,
         joinAckOf,
+        rowRead,
       }),
-    [feed, swaps, templates, owner, staff, me, today, taskTemplates, done, ackAt, suggestions, queue, scheduleNotices, assignments, courses, quizProgress, legacyQuizIds, storeJoinNotices, joinAckOf],
+    [feed, swaps, templates, owner, staff, me, today, taskTemplates, done, ackAt, suggestions, queue, scheduleNotices, assignments, courses, quizProgress, legacyQuizIds, storeJoinNotices, joinAckOf, rowRead],
   );
 
   const initial = (userName ?? '나').trim().slice(0, 1) || '나';
@@ -225,7 +228,8 @@ export default function JuniorNotificationsScreen() {
             rows={rows}
             kindUI={KIND_UI}
             onPress={(r) => {
-              if (r.readFeedId) markNoticeRead(r.readFeedId, me); // 공지·멘션은 탭하면 읽음 처리
+              if (r.readFeedId) markNoticeRead(r.readFeedId, me); // 공지·멘션은 탭하면 읽음 처리(read_by)
+              markRowRead(notifRowKey(r)); // 눌러서 들어가면 그 줄은 읽음(모든 종류 · 0811)
               router.push(r.route as Href);
             }}
             empty={{

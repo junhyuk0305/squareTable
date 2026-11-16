@@ -1141,12 +1141,25 @@ export async function markNotifsSeen(unitIds: string[], feedIds: string[]): Prom
   }
   return data;
 }
+/** 눌러 본 알림 줄 열쇠(0811 notif_row_read · 최근 것부터 2000 · 90일 지나면 서버가 지운다). RLS = 본인 행만. */
+export async function fetchNotifRowRead(): Promise<DbResult<string[]>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase.from('notif_row_read').select('row_key').order('read_at', { ascending: false }).limit(2000);
+  if (error) readFail('fetchNotifRowRead', error);
+  return { data: ((data as { row_key: string }[] | null) ?? []).map((r) => r.row_key), error: error as DbErr };
+}
+/** 알림 줄 읽음(0811) — 줄을 눌러 들어가면 그 줄은 읽음. */
+export async function markNotifRowsRead(keys: string[]): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('markNotifRowsRead', supabase.rpc('mark_notif_rows_read', { p_keys: keys }));
+}
 /** 내 읽은 시각 실시간(0810) — 같은 계정의 다른 기기에서 전체 읽음을 누르면 바로 꺼진다.
  *  두 표(옛 앱이 쓰는 unit_member_prefs · 새 notif_seen) 모두 본인 행만 흘러온다(SELECT 정책). */
 export function subscribeMyNotifSeen(
   userId: string,
   onSeen: (unitId: string, at: string) => void,
   onResubscribe?: () => void,
+  onRowRead?: (key: string) => void,
 ): () => void {
   if (!HAS_SUPABASE) return () => {};
   const pick = (p: { new?: Record<string, unknown> }, col: string) => {
@@ -1158,6 +1171,10 @@ export function subscribeMyNotifSeen(
     .channel(uniqueChannel('my-notif-seen'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'notif_seen', filter: `user_id=eq.${userId}` }, (p) => pick(p, 'seen_at'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'unit_member_prefs', filter: `user_id=eq.${userId}` }, (p) => pick(p, 'notif_ack_at'))
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notif_row_read', filter: `user_id=eq.${userId}` }, (p) => {
+      const k = (p.new as Record<string, unknown> | undefined)?.row_key;
+      if (typeof k === 'string') onRowRead?.(k);
+    })
     .subscribe(resubscribeWatcher(onResubscribe));
   return () => {
     supabase.removeChannel(ch);
