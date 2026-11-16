@@ -207,6 +207,7 @@
     "qa:social-login": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/qa-social-login.mjs",
     "qa:hydrate-telemetry": "node scripts/qa-hydrate-telemetry.mjs",
     "qa:feed-patch": "node scripts/qa-feed-patch.mjs",
+    "qa:starter-steps": "node scripts/qa-starter-steps.mjs",
     "qa:race-client": "node scripts/qa-race-client.cjs",
     "qa:ask-once:local": "node scripts/qa-ask-once.mjs --local",
     "qa:delete-confirm": "node scripts/qa-delete-confirm.mjs",

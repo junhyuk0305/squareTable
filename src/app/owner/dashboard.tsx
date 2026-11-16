@@ -4,7 +4,6 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { PressableScale } from '@/components/PressableScale';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { CoachmarkTour, type TourStep } from '@/components/CoachmarkTour';
@@ -17,7 +16,9 @@ import { AlertRow } from '@/components/blocks/AlertRow';
 import { HeroSubNav, type HeroSubNavItem } from '@/components/blocks/HeroSubNav';
 import { AppTopBar } from '@/components/AppTopBar';
 import { InviteBlock } from '@/components/owner/InviteBlock';
-import { SEED_TEMPLATES } from '@/data/seed-templates';
+import { Greeting } from '@/components/Greeting';
+import { StarterChecklist } from '@/components/hub/StarterChecklist';
+import { starterGraduated, starterNextId } from '@/lib/utils/starterProgress';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { useOwnerDashboardData } from '@/lib/hooks/useOwnerDashboardData';
 import { useStoreAskFirst } from '@/lib/hooks/useStoreAskFirst';
@@ -56,7 +57,12 @@ export default function OwnerDashboardScreen() {
     missedKnowhowCount,
     behindStaff,
     scheduleEmpty,
+    starterRow,
   } = useOwnerDashboardData();
+  // 시작하기 단계 카드(2026-11-17 화면 조립표 2차 0번) — 판정은 starterProgress 하나. 네 단계를 다 끝내면 사라진다.
+  const showStarter = !!starterRow && !starterGraduated(starterRow);
+  // 첫 안내 말풍선 2단계가 비추는 [추천 노하우 담기]는 노하우 담기가 지금 할 단계일 때만 있다.
+  const knowhowStepNext = !!starterRow && starterNextId(starterRow) === 'knowhow';
 
   // ★6번 덩이(스위치 store/ask_first): 히어로 라벨 = "미응답" · 수 = 서버 unit_question_counts.unanswered
   //   (기간 없이 지금 대기 전부 − 승인 대기 · 허브 숫자 줄과 같은 정의). 꺼지면 옛 "답 기다리는 질문"(대기 전부) 그대로.
@@ -240,7 +246,8 @@ export default function OwnerDashboardScreen() {
       {
         targetRef: hubRef,
         title: '매장 운영부터 둘러보세요',
-        body: '직원이 물은 질문이 맨 위에 떠요.\n퀴즈·직원·근무표는 아래 세 칸에 있어요.',
+        // 첫날엔 시작 카드가 이 상자 위에 있다(2026-11-17) — "맨 위"라고 쓰지 않는다.
+        body: '직원이 물은 질문이 여기에 떠요.\n퀴즈·직원·근무표는 아래 세 칸에 있어요.',
       },
       {
         targetRef: ctaRef,
@@ -266,10 +273,11 @@ export default function OwnerDashboardScreen() {
     void hydrateTour();
   }, [hydrateTour]);
   useEffect(() => {
-    if (!loaded || !tourLoaded || entriesCount !== 0 || seenTour) return;
+    // 2단계가 비추는 노하우 담기 버튼은 시작 카드 안에 있다 — 그 버튼이 없으면 시작하지 않는다.
+    if (!loaded || !tourLoaded || entriesCount !== 0 || seenTour || !knowhowStepNext) return;
     const t = setTimeout(() => setTourOn(true), 520);
     return () => clearTimeout(t);
-  }, [loaded, tourLoaded, entriesCount, seenTour]);
+  }, [loaded, tourLoaded, entriesCount, seenTour, knowhowStepNext]);
 
   const endTour = () => {
     setTourOn(false);
@@ -281,6 +289,13 @@ export default function OwnerDashboardScreen() {
     //   여기서 할 일은 '내 말로 노하우 하나 남기기'라서 coach 로 보낸다(첫 사용 워크스루 #7).
     router.push('/owner/coach');
   };
+
+  // 한 벌만 만들고 자리는 미응답 수로 정한다(위 또는 검정 상자 아래).
+  const starterCard = starterRow ? (
+    <Appear delay={stagger(1)}>
+      <StarterChecklist row={starterRow} place="home" knowhowRef={ctaRef} />
+    </Appear>
+  ) : null;
 
   return (
     // 바탕(Surface.screen)만 Screen 이 깐다. 헤더·스크롤·탭바는 코치마크 영역(containerRef)이 함께 감싸야 해서
@@ -303,6 +318,12 @@ export default function OwnerDashboardScreen() {
       <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 정적 콘텐츠 래퍼 — 진입 애니는 각 <Appear>가 담당. 코치마크 위치 측정 기준(scrollContentRef). */}
         <View ref={scrollContentRef} style={styles.scrollInner}>
+        {/* 인사 한 줄 — 직원 홈과 같은 부품(2026-11-17 1차 추천대로). */}
+        <Greeting name={userName} />
+
+        {/* 시작하기 단계 카드 — 미응답이 1건 이상이면 검정 상자 아래, 아니면 위(2026-11-17 2차 0번 · 처리할 것이 첫날 카드보다 먼저). */}
+        {showStarter && pending === 0 && starterCard}
+
         {/* ① N2 히어로 + 서브내비 한 덩어리 — 홈의 유일한 히어로.
             히어로는 **조건 없이** 그린다. 노하우가 없을수록 AI가 답할 근거가 없어 질문은 오히려
             전부 사장에게 쌓이는데, 예전엔 그 구간에서 아래 온보딩 블록이 히어로를 통째로 가렸다(08-06).
@@ -329,44 +350,18 @@ export default function OwnerDashboardScreen() {
           </View>
         </Appear>
 
-        {/* 신규 매장 온보딩 — 노하우 0건이면 가장 먼저 첫 입력을 유도(빈 매장 = 직원 답변 0 → 이탈 방지)
-            "0건"과 "아직 안 옴"의 구분은 화면 게이트가 맡는다(도착 전엔 이 블록 자체가 마운트되지 않는다). */}
-        {entriesCount === 0 && (
-          <Appear delay={stagger(1)} style={styles.onboard}>
-            <Text style={styles.onboardTitle}>노하우부터 채워요</Text>
-            <Text style={styles.onboardBody}>
-              한 줄 남겨보세요. 그래야 직원이 물었을 때 AI가 대신 답해요.
-              {'\n'}업종 <Text style={{ fontWeight: '800' }}>추천 노하우</Text>를 한 번에 담아도 돼요.
-            </Text>
-            <View ref={ctaRef} style={{ alignSelf: 'flex-start' }}>
-              <PressableScale onPress={() => router.push('/owner/onboarding')} scaleTo={0.96} style={styles.onboardCta}>
-                <Ionicons name="download-outline" size={16} color={InkColors.bubbleText} />
-                <Text style={styles.onboardCtaText}>추천 노하우 담기</Text>
-              </PressableScale>
-            </View>
+        {showStarter && pending > 0 && starterCard}
 
-            {/* 씨앗 템플릿 — 직접 한 줄 입력으로 시작하고 싶을 때(AI가 정리) */}
-            <Text style={styles.seedLabel}>직접 한 줄 적어도 돼요. 탭하면 AI가 정리해요</Text>
-            <View style={styles.seedChips}>
-              {SEED_TEMPLATES.map((t) => (
-                <Pressable
-                  key={t.id}
-                  onPress={() => router.push({ pathname: '/owner/coach', params: { seed: t.draft } })}
-                  style={({ pressed }) => [styles.seedChip, pressed && { opacity: 0.7 }]}
-                >
-                  <Text style={styles.seedChipText}>{t.title}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </Appear>
-        )}
+        {/* 옛 분홍 "노하우부터 채워요" 카드와 예시 칩은 시작 카드로 바뀌었다(2026-11-17 2차 0번 · 예시 칩은 뺀다). */}
 
         {/* 직원 초대 — 아직 직원이 한 명도 없으면. 노하우를 아무리 담아도 물어볼 사람이 없으면
             이 앱은 아무 일도 하지 않는다. 노하우 건수와 별개 축이라 entriesCount 로 묶지 않는다.
-            (온보딩 완료 화면·직원 관리·설정과 **같은 컴포넌트** — 자리마다 다른 설명을 읽게 하지 않는다.) */}
+            (온보딩 완료 화면·직원 관리·설정과 **같은 컴포넌트** — 자리마다 다른 설명을 읽게 하지 않는다.)
+            홈에는 초대코드·코드 복사·쓸 수 있는 날만 남긴다. 링크 복사는 시작 카드의 직원 초대 단계 줄에 있다(2026-11-17). */}
         {staffCount === 0 && (
           <Appear delay={stagger(2)} style={styles.section}>
-            <InviteBlock code={inviteCode} from="home" />
+            {/* 시작 카드를 못 읽은 날에는 링크 버튼을 이 카드에 그대로 둔다(누를 곳이 사라지지 않게). */}
+            <InviteBlock code={inviteCode} from="home" hideLink={showStarter} />
           </Appear>
         )}
 
@@ -421,8 +416,8 @@ export default function OwnerDashboardScreen() {
                     accessibilityLabel="할일 등록하기"
                     style={({ pressed }) => [styles.taskEmptyCta, pressed && { opacity: 0.6 }]}
                   >
-                    <Ionicons name="add" size={16} color={InkColors.bubbleText} />
-                    <Text style={styles.taskEmptyCtaText}>할일 등록하기</Text>
+                    <Ionicons name="add" size={16} color={InkColors.ink} />
+                    <Text style={ButtonTextStyles.secondary}>할일 등록하기</Text>
                   </Pressable>
                 </View>
               )}
