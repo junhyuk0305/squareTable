@@ -629,6 +629,17 @@ def('H4B', '동시 승인에서 진 쪽 사본 정리(매니저 · 사장) · �
   await put(M, kM); const r6 = await review(M, s6, kM);
   check('H4B', '대조: 이긴 쪽 노하우가 없으면 내 사본(유일한 노하우)은 안 지운다', live(kM) && r6?.copyArchived !== true, `${JSON.stringify(r6)} · 살아 있음 ${live(kM)}`);
 
+  // ⑤-c 대조(verify): 내가 막 만든 노하우가 이미 다른 제안의 결과 노하우면 사본이 아니다 → 안 지운다
+  const lM = `pb_rcb7m_${w.s}`;
+  const s7a = `sug_rcb7a_${w.s}`; seed(s7a);           // 먼저 생긴 제안(이긴 쪽 W 살아 있음)
+  const lW = `pb_rcb7w_${w.s}`;
+  await put(w.owner, lW); await review(w.owner, s7a, lW);
+  await put(M, lM);
+  const s7b = `sug_rcb7b_${w.s}`; seed(s7b);
+  await review(w.owner, s7b, lM);                       // 사장이 lM 을 다른 제안의 결과로 승인
+  const r7 = await review(M, s7a, lM);
+  check('H4B', '대조: 다른 제안의 결과 노하우는 안 지운다', live(lM) && r7?.copyArchived !== true, `${JSON.stringify(r7)} · 살아 있음 ${live(lM)}`);
+
   // ⑥ 앱이 inserted_by · inserted_at 을 바꾸지 못한다(사본 판정의 근거)
   const u6 = await M.c.from('playbook_entries').update({ inserted_by: M.id, inserted_at: new Date().toISOString() }).eq('id', gO2).select('id');
   const by6 = R.val(`select coalesce(inserted_by::text, '') from public.playbook_entries where id = ${q(gO2)}`);

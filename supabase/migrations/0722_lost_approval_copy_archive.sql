@@ -16,7 +16,7 @@
 --      service_role · 운영 정리(auth.uid() 없음)는 넣은 값을 그대로 둔다(시드 · 하니스).
 --   ② 보관은 review_suggestion 의 already 갈래가 한다. 판정 = 모두 참일 때만:
 --      승인 요청이었다 · 지금 상태가 승인 · 넘긴 노하우가 이긴 쪽 노하우(resulting_entry_id)가 아니다 · 고치기 제안의 대상(target_entry_id)이 아니다 ·
---      이긴 쪽 노하우가 같은 매장에 살아 있다(없으면 내 사본이 유일한 노하우다) ·
+--      이긴 쪽 노하우가 같은 매장에 살아 있다(없으면 내 사본이 유일한 노하우다) · 다른 제안의 결과·대상이 아니다 ·
 --      같은 매장 · inserted_by = 부른 사람 · inserted_at 이 제안이 생긴 뒤 · 1시간 안 · 아직 살아 있음 · 본사 사본 아님 · 임시저장 아님.
 --      남의 노하우(③)와 내 옛 노하우(④)는 이 판정을 못 지난다. 화면에 별도 보관 권한을 열지 않는다(archive_knowhow 는 그대로 사장만).
 --   ③ 보관 가드(tg_playbook_entry_archive_guard)는 사장만 통과시킨다. ② 가 그 트랜잭션 안에서만 사는 설정 st.lost_copy_entry 를
@@ -112,7 +112,10 @@ begin
                     where e.id = p_resulting_entry_id and e.unit_id = s.unit_id
                       and e.inserted_by = v_uid
                       and e.inserted_at >= s.created_at and e.inserted_at > now() - interval '1 hour'
-                      and e.archived_at is null and e.brand_entry_id is null and e.status <> 'draft') then
+                      and e.archived_at is null and e.brand_entry_id is null and e.status <> 'draft'
+                      -- 다른 제안의 결과·대상으로 이미 쓰인 노하우는 사본이 아니다(verify 11-16 · 1시간 안 내 노하우를 지우는 길을 닫는다).
+                      and not exists (select 1 from public.playbook_suggestions x
+                                       where x.id <> s.id and (x.resulting_entry_id = e.id or x.target_entry_id = e.id))) then
       perform set_config('st.lost_copy_entry', p_resulting_entry_id, true);   -- 보관 가드가 이 번호만 통과시킨다(머리말 ③)
       update public.playbook_entries
          set archived_at = now(), archived_by = v_uid
