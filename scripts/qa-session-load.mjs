@@ -57,7 +57,7 @@ async function logout(session) {
 }
 
 // fetch 를 감싸 ≥400 응답을 모은다(cdp.mjs 는 응답 상태를 노출하지 않는다). 전면 무료 공지 모달은 본 것으로 둔다(qa-journey-join 과 같다).
-const INJECT = `(()=>{try{const of=window.fetch;window.__qaBad=[];window.fetch=async(...a)=>{const r=await of(...a);try{if(r.status>=400)window.__qaBad.push(r.status+' '+String(a[0]&&a[0].url||a[0]).replace(/\\?.*/,'').slice(-80));}catch(e){}return r;};localStorage.setItem('sqt.notice.free-until.v3','1');}catch(e){}})()`;
+const INJECT = `(()=>{try{const of=window.fetch;window.__qaBad=[];window.fetch=async(...a)=>{const r=await of(...a);try{if(r.status>=400)window.__qaBad.push(r.status+' '+String(a[0]&&a[0].url||a[0]).replace(/\\?.*/,'').slice(-80));}catch(e){}return r;};}catch(e){}})()`;
 
 const bootstraps = (list) => list.filter((n) => n === 'session_bootstrap').length;
 /** document.hidden/visibilityState 를 인스턴스 접근자로 덮고 visibilitychange 를 쏜다.

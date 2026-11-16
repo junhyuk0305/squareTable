@@ -14,7 +14,6 @@ import { Toast } from '@/components/Toast';
 import { DialogHost } from '@/components/DialogHost';
 import { GuideHost } from '@/components/GuideHost';
 import { TextScaleTransition } from '@/components/settings/TextScaleTransition';
-import { FreeUntilNotice } from '@/components/FreeUntilNotice';
 import { NotificationPermissionSheet } from '@/components/NotificationPermissionSheet';
 import { VoiceRecorderBinder } from '@/components/VoiceRecorderBinder';
 import { BackRulesBinder } from '@/components/BackRulesBinder';
@@ -126,7 +125,6 @@ export default function RootLayout() {
         <GuideHost />
         {/* 글자 크기 전환 로딩 오버레이 — Stack 바깥이라 key 리마운트에도 살아남아 깜빡임을 가린다. */}
         <TextScaleTransition />
-        {splashDone && signedIn && <FreeUntilNotice />}
         {/* 앱 첫 실행 알림 안내 — 로그인 전에도 뜬다(네이티브만 · 권한을 아직 안 정한 사람만). */}
         {splashDone && <NotificationPermissionSheet firstRun />}
         <ErrorBoundary>
