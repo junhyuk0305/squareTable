@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 
 import { KnowhowRows, type KnowhowRow } from '@/components/blocks/KnowhowRows';
 import { SectionLabel } from '@/components/SectionLabel';
@@ -318,6 +319,20 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard, expi
       >
         {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={st.primaryText}>{EDU_ASK.send}</Text>}
       </Pressable>
+      {/* 웹 손님(me 없음)에게만. 퀴즈 링크(q/[token])와 같은 모양이다. 앱 안 링크는 가입 때 동의했다. */}
+      {!me && (
+        <View>
+          <Text style={st.note}>{EDU_ASK.privacyNote}</Text>
+          <Pressable
+            onPress={() => router.push('/privacy')}
+            accessibilityRole="link"
+            accessibilityLabel={EDU_ASK.privacyLink}
+            style={({ pressed }) => [st.linkHit, pressed && st.pressed]}
+          >
+            <Text style={st.linkText}>{EDU_ASK.privacyLink}</Text>
+          </Pressable>
+        </View>
+      )}
       {capNote ? <Text style={st.note}>{SPACE_WORDS.aiCapAsker(owner)}</Text> : null}
 
       {guest && (answers.length > 0 || loadFailed) && (

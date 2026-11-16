@@ -105,11 +105,20 @@ export default function AccountSettings() {
     //   웹도 같이 읽는다(토스 동결 2026-11-10 해제). 웹 카드 자동결제는 탈퇴하면 서버가 멈추므로 따로 묻지 않는다.
     const sub = await fetchMyIapSubscription();
     const iapPlatform: string | null | undefined = sub.error ? undefined : (sub.data?.platform ?? null);
+    // v2.5: 남의 공간 멤버면 공간에 남는 질문을 말한다. 공간 목록을 아직 안 읽었으면 한 번 읽는다.
+    //   읽기 실패면 멤버인지 모르니 공간 문장을 넣는다(멤버가 아니면 남는 질문이 없을 뿐 틀린 말이 아니다 · 빠뜨리는 쪽이 무음 실패).
+    let spaceReadFailed = false;
+    if (!useSessionStore.getState().spacesLoaded) {
+      const r = await useSessionStore.getState().loadSpaces();
+      spaceReadFailed = !!r?.error;
+    }
+    const spaceMember = spaceReadFailed || useSessionStore.getState().spaces.some((x) => x.role === 'space_member');
     const ok = await confirmAction(
       '회원탈퇴',
       deleteConfirmText({
         ownerAccount: isOwnerAccount,
         notice: deleteNotice({ iapPlatform, os: Platform.OS }),
+        spaceMember,
       }),
       '탈퇴하기',
       { destructive: true, icon: 'trash-outline' },

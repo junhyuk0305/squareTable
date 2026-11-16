@@ -63,12 +63,15 @@ export function deleteNotice(v: { iapPlatform: string | null | undefined; os: st
 /** 직원 탈퇴 확인창 — 매장에 남는 기록(처리방침 v2.4 제3조 · 약관 제19조 제4항). */
 export const STAFF_RECORDS_KEPT_TEXT = '매장에 남긴 질문·채팅·퀴즈 기록은 "탈퇴한 직원"으로 매장에 남아요.';
 
+/** 공간 멤버 탈퇴 확인창 — 공간에 남는 질문(처리방침 v2.5 제2조④ · 약관 제6조 · 0758 "탈퇴한 멤버"). */
+export const SPACE_MEMBER_RECORDS_KEPT_TEXT = '공간에 보낸 질문은 "탈퇴한 멤버"로 공간에 남아요.';
+
 /**
  * Q31 — 탈퇴 확인 문구. "복구할 수 없어요"는 실제(30일 보관 뒤 파기)와 달랐다.
  * 보관 문장은 정책 검토 M4 문구 그대로다. 직원은 근로 기록 3년 보관(J3)을 덧붙인다.
  * 웹도 같은 문장이다(2026-11-10 토스 동결 해제).
  */
-export function deleteConfirmText(v: { ownerAccount: boolean; notice: string | null }): string {
+export function deleteConfirmText(v: { ownerAccount: boolean; notice: string | null; spaceMember?: boolean }): string {
   const parts = [
     // v2.4(2026-11-10 사용자 결정): 탈퇴 계정은 복구 없음(처리방침 제3조 · 약관 제6조).
     '탈퇴한 계정은 되돌릴 수 없어요.',
@@ -79,6 +82,8 @@ export function deleteConfirmText(v: { ownerAccount: boolean; notice: string | n
     v.ownerAccount ? null : '출퇴근 기록은 법에 따라 매장에 3년 보관돼요.',
     // v2.4(W5 · 2026-11-10): 직원이 남긴 매장 기록은 매장이 있는 동안 남고 이름은 "탈퇴한 직원"으로 바뀐다.
     v.ownerAccount ? null : STAFF_RECORDS_KEPT_TEXT,
+    // v2.5(2026-11-16): 남의 공간 멤버였으면 그 공간에 보낸 질문이 "탈퇴한 멤버"로 남는다. 사장 계정도 멤버가 될 수 있다(0460).
+    v.spaceMember ? SPACE_MEMBER_RECORDS_KEPT_TEXT : null,
     '30일 동안은 같은 이메일로 다시 가입할 수 없어요.',
     v.notice,
     '정말 탈퇴하시겠어요?',

@@ -122,6 +122,12 @@ console.log('\n■ Q31 — 탈퇴 확인 문구(deleteConfirmText)');
   const WANT_STAFF = `${NO_RESTORE} ${M4} ${STAFF_3Y} ${STAFF_KEPT} 30일 동안은 같은 이메일로 다시 가입할 수 없어요. 정말 탈퇴하시겠어요?`;
   check('★사장 문구 전체 = v2.4 문장 순서 그대로', owner === WANT_OWNER, show(owner));
   check('★직원 문구 전체 = v2.4 문장 순서 그대로', staff === WANT_STAFF, show(staff));
+  // v2.5(2026-11-16): 남의 공간 멤버면 공간 문장을 더 본다. 사장 계정도 멤버가 될 수 있다(0460 머리말).
+  const SPACE_KEPT = '공간에 보낸 질문은 "탈퇴한 멤버"로 공간에 남아요.';
+  const member = confirmText({ ownerAccount: false, notice: null, spaceMember: true });
+  check('★공간 멤버 직원 문구 = 매장 문장 뒤에 공간 문장', member === `${NO_RESTORE} ${M4} ${STAFF_3Y} ${STAFF_KEPT} ${SPACE_KEPT} 30일 동안은 같은 이메일로 다시 가입할 수 없어요. 정말 탈퇴하시겠어요?`, show(member));
+  check('공간 멤버인 사장 문구에도 공간 문장', confirmText({ ownerAccount: true, notice: null, spaceMember: true }).includes(SPACE_KEPT));
+  check('공간 멤버가 아니면 공간 문장이 없다(직원·사장)', !staff.includes(SPACE_KEPT) && !owner.includes(SPACE_KEPT));
   check('★웹 사장 문구 = 앱 사장 문구(os 가 들어와도 같다)', confirmText({ ownerAccount: true, notice: null, os: 'web' }) === WANT_OWNER, show(confirmText({ ownerAccount: true, notice: null, os: 'web' })));
   check('★웹 직원 문구 = 앱 직원 문구', confirmText({ ownerAccount: false, notice: null, os: 'web' }) === WANT_STAFF, show(confirmText({ ownerAccount: false, notice: null, os: 'web' })));
   check('★옛 웹 문구("내 기록 삭제·복구할 수 없어요")가 다시 나오지 않는다', ![true, false].some((o) => [OLD_WEB_OWNER, OLD_WEB_STAFF].includes(confirmText({ ownerAccount: o, notice: null, os: 'web' }))));
