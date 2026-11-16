@@ -54,7 +54,7 @@ const TITLE = new Set(['SectionLabel']);
 const CHROME = new Set([
   'SafeAreaView', 'ScrollView', 'FlatList', 'KeyboardAvoidingView', 'Stack', 'Stack.Screen',
   'Redirect', 'ActivityIndicator', 'RoleTabBar', 'HubTabBar', 'HubTopBar', 'StoreToggle',
-  'NotificationBell', 'OwnerNotificationBell', 'HeaderBackButton', 'HeaderLogoutButton',
+  'NotificationBell', 'OwnerNotificationBell', 'HeaderLogoutButton',
   'StoreHeaderTitle', 'Toast', 'SyncBanner', 'CoachmarkTour', 'DialogHost', 'ErrorBoundary',
   'ResponsiveShell', 'InfoDot',
   // TransitionCover 는 화면을 '대체하는' 로딩 커버다 — 화면의 내용 블록이 아니다.

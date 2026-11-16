@@ -160,14 +160,14 @@ export function EduLinkNewForm({
           <Text style={st.doneTitle}>링크를 만들었어요</Text>
           <UrlBox url={eduLinkUrl(made.token)} label={COPY_LINK_LABEL} onCopy={() => void copy()} />
           <Text style={st.desc}>주소를 복사해 카톡으로 보내 주세요.</Text>
-        <Pressable
-          onPress={() => onOpenDetail(made.id)}
-          accessibilityRole="button"
-          accessibilityLabel="링크 상세 보기"
-          style={({ pressed }) => [st.textBtn, pressed && st.pressed]}
-        >
-          <Text style={st.textBtnText}>링크 상세 보기</Text>
-        </Pressable>
+          <Pressable
+            onPress={() => onOpenDetail(made.id)}
+            accessibilityRole="button"
+            accessibilityLabel="링크 상세 보기"
+            style={({ pressed }) => [st.textBtn, pressed && st.pressed]}
+          >
+            <Text style={st.textBtnText}>링크 상세 보기</Text>
+          </Pressable>
         </Appear>
       </Screen>
     );
