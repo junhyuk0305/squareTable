@@ -1,8 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import {
-  View, Text, Pressable, StyleSheet, ScrollView, TextInput,
-  type StyleProp, type ViewStyle,
-} from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { goToTab } from '@/components/RoleTabBar';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,7 +14,6 @@ import { fetchAiAnswers, type AiAnswerRow } from '@/lib/db';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { Vanish } from '@/components/Vanish';
-import { Collapse } from '@/components/Collapse';
 import { EmptyState } from '@/components/EmptyState';
 import { InfoDot } from '@/components/InfoDot';
 import { VerifyBadge } from '@/components/VerifyBadge';
@@ -29,16 +25,18 @@ import { Heatmap, type HeatCell, type HeatGroup, type HeatLegend, type HeatLevel
 import { CategoryEditSheet } from '@/components/owner/CategoryEditSheet';
 import { OwnerTodoSegment } from '@/components/owner/OwnerTodoSegment';
 import { useOwnerTodoCount } from '@/lib/hooks/useOwnerTodoCount';
+import {
+  KnowhowCountRow, KnowhowEmptyResult, KnowhowEntryRow, KnowhowFab, KnowhowFindBar, KNOWHOW_FAB_SPACE, PagedRows,
+  filterKnowhow, knowhowChipCategories, type KnowhowManageRow,
+} from '@/components/knowhow/KnowhowListParts';
 import { getSectionMeta } from '@/lib/utils/category';
-import { matchesKnowhowQuery } from '@/lib/utils/knowhowSearch';
 import { track } from '@/lib/analytics/track';
-import { UNSECTIONED, sectionOptions } from '@/lib/config/sections';
+import { UNSECTIONED } from '@/lib/config/sections';
 import { manualToText } from '@/lib/utils/manualText';
 import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Type } from '@/lib/theme/type';
-import { Radius, Elevation } from '@/lib/theme/elevation';
-import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
+import { Radius } from '@/lib/theme/elevation';
 import { Layout, Space } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
 import { BadgeStyles } from '@/lib/theme/badge';
@@ -61,9 +59,6 @@ export type KnowhowListTab = 'all' | 'review' | 'old';
  */
 const GROUP_MIN = 30;
 
-/** 우하단 FAB 지름. 터치 타깃 하한 48dp보다 크게. */
-const FAB_SIZE = 56;
-
 // 미검증 = 온보딩 업종팩 fork분(needs_review) 또는 검증정보 없음/미검증.
 // 검증 nudge의 대상은 needs_review(사장이 우리 매장 기준으로 아직 안 다듬음)로 좁힌다.
 const needsVerify = (e: PlaybookEntry) => e.needs_review === true;
@@ -85,9 +80,6 @@ const isUnused = (e: PlaybookEntry) => {
   if (!Number.isFinite(created)) return false;
   return Date.now() - created >= UNUSED_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 };
-
-// 사용자 표면의 분류는 카테고리(= section) 하나 — 종류(루틴/돌발 등)는 AI 내부용이라 안 보여준다.
-const sectionOf = (e: PlaybookEntry) => e.section?.trim() || UNSECTIONED;
 
 /** '오래 손 안 댐' 판정 창(일) — 허브 overview.stale(0091, 90일)과 같은 값이어야 한다. */
 const OLD_DAYS = 90;
@@ -127,41 +119,25 @@ function buildKnowhowHeatmap(list: PlaybookEntry[]): HeatGroup[] {
 }
 
 /**
- * 한 노하우 행(목록) — 탭하면 수정.
- * divider=false 는 아래에 1탭 검증 버튼이 붙는 경우 — 구분선을 래퍼가 대신 갖는다.
+ * 매장 행의 배지(공용 행 KnowhowEntryRow 의 extra 칸) — 점검 필요 / 안 쓰임 · 본사 사본 · 사장님 검증.
+ * 공간 목록에는 없다(사용자 결정 2026-11-16 · 실측 결함 R-3).
  */
-function EntryRow({ e, onPress, divider = true }: { e: PlaybookEntry; onPress: () => void; divider?: boolean }) {
-  const meta = getSectionMeta(e.section);
-  const ratePct = Math.round((e.stats?.resolution_rate ?? 0) * 100);
+function StoreRowBadges({ e }: { e: PlaybookEntry }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, !divider && styles.rowNoDivider, pressed && { opacity: 0.7 }]}>
-      <View style={[styles.dot, { backgroundColor: meta.color }]} />
-      <View style={{ flex: 1 }}>
-        <Text style={styles.rowTitle} numberOfLines={1}>
-          {e.title}
-        </Text>
-        <View style={styles.metaRow}>
-          <Text style={styles.meta}>
-            {meta.label} · v{e.version}
-          </Text>
-          {e.stats?.resolution_rate ? <Text style={styles.metaRate}>· 해결률 {ratePct}%</Text> : null}
-          {e.stats?.query_hits_30d ? <Text style={styles.meta}>· {e.stats.query_hits_30d}</Text> : null}
-          {e.needs_review ? (
-            <View style={styles.badgeReview}>
-              <Text style={styles.badgeReviewText}>점검 필요</Text>
-            </View>
-          ) : isUnused(e) ? (
-            <View style={styles.badgeUnused}>
-              <Text style={styles.badgeUnusedText}>안 쓰임</Text>
-            </View>
-          ) : null}
-          {/* 본사 사본 배지(정본 §4-E ③) — 사본이 아니면 아무것도 안 그린다(미연결 diff 0). */}
-          <BrandCopyBadges entry={e} />
-          {e.verification ? <VerifyBadge state={e.verification.state} size="list" /> : null}
+    <>
+      {e.needs_review ? (
+        <View style={styles.badgeReview}>
+          <Text style={styles.badgeReviewText}>점검 필요</Text>
         </View>
-      </View>
-      <Ionicons name="chevron-forward" size={18} color={InkColors.ink3} />
-    </Pressable>
+      ) : isUnused(e) ? (
+        <View style={styles.badgeUnused}>
+          <Text style={styles.badgeUnusedText}>안 쓰임</Text>
+        </View>
+      ) : null}
+      {/* 본사 사본 배지(정본 §4-E ③) — 사본이 아니면 아무것도 안 그린다(미연결 diff 0). */}
+      <BrandCopyBadges entry={e} />
+      {e.verification ? <VerifyBadge state={e.verification.state} size="list" /> : null}
+    </>
   );
 }
 
@@ -250,7 +226,6 @@ export function OwnerKnowhowBrowse({
   const [query, setQuery] = useState('');
   const [activeCat, setActiveCat] = useState<string | null>(null); // null = 전체(단일 선택). 카테고리(section) 이름.
   const [catSheet, setCatSheet] = useState(false); // 카테고리 편집 시트
-  const [manageOpen, setManageOpen] = useState(false); // 톱니 토글(카테고리 편집·내보내기)
   // 확인 완료를 누르면 이 항목은 목록에서 빠진다 — 먼저 접히는 것을 보여주고(Vanish) 그 다음 검증을 쓴다.
   // 데이터를 먼저 바꾸면 optimisticPatch가 같은 틱에 행을 지워 애니메이션이 아예 안 보인다.
   const [leaving, setLeaving] = useState<string | null>(null);
@@ -279,13 +254,7 @@ export function OwnerKnowhowBrowse({
   // 필터칩·카테고리별 그룹의 공통 목록 = 실제 쓰이는 카테고리 + 매장이 만든 카테고리(0개여도 노출).
   // 순서: 표준 → 매장 고유 → 기타.
   const customCats = usePlaybookStore((s) => s.customCategories);
-  const allCats = useMemo(() => {
-    const customLabels = customCats.map((c) => c.label);
-    const keep = new Set([...visible.map(sectionOf), ...customLabels]);
-    const ordered = sectionOptions(industry, [...visible.map((e) => e.section), ...customLabels]).filter((s) => keep.has(s));
-    if (keep.has(UNSECTIONED)) ordered.push(UNSECTIONED);
-    return ordered;
-  }, [visible, industry, customCats]);
+  const allCats = useMemo(() => knowhowChipCategories(visible, industry, customCats), [visible, industry, customCats]);
 
   // 노하우가 지워져 카테고리가 사라졌는데 활성 필터로 남았으면 전체 취급(상태 리셋 effect 대신 파생).
   const effectiveCat = activeCat && allCats.includes(activeCat) ? activeCat : null;
@@ -305,13 +274,10 @@ export function OwnerKnowhowBrowse({
 
   // 목록 탭 → 검색 + 카테고리 필터(목록·내보내기 공통 베이스). 탭이 묶음을 정하고 그 안에서 다시 거른다.
   const baseFiltered = useMemo(() => {
-    const q = query.trim().toLowerCase();
     let list = visible;
     if (listTab === 'review') list = list.filter(needsVerify);
     else if (listTab === 'old') list = list.filter(isOldOnly);
-    list = list.filter((e) => matchesKnowhowQuery(e, q));
-    if (effectiveCat) list = list.filter((e) => sectionOf(e) === effectiveCat);
-    return list;
+    return filterKnowhow(list, query, effectiveCat);
   }, [visible, listTab, query, effectiveCat]);
 
   // 목록 탭 배지 — 검색·카테고리를 타지 않는 전체 기준(히트맵 주황·빨강과 같은 수).
@@ -369,6 +335,21 @@ export function OwnerKnowhowBrowse({
   }, [listFiltered]);
   const exportCount = useMemo(() => exportGroups.reduce((n, g) => n + g.items.length, 0), [exportGroups]);
 
+  // 목록 관리(톱니 뒤) — 매일 쓰는 게 아니라 접었다. 카테고리 편집 + (복사할 수 있고 대상이 있으면) 내보내기.
+  const manageRows: KnowhowManageRow[] = [
+    { key: 'cat', icon: 'pricetags-outline', label: '카테고리 편집', a11y: '카테고리 편집', onPress: () => setCatSheet(true) },
+    ...(canCopyToClipboard() && exportCount > 0
+      ? [{
+          key: 'export',
+          icon: (copied ? 'checkmark' : 'copy-outline') as KnowhowManageRow['icon'],
+          label: copied ? '복사됐어요' : `내보내기 ${exportCount}개`,
+          a11y: `지금 목록에 보이는 노하우 ${exportCount}개 내보내기`,
+          onPress: () => copy(manualToText(exportGroups, { storeName, date: new Date().toLocaleDateString('ko-KR') })),
+          keepOpen: true,
+        }]
+      : []),
+  ];
+
   const hasEntries = visible.length > 0;
 
   /** 히트맵은 검색·카테고리 필터를 타지 않는다 — 전체 지도다. 카테고리 이름을 누르면 아래 목록이 걸러진다. */
@@ -425,11 +406,11 @@ export function OwnerKnowhowBrowse({
             }}
             style={styles.entryWrap}
           >
-            <EntryRow e={e} onPress={() => onSelect(e.id)} divider={false} />
+            <KnowhowEntryRow e={e} onPress={() => onSelect(e.id)} divider={false} extra={<StoreRowBadges e={e} />} customs={customCats} />
             {verifyButton(e)}
           </Vanish>
         ) : (
-          <EntryRow e={e} onPress={() => onSelect(e.id)} />
+          <KnowhowEntryRow e={e} onPress={() => onSelect(e.id)} extra={<StoreRowBadges e={e} />} customs={customCats} />
         )}
       </Appear>
     );
@@ -514,127 +495,33 @@ export function OwnerKnowhowBrowse({
           </Appear>
         )}
 
-        {/* 개수 줄 + 톱니. 톱니 패널이 이 줄 아래에 **떠서** 열리므로(밀어내지 않는다) 이 블록이 그 앵커다. */}
-        <View style={styles.headBlock}>
-          <View style={styles.headRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1, minWidth: 0 }}>
-              <Text style={styles.subline}>{countLabel}</Text>
-              <InfoDot
-                title="노하우가 뭐예요?"
-                body={'여기 적어두면 직원이 물을 때 AI가 사장님 대신 답해줘요.\n많이 쌓일수록 같은 질문에 일일이 답할 일이 줄어요.'}
-              />
-            </View>
-            {/* 목록 관리(카테고리 편집·내보내기) — 매일 쓰는 게 아니라 이 톱니 뒤로 접었다.
-                ★노하우 0건이면 아래 본문이 빈 화면(EmptyState)이라 이 톱니도 같이 안 뜬다.
-                  옛 판본의 '카테고리 편집' 버튼도 같은 자리·같은 조건이었다(이 개편으로 생긴 공백이 아니다). */}
-            {hasEntries && (
-              <Pressable
-                onPress={() => setManageOpen((v) => !v)}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel={manageOpen ? '목록 관리 닫기' : '목록 관리 열기'}
-                style={({ pressed }) => [styles.gearBtn, pressed && { opacity: 0.6 }]}
-              >
-                <Ionicons name={manageOpen ? 'close' : 'settings-outline'} size={17} color={InkColors.ink2} />
-              </Pressable>
-            )}
-          </View>
-
-          {/* 톱니 패널 — StoreToggle 매장 드롭다운과 같은 A7 규격이다(2026-08-19에 밀어내기→띄우기로 바꿈):
-              누른 자리 바로 아래 absolute 앵커 + Collapse(높이 애니) + Appear(행 스태거).
-              밀어내면 열 때마다 목록이 통째로 내려가 "어디를 보고 있었는지"가 흔들린다. 닫기는 톱니(✕)가 맡는다. */}
-          {hasEntries && manageOpen && (
-            <View style={styles.manageAnchor}>
-              <Collapse style={styles.manageActions}>
-                <Appear delay={stagger(0)} offsetY={7}>
-                  <Pressable
-                    onPress={() => { setManageOpen(false); setCatSheet(true); }}
-                    style={({ pressed }) => [styles.manageRow, pressed && { opacity: 0.7 }]}
-                    accessibilityRole="button"
-                    accessibilityLabel="카테고리 편집"
-                  >
-                    <Ionicons name="pricetags-outline" size={16} color={InkColors.ink2} />
-                    <Text style={styles.manageRowText}>카테고리 편집</Text>
-                    <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
-                  </Pressable>
-                </Appear>
-                {canCopyToClipboard() && exportCount > 0 && (
-                  <Appear delay={stagger(1)} offsetY={7}>
-                    <Pressable
-                      onPress={() => copy(manualToText(exportGroups, { storeName, date: new Date().toLocaleDateString('ko-KR') }))}
-                      style={({ pressed }) => [styles.manageRow, styles.manageRowDivider, pressed && { opacity: 0.7 }]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`지금 목록에 보이는 노하우 ${exportCount}개 내보내기`}
-                    >
-                      <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={16} color={InkColors.ink2} />
-                      <Text style={styles.manageRowText} numberOfLines={1}>{copied ? '복사됐어요' : `내보내기 ${exportCount}개`}</Text>
-                      <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
-                    </Pressable>
-                  </Appear>
-                )}
-              </Collapse>
-            </View>
-          )}
-        </View>
+        {/* 개수 줄 + 톱니(목록 관리 = 카테고리 편집·내보내기 · 공용 KnowhowCountRow).
+            ★노하우 0건이면 아래 본문이 빈 화면(EmptyState)이라 톱니도 같이 안 뜬다(옛 '카테고리 편집' 버튼과 같은 조건). */}
+        <KnowhowCountRow
+          label={countLabel}
+          info={
+            <InfoDot
+              title="노하우가 뭐예요?"
+              body={'여기 적어두면 직원이 물을 때 AI가 사장님 대신 답해줘요.\n많이 쌓일수록 같은 질문에 일일이 답할 일이 줄어요.'}
+            />
+          }
+          manage={hasEntries ? manageRows : undefined}
+        />
 
         </Pane>
 
         {/* 찾기 바 — 검색·카테고리. 톱니 줄 바로 아래 고정이다(2026-08-19 · 넓은 웹에서는 오른쪽 레일). */}
         <Pane side="rail">
         {hasEntries && (
-          <View style={styles.findBar}>
-            {/* 행1 — 검색 */}
-            <View style={SearchStyles.box}>
-              <Ionicons name="search" size={SEARCH_ICON.size} color={SEARCH_ICON.color} />
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="제목·키워드로 검색"
-                placeholderTextColor={InkColors.ink3}
-                style={SearchStyles.input}
-                returnKeyType="search"
-              />
-              {query.length > 0 ? (
-                <Pressable onPress={() => setQuery('')} hitSlop={8}>
-                  <Ionicons name="close-circle" size={16} color={InkColors.ink3} />
-                </Pressable>
-              ) : null}
-            </View>
-
-            {/* 행2 — 카테고리 가로 스크롤. */}
-            <View style={styles.findRow}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.findScroll}
-                contentContainerStyle={styles.chipRow}
-              >
-                <Pressable
-                  onPress={() => setActiveCat(null)}
-                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                  style={[styles.chip, effectiveCat === null && styles.chipOn]}
-                >
-                  <Text style={[styles.chipText, effectiveCat === null && styles.chipTextOn]}>전체</Text>
-                </Pressable>
-                {allCats.map((c) => {
-                  const on = effectiveCat === c;
-                  const m = getSectionMeta(c);
-                  return (
-                    <Pressable
-                      key={c}
-                      onPress={() => selectCat(c)}
-                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                      style={[styles.chip, on && styles.chipOn]}
-                    >
-                      <View style={[styles.chipDot, { backgroundColor: m.color }]} />
-                      <Text style={[styles.chipText, on && styles.chipTextOn]}>{m.label}</Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-
-          </View>
+          <KnowhowFindBar
+            query={query}
+            onQuery={setQuery}
+            cats={allCats}
+            active={effectiveCat}
+            onSelect={selectCat}
+            onAll={() => setActiveCat(null)}
+            customs={customCats}
+          />
         )}
 
       {/* 검토 대기(draft) — 인수인계서 파이프라인이 증분 저장한 항목. 발행 전이라 직원·AI에 안 보임. */}
@@ -676,7 +563,7 @@ export function OwnerKnowhowBrowse({
           <>
             {/* 목록 */}
             {listFiltered.length === 0 ? (
-              <EmptyResult onReset={() => { setQuery(''); setActiveCat(null); setListTab('all'); }} />
+              <KnowhowEmptyResult onReset={() => { setQuery(''); setActiveCat(null); setListTab('all'); }} />
             ) : showUsageGroups ? (
               usageGroups.map((g) => groupBlock(g.key, g.title, g.items))
             ) : (
@@ -758,63 +645,10 @@ export function OwnerKnowhowBrowse({
         {seg === 'todo' ? todoSegment() : knowhowSegment()}
       </ScrollView>
 
-      {/* FAB — ★ScrollView '밖'(형제)이라 스크롤과 같이 움직이지 않는다. 부모가 프레임 안이라 460px을 안 넘는다. */}
-      <Pressable
-        onPress={goAdd}
-        accessibilityRole="button"
-        accessibilityLabel="노하우 추가"
-        style={({ pressed }) => [styles.fab, pressed && { opacity: 0.85 }]}
-      >
-        <Ionicons name="add" size={28} color={InkColors.ink} />
-      </Pressable>
+      {/* FAB — ★ScrollView '밖'(형제)이라 스크롤과 같이 움직이지 않는다(공용 KnowhowFab · 공간 노하우 탭도 같은 것). */}
+      <KnowhowFab onPress={goAdd} />
 
       {catSheet && <CategoryEditSheet onClose={() => setCatSheet(false)} />}
-    </View>
-  );
-}
-
-/** 한 번에 그리는 행 수 — 전량 렌더가 실제로 무너지는 지점은 실측으로 확인했다(위 주석). */
-const LIST_PAGE = 30;
-
-/**
- * 목록을 LIST_PAGE 개씩 끊어 그린다. **남은 수를 버튼이 밝힌다** — 조용히 자르면
- * "이게 전부"로 읽혀서, 안 그려진 노하우가 없는 것이 된다.
- */
-function PagedRows({
-  items, render, style,
-}: {
-  items: PlaybookEntry[];
-  render: (e: PlaybookEntry, i: number) => ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) {
-  const [shown, setShown] = useState(LIST_PAGE);
-  const rest = items.length - shown;
-  return (
-    <View style={style}>
-      {items.slice(0, shown).map(render)}
-      {rest > 0 && (
-        <Pressable
-          onPress={() => setShown((n) => n + LIST_PAGE)}
-          accessibilityRole="button"
-          accessibilityLabel={`${Math.min(rest, LIST_PAGE)}개 더 보기`}
-          style={({ pressed }) => [styles.moreRow, pressed && { opacity: 0.6 }]}
-        >
-          <Text style={styles.moreText}>{Math.min(rest, LIST_PAGE)}개 더 보기 · 남은 {rest}개</Text>
-        </Pressable>
-      )}
-    </View>
-  );
-}
-
-function EmptyResult({ onReset }: { onReset: () => void }) {
-  return (
-    <View style={styles.emptyResult}>
-      {/* 그림 이모지 금지(워딩 §1) — 같은 뜻을 Ionicons 로. 2026-08-07 QA #5-2. */}
-      <Ionicons name="search-outline" size={30} color={InkColors.ink3} />
-      <Text style={styles.emptyResultText}>조건에 맞는 노하우가 없어요</Text>
-      <Pressable onPress={onReset}>
-        <Text style={styles.resetLink}>필터 초기화</Text>
-      </Pressable>
     </View>
   );
 }
@@ -822,38 +656,13 @@ function EmptyResult({ onReset }: { onReset: () => void }) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   // 하단 여백 = FAB 지름 + 위아래 거터. 마지막 행이 FAB 밑에 깔리지 않게.
-  scroll: { padding: Space.gutter, paddingBottom: FAB_SIZE + Space.gutter * 2, gap: Space.md },
+  scroll: { padding: Space.gutter, paddingBottom: KNOWHOW_FAB_SPACE, gap: Space.md },
 
   // 세그먼트 — 공용 SegmentTabs 의 margin(16)을 화면 거터(20)에 맞춘다.
   // 위 = 헤더 아래 첫 여백(Layout.screenTop 16 · 2026-11-02).
   segTabs: { marginHorizontal: Space.gutter, marginTop: Layout.screenTop, marginBottom: 0 },
   // 목록 탭 — 스크롤 본문 안이라 거터는 부모가 갖는다. 라벨과의 간격만 남긴다.
   listTabs: { marginHorizontal: 0, marginTop: 0, marginBottom: 0 },
-
-  // 톱니 패널의 앵커. zIndex 가 없으면 뒤에 오는 형제(찾기 바·목록)가 위에 그려져 패널이 가려진다.
-  // 위아래 -xs: 부모 gap(md) 12 를 8 로 — 개수 한 줄이 탭·찾기 바 사이에서 붕 떠 보였다(2026-09-03).
-  headBlock: { position: 'relative', zIndex: 20, marginVertical: -Space.xs },
-  headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  // "총 N개 · 탭하면 수정" = 카운트+힌트라 **보조**다(본문 아님).
-  // 보조는 15sp 하한 대상이 아니다(simplicity-voice §4). 12sp로 내린다. (2026-08-06)
-  // 색은 읽는 회색(TextColor.secondary) — ink3 는 아이콘·비활성에만 남긴다(2026-11-02).
-  subline: { flexShrink: 1, fontSize: 12, color: TextColor.secondary, fontWeight: '600' },
-
-  // 노하우 추가 FAB — 세 칸 전부에서 보이는 이 화면의 Primary. 상단 버튼을 대체한다(2026-08-07).
-  fab: {
-    position: 'absolute',
-    right: Space.gutter,
-    bottom: Space.gutter,
-    width: FAB_SIZE,
-    height: FAB_SIZE,
-    borderRadius: Radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: BrandColors.yellow,
-    borderWidth: 1,
-    borderColor: BrandColors.yellowDeep,
-    ...Elevation.ey,
-  },
 
   // 템플릿 둘러보기 진입 링크(홈에서 이관)
   // '여러 개 한 번에 추가' — 두 진입을 한 카드 안 2행으로. 카드 1장 = 블록 1개(2026-08-06).
@@ -885,22 +694,7 @@ const styles = StyleSheet.create({
   },
   draftBannerCta: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
 
-  // 찾기 바 — [검색] / [정렬 고정 · 구분선 · 칩 가로 스크롤] / [정렬 펼침]
-  findBar: { gap: Space.sm },
-  findRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  // ★minWidth:0 없으면 웹 flexbox 의 min-width:auto 때문에 가로 스크롤이 안 생기고 부모를 밀어낸다.
-  findScroll: { flex: 1, minWidth: 0 },
-
-
-  // 카테고리 칩
-  chipRow: { flexDirection: 'row', gap: 7, paddingVertical: 1, paddingRight: 4 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 6, paddingHorizontal: 12, borderRadius: Radius.pill },
-  chipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  chipDot: { width: 7, height: 7, borderRadius: Radius.pill },
-  chipText: { ...Type.tag, fontWeight: '700', color: InkColors.ink2 },
-  chipTextOn: { color: InkColors.bubbleText },
-
-  // (2026-08-08: 정렬 컨트롤 스타일 8종 + 카테고리 묶음 헤더 3종은 기능과 함께 삭제됐다.)
+  // (2026-11-16: 찾기 바·칩·개수 줄·톱니 패널·행·더 보기·빈 결과·FAB 스타일은 공용 KnowhowListParts 로 옮겼다.)
 
   // 확인 필요 항목 = [행 + 1탭 검증 버튼] 묶음. 구분선을 행 대신 래퍼가 갖는다(버튼이 다음 항목에
   // 붙어 보이지 않게).
@@ -914,44 +708,13 @@ const styles = StyleSheet.create({
   },
   verifyBtnText: { ...Type.tag, fontWeight: '800', color: InkColors.ink },
 
-  // 톱니 패널 — 개수 줄 **아래에 떠서** 열린다(목록을 밀어내지 않는다).
-  // Collapse 의 style 은 안쪽 내용 View 로 가고 바깥은 높이를 재는 클리핑 박스라, '띄우기'는 이 앵커가 맡는다
-  // (StoreToggle.menuAnchor 와 같은 구조 — 그쪽 주석이 정본이다).
-  manageAnchor: { position: 'absolute', top: '100%', right: 0, minWidth: 220, zIndex: 30, marginTop: Space.xs },
-  manageActions: {
-    borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md,
-    backgroundColor: '#FFFFFF', overflow: 'hidden', ...Elevation.e2,
-  },
-  manageRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingHorizontal: Space.md },
-  manageRowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
-  manageRowText: { ...Type.body, flex: 1, fontWeight: '700' },
-  // 개수 줄 오른쪽 톱니 — 작게 그리되 hitSlop 으로 48dp 하한을 지킨다.
-  gearBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
-
   // 묶음(쓰임새·안 쓰임) = 카드 밖 라벨 + 목록. 위 = 스크롤 gap 12 + 8 = 섹션 사이 20(2026-11-02).
   group: { gap: Space.sm, marginTop: Space.sm },
 
-
   // 리스트/행
   list: CardStyles.rows,
-  // '더 보기' — 행과 같은 세로 리듬. 누를 수 있는 행이라 최소 터치 타깃 48.
-  moreRow: { minHeight: 48, justifyContent: 'center', paddingVertical: 14 },
-  moreText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
-  rowNoDivider: { borderBottomWidth: 0 },
-  dot: { width: 10, height: 10, borderRadius: Radius.pill },
-  rowTitle: { ...Type.body, fontWeight: '600' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' },
-  meta: { fontSize: 12, color: TextColor.secondary, fontWeight: '600' },
-  metaRate: { ...Type.tag, color: InkColors.ink2, fontWeight: '700' },
   badgeReview: { ...BadgeStyles.box, backgroundColor: BrandColors.warnSoft },
   badgeReviewText: { ...BadgeStyles.text, color: BrandColors.warnText },
   badgeUnused: { ...BadgeStyles.box, backgroundColor: BrandColors.accentSoft },
   badgeUnusedText: { ...BadgeStyles.text, color: BrandColors.badText },
-  // 업무 첨부 수(0069 역조회) — 임팩트 신호. 중립 톤(검증·미검증 배지와 색 충돌 방지).
-
-  // 빈 결과
-  emptyResult: { alignItems: 'center', gap: 6, paddingVertical: 36 },
-  emptyResultText: { ...Type.body, fontWeight: '700', color: InkColors.ink2 },
-  resetLink: { fontSize: 13, fontWeight: '800', color: BrandColors.brand, marginTop: 4, textDecorationLine: 'underline' },
 });

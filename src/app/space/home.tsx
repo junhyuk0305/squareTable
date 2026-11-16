@@ -4,7 +4,7 @@ import { Stack, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Screen } from '@/components/Screen';
-import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
+import { AppTopBar } from '@/components/AppTopBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { goToTab } from '@/components/RoleTabBar';
@@ -29,10 +29,11 @@ const WORDS: NumberRowWords = {
  * S03 공간 홈(주인) — 숫자 줄(질문 · AI 답변 · 직접 답변 · 미응답 · 이번 달). 미응답을 누르면 교육 탭.
  * AI 상한에 닿았으면 위에 한 줄(aiCapOwner). 숫자는 서버 파생(unit_question_counts)이라 화면이 다시 세지 않는다.
  * 탭에 돌아올 때마다 다시 읽는다(질문 표는 공간 실시간 구독이 아직 없다).
+ * 헤더 = 매장 홈과 같은 상단바(AppTopBar place='space' · 왼쪽 전환 칩 · 오른쪽 벨 + 계정 · 2026-11-16 R-1).
+ *   매장처럼 홈만 상단바이고 노하우·교육·설정 탭은 "제목 + 공간 이름" 헤더다(사용자 결정).
  */
 export default function SpaceHome() {
   const spaceId = useSessionStore((s) => s.spaceId);
-  const spaceName = useSessionStore((s) => s.spaceName);
   const [counts, setCounts] = useState<QuestionCounts | null>(null);
   const [capHit, setCapHit] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -59,7 +60,7 @@ export default function SpaceHome() {
   );
 
   return (
-    <Screen header={<ScreenTitleHeader variant="tab" title={SPACE_SCREEN.tabHome} line={spaceName} />} tabBar="space">
+    <Screen header={<AppTopBar place="space" />} tabBar="space">
       <Stack.Screen options={{ headerShown: false }} />
       {capHit ? (
         <View style={styles.cap} accessibilityRole="text">

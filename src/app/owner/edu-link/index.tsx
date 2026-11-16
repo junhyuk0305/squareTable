@@ -12,24 +12,14 @@ import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { EmptyState } from '@/components/EmptyState';
-import { SettingsRow, SettingsSection } from '@/components/settings/SettingsKit';
-import { isOpenLink, useStoreEduLinksOn } from '@/components/edu/LinkFormStore';
+import { useStoreEduLinksOn } from '@/components/edu/LinkFormStore';
+import { EduLinkRows } from '@/components/edu/EduLinkRows';
 import { fetchEduLinks, type EduLinkRow } from '@/lib/db';
-import { daysLeft } from '@/lib/edu/link';
 import { placeErrorMessage } from '@/lib/place/errors';
-import { SPACE_WORDS, STORE_LINK, STORE_LINK_LIST } from '@/lib/place/words';
+import { STORE_LINK, STORE_LINK_LIST } from '@/lib/place/words';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { InkColors } from '@/lib/theme/colors';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
-
-const statusOf = (l: EduLinkRow) => {
-  const left = daysLeft(l.expiresAt);
-  return l.closedAt
-    ? STORE_LINK_LIST.closed
-    : left !== null
-      ? `${STORE_LINK_LIST.open} · ${STORE_LINK_LIST.daysLeft(left)}`
-      : STORE_LINK_LIST.expired;
-};
 
 export default function StoreEduLinkListScreen() {
   const router = useRouter();
@@ -74,9 +64,6 @@ export default function StoreEduLinkListScreen() {
     );
   }
 
-  // 열린 링크를 위로. 같은 칸 안에서는 서버 순서(최근 만든 것 먼저)를 지킨다.
-  const sorted = [...links].sort((a, b) => Number(isOpenLink(b)) - Number(isOpenLink(a)));
-
   return (
     <Screen header={header}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -91,23 +78,13 @@ export default function StoreEduLinkListScreen() {
         </Pressable>
       ) : null}
 
-      {sorted.length === 0 ? (
+      {links.length === 0 ? (
         <EmptyState
           title={on ? STORE_LINK_LIST.emptyTitle : placeErrorMessage({ message: 'feature_off' })}
           body={on ? STORE_LINK_LIST.emptyBody : undefined}
         />
       ) : (
-        <SettingsSection>
-          {sorted.map((l, i) => (
-            <SettingsRow
-              key={l.id}
-              first={i === 0}
-              label={l.title.trim() || SPACE_WORDS.link}
-              hint={statusOf(l)}
-              onPress={() => router.push({ pathname: '/owner/edu-link/[id]', params: { id: l.id } })}
-            />
-          ))}
-        </SettingsSection>
+        <EduLinkRows links={links} onOpen={(id) => router.push({ pathname: '/owner/edu-link/[id]', params: { id } })} />
       )}
     </Screen>
   );

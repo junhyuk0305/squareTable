@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { useSpaceKnowhowCategories } from '@/lib/hooks/useSpaceKnowhowCategories';
 import { showToast } from '@/lib/store/useToastStore';
 import { buildDirectUq } from '@/lib/utils/buildEntry';
 import { embedEntry } from '@/lib/ai';
@@ -42,6 +43,8 @@ export default function SpaceWrite() {
   const seedText = typeof seed === 'string' && seed ? seed : undefined;
 
   const [entries, setEntries] = useState<PlaybookEntry[] | null>(null);
+  // 저장 시트의 카테고리 선택지 = 공간 카테고리(노하우 탭 톱니에서 편집 · 0780).
+  const spaceCats = useSpaceKnowhowCategories(spaceId ?? '');
   const [question, setQuestion] = useState<UnknownQuery | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -265,6 +268,7 @@ export default function SpaceWrite() {
           visible={!!pending}
           entries={pending?.entries ?? []}
           pool={entries}
+          poolCustoms={spaceCats.customs ?? undefined}
           partsEnabled={false}
           onCancel={() => settle(undefined)}
           onConfirm={(section) => settle(section)}

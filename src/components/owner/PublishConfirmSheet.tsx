@@ -49,6 +49,7 @@ export function PublishConfirmSheet({
   onEditExisting,
   partsEnabled = true,
   pool,
+  poolCustoms,
 }: {
   visible: boolean;
   /** 저장하려는 노하우(단건 발행=1개, 분리 발행=N개). */
@@ -69,6 +70,8 @@ export function PublishConfirmSheet({
    * 없으면 지금 매장 노하우(usePlaybookStore) 그대로다. 공간은 파트도 없으니 partsEnabled={false} 와 같이 넘긴다.
    */
   pool?: PlaybookEntry[];
+  /** 공간 카테고리(0780 · 공간 노하우 탭에서 편집한 것). pool 과 같이 넘긴다. 없으면 공간은 빈 목록. */
+  poolCustoms?: { label: string }[];
 }) {
   const storeEntries = usePlaybookStore((s) => s.entries);
   const allEntries = pool ?? storeEntries;
@@ -93,7 +96,7 @@ export function PublishConfirmSheet({
 
   // 선택지 = 표준 + 사용 중 + 매장이 만든 카테고리(0개짜리 포함 — 카테고리 편집에서 추가한 것).
   const storeCustoms = usePlaybookStore((s) => s.customCategories);
-  const customs = pool ? NO_CUSTOMS : storeCustoms;
+  const customs = pool ? (poolCustoms ?? NO_CUSTOMS) : storeCustoms;
   const options = useMemo(
     () => sectionOptions(industry, [...published.map((e) => e.section), ...customs.map((c) => c.label)]),
     [industry, published, customs],

@@ -6,6 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { useStoreEntryStore } from '@/lib/store/useStoreEntryStore';
+import { useOpenSpace } from '@/lib/hooks/useOpenSpace';
+import type { MySpace } from '@/lib/db';
 import { useStoreDisplay } from '@/components/StoreHeaderTitle';
 import { Wordmark } from '@/components/Wordmark';
 import { Appear, stagger } from '@/components/Appear';
@@ -25,6 +27,9 @@ import { ButtonStyles, TouchSize, hitTrim } from '@/lib/theme/button';
 //       2곳   허브=현재 매장 진입 · 매장=1탭으로 다른 매장 토글
 //       3곳↑  아래로 펼치는 드롭다운에서 고른다(바닥 시트 폐기 — 누른 자리에서 열려야 인과가 분명하다)
 //   · 폭: 매장명만 줄어든다. 트랙 상한 310px 에 닿으면 매장명이 …가 된다. 로고는 안 줄인다.
+//   · ★공간(2026-11-16 사용자 결정 · 실측 결함 R-1): 목록 = 내 매장 + 내 공간(주인·멤버 · 공간 입구가 열린 계정만) 한 목록.
+//     공간 층(scope='space')에서는 오른쪽 칸 = 지금 공간 이름. 공간을 고르면 useOpenSpace(매장 탭 [공간] 칸과 같은 길),
+//     매장을 고르면 공간에서 나와 허브와 같은 매장 진입 커버(useStoreEntryStore.enter)로 간다. 로고 칸 = 공간에서 나와 허브로.
 //
 // 애니메이션(같은 감속 곡선 하나 — cubic-bezier(.32,.72,0,1)):
 //   A1 흰 면 슬라이드(300ms) 선택이 이동했다는 것 · A9 비선택 칸 페이드(220ms) 지금 여기가 아니라는 것
@@ -35,12 +40,28 @@ const SLIDE_MS = 300;
 const FADE_MS = 220;
 const EASE = Easing.bezier(0.32, 0.72, 0, 1);
 
-export function StoreToggle({ scope = 'store' }: { scope?: 'hub' | 'store' }) {
+type Item = { id: string; name: string; space?: MySpace };
+
+export function StoreToggle({ scope = 'store' }: { scope?: 'hub' | 'store' | 'space' }) {
   const router = useRouter();
   const stores = useSessionStore((s) => s.stores);
   const unitId = useSessionStore((s) => s.unitId);
   const storeName = useSessionStore((s) => s.storeName);
   const switchUnit = useSessionStore((s) => s.switchUnit);
+  const status = useSessionStore((s) => s.status);
+  const userId = useSessionStore((s) => s.userId);
+  const spaces = useSessionStore((s) => s.spaces);
+  const spaceOpen = useSessionStore((s) => s.spaceOpen);
+  const spacesLoaded = useSessionStore((s) => s.spacesLoaded);
+  const loadSpaces = useSessionStore((s) => s.loadSpaces);
+  const spaceId = useSessionStore((s) => s.spaceId);
+  const spaceName = useSessionStore((s) => s.spaceName);
+  const leaveSpace = useSessionStore((s) => s.leaveSpace);
+  const { open: openSpace, busy: spaceBusy } = useOpenSpace();
+  // 매장 화면을 주소로 바로 열면(웹 새로고침) 공간 목록을 아직 안 읽었다 — 허브(stores.tsx)와 같이 한 번 읽는다.
+  useEffect(() => {
+    if (status === 'signed_in' && userId && !spacesLoaded) void loadSpaces();
+  }, [status, userId, spacesLoaded, loadSpaces]);
   // 이름·색 판정과 prefs hydrate 는 StoreHeaderTitle 과 같은 헬퍼를 쓴다(복제 금지).
   const { nameOf, nameNow, dotColorOf } = useStoreDisplay();
   const enterStore = useStoreEntryStore((s) => s.enter);
@@ -50,20 +71,24 @@ export function StoreToggle({ scope = 'store' }: { scope?: 'hub' | 'store' }) {
   const [cells, setCells] = useState<{ x: number; w: number }[]>([]);
 
   // 목록이 비면(직원·로드 중) 활성 매장 1개로. Phase 0에서 직원 다매장이 열리면 stores로 통일.
-  const list =
+  const storeList: Item[] =
     stores.length > 0
       ? stores.map((s) => ({ id: s.unit_id, name: s.store_name }))
       : unitId
         ? [{ id: unitId, name: storeName || '내 매장' }]
         : [];
-  const current = list.find((s) => s.id === unitId);
-  const other = list.find((s) => s.id !== unitId); // 2곳일 때의 '다른 한 곳'
+  const spaceList: Item[] = spaceOpen === true ? spaces.map((s) => ({ id: s.id, name: s.name, space: s })) : [];
+  const list = [...storeList, ...spaceList];
   const onHub = scope === 'hub';
+  const onSpace = scope === 'space';
+  const hereId = onSpace ? spaceId : unitId;
+  const current = list.find((s) => s.id === hereId);
+  const other = list.find((s) => s.id !== hereId); // 2곳일 때의 '다른 한 곳'
   // 허브에선 스코프가 '전체 매장'이다 — 지금 보고 있는 범위를 그대로 쓴다.
   // 매장 층 라벨은 **확정된 뒤에만** 적는다(nameOf 가 null 이면 빈칸) — 원본명을 먼저 적으면
   // `내 매장 → 신촌점 → 본점`으로 라벨이 두 번 바뀐다. 상시 노출이라 가장 많이 보이는 깜빡임이었다.
-  const currentName = current ? nameOf(current.id, current.name) : null;
-  const scopeLabel = onHub ? '전체 매장' : currentName ? shortName(currentName) : '';
+  const currentName = onSpace ? spaceName || null : current ? nameOf(current.id, current.name) : null;
+  const scopeLabel = onHub ? '전체 매장' : currentName ? (onSpace ? currentName : shortName(currentName)) : '';
   // 매장 층에서 1곳이면 갈 데가 없다(C안 동작표). 허브에선 1곳이어도 '들어가기'가 있다.
   const hasMove = onHub ? list.length >= 1 : list.length >= 2;
 
@@ -99,15 +124,27 @@ export function StoreToggle({ scope = 'store' }: { scope?: 'hub' | 'store' }) {
   const goHub = () => {
     setOpen(false);
     if (onHub) return; // 이미 허브다 — 같은 곳으로 다시 보내지 않는다.
+    // 공간에서는 먼저 공간 밖으로 옮긴 뒤 상태를 비운다(설정 탭 "매장으로 돌아가기"와 같은 순서 · 문지기가 다시 들어가지 않게).
     router.replace('/hub');
+    if (onSpace) leaveSpace();
   };
   /** 매장을 골랐다. 허브에선 '들어가기'(전역 커버), 매장 층에선 '전환'이다. */
   const pick = async (id: string) => {
     setOpen(false);
-    if (busy) return;
+    if (busy || spaceBusy) return;
+    const row = list.find((s) => s.id === id);
+    if (row?.space) {
+      if (onSpace && id === spaceId) return;
+      return void openSpace(row.space);
+    }
+    if (onSpace) {
+      // 공간 → 매장: 공간에서 나와 허브와 같은 매장 진입 커버로(전환·착지 화면은 enterStore 가 정한다).
+      router.replace('/stores');
+      leaveSpace();
+      return void enterStore({ uid: id, name: row ? nameNow(row.id, row.name) : '내 매장' });
+    }
     if (onHub) {
       // 전환 커버에 넘기는 건 표시 지연과 무관한 **데이터**다 — 지금 아는 최선값을 쓴다.
-      const row = list.find((s) => s.id === id);
       return void enterStore({ uid: id, name: row ? nameNow(row.id, row.name) : '내 매장' });
     }
     if (id === unitId) return;
@@ -122,7 +159,7 @@ export function StoreToggle({ scope = 'store' }: { scope?: 'hub' | 'store' }) {
   };
   // 2곳이면 1탭, 3곳↑이면 드롭다운. 허브에서 1곳이면 그 매장으로 바로 들어간다.
   const onScope = () => {
-    if (busy || !hasMove) return;
+    if (busy || spaceBusy || !hasMove) return;
     if (list.length > 2) return setOpen((v) => !v);
     if (onHub) return void pick(current?.id ?? list[0].id);
     if (other) void pick(other.id);
@@ -148,20 +185,20 @@ export function StoreToggle({ scope = 'store' }: { scope?: 'hub' | 'store' }) {
         <Pressable
           onPress={onScope}
           onLayout={onCellLayout(1)}
-          disabled={!hasMove || busy}
+          disabled={!hasMove || busy || !!spaceBusy}
           style={styles.scopeCell}
           accessibilityRole="button"
           accessibilityLabel={
             onHub
               ? list.length > 2 ? '매장 골라 들어가기' : `${scopeLabel}, 매장 들어가기`
               : list.length === 2
-                ? `현재 매장 ${scopeLabel}, 다른 매장으로 전환`
+                ? `현재 ${onSpace ? '공간' : '매장'} ${scopeLabel}, 다른 곳으로 전환`
                 : list.length > 2
-                  ? `현재 매장 ${scopeLabel}, 매장 전환`
-                  : '현재 매장'
+                  ? `현재 ${onSpace ? '공간' : '매장'} ${scopeLabel}, 전환`
+                  : onSpace ? '현재 공간' : '현재 매장'
           }
         >
-          {busy ? (
+          {busy || spaceBusy ? (
             <ActivityIndicator size="small" color={InkColors.ink} />
           ) : (
             <FadeCell dim={onHub}>
@@ -183,22 +220,28 @@ export function StoreToggle({ scope = 'store' }: { scope?: 'hub' | 'store' }) {
         <View style={styles.menuAnchor}>
         <Collapse style={styles.menu}>
           {list.map((s, i) => {
-            const isCurrent = s.id === unitId;
-            const rowName = nameOf(s.id, s.name);
+            const isCurrent = s.id === hereId;
+            const rowName = s.space ? s.name : nameOf(s.id, s.name);
+            const nowWord = s.space ? '현재 공간' : '현재 매장';
             return (
               <Appear key={s.id} delay={stagger(i)} offsetY={7}>
                 <Pressable
                   onPress={() => void pick(s.id)}
                   style={({ pressed }) => [styles.row, pressed && { backgroundColor: InkColors.bgSoft }]}
                   accessibilityRole="button"
-                  accessibilityLabel={`${rowName ?? '매장'}${isCurrent ? ' (현재 매장)' : ''}`}
+                  accessibilityLabel={`${rowName ?? '매장'}${isCurrent ? ` (${nowWord})` : ''}`}
                 >
-                  <View style={[styles.dot, { backgroundColor: dotColorOf(s.id) }]} />
+                  {/* 공간은 매장 색점 대신 공간 표시(매장 탭 [공간] 칸과 같은 아이콘) — 색만으로 구분하지 않는다. */}
+                  {s.space ? (
+                    <Ionicons name={s.space.role === 'space_owner' ? 'library-outline' : 'people-outline'} size={Type.desc.fontSize} color={InkColors.ink2} />
+                  ) : (
+                    <View style={[styles.dot, { backgroundColor: dotColorOf(s.id) }]} />
+                  )}
                   <Text style={styles.rowText} numberOfLines={1}>
                     {rowName ?? ' '}
                   </Text>
                   {/* 색만으로 구분하지 않는다 — 지금 매장은 글자로도 말한다. */}
-                  {isCurrent && <Text style={styles.rowNow}>현재 매장</Text>}
+                  {isCurrent && <Text style={styles.rowNow}>{nowWord}</Text>}
                 </Pressable>
               </Appear>
             );

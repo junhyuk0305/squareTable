@@ -12,6 +12,7 @@ import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Type } from '@/lib/theme/type';
+import type { PlaybookEntry } from '@/types';
 
 const LABEL_MAX = 20;
 
@@ -24,6 +25,8 @@ const LABEL_MAX = 20;
  *  · 추가 = 매장 설정 레지스트리(schedule_config.knowhow_categories, 0096 재활용)에 저장 —
  *    노하우가 0개여도 필터칩·저장 시트 선택지에 나타난다.
  * 레지스트리 불변식: 표준 세트에 없는 이름만 담는다(표준은 항상 선택지에 있으므로).
+ *
+ * 매장 = 이 감싸개(usePlaybookStore · 현재 매장). 공간 = CategoryEditSheetView 에 공간 목록·저장을 넘긴다(2026-11-16 · R-3 · 0780).
  */
 export function CategoryEditSheet({ onClose }: { onClose: () => void }) {
   const entries = usePlaybookStore((s) => s.entries);
@@ -31,6 +34,30 @@ export function CategoryEditSheet({ onClose }: { onClose: () => void }) {
   const saveCustomCategories = usePlaybookStore((s) => s.saveCustomCategories);
   const renameSection = usePlaybookStore((s) => s.renameSection);
   const industry = useSessionStore((s) => s.industry);
+  return (
+    <CategoryEditSheetView
+      entries={entries}
+      customs={customs}
+      industry={industry}
+      saveCustomCategories={saveCustomCategories}
+      renameSection={renameSection}
+      onClose={onClose}
+    />
+  );
+}
+
+/** 카테고리 편집 본체 — 데이터와 저장은 부르는 쪽이 준다(매장 스토어 또는 공간 번호로 읽은 목록). */
+export function CategoryEditSheetView({
+  entries, customs, industry, saveCustomCategories, renameSection, onClose,
+}: {
+  entries: PlaybookEntry[];
+  customs: CustomCategory[];
+  industry: string | undefined;
+  saveCustomCategories: (items: CustomCategory[]) => Promise<boolean>;
+  /** 원문 이름 from 의 노하우를 to(null = 기타)로 일괄 이동. */
+  renameSection: (from: string, to: string | null) => Promise<boolean>;
+  onClose: () => void;
+}) {
 
   const visible = useMemo(() => entries.filter((e) => e.status !== 'draft'), [entries]);
   const countFor = (name: string) => visible.filter((e) => (e.section?.trim() || UNSECTIONED) === name).length;

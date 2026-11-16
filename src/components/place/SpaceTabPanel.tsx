@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,13 +5,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Section } from '@/components/Screen';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
-import { showToast } from '@/lib/store/useToastStore';
+import { useOpenSpace } from '@/lib/hooks/useOpenSpace';
 import { SPACE_MEMBERS, SPACE_SCREEN, SPACE_WORDS } from '@/lib/place/words';
 import { InkColors, TextColor } from '@/lib/theme/colors';
 import { CardStyles } from '@/lib/theme/card';
 import { Space, Gap } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
-import type { MySpace } from '@/lib/db';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -29,23 +27,14 @@ export function SpaceTabPanel() {
   const spaces = useSessionStore((s) => s.spaces);
   const isOwnerAccount = useSessionStore((s) => s.isOwnerAccount);
   const signupRole = useSessionStore((s) => s.signupRole);
-  const enterSpace = useSessionStore((s) => s.enterSpace);
   const joinNotices = useCrossNotifStore((s) => s.joinNotices);
-  const [busy, setBusy] = useState('');
+  // 공간으로 가는 길 = useOpenSpace 한 곳(상단 전환 칩과 같은 규칙 · 2026-11-16).
+  const { open: openSpace, busy } = useOpenSpace();
 
   const mine = spaces.find((s) => s.role === 'space_owner');
   const joined = spaces.filter((s) => s.role === 'space_member');
   const canCreate = !isOwnerAccount && signupRole !== 'owner';
   const requestsOf = (id: string) => joinNotices.filter((n) => n.kind === 'space_join_request' && n.unit_id === id).length;
-
-  const openMine = async (s: MySpace) => {
-    if (busy) return;
-    setBusy(s.id);
-    const { error } = await enterSpace(s.id);
-    setBusy('');
-    if (error) return showToast(error, 'warn');
-    router.replace('/space/home');
-  };
 
   return (
     <View style={styles.stack}>
@@ -57,7 +46,7 @@ export function SpaceTabPanel() {
             title={mine.name}
             hint={busy === mine.id ? SPACE_SCREEN.entryOpening : SPACE_SCREEN.entryEnterHint}
             badge={requestsOf(mine.id) > 0 ? SPACE_MEMBERS.requestBadge(requestsOf(mine.id)) : undefined}
-            onPress={() => void openMine(mine)}
+            onPress={() => void openSpace(mine)}
           />
         ) : (
           <Row icon="add" title={SPACE_SCREEN.entryCreate} hint={SPACE_SCREEN.entryCreateHint} onPress={() => router.push('/space/start')} />
@@ -73,7 +62,7 @@ export function SpaceTabPanel() {
                 icon="people-outline"
                 title={s.name}
                 hint={SPACE_MEMBERS.joinedRowHint}
-                onPress={() => router.push({ pathname: '/space/joined/[id]', params: { id: s.id } })}
+                onPress={() => void openSpace(s)}
               />
             ))}
           </View>
