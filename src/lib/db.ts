@@ -1121,10 +1121,47 @@ export async function fetchMemberPrefs(): Promise<DbResult<UnitMemberPrefsRow[]>
   if (error) readFail('fetchMemberPrefs', error); // 실패가 무음이면 "전부 꺼짐"으로 위장되고, 토글 한 번에 서버 값이 기본값으로 덮인다
   return { data: (data as UnitMemberPrefsRow[]) ?? null, error: error as DbErr };
 }
-/** 알림 '모두 읽기'(0078) — 내 (user, unit) 행의 notif_ack_at 을 지금으로. */
-export async function ackNotifications(unitId: string): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  return write('ackNotifications', supabase.rpc('ack_notifications', { p_unit_id: unitId }));
+/** 자리별 읽은 시각(0810 notif_seen) — 멤버가 아닌 자리(반려·내보냄·지운 공간·닫힌 매장)도 있다. RLS = 본인 행만. */
+export async function fetchNotifSeen(): Promise<DbResult<{ unit_id: string; seen_at: string }[]>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  // 행 = 내 자리 수(매장·공간·지나간 자리) — 1000 이면 넉넉하다. 넘치면 가장 최근 것부터 남긴다.
+  const { data, error } = await supabase.from('notif_seen').select('unit_id, seen_at').order('seen_at', { ascending: false }).limit(1000);
+  if (error) readFail('fetchNotifSeen', error);
+  return { data: (data as { unit_id: string; seen_at: string }[]) ?? null, error: error as DbErr };
+}
+/** 전체 읽음(0810) — 그 화면이 담는 자리 전부를 서버 시각으로 읽음 + 공지·멘션 read_by. 돌려주는 값 = 서버 시각(실패 = null).
+ *  옛 ack_notifications(0078)는 옛 앱이 쓴다. 새 앱은 이 함수 하나로만 읽음을 쓴다. */
+export async function markNotifsSeen(unitIds: string[], feedIds: string[]): Promise<string | null> {
+  if (!HAS_SUPABASE) return new Date().toISOString();
+  const { data, error } = await supabase.rpc('mark_notifs_seen', { p_unit_ids: unitIds, p_feed_ids: feedIds });
+  if (error || typeof data !== 'string') {
+    console.warn('[db] markNotifsSeen:', error?.message ?? 'no timestamp');
+    reportError('db.write:markNotifsSeen', error ?? { message: 'no timestamp' });
+    return null;
+  }
+  return data;
+}
+/** 내 읽은 시각 실시간(0810) — 같은 계정의 다른 기기에서 전체 읽음을 누르면 바로 꺼진다.
+ *  두 표(옛 앱이 쓰는 unit_member_prefs · 새 notif_seen) 모두 본인 행만 흘러온다(SELECT 정책). */
+export function subscribeMyNotifSeen(
+  userId: string,
+  onSeen: (unitId: string, at: string) => void,
+  onResubscribe?: () => void,
+): () => void {
+  if (!HAS_SUPABASE) return () => {};
+  const pick = (p: { new?: Record<string, unknown> }, col: string) => {
+    const u = p.new?.unit_id;
+    const at = p.new?.[col];
+    if (typeof u === 'string' && typeof at === 'string') onSeen(u, at);
+  };
+  const ch = supabase
+    .channel(uniqueChannel('my-notif-seen'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'notif_seen', filter: `user_id=eq.${userId}` }, (p) => pick(p, 'seen_at'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'unit_member_prefs', filter: `user_id=eq.${userId}` }, (p) => pick(p, 'notif_ack_at'))
+    .subscribe(resubscribeWatcher(onResubscribe));
+  return () => {
+    supabase.removeChannel(ch);
+  };
 }
 export async function saveMemberPrefs(p: UnitMemberPrefsRow): Promise<{ error: DbErr }> {
   if (!HAS_SUPABASE) return { error: null };
@@ -4340,7 +4377,7 @@ export async function fetchScheduleNotices(): Promise<ReadResult<ScheduleNotice[
 }
 
 /** 합류 결과(0247) — 승인·반려 때 서버가 넣은 member_notices 행. RLS = 본인 행만. 매장과 무관하게 읽는다(신청한 매장은 아직 내 활성 매장이 아니다).
- *  시간 창은 없다(10-16 결정 2) — 읽음은 계정 단위 기준(accountAckAt)이라 과거 이력이 새 매장 벨에 안 읽음으로 잡히지 않는다. */
+ *  시간 창은 없다(10-16 결정 2). 읽음은 그 줄 자리(unit_id)의 읽은 시각이다(0810 · ackOf). 멤버가 아닌 자리도 허브 전체 읽음이 끈다. */
 export async function fetchJoinNotices(): Promise<ReadResult<JoinNotice[]>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase

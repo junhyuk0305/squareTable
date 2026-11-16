@@ -64,14 +64,15 @@ export type JuniorNotif = {
 export const isAfterAck = (at: string | undefined, ackAt?: string | null): boolean =>
   !ackAt || !at || tsMs(at) > tsMs(ackAt);
 
-/** 계정 단위 알림(합류 결과 = member_notices approved·rejected)의 읽음 기준 = 내 매장 ack 중 가장 늦은 시각.
- *  특정 매장 ack 에 묶지 않는다 — 반려된 매장엔 unit_member_prefs 행이 없어 그 매장 ackAt 이 영영 null 이다(10-16 결정 3).
- *  어디서 '모두 읽기'를 눌러도(매장 벨·허브) 읽은 것이다. 매장 벨·허브 두 화면이 이 하나를 쓴다. */
-export const accountAckAt = (ackByUnit: Record<string, string | null | undefined>): string | null => {
-  let max: string | null = null;
-  for (const at of Object.values(ackByUnit)) if (at && (!max || tsMs(at) > tsMs(max))) max = at;
-  return max;
-};
+/** 줄 자리(unit_id) → 그 자리의 읽은 시각. 알림 읽음 규칙은 이것 하나다(2026-11-16 사용자 결정 · R-13 · 0810):
+ *  "알림 줄은 자기 자리(매장·공간)가 있다. 자리마다 읽은 시각이 하나다. 그 시각 뒤에 온 줄만 안 읽음이다."
+ *  허브 전체 읽음 = 내 모든 자리 · 매장 전체 읽음 = 그 매장 자리(useMemberPrefsStore.markAllSeen).
+ *  멤버가 아닌 자리(반려·내보냄·지운 공간)도 0810 notif_seen 에 시각이 있다 — 예전처럼 다른 매장 ack 를 빌리지 않는다. */
+export type AckOf = (unitId: string) => string | null;
+export const ackOfUnit = (ackByUnit: Record<string, string | null | undefined>): AckOf => (u) => ackByUnit[u] ?? null;
+/** 매장 안 화면(매장 벨·매장 알림)에 보일 합류 결과 = 그 매장 것만. 다른 자리 것은 허브가 보인다(허브가 맨 위 · 2026-11-16). */
+export const joinNoticesOfUnit = <T extends { unit_id: string }>(notices: T[], unitId: string | null | undefined): T[] =>
+  unitId ? notices.filter((n) => n.unit_id === unitId) : [];
 
 /** 코스 이름 찾기용 최소 열 — 허브(my_units_notif_data 'course')는 id·name 만 준다. */
 export type CourseName = Pick<TrainingCourseRow, 'id' | 'name'> & Partial<Pick<TrainingCourseRow, 'due_days' | 'audience' | 'created_at'>>;
@@ -161,8 +162,8 @@ export function juniorUnreadCount(
   assignments: QuizAssignment[] = [],
   /** 합류 결과(0247 member_notices). 계정 단위라 허브는 매장 묶음 밖(buildJoinNotifRows)에서 따로 센다 → 기본 빈 배열. */
   joinNotices: JoinNotice[] = [],
-  /** 합류 결과의 읽음 기준 = accountAckAt(ackByUnit). 없으면 매장 ackAt(옛 호출부 호환). */
-  joinAckAt: string | null = ackAt ?? null,
+  /** 합류 결과의 읽음 기준 = 그 줄 자리의 읽은 시각(ackOfUnit). 없으면 매장 ackAt. */
+  joinAckOf: AckOf = () => ackAt ?? null,
   /** 발송 진행(0332 state). 없으면 완료 여부만 본다. 목록(buildJuniorNotifications)과 같은 값을 넘긴다. */
   quizProgress?: QuizProgressRow[],
   /** 퀴즈 목록(순서·손님용 제외). 스토어 courses 그대로 넘긴다. */
@@ -176,8 +177,8 @@ export function juniorUnreadCount(
     myOpenQuizzes(assignments, me, quizProgress, quizCourses, legacyQuizIds).filter((q) => isAfterAck(q.at, ackAt)).length +
     // 내 근무 알림(D9) — 대타 확정 · 시간 수정 결과 · 근무표 변경. read 개념이 없어 '모두 읽기'(ack) 전까지 센다.
     scheduleNotices.filter((n) => isAfterAck(n.created_at, ackAt)).length +
-    // 합류 결과 — 같은 표(member_notices)의 승인·반려 행. 계정 단위 읽음 축(accountAckAt). 목록(buildJoinNotifRows)과 같은 판정.
-    buildJoinNotifRows(joinNotices, joinAckAt).filter((r) => r.unread).length +
+    // 합류 결과 — 같은 표(member_notices)의 승인·반려 행. 줄 자리의 읽은 시각. 목록(buildJoinNotifRows)과 같은 판정.
+    buildJoinNotifRows(joinNotices, joinAckOf).filter((r) => r.unread).length +
     // 동료가 물었는데 아직 답이 없는 질문(D4) — 푸시를 놓치면 '내 공간'에 들어가야만 알 수 있었다.
     answerableQuestions(queue, me, suggestions).filter((u) => isAfterAck(u.asked_at, ackAt)).length +
     feed.filter((f) => isUnreadMention(f, me) && isAfterAck(f.createdAt, ackAt)).length +
@@ -219,10 +220,10 @@ export function buildJuniorNotifications(args: {
   legacyQuizIds?: readonly string[];
   /** 합류 결과(0247 member_notices approved·rejected). 없으면 해당 알림 없음. */
   joinNotices?: JoinNotice[];
-  /** 합류 결과의 읽음 기준 = accountAckAt(ackByUnit)(결정 3). 없으면 매장 ackAt. */
-  joinAckAt?: string | null;
+  /** 합류 결과의 읽음 기준 = 그 줄 자리의 읽은 시각(ackOfUnit). 없으면 매장 ackAt. */
+  joinAckOf?: AckOf;
 }): JuniorNotif[] {
-  const { feed, swaps, templates, nameOf, userId: me, today, taskTemplates = [], done = {}, ackAt, suggestions = [], queue = [], scheduleNotices = [], assignments = [], courses = [], quizProgress, legacyQuizIds, joinNotices = [], joinAckAt = ackAt ?? null } = args;
+  const { feed, swaps, templates, nameOf, userId: me, today, taskTemplates = [], done = {}, ackAt, suggestions = [], queue = [], scheduleNotices = [], assignments = [], courses = [], quizProgress, legacyQuizIds, joinNotices = [], joinAckOf = () => ackAt ?? null } = args;
   const tplById = (id: string) => templates.find((t) => t.id === id);
   const out: JuniorNotif[] = [];
 
@@ -380,7 +381,7 @@ export function buildJuniorNotifications(args: {
   }
 
   // 합류 결과(0247) — 계정 단위 축. 매장 벨과 허브가 같은 행 빌더를 쓴다.
-  out.push(...buildJoinNotifRows(joinNotices, joinAckAt));
+  out.push(...buildJoinNotifRows(joinNotices, joinAckOf));
 
   return out.sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_NOTIFS);
 }
@@ -400,8 +401,8 @@ function roleNoticeRow(n: ScheduleNotice, ackAt?: string | null): JuniorNotif {
 }
 
 /** 합류 결과(0247 member_notices approved·rejected) 행 —서버가 승인·반려 때 넣은 행. 푸시는 같은 행을 크론이 보낸다.
- *  매장 이름이 제목에 들어간다(역 ⑧ id = kind_<행 id>). 읽음 기준은 accountAckAt(결정 3) — 매장 벨·허브·배지가 이 하나를 본다. */
-export function buildJoinNotifRows(joinNotices: JoinNotice[], joinAckAt: string | null): JuniorNotif[] {
+ *  매장 이름이 제목에 들어간다(역 ⑧ id = kind_<행 id>). 읽음 기준 = 그 줄 자리(n.unit_id)의 읽은 시각(ackOfUnit) — 매장 벨·허브·배지가 이 하나를 본다. */
+export function buildJoinNotifRows(joinNotices: JoinNotice[], ackOf: AckOf): JuniorNotif[] {
   const out: JuniorNotif[] = [];
   for (const n of joinNotices) {
     // ★0460 공간(4번 덩이) — N7 대기 요청(파생) · N8 수락. 매장 승인(approved)과 다른 종류 값이라 아래 매장 갈래로 떨어지지 않게 먼저 거른다.
@@ -412,7 +413,7 @@ export function buildJoinNotifRows(joinNotices: JoinNotice[], joinAckAt: string 
         title: NOTIF.space_join_request.title(n.body || '새 멤버'),
         body: n.store_name || '공간',
         at: n.created_at,
-        unread: isAfterAck(n.created_at, joinAckAt),
+        unread: isAfterAck(n.created_at, ackOf(n.unit_id)),
         route: n.actor_id ? spaceRequestRoute(n.unit_id, n.actor_id) : NOTIF.space_join_request.route('junior', n.unit_id),
       });
       continue;
@@ -424,7 +425,7 @@ export function buildJoinNotifRows(joinNotices: JoinNotice[], joinAckAt: string 
         title: NOTIF.space_join_approved.title(n.store_name || '공간'),
         body: n.body,
         at: n.created_at,
-        unread: isAfterAck(n.created_at, joinAckAt),
+        unread: isAfterAck(n.created_at, ackOf(n.unit_id)),
         route: NOTIF.space_join_approved.route('junior', n.unit_id),
       });
       continue;
@@ -436,7 +437,7 @@ export function buildJoinNotifRows(joinNotices: JoinNotice[], joinAckAt: string 
         title: NOTIF.member_removed.title(n.store_name || '매장'),
         body: n.body,
         at: n.created_at,
-        unread: isAfterAck(n.created_at, joinAckAt),
+        unread: isAfterAck(n.created_at, ackOf(n.unit_id)),
         route: NOTIF.member_removed.route('junior'),
       });
       continue;
@@ -449,7 +450,7 @@ export function buildJoinNotifRows(joinNotices: JoinNotice[], joinAckAt: string 
       title: spec.title(n.store_name || '신청한 매장'),
       body: n.body,
       at: n.created_at,
-      unread: isAfterAck(n.created_at, joinAckAt),
+      unread: isAfterAck(n.created_at, ackOf(n.unit_id)),
       route: spec.route('junior'),
     });
   }

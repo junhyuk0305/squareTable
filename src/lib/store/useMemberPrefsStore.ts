@@ -3,8 +3,9 @@
 // 와 별개 축이다. 저장은 원자적 upsert RPC(saveMemberPrefs) 한 번 — 낙관적 반영 후 실패 시 롤백.
 import { create } from 'zustand';
 import { currentAccountEpoch, isStaleAccountEpoch } from '@/lib/store/tenantEpoch';
-import { fetchMemberPrefs, saveMemberPrefs, ackNotifications, type UnitMemberPrefsRow } from '@/lib/db';
-import { guardWrite } from '@/lib/store/useSyncStore';
+import { fetchMemberPrefs, fetchNotifSeen, saveMemberPrefs, markNotifsSeen, type UnitMemberPrefsRow } from '@/lib/db';
+import { showToast } from '@/lib/store/useToastStore';
+import { tsMs } from '@/lib/utils/attendance';
 import { HAS_SUPABASE } from '@/lib/supabase';
 
 // 연속 진입(허브→설정 등) 순간 이중 fetch 방지 — 이 간격 안의 재호출은 스킵(useCrossNotifStore 와 동일 패턴).
@@ -36,7 +37,8 @@ export const DEFAULT_MEMBER_PREF: MemberPref = {
 
 type State = {
   byUnit: Record<string, MemberPref>;
-  /** 알림 '모두 읽기' 기준 시각(0078) — unit_id → ISO. MemberPref(저장 RPC 축)와 분리 보관. */
+  /** 자리(매장·공간)별 읽은 시각 — unit_id → ISO. = max(0078 notif_ack_at, 0810 notif_seen.seen_at).
+   *  알림 줄은 자기 자리의 이 값 뒤에 왔을 때만 안 읽음이다. MemberPref(저장 RPC 축)와 분리 보관. */
   ackByUnit: Record<string, string | null>;
   /** true = 조회 **시도가 끝남**(성공·실패 무관). 실패 여부는 loadError 로 본다. */
   loaded: boolean;
@@ -50,11 +52,18 @@ type State = {
   prefFor: (unitId: string) => MemberPref;
   /** unit_id 의 알림 ack 시각(없으면 null = 전체 미ack). */
   ackFor: (unitId: string) => string | null;
-  /** 알림 모두 읽기 — 낙관적 반영 후 실패 시 롤백+배너(guardWrite). */
-  ackNotifs: (unitId: string) => Promise<void>;
+  /** 전체 읽음 — 이 앱의 유일한 읽음 쓰기(0810 mark_notifs_seen). unitIds = 그 화면이 담는 자리 전부
+   *  (허브 = 내 모든 자리 · 매장 화면 = 그 매장). 서버 시각을 받은 뒤에만 로컬을 바꾸고 성공 문구를 띄운다. 실패면 그대로 두고 실패 문구. */
+  markAllSeen: (unitIds: string[], feedIds: string[]) => Promise<boolean>;
+  /** 읽은 시각 하나 반영(실시간 · 다른 기기). 늦은 값만 받는다. */
+  applySeen: (unitId: string, at: string) => void;
   /** 저장 — 낙관적 반영 후 실패 시 롤백하고 error 반환(무음 유실 방지). */
   save: (unitId: string, patch: Partial<MemberPref>) => Promise<{ error: string | null }>;
 };
+
+/** 두 시각 중 늦은 것(없으면 있는 쪽). 읽은 시각은 뒤로 가지 않는다. */
+const later = (a: string | null | undefined, b: string | null | undefined): string | null =>
+  !a ? (b ?? null) : !b ? a : tsMs(b) > tsMs(a) ? b : a;
 
 export const useMemberPrefsStore = create<State>((set, get) => ({
   byUnit: {},
@@ -68,7 +77,7 @@ export const useMemberPrefsStore = create<State>((set, get) => ({
     const now = Date.now();
     if (now - _lastHydrateAt < HYDRATE_TTL_MS) return;
     _lastHydrateAt = now;
-    const { data, error } = await fetchMemberPrefs();
+    const [{ data, error }, seen] = await Promise.all([fetchMemberPrefs(), fetchNotifSeen()]);
     if (isStaleAccountEpoch(epoch)) return;
     if (error || !data) {
       _lastHydrateAt = 0; // 실패는 TTL 미적용 — 다음 진입에서 즉시 재시도
@@ -92,6 +101,8 @@ export const useMemberPrefsStore = create<State>((set, get) => ({
       };
       ackByUnit[r.unit_id] = r.notif_ack_at ?? null;
     }
+    // 0810 자리별 읽은 시각 — 멤버가 아닌 자리도 있다. 못 읽었으면 0078 값만으로 본다(readFail 이 배너를 띄운다).
+    for (const r of seen.data ?? []) ackByUnit[r.unit_id] = later(ackByUnit[r.unit_id], r.seen_at);
     set({ byUnit, ackByUnit, loaded: true, loadError: false });
   },
 
@@ -104,15 +115,28 @@ export const useMemberPrefsStore = create<State>((set, get) => ({
 
   ackFor: (unitId) => get().ackByUnit[unitId] ?? null,
 
-  ackNotifs: async (unitId) => {
+  markAllSeen: async (unitIds, feedIds) => {
     const epoch = currentAccountEpoch();
-    const prev = get().ackByUnit[unitId] ?? null;
-    set({ ackByUnit: { ...get().ackByUnit, [unitId]: new Date().toISOString() } });
-    await guardWrite(
-      ackNotifications(unitId),
-      () => { if (!isStaleAccountEpoch(epoch)) set({ ackByUnit: { ...get().ackByUnit, [unitId]: prev } }); },
-      '모두 읽음 처리에 실패했어요.',
-    );
+    const ids = [...new Set(unitIds.filter(Boolean))];
+    if (ids.length === 0) return false;
+    // 기기 시계를 쓰지 않는다 — 줄 시각은 서버 시각이라 기기 시계가 어긋나면 방금 온 줄이 숨거나 남는다.
+    const at = await markNotifsSeen(ids, [...new Set(feedIds)]);
+    if (isStaleAccountEpoch(epoch)) return false;
+    if (!at) {
+      showToast('모두 읽음 처리에 실패했어요. 다시 눌러 주세요.', 'warn');
+      return false;
+    }
+    const next = { ...get().ackByUnit };
+    for (const u of ids) next[u] = later(next[u], at);
+    set({ ackByUnit: next });
+    showToast('모두 읽음 처리했어요', 'good');
+    return true;
+  },
+
+  applySeen: (unitId, at) => {
+    const cur = get().ackByUnit[unitId];
+    const v = later(cur, at);
+    if (v !== cur) set({ ackByUnit: { ...get().ackByUnit, [unitId]: v } });
   },
 
   save: async (unitId, patch) => {

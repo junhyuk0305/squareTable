@@ -3,12 +3,12 @@
 //   space_question = 내가 주인인 공간의 대기 질문(답하면 사라진다) · space_answered = 내 공간 질문에 온 답(14일)
 //   · link_answered = 옮겨 받은 링크 질문의 답(14일 · 링크가 닫히면 빠진다) · space_deleted = 공간 삭제(14일).
 // 행 id = spq_<질문> · spa_<질문> · lka_<질문> · spd_<알림 번호>(계약 6-3). 제목·주소는 레지스트리(NOTIF · 주소 함수)가 정한다.
-// 읽음 기준 = 계정 단위 축과 같은 accountAckAt(합류 결과와 같다 · 처리형 줄은 read_by 가 없다).
+// 읽음 기준 = 그 줄 자리(공간·링크의 unit)의 읽은 시각(ackOf · 0810 · 매장 ack 를 빌리지 않는다 · 처리형 줄은 read_by 가 없다).
 // ★notifications.ts 는 고치지 않는다(계약 3절). 매장 벨(매장 안)에는 넣지 않는다. 공간은 매장 층 밖이다.
 import type { SpaceNotifRow } from '@/lib/db';
 import { NOTIF, linkAnsweredRoute, spaceAnsweredRoute, spaceQuestionRoute } from '@/lib/notif/registry';
 import { SPACE_WORDS } from '@/lib/place/words';
-import { isAfterAck } from '@/lib/utils/notifications';
+import { isAfterAck, type AckOf } from '@/lib/utils/notifications';
 
 export type SpaceBellKind = 'space_question' | 'space_q_answered' | 'link_q_answered' | 'space_deleted';
 
@@ -29,9 +29,10 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 /** 답한 사람 이름이 비면 공간 주인으로 부른다(서버 0551 제목과 같은 규칙 · 가결정 6). */
 const answerer = (name: string) => name.trim() || `공간 ${SPACE_WORDS.ownerRole}`;
 
-export function buildSpaceNotifRows(rows: SpaceNotifRow[], ackAt: string | null): SpaceBellRow[] {
+export function buildSpaceNotifRows(rows: SpaceNotifRow[], ackOf: AckOf): SpaceBellRow[] {
   const out: SpaceBellRow[] = [];
   for (const r of rows) {
+    const ackAt = ackOf(r.unitId);
     const p = r.payload ?? {};
     const id = str(p.id);
     if (!id) continue;
@@ -72,7 +73,7 @@ export function buildSpaceNotifRows(rows: SpaceNotifRow[], ackAt: string | null)
 /**
  * 공간 홈 상단바 벨 숫자(2026-11-16 · R-1) — 그 공간 줄 중 안 읽은 것만 센다. 매장 벨 수를 섞지 않는다.
  * 입력은 계정 층 벨(useCrossNotifRows · /notifications)과 같은 행이다: 공간 줄(buildSpaceNotifRows) + 합류 줄(buildJoinCrossNotifs ·
- * 그 공간 합류 신청). 읽음 기준도 같다(accountAckAt). 누르면 그 목록(/notifications)으로 가고, 줄을 누른 뒤 착지는 지금 규칙 그대로다.
+ * 그 공간 합류 신청). 읽음 기준도 같다(그 공간의 읽은 시각). 누르면 그 목록(/notifications)으로 가고, 줄을 누른 뒤 착지는 지금 규칙 그대로다.
  */
 export function spaceBellCount(spaceId: string, spaceRows: { unitId: string; unread: boolean }[], joinRows: { unitId: string; unread: boolean }[]): number {
   if (!spaceId) return 0;
