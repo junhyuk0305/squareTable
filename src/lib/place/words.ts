@@ -56,6 +56,10 @@ export const SPACE_WORDS = {
   link: '교육 링크',
   emptyLink: (owner: string) => `${subj(owner)} 아직 담은 노하우가 없어요. 궁금한 걸 물어보세요.`,
   linkClose: '링크 닫기',
+  // 교육 링크 기간(만들기·상세 같은 이름 · 줄이기·늘리기 둘 다 · 2026-11-16 R-8). 상한 = 만든 날 + 30일(서버 edu_link_create·update).
+  linkPeriod: '기간',
+  linkPeriodHint: '만든 날부터 30일 안',
+  linkUntil: (day: string) => `${day}까지 열려요.`,
   // 교육 링크 화면(EduLinkView)과 오류 코드 link_closed 가 같이 쓴다. 공간 링크·매장 링크 공통.
   linkClosed: '이 링크는 닫혔어요. 보낸 분께 새 링크를 받아 주세요.',
   askSoon: '묻기는 곧 열려요. 지금은 아래 노하우를 읽어 주세요.',

@@ -17,7 +17,7 @@ import { SPACE_KNOWHOW, SPACE_SCREEN, SPACE_WORDS, STORE_LINK_LIST } from '@/lib
 import { InkColors, TextColor } from '@/lib/theme/colors';
 import { CardStyles } from '@/lib/theme/card';
 import { ButtonStyles, ButtonTextStyles, TouchSize } from '@/lib/theme/button';
-import { Gap, Space } from '@/lib/theme/layout';
+import { Space } from '@/lib/theme/layout';
 import { Radius } from '@/lib/theme/elevation';
 import { Type } from '@/lib/theme/type';
 import type { UnknownQuery } from '@/types';
@@ -106,21 +106,19 @@ export default function SpaceTeach() {
   return (
     <Screen header={header} tabBar="space">
       <Stack.Screen options={{ headerShown: false }} />
+      {/* [새 교육 링크] = 매장 교육 링크 목록과 같은 노란 주 버튼(2026-11-16 R-10). */}
       {hasLinks ? (
-        <Section
-          title={SPACE_KNOWHOW.linksTitle}
-          trailing={
-            <Pressable
-              onPress={newLink}
-              accessibilityRole="button"
-              accessibilityLabel={STORE_LINK_LIST.newLink}
-              style={({ pressed }) => [styles.small, pressed && styles.pressed]}
-            >
-              <Ionicons name="add" size={Type.body.fontSize} color={InkColors.ink} />
-              <Text style={styles.smallText}>{STORE_LINK_LIST.newLink}</Text>
-            </Pressable>
-          }
+        <Pressable
+          onPress={newLink}
+          accessibilityRole="button"
+          accessibilityLabel={STORE_LINK_LIST.newLink}
+          style={({ pressed }) => [styles.newLink, pressed && styles.pressed]}
         >
+          <Text style={styles.newLinkText}>{STORE_LINK_LIST.newLink}</Text>
+        </Pressable>
+      ) : null}
+      {hasLinks ? (
+        <Section title={SPACE_KNOWHOW.linksTitle}>
           <EduLinkRows links={links} onOpen={openLink} />
         </Section>
       ) : null}
@@ -144,17 +142,18 @@ export default function SpaceTeach() {
                 {s.done ? <Text style={styles.doneTag}>{SPACE_KNOWHOW.guideDone}</Text> : null}
               </View>
             ))}
+            {/* 지금 할 단계 버튼은 안내 카드 안 맨 아래(R-14 · 버튼도 흰 카드 위). */}
+            {primary ? (
+              <Pressable
+                onPress={primary.onPress}
+                accessibilityRole="button"
+                accessibilityLabel={primary.label}
+                style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
+              >
+                <Text style={styles.primaryText}>{primary.label}</Text>
+              </Pressable>
+            ) : null}
           </View>
-          {primary ? (
-            <Pressable
-              onPress={primary.onPress}
-              accessibilityRole="button"
-              accessibilityLabel={primary.label}
-              style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
-            >
-              <Text style={styles.primaryText}>{primary.label}</Text>
-            </Pressable>
-          ) : null}
         </Section>
       ) : (
         <Section title={`${SPACE_KNOWHOW.queueTitle} ${questions.length}`}>
@@ -211,8 +210,8 @@ const styles = StyleSheet.create({
   stepNoTextNow: { color: InkColors.ink },
   doneTitle: { color: TextColor.secondary },
   doneTag: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
-  primary: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
+  primary: { ...ButtonStyles.primary, backgroundColor: InkColors.ink, marginBottom: Space.lg },
   primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
-  small: { ...ButtonStyles.small, flexDirection: 'row', alignItems: 'center', gap: Gap.inline, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
-  smallText: { ...ButtonTextStyles.small, color: InkColors.ink },
+  newLink: ButtonStyles.primaryYellow,
+  newLinkText: ButtonTextStyles.primaryOnYellow,
 });

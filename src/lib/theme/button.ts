@@ -1,6 +1,6 @@
 import { type TextStyle, type ViewStyle } from 'react-native';
 
-import { InkColors } from '@/lib/theme/colors';
+import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
@@ -29,17 +29,21 @@ export const hitTrim = (face: number, hit: number = TouchSize.inline) => (face -
  *  · inlineHit(누르는 상자 44): 줄 안 작은 버튼·상단바 작은 알약·글자 링크의 바깥 Pressable. 보이는 모양은 안쪽 View 가 든다.
  *  · iconCircle(흰 원 아이콘 버튼): 보이는 원 40 · 흰 면 · 선 lineStrong(2026-11-02 사용자 결정 · 근무표 주 이동·출근 기록 월 이동 화살표).
  *    누르는 상자 48 은 바깥 Pressable 이 minWidth/minHeight 48 로 든다(RN-web 은 hitSlop 을 무시한다).
+ *  · primaryYellow(노란 주 버튼 · 2026-11-16 사용자 결정 R-10): primary 모양 + 노랑 면 + yellowDeep 테두리(노하우 추가 FAB 와 같은 계열).
+ *    글자 = ButtonTextStyles.primaryOnYellow(검정). 쓰는 곳 = 매장·공간 [새 교육 링크].
  * 화면 StyleSheet 에서 펼쳐 쓴다(`...ButtonStyles.primary`, 글자는 `...ButtonTextStyles.primary`).
  */
+const primaryShape: ViewStyle = {
+  minHeight: 52,
+  borderRadius: Radius.md,
+  paddingHorizontal: Space.lg,
+  alignSelf: 'stretch',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
 export const ButtonStyles = {
-  primary: {
-    minHeight: 52,
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.lg,
-    alignSelf: 'stretch',
-    alignItems: 'center',
-    justifyContent: 'center',
-  } as ViewStyle,
+  primary: primaryShape,
   small: {
     minHeight: 44,
     borderRadius: Radius.pill,
@@ -51,6 +55,12 @@ export const ButtonStyles = {
   inlineHit: {
     minHeight: TouchSize.inline,
     justifyContent: 'center',
+  } as ViewStyle,
+  primaryYellow: {
+    ...primaryShape,
+    backgroundColor: BrandColors.yellow,
+    borderWidth: 1,
+    borderColor: BrandColors.yellowDeep,
   } as ViewStyle,
   iconCircle: {
     width: 40,
@@ -68,4 +78,5 @@ export const ButtonStyles = {
 export const ButtonTextStyles = {
   primary: { fontSize: 16, fontWeight: '800' } as TextStyle,
   small: { fontSize: 15, fontWeight: '800' } as TextStyle,
+  primaryOnYellow: { fontSize: 16, fontWeight: '800', color: InkColors.ink } as TextStyle,
 };

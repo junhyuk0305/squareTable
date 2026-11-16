@@ -28,10 +28,14 @@ export function daysLeft(expiresAt: string, now = Date.now()): number | null {
   return kstDayNo(t) - kstDayNo(now);
 }
 
-/** 만든 시각 + n일. S11 기간 늘리기가 고르는 끝 시각이다(서버 상한 = 만든 시각 + 30일). */
+/** 시각 → 한국 날짜 "YYYY-MM-DD". 달력(MiniCalendar)이 고르는 값과 같은 꼴이다. */
+export function kstYmd(iso: string): string {
+  const d = new Date(new Date(iso).getTime() + KST_MS);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+/** 만든 시각 + n일. S11 상세에서 고른 끝 날의 끝 시각이다(서버 상한 = 만든 시각 + 30일 · 줄이기도 받는다). */
 export function createdPlusDays(createdAt: string, days: number): string {
   return new Date(new Date(createdAt).getTime() + days * DAY_MS).toISOString();
 }
 
-/** 기간 고르기 칸(일). 기본 7, 상한 30. */
-export const EDU_LINK_DAY_OPTIONS = [7, 14, 30] as const;

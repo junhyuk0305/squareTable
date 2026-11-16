@@ -18,7 +18,6 @@ import { fetchEduLinks, type EduLinkRow } from '@/lib/db';
 import { placeErrorMessage } from '@/lib/place/errors';
 import { STORE_LINK, STORE_LINK_LIST } from '@/lib/place/words';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { InkColors } from '@/lib/theme/colors';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 export default function StoreEduLinkListScreen() {
@@ -91,7 +90,8 @@ export default function StoreEduLinkListScreen() {
 }
 
 const st = StyleSheet.create({
-  cta: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
-  ctaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  // [새 교육 링크] = 노란 주 버튼(2026-11-16 사용자 결정 R-10 · 공간 교육 탭과 같은 토큰).
+  cta: ButtonStyles.primaryYellow,
+  ctaText: ButtonTextStyles.primaryOnYellow,
   pressed: { opacity: 0.85 },
 });

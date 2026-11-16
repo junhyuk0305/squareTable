@@ -10,8 +10,13 @@
  * ★비워도 만들 수 있다. 빈 링크는 받는 사람에게 "궁금한 걸 물어보세요"로 보인다(S14 빈 링크).
  * 공유는 주소 복사다. 퀴즈 링크·초대 링크와 같은 shareText(웹·네이티브 모두 클립보드)를 쓴다.
  *
+ * ★기간 = 달력에서 끝 날을 고른다(2026-11-16 사용자 결정 R-7 · 앱 어디에도 "n일" 칩 없음). 고를 수 있는 날 = 내일 ~ 만든 날 + 30일.
+ *   만들기: 서버가 일수(1~30)를 받는다 → 일수 = 고른 날 - 오늘(끝 = 만든 시각 + n일).
+ *
  * 상세(S11)
- * ★기간은 만든 날부터 센다. 서버 상한 = 만든 시각 + 30일(edu_link_update). 이미 지난 끝 날은 고를 수 없다.
+ * ★기간은 줄이기·늘리기 둘 다 된다(R-8 · 서버 edu_link_update 는 "지금 이후 ~ 만든 시각 + 30일"이면 받는다).
+ *   새 끝 = 만든 시각 + (고른 날 - 만든 날)일.
+ * 주소는 주소 상자(UrlBox) 하나로 보이고 상자를 누르면 복사한다(R-9 · 만든 직후·상세 같은 부품).
  * ★닫으면 되돌릴 수 없다. 받은 사람 쪽이 전부 끊긴다. 그래서 confirmAction 으로 한 번 묻고, 닫은 뒤 앞 화면으로 간다.
  * ★닫힌 링크·기간 끝난 링크는 고칠 수 없다(서버 link_closed · link_expired). 화면도 고치는 칸을 그리지 않는다.
  *   기간 끝난 링크는 닫을 수 있다(서버가 받는다).
@@ -28,7 +33,10 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { Appear } from '@/components/Appear';
 import { PickRow } from '@/components/blocks/PickRow';
-import { DayChips } from '@/components/edu/DayChips';
+import { MiniCalendar } from '@/components/blocks/MiniCalendar';
+import { UrlBox } from '@/components/edu/UrlBox';
+import { useToday } from '@/lib/hooks/useToday';
+import { addDaysKst, dayLabelKst, daysBetweenKst } from '@/lib/quiz/schedule';
 import {
   closeEduLink,
   createEduLink,
@@ -39,7 +47,7 @@ import {
   type EduLinkRow,
 } from '@/lib/db';
 import { placeErrorMessage } from '@/lib/place/errors';
-import { EDU_LINK_DAY_OPTIONS, EDU_LINK_DEFAULT_DAYS, createdPlusDays, daysLeft, eduLinkUrl } from '@/lib/edu/link';
+import { EDU_LINK_DEFAULT_DAYS, EDU_LINK_MAX_DAYS, createdPlusDays, daysLeft, eduLinkUrl, kstYmd } from '@/lib/edu/link';
 import { LINK_IN_APP, SPACE_WORDS } from '@/lib/place/words';
 import { copyLinkToast, COPY_LINK_LABEL } from '@/lib/quiz/link';
 import { shareText } from '@/lib/utils/shareText';
@@ -85,7 +93,10 @@ export function EduLinkNewForm({
 
   const [title, setTitle] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
-  const [days, setDays] = useState<number>(EDU_LINK_DEFAULT_DAYS);
+  const today = useToday();
+  const [end, setEnd] = useState<string | null>(null);
+  const endDate = end ?? addDaysKst(today, EDU_LINK_DEFAULT_DAYS);
+  const days = daysBetweenKst(today, endDate);
   const [busy, setBusy] = useState(false);
   const [made, setMade] = useState<{ id: string; token: string } | null>(null);
 
@@ -140,24 +151,15 @@ export function EduLinkNewForm({
     );
   }
 
-  // 만든 뒤 — 주소와 복사 하나. 상세(S11)로 가면 넣기·빼기·기간·닫기를 한다.
+  // 만든 뒤 — 주소 상자(누르면 복사) 하나. 상세(S11)로 가면 넣기·빼기·기간·닫기를 한다.
   if (made) {
     return (
       <Screen header={header}>
         <Stack.Screen options={{ headerShown: false }} />
         <Appear style={st.doneCard}>
           <Text style={st.doneTitle}>링크를 만들었어요</Text>
-          <Text style={st.url} selectable>{eduLinkUrl(made.token)}</Text>
+          <UrlBox url={eduLinkUrl(made.token)} label={COPY_LINK_LABEL} onCopy={() => void copy()} />
           <Text style={st.desc}>주소를 복사해 카톡으로 보내 주세요.</Text>
-        </Appear>
-        <Pressable
-          onPress={() => void copy()}
-          accessibilityRole="button"
-          accessibilityLabel={COPY_LINK_LABEL}
-          style={({ pressed }) => [st.cta, pressed && st.pressed]}
-        >
-          <Text style={st.ctaText}>{COPY_LINK_LABEL}</Text>
-        </Pressable>
         <Pressable
           onPress={() => onOpenDetail(made.id)}
           accessibilityRole="button"
@@ -166,6 +168,7 @@ export function EduLinkNewForm({
         >
           <Text style={st.textBtnText}>링크 상세 보기</Text>
         </Pressable>
+        </Appear>
       </Screen>
     );
   }
@@ -196,11 +199,18 @@ export function EduLinkNewForm({
         <PickNote text={pickNote} />
       </Section>
 
-      <Section title="기간">
-        <DayChips options={EDU_LINK_DAY_OPTIONS} value={days} onChange={setDays} />
+      <Section title={SPACE_WORDS.linkPeriod} hint={SPACE_WORDS.linkPeriodHint}>
+        <MiniCalendar
+          value={endDate}
+          today={today}
+          min={addDaysKst(today, 1)}
+          max={addDaysKst(today, EDU_LINK_MAX_DAYS)}
+          onChange={setEnd}
+        />
+        <Text style={st.desc}>{SPACE_WORDS.linkUntil(dayLabelKst(endDate))}</Text>
       </Section>
 
-      <Section title="제목" hint="선택">
+      <Section title="제목" hint="선택" card>
         <TextInput
           style={st.input}
           value={title}
@@ -212,17 +222,16 @@ export function EduLinkNewForm({
           accessibilityLabel="링크 제목"
         />
         <Text style={st.desc}>비우면 &apos;{SPACE_WORDS.link}&apos;로 보여요.</Text>
+        <Pressable
+          onPress={() => void create()}
+          disabled={busy}
+          accessibilityRole="button"
+          accessibilityLabel="링크 만들기"
+          style={({ pressed }) => [st.cta, busy && st.busy, pressed && st.pressed]}
+        >
+          <Text style={st.ctaText}>링크 만들기</Text>
+        </Pressable>
       </Section>
-
-      <Pressable
-        onPress={() => void create()}
-        disabled={busy}
-        accessibilityRole="button"
-        accessibilityLabel="링크 만들기"
-        style={({ pressed }) => [st.cta, busy && st.busy, pressed && st.pressed]}
-      >
-        <Text style={st.ctaText}>링크 만들기</Text>
-      </Pressable>
     </Screen>
     </KeyboardShift>
   );
@@ -249,7 +258,8 @@ export function EduLinkDetailForm({
   const ready = !unitId || loadedFor === loadKey;
 
   const [picked, setPicked] = useState<string[]>([]);
-  const [days, setDays] = useState<number | null>(null);
+  const today = useToday();
+  const [end, setEnd] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -261,7 +271,7 @@ export function EduLinkDetailForm({
       setLink(l);
       setList(entries.data ?? []);
       setPicked(l?.entryIds ?? []);
-      setDays(null);
+      setEnd(null);
       setFailed(!!links.error || !!entries.error);
       setLoadedFor(loadKey);
     });
@@ -307,7 +317,10 @@ export function EduLinkDetailForm({
   const editable = !closed && !expired;
   const status = closed ? '닫힘' : expired ? '기간 끝남' : '열림';
 
-  const nextExpiry = days !== null ? createdPlusDays(link.createdAt, days) : null;
+  const createdDay = kstYmd(link.createdAt);
+  const curEnd = kstYmd(link.expiresAt);
+  const endDate = end ?? curEnd;
+  const nextExpiry = endDate !== curEnd ? createdPlusDays(link.createdAt, daysBetweenKst(createdDay, endDate)) : null;
   const dirty = !sameIds(picked, link.entryIds) || nextExpiry !== null;
 
   const save = async () => {
@@ -345,12 +358,6 @@ export function EduLinkDetailForm({
     if (t) showToast(t.text, t.tone);
   };
 
-  // 지금 끝 날보다 앞이거나 이미 지난 날은 고를 수 없다(줄이기는 이 화면에서 하지 않는다 · 닫기가 있다).
-  const cannotPick = (d: number) => {
-    const t = new Date(createdPlusDays(link.createdAt, d)).getTime();
-    return t <= Date.now() || t <= new Date(link.expiresAt).getTime();
-  };
-
   return (
     <Screen header={header}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -371,17 +378,7 @@ export function EduLinkDetailForm({
           <Text style={st.kvValue}>{link.openedCount > 0 ? `${link.openedCount}번` : '없음'}</Text>
         </View>
         {editable ? (
-          <>
-            <Text style={st.detailUrl} selectable>{eduLinkUrl(link.token)}</Text>
-            <Pressable
-              onPress={() => void copy()}
-              accessibilityRole="button"
-              accessibilityLabel={COPY_LINK_LABEL}
-              style={({ pressed }) => [st.smallBtn, pressed && st.pressed]}
-            >
-              <Text style={st.smallBtnText}>{COPY_LINK_LABEL}</Text>
-            </Pressable>
-          </>
+          <UrlBox url={eduLinkUrl(link.token)} label={COPY_LINK_LABEL} onCopy={() => void copy()} />
         ) : (
           <Text style={st.desc}>
             {closed ? '닫힌 링크예요. 새 링크를 만들어 주세요.' : placeErrorMessage({ message: 'link_expired' })}
@@ -410,38 +407,45 @@ export function EduLinkDetailForm({
             <PickNote text={pickNote} />
           </Section>
 
-          <Section title="기간 늘리기" hint="만든 날부터">
-            <DayChips
-              options={EDU_LINK_DAY_OPTIONS}
-              value={days}
-              onChange={(d) => setDays((cur) => (cur === d ? null : d))}
-              disabledOf={cannotPick}
+          <Section title={SPACE_WORDS.linkPeriod} hint={SPACE_WORDS.linkPeriodHint}>
+            <MiniCalendar
+              value={endDate}
+              today={today}
+              min={addDaysKst(today, 1)}
+              max={addDaysKst(createdDay, EDU_LINK_MAX_DAYS)}
+              onChange={setEnd}
             />
-            {nextExpiry ? <Text style={st.desc}>{endDay(nextExpiry)}까지 열려요.</Text> : null}
+            <Text style={st.desc}>{SPACE_WORDS.linkUntil(dayLabelKst(endDate))}</Text>
           </Section>
-
-          <Pressable
-            onPress={() => void save()}
-            disabled={busy || !dirty}
-            accessibilityRole="button"
-            accessibilityLabel="저장"
-            style={({ pressed }) => [st.cta, (busy || !dirty) && st.off, pressed && st.pressed]}
-          >
-            <Text style={st.ctaText}>저장</Text>
-          </Pressable>
         </>
       ) : null}
 
-      {!closed ? (
-        <Pressable
-          onPress={() => void close()}
-          disabled={busy}
-          accessibilityRole="button"
-          accessibilityLabel={SPACE_WORDS.linkClose}
-          style={({ pressed }) => [st.textBtn, pressed && st.pressed]}
-        >
-          <Text style={st.closeText}>{SPACE_WORDS.linkClose}</Text>
-        </Pressable>
+      {/* 저장·닫기 = 카드 한 장(R-14 · 버튼도 흰 카드 위). */}
+      {editable || !closed ? (
+        <View style={st.card}>
+          {editable ? (
+            <Pressable
+              onPress={() => void save()}
+              disabled={busy || !dirty}
+              accessibilityRole="button"
+              accessibilityLabel="저장"
+              style={({ pressed }) => [st.cta, (busy || !dirty) && st.off, pressed && st.pressed]}
+            >
+              <Text style={st.ctaText}>저장</Text>
+            </Pressable>
+          ) : null}
+          {!closed ? (
+            <Pressable
+              onPress={() => void close()}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel={SPACE_WORDS.linkClose}
+              style={({ pressed }) => [st.textBtn, pressed && st.pressed]}
+            >
+              <Text style={st.closeText}>{SPACE_WORDS.linkClose}</Text>
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
     </Screen>
   );
@@ -459,18 +463,13 @@ const st = StyleSheet.create({
   busy: { opacity: 0.5 },
   off: { opacity: 0.4 },
   pressed: { opacity: 0.85 },
-  doneCard: { ...CardStyles.list, gap: Gap.inline },
+  doneCard: { ...CardStyles.list, gap: Gap.item },
   doneTitle: { ...Type.section },
-  // 띄어쓰기 없는 주소는 RN-web Text 기본 word-wrap 이 끊는다(ui.md 줄바꿈).
-  url: { ...Type.body, color: InkColors.ink, marginTop: Space.sm },
-  detailUrl: { ...Type.body, color: InkColors.ink },
   card: { ...CardStyles.list, gap: Gap.item },
   kvRow: { flexDirection: 'row', alignItems: 'baseline', gap: Space.md },
   kvLabel: { ...Type.desc, fontWeight: '700', flexShrink: 0 },
   kvValue: { ...Type.body, fontWeight: '700', flex: 1, minWidth: 0, textAlign: 'right' },
   kvMuted: { color: TextColor.secondary },
-  smallBtn: { ...ButtonStyles.small, borderWidth: 1, borderColor: InkColors.lineStrong, backgroundColor: InkColors.bg },
-  smallBtnText: { ...ButtonTextStyles.small, color: InkColors.ink },
   textBtn: { ...ButtonStyles.inlineHit, alignSelf: 'center', paddingHorizontal: Space.lg },
   textBtnText: { ...Type.body, fontWeight: '700', color: InkColors.ink2, textDecorationLine: 'underline' },
   closeText: { ...Type.body, fontWeight: '700', color: BrandColors.badText },

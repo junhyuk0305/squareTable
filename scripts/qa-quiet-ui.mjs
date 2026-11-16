@@ -251,17 +251,21 @@ try {
         ok(await hasText(w.page, '이미 답한 질문이에요', 20000), '새로고침 뒤 → "이미 답한 질문이에요"');
       }
     }
-    // 링크 기간 늘리기(공간 설정 중 저장 가능한 값)
+    // 링크 기간(공간 설정 중 저장 가능한 값) — 달력에서 끝 날을 고른다(2026-11-16 R-7 · 칸 라벨 = YYYY-MM-DD).
     const L = await newLink('기간');
     const before = psql(`select expires_at from public.edu_links where id = '${L.id}'`);
+    const pick = psql(`select to_char((created_at at time zone 'Asia/Seoul') + interval '14 days', 'YYYY-MM-DD') from public.edu_links where id = '${L.id}'`);
     await settle(w.page, `/space/link/${L.id}?unit=${SPACE_ID}&space=${SPACE_ID}`);
-    const up = await w.page.waitFor(`!!document.querySelector('${byLabel('14일')}')`, 30000);
+    let up = await w.page.waitFor(`!!document.querySelector('${byLabel('다음 달')}')`, 30000);
+    // 고를 날이 다음 달이면 달력을 한 달 넘긴다(처음엔 지금 끝 날의 달이 펴져 있다).
+    if (up && !(await w.page.visible(byLabel(pick)))) await w.page.click(byLabel('다음 달'));
+    up = up && (await w.page.waitFor(`!!document.querySelector('${byLabel(pick)}')`, 10000));
     if (!ok(up, '링크 상세가 뜬다')) {
       const shot = join(SHOT_DIR, 'qa-quiet-ui-link.png');
       await w.page.shot(shot).catch(() => {});
       out('  ·', `화면: ${(await w.page.text()).replace(/\s+/g, ' ').slice(0, 200)} · ${await w.page.path()} · ${shot}`);
     } else {
-      await w.page.click(byLabel('14일'));
+      await w.page.click(byLabel(pick));
       await w.page.click(byLabel('저장'));
       ok(await hasText(w.page, '저장했어요', 10000), '기간 저장 → "저장했어요"');
       const after = psql(`select round(extract(epoch from expires_at - created_at) / 86400) from public.edu_links where id = '${L.id}'`);
