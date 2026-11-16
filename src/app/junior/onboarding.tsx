@@ -113,6 +113,6 @@ const styles = StyleSheet.create({
   helpTitle: { fontSize: 13, fontWeight: '800', color: TextColor.secondary },
   helpBody: { ...Type.desc },
   // 누르는 상자 48(RN-web 은 hitSlop 을 무시한다).
-  logoutRow: { alignItems: 'center', justifyContent: 'center', minHeight: 48 },
-  logoutText: { fontSize: 13, color: TextColor.secondary, fontWeight: '600' },
+  logoutRow: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  logoutText: ButtonTextStyles.secondary,
 });

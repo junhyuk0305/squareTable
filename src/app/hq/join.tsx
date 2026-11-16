@@ -16,6 +16,7 @@ import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 export default function HqJoinScreen() {
   const router = useRouter();
@@ -97,8 +98,8 @@ function Card({
           </Pressable>
         ) : null}
         {secondary ? (
-          <Pressable onPress={secondary.onPress} accessibilityRole="button" style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
-            <Text style={styles.link}>{secondary.label}</Text>
+          <Pressable onPress={secondary.onPress} accessibilityRole="button" style={({ pressed }) => [styles.link, pressed && { opacity: 0.7 }]}>
+            <Text style={styles.linkText}>{secondary.label}</Text>
           </Pressable>
         ) : null}
       </Appear>
@@ -113,5 +114,6 @@ const styles = StyleSheet.create({
   body: { fontSize: 14, color: InkColors.ink2, textAlign: 'center', lineHeight: 21 },
   btn: { marginTop: Space.xs, paddingVertical: 10, paddingHorizontal: Space.xl, borderRadius: Radius.pill, backgroundColor: BrandColors.brand },
   btnText: { fontSize: 14, fontWeight: '800', color: InkColors.bubbleText },
-  link: { fontSize: 13, fontWeight: '600', color: InkColors.ink2, textDecorationLine: 'underline' },
+  link: { ...ButtonStyles.secondary, alignSelf: 'center' },
+  linkText: ButtonTextStyles.secondary,
 });

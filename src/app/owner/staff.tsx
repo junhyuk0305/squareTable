@@ -315,7 +315,7 @@ export default function OwnerStaffScreen() {
                 ★지정은 **권한이 늘어나는 방향**이라 안내 모달을 먼저 띄운다(2026-09-13 사장 요청):
                   같은 버튼으로 되돌릴 수 있다는 것(P7)은 "무엇이 달라지는지 모른 채 눌렀다"를 못 막는다.
                 해제는 권한이 줄어드는 쪽이라 그대로 즉시 실행한다 — 확인을 두 방향에 다 걸면 되돌리기가 무거워진다.
-                지정 버튼은 노랑(권장 액션·검정 글자), 해제는 눌러서 되돌리는 회색 글자 그대로. */}
+                지정 버튼은 노랑(권장 액션·검정 글자), 해제는 보조 알약(연한 면·회색 선 · 2026-11-16 R-11). */}
             {isOwner && (
               <Pressable
                 onPress={() => (isManager ? setRole(s.id, 'junior') : setManagerTarget({ id: s.id, name: s.name }))}
@@ -329,7 +329,7 @@ export default function OwnerStaffScreen() {
                     size={14}
                     color={isManager ? InkColors.ink3 : InkColors.ink}
                   />
-                  <Text style={isManager ? styles.roleBtnText : styles.roleBtnOnText}>
+                  <Text style={styles.roleBtnOnText}>
                     {isManager ? '매니저 해제' : '매니저로 지정'}
                   </Text>
                 </View>
@@ -443,8 +443,8 @@ const styles = StyleSheet.create({
     ...ButtonStyles.inlineHit, alignSelf: 'flex-end',
     marginTop: hitTrim(TouchSize.inlineFace), marginBottom: Space.md + hitTrim(TouchSize.inlineFace),
   },
-  roleBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: TouchSize.inlineFace, paddingHorizontal: 2 },
-  roleBtnText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
+  // 해제 = 보조 알약 모양을 지정과 같은 보이는 높이 32 로(누르는 상자 44 는 roleHit).
+  roleBtn: { ...ButtonStyles.secondary, flexDirection: 'row', gap: Space.xs, minHeight: TouchSize.inlineFace, paddingHorizontal: Space.md },
   // 지정(권장 액션) — 노랑 알약 + 검정 글자. 해제(roleBtn)와 무게를 일부러 다르게 둔다.
   roleBtnOn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,

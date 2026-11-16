@@ -278,7 +278,7 @@ export function OwnerKnowhowImport() {
             ) : loadErr ? (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyBody}>목록을 불러오지 못했어요.</Text>
-                <Pressable onPress={() => { setLoadErr(false); setLoading(true); setNonce((n) => n + 1); }} hitSlop={8}>
+                <Pressable onPress={() => { setLoadErr(false); setLoading(true); setNonce((n) => n + 1); }} hitSlop={8} style={styles.retryBtn}>
                   <Text style={styles.retryLink}>다시 시도</Text>
                 </Pressable>
               </View>
@@ -286,7 +286,7 @@ export function OwnerKnowhowImport() {
               <View style={styles.emptyCard}>
                 <Ionicons name="file-tray-outline" size={30} color={InkColors.ink3} />
                 <Text style={styles.emptyBody}>이 매장에는 발행된 노하우가 없어요.</Text>
-                <Pressable onPress={() => setStep(1)} hitSlop={8} accessibilityRole="button" accessibilityLabel="매장 다시 고르기">
+                <Pressable onPress={() => setStep(1)} hitSlop={8} style={styles.retryBtn} accessibilityRole="button" accessibilityLabel="매장 다시 고르기">
                   <Text style={styles.retryLink}>매장 다시 고르기</Text>
                 </Pressable>
               </View>
@@ -318,7 +318,7 @@ export function OwnerKnowhowImport() {
                     {filtering ? `${rows?.length}개 중 ${visible.length}개 보임 · ` : `${rows?.length}개 중 `}
                     {selected.size}개 선택
                   </Text>
-                  <Pressable onPress={toggleAll} hitSlop={8} accessibilityRole="button" accessibilityLabel={filtering ? '보이는 노하우 전부 선택' : '전체 선택'}>
+                  <Pressable onPress={toggleAll} hitSlop={8} style={styles.selectAllBtn} accessibilityRole="button" accessibilityLabel={filtering ? '보이는 노하우 전부 선택' : '전체 선택'}>
                     <Text style={styles.selectAll}>
                       {visibleAllSelected ? (filtering ? '보이는 것 해제' : '전체 해제') : filtering ? '보이는 것 전부' : '전체 선택'}
                     </Text>
@@ -332,7 +332,7 @@ export function OwnerKnowhowImport() {
                 {visible.length === 0 ? (
                   <View style={styles.emptyCard}>
                     <Text style={styles.emptyBody}>찾는 노하우가 없어요.</Text>
-                    <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="검색어 지우기">
+                    <Pressable onPress={() => setQuery('')} hitSlop={8} style={styles.retryBtn} accessibilityRole="button" accessibilityLabel="검색어 지우기">
                       <Text style={styles.retryLink}>검색어 지우기</Text>
                     </Pressable>
                   </View>
@@ -521,7 +521,8 @@ const styles = StyleSheet.create({
   // 목록
   listHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   listCount: { fontSize: 13, color: TextColor.secondary, fontWeight: '700' },
-  selectAll: { fontSize: 13, fontWeight: '800', color: BrandColors.brand },
+  selectAllBtn: { ...ButtonStyles.secondary },
+  selectAll: ButtonTextStyles.secondary,
   list: { gap: Space.sm },
   // 카드 = CardStyles.list(모서리 16 · 안쪽 16 · 그림자 e1 · 2026-11-02).
   row: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: 11 },
@@ -536,7 +537,8 @@ const styles = StyleSheet.create({
   rowSub: { ...Type.tag, color: TextColor.secondary, fontWeight: '600', flexShrink: 1 },
   rowPreview: { ...Type.desc, fontWeight: '500', marginTop: 4 },
 
-  retryLink: { fontSize: 13, fontWeight: '800', color: BrandColors.brand, textDecorationLine: 'underline' },
+  retryBtn: { ...ButtonStyles.secondary, alignSelf: 'center' },
+  retryLink: ButtonTextStyles.secondary,
 
   // 3단계 완료
   doneCard: { ...CardStyles.list, gap: Space.sm },

@@ -217,8 +217,8 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
 
-  addRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, minHeight: 48 },
-  addText: { fontSize: 15, fontWeight: '700', color: BrandColors.goodText },
+  addRow: { ...ButtonStyles.secondary, flexDirection: 'row', gap: Space.xs },
+  addText: ButtonTextStyles.secondary,
 
   cellFoot: { flexDirection: 'row', gap: Space.sm, alignItems: 'center', marginTop: Space.sm },
   // 작은 버튼(44 알약 · 15/800 · 내용 폭 · 2026-11-02).

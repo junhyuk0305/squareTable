@@ -53,7 +53,7 @@ import { copyLinkToast, COPY_LINK_LABEL } from '@/lib/quiz/link';
 import { shareText } from '@/lib/utils/shareText';
 import { confirmAction } from '@/lib/utils/confirm';
 import { showToast } from '@/lib/store/useToastStore';
-import { BrandColors, InkColors, TextColor } from '@/lib/theme/colors';
+import { InkColors, TextColor } from '@/lib/theme/colors';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { CardStyles } from '@/lib/theme/card';
 import { EmptyStyles } from '@/lib/theme/empty';
@@ -440,7 +440,7 @@ export function EduLinkDetailForm({
               disabled={busy}
               accessibilityRole="button"
               accessibilityLabel={SPACE_WORDS.linkClose}
-              style={({ pressed }) => [st.textBtn, pressed && st.pressed]}
+              style={({ pressed }) => [st.closeBtn, pressed && st.pressed]}
             >
               <Text style={st.closeText}>{SPACE_WORDS.linkClose}</Text>
             </Pressable>
@@ -470,7 +470,9 @@ const st = StyleSheet.create({
   kvLabel: { ...Type.desc, fontWeight: '700', flexShrink: 0 },
   kvValue: { ...Type.body, fontWeight: '700', flex: 1, minWidth: 0, textAlign: 'right' },
   kvMuted: { color: TextColor.secondary },
-  textBtn: { ...ButtonStyles.inlineHit, alignSelf: 'center', paddingHorizontal: Space.lg },
-  textBtnText: { ...Type.body, fontWeight: '700', color: InkColors.ink2, textDecorationLine: 'underline' },
-  closeText: { ...Type.body, fontWeight: '700', color: BrandColors.badText },
+  // 글자 버튼 금지(R-11) — 이동 = 보조 · 닫기 = 위험. 카드 안 가로 꽉.
+  textBtn: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  textBtnText: ButtonTextStyles.secondary,
+  closeBtn: { ...ButtonStyles.danger, alignSelf: 'stretch' },
+  closeText: ButtonTextStyles.danger,
 });

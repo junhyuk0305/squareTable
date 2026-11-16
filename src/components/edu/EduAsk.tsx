@@ -238,9 +238,9 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard, expi
               onPress={() => { setReportFor(reportFor === a.cqId ? null : a.cqId); setReportCat('ai_answer'); }}
               accessibilityRole="button"
               accessibilityLabel={EDU_ASK.report}
-              style={({ pressed }) => [st.linkHit, pressed && st.pressed]}
+              style={({ pressed }) => [st.reportBtn, pressed && st.pressed]}
             >
-              <Text style={st.linkText}>{EDU_ASK.report}</Text>
+              <Text style={st.reportBtnText}>{EDU_ASK.report}</Text>
             </Pressable>
           </View>
         </View>
@@ -407,10 +407,10 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard, expi
                 onPress={() => void refresh(guest)}
                 accessibilityRole="button"
                 accessibilityLabel={EDU_ASK.refresh}
-                style={({ pressed }) => [st.linkHit, st.refresh, pressed && st.pressed]}
+                style={({ pressed }) => [st.refresh, pressed && st.pressed]}
               >
                 <Ionicons name="refresh" size={Type.desc.fontSize} color={InkColors.ink2} />
-                <Text style={st.linkText}>{EDU_ASK.refresh}</Text>
+                <Text style={st.refreshText}>{EDU_ASK.refresh}</Text>
               </Pressable>
             </View>
           )}
@@ -452,7 +452,10 @@ const st = StyleSheet.create({
   smallText: { ...ButtonTextStyles.small, color: InkColors.ink },
   linkHit: { minHeight: 48, justifyContent: 'center' },
   linkText: { ...Type.desc, fontWeight: '700', color: InkColors.ink2 },
-  refresh: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, alignSelf: 'flex-start' },
+  refresh: { ...ButtonStyles.secondary, flexDirection: 'row', gap: Space.xs },
+  refreshText: ButtonTextStyles.secondary,
+  reportBtn: { ...ButtonStyles.danger },
+  reportBtnText: ButtonTextStyles.danger,
   report: { gap: Space.sm, paddingTop: Space.sm, borderTopWidth: 1, borderTopColor: InkColors.line },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.xs },
   chipHit: { minHeight: 48, justifyContent: 'center' },

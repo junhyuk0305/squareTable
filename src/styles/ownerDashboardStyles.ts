@@ -57,7 +57,6 @@ export const styles = StyleSheet.create({
   // 질문 0건 상태는 히어로가 직접 말한다("없어요" + 노하우 남기기 CTA) — 블록을 하나 더 쓰지 않는다.
 
   // ② '오늘' 카드 — 섹션 라벨은 카드 밖, [근무 머리줄 + 업무 3건]이 카드 안.
-  moreLink: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   // 머리줄: 오늘 누가 나와 있나. 누르면 근무표(전체보기는 업무로 가므로 목적지가 겹치지 않는다).
   // 보조 표기(위치·상태 꼬리표)라 본문 15sp 하한 대상이 아니다.
   dutyRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 40, paddingVertical: Space.sm },

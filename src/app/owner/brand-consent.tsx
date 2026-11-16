@@ -199,8 +199,8 @@ export default function BrandConsentScreen() {
           >
             <Text style={styles.primaryText}>{picked.size > 0 ? `${picked.size}곳 연결 수락` : '연결 수락'}</Text>
           </Pressable>
-          <Pressable testID="brand-decline" accessibilityRole="button" disabled={busy} onPress={() => void respond(false)} style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.7 }]}>
-            <Text style={styles.secondaryText}>거절</Text>
+          <Pressable testID="brand-decline" accessibilityRole="button" disabled={busy} onPress={() => void respond(false)} style={({ pressed }) => [styles.danger, pressed && { opacity: 0.7 }]}>
+            <Text style={styles.dangerText}>거절</Text>
           </Pressable>
           </View>
         </ScrollView>
@@ -323,9 +323,9 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
           accessibilityRole="button"
           disabled={busy}
           onPress={() => void answer(false)}
-          style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [styles.danger, pressed && { opacity: 0.7 }]}
         >
-          <Text style={styles.secondaryText}>동의하지 않기(연결 끝내기)</Text>
+          <Text style={styles.dangerText}>동의하지 않기(연결 끝내기)</Text>
         </Pressable>
       )}
       </View>
@@ -372,6 +372,8 @@ const styles = StyleSheet.create({
   primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   // 수락·거절 버튼 묶음 — 흰 카드 안(R-14 · 2026-11-16).
   answerCard: { ...CardStyles.list, gap: Space.xs },
-  secondary: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  secondaryText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
+  secondary: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  secondaryText: ButtonTextStyles.secondary,
+  danger: { ...ButtonStyles.danger, alignSelf: 'stretch' },
+  dangerText: ButtonTextStyles.danger,
 });

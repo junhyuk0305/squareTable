@@ -566,8 +566,8 @@ function BillingBody() {
               계정 설정에 이미 로그아웃이 있다 — 구매 화면에 로그아웃을 놓지 않는다. */}
           {!entitledAtMount && (
             <Appear delay={stagger(5)}>
-            <Pressable onPress={() => void logout()} style={styles.logoutRow}>
-              <Text style={styles.logoutText}>로그아웃</Text>
+            <Pressable onPress={() => void logout()} style={styles.promoToggle}>
+              <Text style={styles.promoToggleText}>로그아웃</Text>
             </Pressable>
             </Appear>
           )}
@@ -1020,8 +1020,8 @@ function BillingBody() {
 
                 {/* 보조 경로 — 신고는 이미 저장됐고, 급할 때 사람을 직접 부르는 창구(설계문서 B-1). */}
                 <Appear delay={stagger(6)}>
-                <Pressable onPress={() => void notifyPaid()} style={({ pressed }) => [styles.mailRow, pressed && { opacity: 0.6 }]}>
-                  <Text style={styles.mailText}>메일로도 알리기 ({BILLING_INFO.contactValue})</Text>
+                <Pressable onPress={() => void notifyPaid()} style={({ pressed }) => [styles.promoToggle, pressed && { opacity: 0.6 }]}>
+                  <Text style={styles.promoToggleText}>메일로도 알리기 ({BILLING_INFO.contactValue})</Text>
                 </Pressable>
                 </Appear>
                 </View>
@@ -1081,8 +1081,8 @@ function BillingBody() {
         <Pressable disabled={busy} onPress={() => void recheck()} style={({ pressed }) => [styles.ghost, pressed && { opacity: 0.7 }, busy && { opacity: 0.6 }]}>
           {busy ? <ActivityIndicator color={InkColors.ink2} /> : <Text style={styles.ghostText}>이용 상태 새로고침</Text>}
         </Pressable>
-        <Pressable onPress={() => void logout()} style={styles.logoutRow}>
-          <Text style={styles.logoutText}>로그아웃</Text>
+        <Pressable onPress={() => void logout()} style={styles.promoToggle}>
+          <Text style={styles.promoToggleText}>로그아웃</Text>
         </Pressable>
         </View>
         </Appear>
@@ -1206,12 +1206,9 @@ const styles = StyleSheet.create({
   consentRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingHorizontal: 2 },
   consentText: { flex: 1, fontSize: Type.body.fontSize, lineHeight: 22, color: TextColor.secondary, fontWeight: '600' },
 
-  mailRow: { alignItems: 'center', paddingVertical: Space.sm },
-  mailText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
-
-  // 무료 이용 코드 — 접힘 상태 토글(보조 링크 톤, mailRow 계열).
-  promoToggle: { alignItems: 'center', paddingVertical: Space.sm },
-  promoToggleText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary, textDecorationLine: 'underline' },
+  // 보조 버튼(카드 맨 아래 단독 줄 · 가로 꽉) — 세금계산서·메일·도입 문의·무료 이용 코드·로그아웃이 같이 쓴다(2026-11-16 R-11).
+  promoToggle: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  promoToggleText: ButtonTextStyles.secondary,
 
   // 주 버튼(52 · 모서리 16 · 가로 꽉 · 16/800).
   primary: { ...ButtonStyles.primary, backgroundColor: BrandColors.brand },
@@ -1219,6 +1216,4 @@ const styles = StyleSheet.create({
   // 보조 버튼 — 주 버튼과 같은 모양, 흰 면 + 선. 옛 bgSoft 면은 회색 바탕(Surface.screen) 위에서 묻혔다.
   ghost: { ...ButtonStyles.primary, backgroundColor: Surface.card, borderWidth: 1, borderColor: InkColors.line },
   ghostText: { ...ButtonTextStyles.primary, color: TextColor.secondary },
-  logoutRow: { alignItems: 'center', paddingVertical: 4 },
-  logoutText: { fontSize: 13, color: TextColor.secondary, fontWeight: '700' },
 });

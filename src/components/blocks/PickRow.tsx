@@ -2,6 +2,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
@@ -139,13 +140,7 @@ const styles = StyleSheet.create({
   disc: { width: DISC, height: DISC, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
   discAdd: { backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep },
   discDone: { backgroundColor: BrandColors.goodSoft },
-  more: {
-    borderTopWidth: 1,
-    borderTopColor: InkColors.line,
-    minHeight: DISC_BOX,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Space.lg,
-  },
-  moreText: { fontSize: 13, lineHeight: 18, fontWeight: '800', color: InkColors.ink2 },
+  // 더 보기 줄 = 카드 안 맨 아래 가로 꽉 보조 알약(R-11 · 2026-11-16). 카드 안쪽 여백이 없어 둘레 여백을 준다.
+  more: { ...ButtonStyles.secondary, alignSelf: 'stretch', margin: Space.md, marginTop: Space.xs },
+  moreText: ButtonTextStyles.secondary,
 });

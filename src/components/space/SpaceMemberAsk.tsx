@@ -187,9 +187,9 @@ export function SpaceMemberAsk({
               onPress={openReport}
               accessibilityRole="link"
               accessibilityLabel={SPACE_ASK.reportEntry}
-              style={({ pressed }) => [st.linkHit, pressed && st.pressed]}
+              style={({ pressed }) => [st.dangerBtn, pressed && st.pressed]}
             >
-              <Text style={st.linkText}>{SPACE_ASK.reportEntry}</Text>
+              <Text style={st.dangerText}>{SPACE_ASK.reportEntry}</Text>
             </Pressable>
           </View>
         </View>
@@ -218,9 +218,9 @@ export function SpaceMemberAsk({
               disabled={sending}
               accessibilityRole="button"
               accessibilityLabel={SPACE_ASK.keep}
-              style={({ pressed }) => [st.linkHit, pressed && st.pressed]}
+              style={({ pressed }) => [st.ghostBtn, pressed && st.pressed]}
             >
-              <Text style={st.linkText}>{SPACE_ASK.keep}</Text>
+              <Text style={st.ghostText}>{SPACE_ASK.keep}</Text>
             </Pressable>
           </View>
         </View>
@@ -247,7 +247,9 @@ export function SpaceMemberAsk({
           style={({ pressed }) => [st.openRow, pressed && st.pressed]}
         >
           <Text style={st.answerLabel}>{SPACE_WORDS.answeredBy(q.answererName ? eduOwnerWord('space', q.answererName) : owner)}</Text>
-          <Text style={st.linkText}>{isOpen ? SPACE_ASK.answerClose : SPACE_ASK.answerOpen}</Text>
+          <View style={st.ghostBtn}>
+            <Text style={st.ghostText}>{isOpen ? SPACE_ASK.answerClose : SPACE_ASK.answerOpen}</Text>
+          </View>
         </Pressable>
         {isOpen ? (
           <>
@@ -352,8 +354,10 @@ const st = StyleSheet.create({
   smallHit: { minHeight: HIT, justifyContent: 'center' },
   smallBtn: { ...ButtonStyles.small, borderWidth: 1, borderColor: InkColors.lineStrong, backgroundColor: Surface.card },
   smallText: { ...ButtonTextStyles.small, color: InkColors.ink },
-  linkHit: { minHeight: HIT, justifyContent: 'center' },
-  linkText: { ...Type.desc, fontWeight: '700', color: InkColors.ink2 },
+  ghostBtn: { ...ButtonStyles.secondary },
+  ghostText: ButtonTextStyles.secondary,
+  dangerBtn: { ...ButtonStyles.danger },
+  dangerText: ButtonTextStyles.danger,
   pressed: { opacity: 0.88 },
   disabled: { opacity: 0.5 },
 });

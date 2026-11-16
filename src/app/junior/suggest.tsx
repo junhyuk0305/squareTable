@@ -331,12 +331,12 @@ export default function JuniorSuggestScreen() {
                 {s.status === 'pending' && editingId !== s.id && (
                   <View style={styles.mineActions}>
                     {s.kind !== 'from_space' && (
-                    <Pressable onPress={() => startEdit(s)} disabled={rowBusy === s.id} style={({ pressed }) => [ButtonStyles.inlineHit, pressed && { opacity: 0.6 }]}>
-                      <Text style={styles.mineActionText}>수정</Text>
+                    <Pressable onPress={() => startEdit(s)} disabled={rowBusy === s.id} style={({ pressed }) => [ButtonStyles.secondary, pressed && { opacity: 0.6 }]}>
+                      <Text style={ButtonTextStyles.secondary}>수정</Text>
                     </Pressable>
                     )}
-                    <Pressable onPress={() => void withdrawOne(s.id)} disabled={rowBusy === s.id} style={({ pressed }) => [ButtonStyles.inlineHit, pressed && { opacity: 0.6 }]}>
-                      <Text style={[styles.mineActionText, styles.mineActionDanger]}>제안 취소</Text>
+                    <Pressable onPress={() => void withdrawOne(s.id)} disabled={rowBusy === s.id} style={({ pressed }) => [ButtonStyles.danger, pressed && { opacity: 0.6 }]}>
+                      <Text style={ButtonTextStyles.danger}>제안 취소</Text>
                     </Pressable>
                   </View>
                 )}
@@ -390,9 +390,7 @@ const styles = StyleSheet.create({
   mineChipText: { ...Type.tag, fontWeight: '800' },
   mineText: { flex: 1, fontSize: 13, color: TextColor.secondary, fontWeight: '500' },
   // 대기 제안 줄의 글자 버튼(수정·제안 취소) — 누르는 높이 44는 ButtonStyles.inlineHit 가 든다.
-  mineActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: Space.lg },
-  mineActionText: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
-  mineActionDanger: { color: BrandColors.badText },
+  mineActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: Space.sm },
   editWrap: { gap: Space.sm, paddingBottom: Space.md },
   editBtns: { flexDirection: 'row', justifyContent: 'flex-end', gap: Space.sm },
   ghostBtn: { ...ButtonStyles.small, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },

@@ -201,6 +201,6 @@ const styles = StyleSheet.create({
   ghost: { ...ButtonStyles.primary, marginTop: Space.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
   ghostText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
 
-  mailRow: { alignItems: 'center', paddingVertical: Space.sm },
-  mailText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
+  mailRow: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  mailText: ButtonTextStyles.secondary,
 });

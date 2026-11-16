@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { BrandColors, InkColors, TextColor } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { CardStyles } from '@/lib/theme/card';
 import { Type } from '@/lib/theme/type';
 import { InfoDot } from '@/components/InfoDot';
@@ -180,9 +181,9 @@ export function Heatmap({
                   accessibilityRole="button"
                   accessibilityLabel={`${g.name} ${rest}개 더 보기`}
                   onPress={() => onPressGroup(g.name)}
-                  style={({ pressed }) => [styles.more, pressed && styles.cellPressed]}
+                  style={({ pressed }) => [styles.moreBtn, pressed && styles.cellPressed]}
                 >
-                  <Text style={styles.moreText}><Text style={styles.moreN}>+{rest}개</Text> 더 · 이 카테고리 보기 ›</Text>
+                  <Text style={styles.moreBtnText}><Text style={styles.moreN}>+{rest}개</Text> 더 · 이 카테고리 보기 ›</Text>
                 </Pressable>
               ) : (
                 <Text style={[styles.moreText, styles.more]}><Text style={styles.moreN}>+{rest}개</Text> 더</Text>
@@ -269,14 +270,14 @@ const styles = StyleSheet.create({
   cellPressed: { opacity: 0.6 },
   // 눌리는 행이라 48dp — RN-web 은 hitSlop 을 무시한다(2026-08-26 실측).
   more: { minHeight: 48, justifyContent: 'center' },
+  // 누르는 '이 카테고리 보기' = 보조 알약(R-11 · 2026-11-16). 누를 수 없는 '+N개 더' 는 글자 그대로.
+  moreBtn: { ...ButtonStyles.secondary, marginTop: Space.xs },
+  moreBtnText: ButtonTextStyles.secondary,
   moreText: { ...Type.micro, lineHeight: 15, fontWeight: '800', color: InkColors.ink2 },
   moreN: { color: InkColors.ink },
-  // 카테고리 접기 줄 — 격자와 범례 사이를 가르는 자리라 위에 선을 하나 둔다.
-  foldRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs,
-    minHeight: 48, marginTop: Space.xs, borderTopWidth: 1, borderTopColor: InkColors.line,
-  },
-  foldText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
+  // 카테고리 접기 줄 = 격자 아래 가로 꽉 보조 알약(R-11 · 2026-11-16).
+  foldRow: { ...ButtonStyles.secondary, alignSelf: 'stretch', flexDirection: 'row', gap: Space.xs, marginTop: Space.sm },
+  foldText: ButtonTextStyles.secondary,
   legend: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Space.xs - 1, marginTop: Space.md },
   legendText: { ...Type.micro, lineHeight: 14, color: TextColor.secondary },
   legendBox: { width: LEGEND_BOX, height: LEGEND_BOX, borderRadius: 3, backgroundColor: InkColors.bg },

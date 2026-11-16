@@ -481,8 +481,8 @@ const s = StyleSheet.create({
   delAsk: { backgroundColor: BrandColors.badSoft },
   delAskTitle: { color: BrandColors.badText },
 
-  delBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, minHeight: TAP, marginTop: Space.md },
-  delText: { ...ButtonTextStyles.small, color: BrandColors.badText },
+  delBtn: { ...ButtonStyles.danger, alignSelf: 'stretch', flexDirection: 'row', gap: Space.xs, marginTop: Space.md },
+  delText: ButtonTextStyles.danger,
 
   foot: { flexDirection: 'row', gap: Space.sm, paddingHorizontal: Space.lg, paddingTop: Space.md, paddingBottom: Space.xl, borderTopWidth: 1, borderTopColor: InkColors.line },
   // 취소·저장 = 주 버튼 모양(52 · 모서리 16) 두 개를 나란히.

@@ -30,6 +30,7 @@ import { todayStr } from '@/lib/utils/attendance';
 import { confirmAction } from '@/lib/utils/confirm';
 import { formatAsked } from '@/lib/utils/time';
 import { styles } from '@/styles/ownerDashboardStyles';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 /** 홈 목록은 3건 + "전체보기 ›" — 전 화면 공통 배치 규칙(2026-08-05 블록 어휘). */
 // 홈 목록 상한. ui.md 배치 규칙 3의 기본값은 3이지만 2026-08-12에 4, 2026-08-19에 **5**로 올렸다 —
@@ -388,10 +389,10 @@ export default function OwnerDashboardScreen() {
                     onPress={() => goToTab('/owner/work?view=todo')}
                     accessibilityRole="button"
                     accessibilityLabel="오늘 업무 전체보기"
-                    style={({ pressed }) => pressed && { opacity: 0.6 }}
+                    style={({ pressed }) => [ButtonStyles.secondary, pressed && { opacity: 0.6 }]}
                   >
                     {/* 잘린 개수를 말한다 — "4개가 전부"와 "4개만 보여주는 중"은 화면만 봐선 구분이 안 된다. */}
-                    <Text style={styles.moreLink}>
+                    <Text style={ButtonTextStyles.secondary}>
                       {todayTasks.length > HOME_LIST_LIMIT ? `전체보기 (${todayTasks.length - HOME_LIST_LIMIT}개 더) ›` : '전체보기 ›'}
                     </Text>
                   </Pressable>

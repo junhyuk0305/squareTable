@@ -588,7 +588,7 @@ const styles = StyleSheet.create({
   primary: { ...ButtonStyles.primary, marginTop: 6, backgroundColor: BrandColors.brand },
   primaryDisabled: { backgroundColor: InkColors.line },
   primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
-  loginRow: { alignItems: 'center', paddingVertical: 6 },
-  loginText: { fontSize: Type.body.fontSize, color: TextColor.secondary },
+  loginRow: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  loginText: ButtonTextStyles.secondary,
   loginStrong: { color: BrandColors.brand, fontWeight: '800' },
 });

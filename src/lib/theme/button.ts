@@ -31,6 +31,11 @@ export const hitTrim = (face: number, hit: number = TouchSize.inline) => (face -
  *    누르는 상자 48 은 바깥 Pressable 이 minWidth/minHeight 48 로 든다(RN-web 은 hitSlop 을 무시한다).
  *  · primaryYellow(노란 주 버튼 · 2026-11-16 사용자 결정 R-10): primary 모양 + 노랑 면 + yellowDeep 테두리(노하우 추가 FAB 와 같은 계열).
  *    글자 = ButtonTextStyles.primaryOnYellow(검정). 쓰는 곳 = 매장·공간 [새 교육 링크].
+ *  · secondary(보조 · 2026-11-16 사용자 결정 R-11 "누르는 것은 모두 버튼 모양"): small 알약 + 연한 면 + 회색 선. 글자 = ButtonTextStyles.secondary.
+ *    건너뛰기·취소·다른 계정으로 로그인·더 보기·이동 글자처럼 **글자만 있던 버튼**은 전부 이것(또는 danger)으로 그린다.
+ *    가로 꽉이 필요하면 `{ ...ButtonStyles.secondary, alignSelf: 'stretch' }`.
+ *  · danger(위험): small 알약 + badSoft 면 · 글자 = ButtonTextStyles.danger(badText). 삭제·나가기·닫기·해지·신고.
+ *  ⛔ 글자만 있는 버튼(밑줄·색 글자)은 만들지 않는다. inlineHit 은 누르는 상자 크기용이지 모양이 아니다.
  * 화면 StyleSheet 에서 펼쳐 쓴다(`...ButtonStyles.primary`, 글자는 `...ButtonTextStyles.primary`).
  */
 const primaryShape: ViewStyle = {
@@ -62,6 +67,26 @@ export const ButtonStyles = {
     borderWidth: 1,
     borderColor: BrandColors.yellowDeep,
   } as ViewStyle,
+  secondary: {
+    minHeight: TouchSize.inline,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Space.lg,
+    alignSelf: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: InkColors.bgSoft,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+  } as ViewStyle,
+  danger: {
+    minHeight: TouchSize.inline,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Space.lg,
+    alignSelf: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: BrandColors.badSoft,
+  } as ViewStyle,
   iconCircle: {
     width: 40,
     height: 40,
@@ -79,4 +104,6 @@ export const ButtonTextStyles = {
   primary: { fontSize: 16, fontWeight: '800' } as TextStyle,
   small: { fontSize: 15, fontWeight: '800' } as TextStyle,
   primaryOnYellow: { fontSize: 16, fontWeight: '800', color: InkColors.ink } as TextStyle,
+  secondary: { fontSize: 15, fontWeight: '800', color: InkColors.ink } as TextStyle,
+  danger: { fontSize: 15, fontWeight: '800', color: BrandColors.badText } as TextStyle,
 };

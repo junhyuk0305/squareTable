@@ -1362,8 +1362,8 @@ const st = StyleSheet.create({
   rowTitleWaiting: { color: InkColors.ink3 },
 
   calWrap: { gap: Space.md },
-  textAction: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
-  textActionText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, textDecorationLine: 'underline' },
+  textAction: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  textActionText: ButtonTextStyles.secondary,
   noteBox: {
     flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm,
     backgroundColor: BrandColors.warnSoft, borderRadius: Radius.md, padding: Space.md, ...Elevation.e1,

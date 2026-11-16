@@ -18,6 +18,7 @@ import { sortByUrgency } from '@/lib/utils/unknownQuery';
 import { formatAsked } from '@/lib/utils/time';
 import { AI_ANSWER_LIMIT, fetchPeerAnswers, type AiAnswerRow as AiAnswer, type PeerAnswerRow } from '@/lib/db';
 
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { CardStyles } from '@/lib/theme/card';
 import { EmptyStyles } from '@/lib/theme/empty';
 import { InkColors } from '@/lib/theme/colors';
@@ -310,14 +311,16 @@ function PagedList<T>({ items, render, style }: {
     <View style={style}>
       {visible.map((it, i) => render(it, i, !!style && rest <= 0 && i === visible.length - 1))}
       {rest > 0 && (
+        <View style={!style ? styles.moreCard : undefined}>
         <Pressable
           onPress={() => setShown((n) => n + PAGE)}
           accessibilityRole="button"
           accessibilityLabel={`${Math.min(rest, PAGE)}건 더 보기`}
-          style={({ pressed }) => [styles.moreRow, !!style && styles.rowLast, !style && styles.moreCard, pressed && { opacity: 0.6 }]}
+          style={({ pressed }) => [styles.moreRow, !!style && styles.moreInCard, pressed && { opacity: 0.7 }]}
         >
           <Text style={styles.moreText}>{Math.min(rest, PAGE)}건 더 보기 · 남은 {rest}건</Text>
         </Pressable>
+        </View>
       )}
     </View>
   );
@@ -345,15 +348,13 @@ const styles = StyleSheet.create({
   listCard: { ...CardStyles.rows, paddingHorizontal: 0 },
   rowLast: { borderBottomWidth: 0 },
 
-  // '더 보기' — 행들과 같은 좌우 인셋. 누를 수 있는 행이라 최소 터치 타깃 48.
-  moreRow: {
-    minHeight: 48, justifyContent: 'center',
-    paddingHorizontal: Space.lg, paddingVertical: Space.md,
-    borderBottomWidth: 1, borderBottomColor: InkColors.line,
-  },
-  // 카드(style) 없이 줄마다 카드인 목록 — '더 보기'도 혼자 흰 카드에 담는다(R-14 · 2026-11-16).
+  // '더 보기' = 목록 맨 아래 가로 꽉 보조 알약(R-11 · 2026-11-16).
+  // 카드(style) 없이 줄마다 카드인 목록이면 버튼도 흰 카드에 담는다(R-14 · 버튼도 흰 카드 위).
   moreCard: CardStyles.list,
-  moreText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
+  moreRow: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  // 카드(style) 안이면 카드 좌우 안쪽이 0 이라 행과 같은 좌우 인셋을 준다.
+  moreInCard: { marginHorizontal: Space.lg, marginVertical: Space.sm },
+  moreText: ButtonTextStyles.secondary,
 
   // '동료가 답한 질문' 한 줄 — '더 보기'와 같은 인셋·구분선. 누르면 답으로 쓴 노하우를 연다.
   peerRow: {

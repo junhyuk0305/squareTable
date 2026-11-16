@@ -19,6 +19,7 @@ import { EmptyStyles } from '@/lib/theme/empty';
 import { Type } from '@/lib/theme/type';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import type { PlaybookEntry } from '@/types';
 
 /**
@@ -174,7 +175,7 @@ export default function HubKnowhowScreen() {
           {visible.length === 0 ? (
             <View style={st.center}>
               <Text style={st.centerText}>찾는 노하우가 없어요</Text>
-              <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="검색어 지우기">
+              <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="검색어 지우기" style={st.reset}>
                 <Text style={st.resetText}>검색어 지우기</Text>
               </Pressable>
             </View>
@@ -237,7 +238,8 @@ const st = StyleSheet.create({
   // 검색 결과 없음 = 흰 카드(EmptyStyles.box · 2026-11-16 R-14). 검색어 지우기 글자 버튼도 카드 안에 둔다.
   center: EmptyStyles.box,
   centerText: { ...Type.body, color: TextColor.secondary, fontWeight: '600' },
-  resetText: { fontSize: Type.body.fontSize, fontWeight: '800', color: InkColors.ink, textDecorationLine: 'underline' },
+  reset: { ...ButtonStyles.secondary, alignSelf: 'center' },
+  resetText: ButtonTextStyles.secondary,
 
   countLabel: { fontSize: Type.desc.fontSize, fontWeight: '700', color: TextColor.secondary },
 

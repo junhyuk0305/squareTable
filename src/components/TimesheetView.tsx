@@ -509,9 +509,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   editActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  // 삭제 = 글자 링크 · 누르는 높이 44(2026-11-02 사용자 결정). 옆 작은 버튼(44)과 같은 높이라 줄 높이는 그대로.
-  delBtn: { ...ButtonStyles.inlineHit, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10 },
-  delText: { fontSize: 13, fontWeight: '700', color: BrandColors.accentText },
+  // 삭제 = 위험 알약 44(R-11 · 2026-11-16). 옆 작은 버튼(44)과 같은 높이라 줄 높이는 그대로.
+  delBtn: { ...ButtonStyles.danger, flexDirection: 'row', gap: Space.xs },
+  delText: ButtonTextStyles.danger,
   // 작은 버튼(44 알약 · 15/800 · 내용 폭).
   cancelBtn: { ...ButtonStyles.small, borderWidth: 1, borderColor: InkColors.line },
   cancelText: { ...ButtonTextStyles.small, color: TextColor.secondary },

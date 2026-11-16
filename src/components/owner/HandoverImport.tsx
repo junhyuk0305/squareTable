@@ -928,12 +928,12 @@ const styles = StyleSheet.create({
   },
   addBtnText: { ...Type.tag, fontWeight: '800', color: InkColors.ink2 },
   editorWarn: { ...Type.desc, fontWeight: '700', color: BrandColors.warnText, marginTop: 12 },
-  deleteLink: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', marginTop: 12, paddingVertical: 4 },
-  deleteLinkText: { ...Type.tag, fontWeight: '800', color: BrandColors.badText },
+  deleteLink: { ...ButtonStyles.danger, flexDirection: 'row', gap: Space.xs, marginTop: 12 },
+  deleteLinkText: ButtonTextStyles.danger,
 
   backCard: CardStyles.rows,
-  backLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
-  backLinkText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
+  backLink: { ...ButtonStyles.secondary, alignSelf: 'center', flexDirection: 'row', gap: Space.xs },
+  backLinkText: ButtonTextStyles.secondary,
 
   saveBar: {
     padding: Space.gutter,

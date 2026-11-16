@@ -5,6 +5,7 @@ import { PressableScale } from '@/components/PressableScale';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 /**
  * 스포트라이트 코치마크 투어 — 실제 화면 요소를 하나씩 비춰가며 문구로 안내한다(토스·배민식).
@@ -171,8 +172,8 @@ export function CoachmarkTour({
             </Pressable>
             <View style={styles.navRight}>
               {index > 0 && (
-                <Pressable onPress={prev} hitSlop={8} style={styles.prev}>
-                  <Text style={styles.prevText}>이전</Text>
+                <Pressable onPress={prev} hitSlop={8} style={styles.skip}>
+                  <Text style={styles.skipText}>이전</Text>
                 </Pressable>
               )}
               <PressableScale onPress={next} scaleTo={0.96} style={styles.cta}>
@@ -214,11 +215,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 17, lineHeight: 24, fontWeight: '900', color: InkColors.ink },
   body: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   actions: { flexDirection: 'row', alignItems: 'center', marginTop: Space.sm },
-  skip: { paddingVertical: Space.sm, paddingHorizontal: Space.xs },
-  skipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
+  skip: { ...ButtonStyles.secondary },
+  skipText: ButtonTextStyles.secondary,
   navRight: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginLeft: 'auto' },
-  prev: { paddingVertical: Space.sm, paddingHorizontal: Space.md },
-  prevText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
   cta: {
     backgroundColor: InkColors.ink,
     paddingVertical: 10,

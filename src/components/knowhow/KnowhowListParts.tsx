@@ -20,7 +20,7 @@ import { Radius, Elevation } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Space } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
-import { FabSize } from '@/lib/theme/button';
+import { ButtonStyles, ButtonTextStyles, FabSize } from '@/lib/theme/button';
 import type { PlaybookEntry } from '@/types';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -220,7 +220,7 @@ export function PagedRows({
           onPress={() => setShown((n) => n + LIST_PAGE)}
           accessibilityRole="button"
           accessibilityLabel={`${Math.min(rest, LIST_PAGE)}개 더 보기`}
-          style={({ pressed }) => [styles.moreRow, pressed && { opacity: 0.6 }]}
+          style={({ pressed }) => [styles.moreRow, pressed && { opacity: 0.7 }]}
         >
           <Text style={styles.moreText}>{Math.min(rest, LIST_PAGE)}개 더 보기 · 남은 {rest}개</Text>
         </Pressable>
@@ -235,7 +235,7 @@ export function KnowhowEmptyResult({ onReset }: { onReset: () => void }) {
       {/* 그림 이모지 금지(워딩 §1) — 같은 뜻을 Ionicons 로. 2026-08-07 QA #5-2. */}
       <Ionicons name="search-outline" size={30} color={InkColors.ink3} />
       <Text style={styles.emptyResultText}>조건에 맞는 노하우가 없어요</Text>
-      <Pressable onPress={onReset}>
+      <Pressable onPress={onReset} style={styles.resetBtn}>
         <Text style={styles.resetLink}>필터 초기화</Text>
       </Pressable>
     </View>
@@ -306,14 +306,15 @@ const styles = StyleSheet.create({
   meta: { fontSize: 12, color: TextColor.secondary, fontWeight: '600' },
   metaRate: { ...Type.tag, color: InkColors.ink2, fontWeight: '700' },
 
-  // '더 보기' — 행과 같은 세로 리듬. 누를 수 있는 행이라 최소 터치 타깃 48.
-  moreRow: { minHeight: 48, justifyContent: 'center', paddingVertical: 14 },
-  moreText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
+  // 더 보기 줄 = 목록 맨 아래 가로 꽉 보조 알약(R-11 · 2026-11-16).
+  moreRow: { ...ButtonStyles.secondary, alignSelf: 'stretch', marginTop: Space.sm },
+  moreText: ButtonTextStyles.secondary,
 
   // 빈 결과
   emptyResult: { ...CardStyles.list, alignItems: 'center', gap: 6, paddingVertical: 36 },
   emptyResultText: { ...Type.body, fontWeight: '700', color: InkColors.ink2 },
-  resetLink: { fontSize: 13, fontWeight: '800', color: BrandColors.brand, marginTop: 4, textDecorationLine: 'underline' },
+  resetBtn: { ...ButtonStyles.secondary, alignSelf: 'center', marginTop: 4 },
+  resetLink: ButtonTextStyles.secondary,
 
   // 노하우 추가 + (2026-08-07 · 노랑 · yellowDeep 테두리 · 노랑 그림자)
   fab: {

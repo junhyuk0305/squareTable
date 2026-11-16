@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native';
 import { CardStyles } from '@/lib/theme/card';
-import { InkColors, TextColor } from '@/lib/theme/colors';
+import { InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
 
 // 바탕·첫 여백·섹션 간격·인사 문구·섹션(제목 ↔ 카드)은 <Screen>·<Greeting>·<Section> 이 든다(2026-11-02).
@@ -14,5 +14,4 @@ export const styles = StyleSheet.create({
   todoTextDone: { color: InkColors.ink3, textDecorationLine: 'line-through' },
   // 빈 상태는 한 줄로만 말한다 — 업무 탭이 하단 탭바에 있으므로 여기에 버튼을 또 두지 않는다.
   todoEmpty: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: InkColors.ink2 },
-  moreLink: { fontSize: 13, fontWeight: '700', color: TextColor.secondary },
 });

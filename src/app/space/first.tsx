@@ -289,8 +289,8 @@ const styles = StyleSheet.create({
   primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   small: { ...ButtonStyles.small, borderWidth: 1, borderColor: InkColors.lineStrong, backgroundColor: Surface.card },
   smallText: { ...ButtonTextStyles.small, color: InkColors.ink },
-  textBtn: { ...ButtonStyles.inlineHit, alignSelf: 'center', paddingHorizontal: Space.lg },
-  textBtnText: { ...ButtonTextStyles.small, color: TextColor.secondary },
+  textBtn: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  textBtnText: ButtonTextStyles.secondary,
   pressed: { opacity: 0.88 },
   disabled: { opacity: 0.5 },
 });

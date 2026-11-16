@@ -45,6 +45,7 @@ import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Layout, Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { EmptyStyles } from '@/lib/theme/empty';
 
 /**
@@ -904,11 +905,9 @@ const st = StyleSheet.create({
   // ★hitSlop 은 RN-web 에서 안 먹는다 — 실측 높이가 곧 누를 수 있는 크기다(2026-08-26 실측 29·31dp).
   //   48dp 하한(복잡도 §4)은 상자 크기로 지켜야 한다.
   // ScreenTitleHeader 의 바가 이미 좌우 거터를 갖는다 — 오른쪽 거터를 또 주면 두 겹이 된다.
-  headerAction: {
-    minHeight: 48, justifyContent: 'center',
-    paddingLeft: Space.sm,
-  },
-  headerActionText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  //   2026-11-16 R-11: 글자만 있던 자리를 보조 알약(44)으로 바꿨다.
+  headerAction: { ...ButtonStyles.secondary, alignSelf: 'center' },
+  headerActionText: ButtonTextStyles.secondary,
 
   // 히어로 빈 상태 — 흰 빈 카드(R-14 · 2026-11-16 사용자 규칙: 빈 상태는 흰 카드 위).
   hero: EmptyStyles.box,
@@ -997,7 +996,7 @@ const st = StyleSheet.create({
   missIntro: { ...Type.desc, marginBottom: Space.md },
 
   // 행 안의 액션 — 48dp 는 상자 크기로 지킨다(hitSlop 은 RN-web 에서 안 먹는다).
-  rowAction: { flexShrink: 0, minHeight: 48, justifyContent: 'center', paddingLeft: Space.md },
-  rowActionText: { fontSize: 13, fontWeight: '800', color: InkColors.ink, textDecorationLine: 'underline' },
+  rowAction: { ...ButtonStyles.secondary, alignSelf: 'center', flexShrink: 0, marginLeft: Space.sm },
+  rowActionText: ButtonTextStyles.secondary,
 
 });

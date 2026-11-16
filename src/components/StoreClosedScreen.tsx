@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
+import { InkColors, BrandColors, Surface } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
@@ -51,6 +51,6 @@ const styles = StyleSheet.create({
   // 주 버튼(52 · 모서리 16 · 가로 꽉 · 16/800).
   btn: { ...ButtonStyles.primary, backgroundColor: BrandColors.brand },
   btnText: { ...ButtonTextStyles.primary, color: '#FFFFFF' },
-  linkBtn: { paddingVertical: Space.sm, paddingHorizontal: Space.md },
-  link: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary, textDecorationLine: 'underline' },
+  linkBtn: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  link: ButtonTextStyles.secondary,
 });

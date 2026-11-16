@@ -8,7 +8,7 @@ import { cardProgressText, type QuizItemProgress } from '@/lib/quiz/checkCopy';
 import { roundLabel } from '@/lib/quiz/metrics';
 import { useToday } from '@/lib/hooks/useToday';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
-import { ButtonStyles } from '@/lib/theme/button';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { CardStyles } from '@/lib/theme/card';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -188,7 +188,7 @@ export function TrainingCard({
         </Pressable>
       </View>
 
-      {/* 다시 알리기가 푸는 중에 왔다(0348). 기본은 이어 풀기라 글자 링크로만 둔다(주 버튼은 하나). */}
+      {/* 다시 알리기가 푸는 중에 왔다(0348). 기본은 이어 풀기라 보조 알약으로 둔다(주 버튼은 하나). */}
       {onRestart ? (
         <Pressable
           onPress={onRestart}
@@ -265,15 +265,13 @@ const st = StyleSheet.create({
     borderRadius: Radius.md, backgroundColor: InkColors.ink,
   },
   ctaText: { fontWeight: '800', fontSize: Type.desc.fontSize, color: '#FFFFFF' },
-  // 글자 링크 — 누르는 상자 44(TouchSize.inline) · 보이는 것은 글자뿐.
-  restartHit: { ...ButtonStyles.inlineHit, alignSelf: 'center', paddingHorizontal: Space.md },
-  restartText: { ...Type.desc, fontWeight: '700', color: TextColor.secondary, textDecorationLine: 'underline' },
+  // 보조 알약(R-11 · 2026-11-16) — 글자만 있던 링크를 버튼 모양으로.
+  restartHit: { ...ButtonStyles.secondary, alignSelf: 'center' },
+  restartText: ButtonTextStyles.secondary,
 
-  expandRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
-    borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: Space.xs, paddingVertical: Space.sm, minHeight: 40,
-  },
-  expandText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
+  // 더 보기 줄 = 카드 안 맨 아래 가로 꽉 보조 알약(R-11).
+  expandRow: { ...ButtonStyles.secondary, alignSelf: 'stretch', flexDirection: 'row', gap: Space.xs, marginTop: Space.xs },
+  expandText: ButtonTextStyles.secondary,
   // 갈래 사이 간격. 행 간격은 group 이 갖는다(예전엔 여기 하나가 행 간격이었다).
   itemList: { gap: Space.md },
   group: { gap: Space.xs },

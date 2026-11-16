@@ -257,9 +257,7 @@ export function HqSlab({ title, hint, more }: { title: string; hint?: string; mo
       <Text style={styles.slabTitle}>{title}</Text>
       {hint ? <Text style={styles.slabHint}>{hint}</Text> : null}
       {more ? (
-        <Pressable onPress={more.onPress} accessibilityRole="button" style={{ marginLeft: 'auto', flexShrink: 0 }}>
-          <Text style={styles.slabMore}>{more.label}</Text>
-        </Pressable>
+        <HqButton label={more.label} onPress={more.onPress} style={{ marginLeft: 'auto', flexShrink: 0 }} />
       ) : null}
     </View>
   );
@@ -410,7 +408,6 @@ const styles = StyleSheet.create({
   slab: { flexDirection: 'row', alignItems: 'baseline', gap: 9, marginBottom: 9 },
   slabTitle: { fontSize: 16, fontWeight: '700', color: InkColors.ink, flexShrink: 0 },
   slabHint: { fontSize: 13.5, color: InkColors.ink3, flex: 1, minWidth: 0 },
-  slabMore: { fontSize: 14, fontWeight: '600', color: InkColors.ink2, flexShrink: 0 },
 
   empty: { paddingVertical: 28, paddingHorizontal: 16, alignItems: 'center', gap: Space.md },
   emptyText: { fontSize: 14.5, color: InkColors.ink3, textAlign: 'center' },

@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
   primary: { ...ButtonStyles.primary, marginTop: Space.sm, backgroundColor: BrandColors.brand },
   primaryDisabled: { opacity: 0.6 },
   primaryText: { ...ButtonTextStyles.primary, lineHeight: 22, color: InkColors.bubbleText },
-  logoutRow: { alignItems: 'center', paddingVertical: 10 },
-  logoutText: { fontSize: Type.body.fontSize, lineHeight: 20, color: TextColor.secondary },
+  logoutRow: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  logoutText: ButtonTextStyles.secondary,
   logoutStrong: { color: InkColors.ink, fontWeight: '800' },
 });

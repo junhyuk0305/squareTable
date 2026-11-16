@@ -36,6 +36,7 @@ import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Type } from '@/lib/theme/type';
 import type { QuizAssignment, TrainingCourse } from '@/lib/quiz/types';
 
@@ -382,6 +383,6 @@ const s = StyleSheet.create({
   // 저장 = 흰 카드 안(R-14 · 2026-11-16 · 버튼만 회색 위에 두지 않는다).
   foot: CardStyles.list,
   // 만들기 5단계의 textAction 과 같은 모양(달력 아래 한 줄 글자 버튼 · 48dp 하한).
-  textAction: { minHeight: 48, justifyContent: 'center', alignSelf: 'flex-start' },
-  textActionText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
+  textAction: { ...ButtonStyles.secondary },
+  textActionText: ButtonTextStyles.secondary,
 });

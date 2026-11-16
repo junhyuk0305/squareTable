@@ -331,7 +331,7 @@ export function TemplateLibrary() {
         <View style={styles.empty}>
           <Ionicons name="search-outline" size={34} color={InkColors.ink3} />
           <Text style={styles.emptyText}>조건에 맞는 템플릿이 없어요</Text>
-          <Pressable onPress={() => setQuery('')}>
+          <Pressable onPress={() => setQuery('')} style={styles.resetBtn}>
             <Text style={styles.resetLink}>검색 초기화</Text>
           </Pressable>
         </View>
@@ -414,5 +414,6 @@ const styles = StyleSheet.create({
   // 검색 결과 없음 = 흰 빈 카드(R-14 · 2026-11-16).
   empty: EmptyStyles.box,
   emptyText: { ...Type.body, fontWeight: '700', color: InkColors.ink2 },
-  resetLink: { fontSize: 13, fontWeight: '800', color: BrandColors.brand, marginTop: 4, textDecorationLine: 'underline' },
+  resetBtn: { ...ButtonStyles.secondary, alignSelf: 'center', marginTop: 4 },
+  resetLink: ButtonTextStyles.secondary,
 });

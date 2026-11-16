@@ -533,6 +533,6 @@ const styles = StyleSheet.create({
   primary: { ...ButtonStyles.primary, backgroundColor: BrandColors.brand },
   primaryOff: { opacity: 0.35 },
   primaryText: { ...ButtonTextStyles.primary, lineHeight: 22, color: InkColors.bubbleText },
-  link: { alignItems: 'center', paddingVertical: Space.sm, minHeight: 48, justifyContent: 'center' },
-  linkText: { fontSize: Type.body.fontSize, lineHeight: 22, fontWeight: '800', color: TextColor.secondary, textDecorationLine: 'underline' },
+  link: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  linkText: ButtonTextStyles.secondary,
 });

@@ -10,6 +10,8 @@ import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { CardStyles } from '@/lib/theme/card';
 import { EmptyStyles } from '@/lib/theme/empty';
 import { Radius } from '@/lib/theme/elevation';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { BadgeStyles } from '@/lib/theme/badge';
 import { mdHHmm } from '@/lib/utils/attendance';
@@ -298,8 +300,8 @@ function NoticeCard({
         <View>
           <TextInput value={editText} onChangeText={setEditText} style={s.editInput} multiline />
           <View style={s.editActions}>
-            <Pressable onPress={() => setEditing(false)}><Text style={s.editCancel}>취소</Text></Pressable>
-            <Pressable onPress={saveEdit}><Text style={s.editSave}>저장</Text></Pressable>
+            <Pressable onPress={() => setEditing(false)} style={({ pressed }) => [s.editCancel, pressed && { opacity: 0.7 }]}><Text style={s.editCancelText}>취소</Text></Pressable>
+            <Pressable onPress={saveEdit} style={({ pressed }) => [s.editSave, pressed && { opacity: 0.85 }]}><Text style={s.editSaveText}>저장</Text></Pressable>
           </View>
         </View>
       ) : (
@@ -383,9 +385,9 @@ function NoticeCard({
                     const t = deleteConfirmText(c, me);
                     if (await confirmAction(t.title, t.message, '삭제', { destructive: true, icon: 'trash-outline' })) onDeleteComment(c.id);
                   }}
-                  hitSlop={6}
+                  style={({ pressed }) => [s.cDel, pressed && { opacity: 0.7 }]}
                 >
-                  <Text style={s.cDel}>삭제</Text>
+                  <Text style={s.cDelText}>삭제</Text>
                 </Pressable>
               )}
             </View>
@@ -424,9 +426,11 @@ const s = StyleSheet.create({
   body: { ...Type.body, fontWeight: '600', lineHeight: 22 },
 
   editInput: { ...Type.body, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, padding: 10, backgroundColor: InkColors.cream, minHeight: 60 },
-  editActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 16, marginTop: 8 },
-  editCancel: { fontSize: 13, fontWeight: '700', color: TextColor.secondary },
-  editSave: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
+  editActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: Space.sm, marginTop: 8 },
+  editCancel: { ...ButtonStyles.secondary },
+  editCancelText: ButtonTextStyles.secondary,
+  editSave: { ...ButtonStyles.small, backgroundColor: InkColors.ink },
+  editSaveText: { ...ButtonTextStyles.small, color: InkColors.bubbleText },
 
   foot2: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, paddingTop: 9, borderTopWidth: 1, borderTopColor: InkColors.line },
   readRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
@@ -446,7 +450,8 @@ const s = StyleSheet.create({
   cName: { ...Type.micro, fontWeight: '800', color: TextColor.secondary, marginBottom: 2 },
   // 댓글 본문은 읽는 내용이라 검정 그대로. 크기만 설명 단계(13/19).
   cText: { ...Type.desc, color: InkColors.ink },
-  cDel: { fontSize: 11, color: BrandColors.badText, fontWeight: '700', padding: 3 },
+  cDel: { ...ButtonStyles.danger, paddingHorizontal: Space.md },
+  cDelText: ButtonTextStyles.danger,
   cInputRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   cInput: { paddingVertical: 8, fontSize: 12 },
   cPost: { backgroundColor: InkColors.ink, borderRadius: Radius.pill, paddingHorizontal: 14, paddingVertical: 8 },
