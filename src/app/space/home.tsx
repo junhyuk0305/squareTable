@@ -54,7 +54,7 @@ const STAT_LABEL_MIN = 54;
  *   운영 · 처리할 것 0 = 인사 → 바로가기 3칸 → 이번 달 숫자 4칸 → 교육 링크
  * AI 상한에 닿았으면 인사 아래 한 줄(aiCapOwner). 숫자는 서버 파생(unit_question_counts)이라 화면이 다시 세지 않는다.
  * 같은 숫자는 한 화면에 한 번: 운영에서 미응답은 "답할 질문" 배지에만 나온다.
- * 읽기 = 지금 있는 db.ts 함수만(새 서버 작업 0). 숫자를 못 읽으면 오류 화면. 나머지를 못 읽으면 지난 값을 둔다(teach.tsx 와 같은 식).
+ * 읽기 = 지금 있는 db.ts 함수만(새 서버 작업 0). 처음 읽기에서 숫자·질문·노하우·링크 중 하나라도 못 읽으면 오류 화면. 다시 읽기에서 못 읽으면 지난 값을 둔다.
  * 탭에 돌아올 때마다 다시 읽는다(질문 표는 공간 실시간 구독을 교육 탭만 건다).
  * 헤더 = 매장 홈과 같은 상단바(AppTopBar place='space' · 2026-11-16 R-1).
  */
@@ -91,13 +91,14 @@ export default function SpaceHome() {
     else setFailed(true);
     // 사용량을 못 읽으면 상한 줄을 띄우지 않는다(다 썼다고 단정하지 않는다).
     setCapHit(quota.data?.exceeded === true);
-    // 나머지를 못 읽으면 "안 했다"로 단정하지 않는다 = 지난 값을 둔다(처음이면 빈 목록 · teach.tsx 와 같은 식).
+    // 질문·노하우·링크를 못 읽으면 "안 했다"로 단정하지 않는다. 지난 값이 있으면 그대로 두고, 처음 읽기면 오류 화면이다
+    //   (빈 목록으로 채우면 노하우가 있는 주인에게 첫날 카드가 뜬다 · 2026-11-17 검토).
     if (!q.error) setQuestions(q.data.filter((x) => x.status === 'pending_owner_answer'));
-    else setQuestions((v) => v ?? []);
+    else setFailed(true);
     if (!kn.error) setEntries(kn.data.filter((e) => e.status !== 'draft'));
-    else setEntries((v) => v ?? []);
+    else setFailed(true);
     if (ln.data) setLinks(ln.data);
-    else setLinks((v) => v ?? []);
+    else setFailed(true);
     // 멤버 수를 못 읽으면 바로가기 칸의 상태 줄만 비운다(0명으로 위장하지 않는다).
     if (mem.data) setMemberCount(mem.data.length);
   }, [spaceId]);
@@ -114,7 +115,7 @@ export default function SpaceHome() {
     return (
       <Screen header={header} tabBar="space">
         <Stack.Screen options={{ headerShown: false }} />
-        {failed && !counts ? (
+        {failed ? (
           <LoadErrorState title={SPACE_SCREEN.homeLoadFail} onRetry={() => void load()} />
         ) : (
           <ScreenLoading label={SPACE_SCREEN.homeLoading} />
