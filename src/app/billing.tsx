@@ -541,7 +541,7 @@ function BillingBody() {
             <Appear delay={stagger(1)}>
               <Text style={styles.body}>
                 {freeNow
-                  ? `${FREE_PROMO.until}까지는 모든 기능을 무료로 쓰실 수 있어요. 매장 수·직원 수 제한도 없어요.\n지금은 결제하실 것이 없어요.`
+                  ? `${FREE_PROMO.body}\n지금은 결제하실 것이 없어요.`
                   : expired
                     ? isOwner
                       ? '이 매장의 이용 기간이 끝났어요. 이용 재개는 관리자에게 문의해 주세요.'

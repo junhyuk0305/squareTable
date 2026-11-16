@@ -256,7 +256,7 @@ export default function AccountSettings() {
                 onPress={() =>
                   notifyAction(
                     '구독 및 결제',
-                    `${FREE_PROMO.until}까지는 모든 기능을 무료로 쓰실 수 있어요. 매장 수·직원 수 제한도 없어요.`,
+                    FREE_PROMO.body,
                     '확인',
                     { icon: 'card-outline' },
                   )
