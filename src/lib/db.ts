@@ -1620,13 +1620,14 @@ export async function insertSuggestion(s: PlaybookSuggestion): Promise<boolean> 
  * 제안 승인·반려(0631 review_suggestion · H4). 대기 제안만 한 번 바뀐다. 검토한 사람·시각은 서버가 찍는다.
  * already = 다른 관리자가 먼저 처리했다 → current(지금 상태) · resultingEntryId(이긴 쪽 노하우)를 같이 준다.
  */
-export type ReviewSuggestionResult = { decision: Decision; current: PlaybookSuggestion['status'] | null; resultingEntryId: string | null; code: string | null };
+/** copyArchived = ★0722 already 일 때 서버가 진 쪽(나)이 넘긴 사본을 보관했다(사장·매니저 같은 규칙). */
+export type ReviewSuggestionResult = { decision: Decision; current: PlaybookSuggestion['status'] | null; resultingEntryId: string | null; code: string | null; copyArchived?: boolean };
 export async function reviewSuggestionRpc(id: string, status: 'approved' | 'rejected', resultingEntryId?: string, ownerNote?: string): Promise<ReviewSuggestionResult> {
   if (!HAS_SUPABASE) return { decision: 'ok', current: status, resultingEntryId: resultingEntryId ?? null, code: null };
-  const r = await rpcStatus<{ status: string; current?: PlaybookSuggestion['status']; resultingEntryId?: string | null }>('reviewSuggestion', 'review_suggestion', {
+  const r = await rpcStatus<{ status: string; current?: PlaybookSuggestion['status']; resultingEntryId?: string | null; copyArchived?: boolean }>('reviewSuggestion', 'review_suggestion', {
     p_id: id, p_status: status, p_resulting_entry_id: resultingEntryId ?? null, p_owner_note: ownerNote ?? null,
   });
-  return { decision: r.decision, current: r.data?.current ?? null, resultingEntryId: r.data?.resultingEntryId ?? null, code: r.code };
+  return { decision: r.decision, current: r.data?.current ?? null, resultingEntryId: r.data?.resultingEntryId ?? null, code: r.code, copyArchived: r.data?.copyArchived === true };
 }
 
 /** 내 대기 제안 취소(0355). null = 성공. not_found·not_pending·forbidden → suggestionErrorMessage. */

@@ -49,6 +49,7 @@ export default function OwnerCoachScreen() {
   const addEntry = usePlaybookStore((s) => s.add);
   const noteSaved = usePlaybookStore((s) => s.noteSaved);
   const archiveEntry = usePlaybookStore((s) => s.archive);
+  const refreshEntries = usePlaybookStore((s) => s.hydrate);
   const resolve = useUnknownQueueStore((s) => s.resolve);
   const answer = useUnknownQueueStore((s) => s.answer);
   // 채팅 메시지 승격(§4.1)에서 넘어온 경우: 발행 성공 시 원본 메시지에 흔적을 남겨 재승격 넛지를 끈다.
@@ -190,11 +191,15 @@ export default function OwnerCoachScreen() {
         // ★H4(0631): 다른 관리자가 같은 제안을 먼저 승인했으면(already · 이긴 쪽 노하우가 따로 있다) 방금 만든 내 사본을 보관한다.
         //   안 지우면 같은 노하우가 2건이다. 서버가 노하우 만들기와 승인을 묶지 않은 이유 = 0631 머리말.
         //   이긴 쪽 노하우가 내 것이면(재시도·0520 답 저장이 이미 승인) 지우지 않는다. 반려로 끝났으면 겹칠 노하우가 없어 남긴다.
-        //   보관은 사장만 된다(archive_knowhow → knowhow_delete_ok · 0376). 매니저는 보관을 시도하지 않고 정리를 사장에게 넘긴다.
+        //   ★0722: 서버(review_suggestion)가 진 쪽이 넘긴 사본(entryIds[0])을 보관한다 · 사장·매니저 같은 규칙(copyArchived).
+        //   사장은 예전처럼 나머지 사본까지 직접 보관한다(archive_knowhow = 사장만 · 0376). 매니저는 목록을 다시 읽어 서버 결과에 맞춘다.
+        //   서버가 보관하지 않았거나(판정 밖) 사본이 여럿이면 매니저는 정리를 사장에게 넘긴다.
         if (r.decision === 'already' && r.current === 'approved' && r.resultingEntryId && !entryIds.includes(r.resultingEntryId)) {
           if (isOwnerHere) for (const id of entryIds) archiveEntry(id);
+          else if (r.copyArchived) void refreshEntries();
+          const cleaned = isOwnerHere || (r.copyArchived === true && entryIds.length === 1);
           setToastErr(false);
-          setToast(isOwnerHere
+          setToast(cleaned
             ? '다른 분이 먼저 승인한 제안이에요. 방금 저장한 노하우는 겹쳐서 지웠어요.'
             : '다른 분이 먼저 승인한 제안이에요. 겹친 노하우는 사장님이 정리해 주세요.');
           navAfter();
@@ -225,7 +230,7 @@ export default function OwnerCoachScreen() {
       else navAfter();
       return true;
     },
-    [answerable, realUq, resolve, answer, noteSaved, sugId, approveSuggestion, archiveEntry, isOwnerHere, srcTemplate, attachKnowhow, feedId, markPromoted, navAfter, nudgeTargets, targetUnitId],
+    [answerable, realUq, resolve, answer, noteSaved, sugId, approveSuggestion, archiveEntry, refreshEntries, isOwnerHere, srcTemplate, attachKnowhow, feedId, markPromoted, navAfter, nudgeTargets, targetUnitId],
   );
 
   // 이미 있는 노하우로 답하기 — 새 노하우를 만들지 않고 질문만 그 노하우로 해결한다.

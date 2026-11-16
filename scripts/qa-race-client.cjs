@@ -189,11 +189,17 @@ async function main() {
     const src = fs.readFileSync(path.join(root, 'src/app/owner/coach.tsx'), 'utf8');
     assert.ok(/archive\w*\(/.test(src) && /already/.test(src.slice(src.indexOf('approveSuggestion(sugId'))), 'coach.tsx 에 already → 보관 갈래가 없다');
   });
-  await test('H4-5 매니저는 보관을 부르지 않고(사장만 보관 · 0376) "지웠어요"라고 말하지 않는다', async () => {
+  await test('H4-5 매니저는 보관을 부르지 않는다(사장만 보관 · 0376) · 서버가 사본을 보관했을 때만(0722 copyArchived) 사장과 같은 "지웠어요"', async () => {
     const src = fs.readFileSync(path.join(root, 'src/app/owner/coach.tsx'), 'utf8');
     const br = src.slice(src.indexOf("r.decision === 'already'"), src.indexOf('navAfter();', src.indexOf("r.decision === 'already'")));
     assert.ok(/if \(isOwnerHere\) for \(const id of entryIds\) archiveEntry\(id\)/.test(br), '보관이 사장 조건 없이 불린다');
-    assert.ok(/isOwnerHere\s*\?\s*'[^']*지웠어요[^']*'\s*:\s*'[^']*사장님이 정리/.test(br), '매니저 문구가 사장 문구와 같다');
+    assert.ok(/const cleaned = isOwnerHere \|\| \(r\.copyArchived === true && entryIds\.length === 1\)/.test(br), '매니저 "지웠어요" 가 서버 보관(copyArchived)에 묶이지 않았다');
+    assert.ok(/cleaned\s*\?\s*'[^']*지웠어요[^']*'\s*:\s*'[^']*사장님이 정리/.test(br), '정리됨/정리 안 됨 문구 갈래가 없다');
+  });
+  await test('H4-6 reviewSuggestionRpc 가 서버 copyArchived 를 넘긴다(0722)', async () => {
+    const src = fs.readFileSync(path.join(root, 'src/lib/db.ts'), 'utf8');
+    const fn = src.slice(src.indexOf('export async function reviewSuggestionRpc'), src.indexOf('export async function withdrawSuggestion'));
+    assert.ok(/copyArchived: r\.data\?\.copyArchived === true/.test(fn), 'db.ts 가 copyArchived 를 버린다');
   });
 
   // ── M1·M2 출퇴근 ──

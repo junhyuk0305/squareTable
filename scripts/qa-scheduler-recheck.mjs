@@ -21,7 +21,7 @@ console.log(`— 대상 로컬 ${env.URL_} · schema_migrations 최고 ${MIG} ·
 if (Number(MIG) >= 348) console.log(`  · 0348(11-04 main 머지) 이후 DB 다. ①퀴즈·②·④ 는 0348 이 고쳤으므로 재현 안 됨이 정상이다. 수정 전 RED 를 보려면 0348 이전 DB 가 필요하다.`);
 
 let pass = 0, fail = 0, skip = 0, executed = 0, ref = 0; // ref = 단언 없이 사실만 찍은 참고 줄(통과로 안 센다)
-const PLANNED = 14;   // ⑤~⑧ 4개를 더했다(2026-11-12 S0) · ⑨~⑫ 4개(S3)
+const PLANNED = 18;   // ⑤~⑧ 4개를 더했다(2026-11-12 S0) · ⑨~⑫ 4개(S3) · ⑬~⑯ 4개(11-16 U-4)
 const check = (n, reproduced, extra = '') => { executed++; reproduced ? (fail++, console.log('  ✗ 재현됨 ·', n, extra)) : (pass++, console.log('  ✓ 재현 안 됨 ·', n, extra)); };
 const skipped = (n, why) => { executed++; skip++; console.log('  - skip ·', n, '·', why); };
 const worlds = [];
@@ -209,6 +209,51 @@ select coalesce(string_agg(out_id::text, ','), '') from public.sweep_member_noti
   const got12 = inTx(`select coalesce(string_agg(out_id::text, ','), '') from public.sweep_owner_alerts() where out_id in (${a12}, ${c12});`).split(',').filter(Boolean).map(Number);
   if (!got12.includes(c12)) skipped('⑫', '대조군(card_renew)도 안 나갔다');
   else check('⑫: 좌석이 풀려 주기가 닫혔는데 좌석 알림을 보낸다', got12.includes(a12));
+
+  // ── ⑬~⑯ 버린 알림이 알림함에도 안 보이는가(11-16 사용자 결정 U-4) ──
+  // 스윕을 같은 트랜잭션 안에서 돌린 뒤, 받는 사람 세션(authenticated · jwt sub)으로 알림함이 읽는 두 길을 본다.
+  //   길 1 = 표 직접 읽기(RLS · fetchScheduleNotices · fetchJoinNotices · fetchOwnerAlerts) · 길 2 = my_units_notif_data(허브 벨 · 정의자).
+  //   대조군 = 같은 사람의 버리지 않은 알림. 대조군이 안 보이면 skip.
+  const seenAfterSweep = (uid, sweepSql, readSql) => inTx(`update public.member_notices set claimed_at = now() where claimed_at is null and unit_id <> ${sq(w.unit)};
+update public.owner_alerts set claimed_at = now() where claimed_at is null and unit_id <> ${sq(w.unit)};
+${sweepSql}
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', ${sq(uid)}, 'role', 'authenticated')::text, true);
+${readSql}`).split('\n').pop().split(',').filter(Boolean).map(Number);
+  const SWEEP_M = 'select count(*) from public.sweep_member_notices();';
+  const SWEEP_A = 'select count(*) from public.sweep_owner_alerts();';
+  const viaTable = (tbl, ids) => `select coalesce(string_agg(id::text, ','), '') from public.${tbl} where id in (${ids.join(',')});`;
+  const viaHub = (kind, ids) => `select coalesce(string_agg((payload->>'id'), ','), '') from public.my_units_notif_data() where source = '${kind}' and (payload->>'id')::bigint in (${ids.join(',')});`;
+
+  console.log('— ⑬ 버린 옛 역할 알림이 알림함(표 읽기)에 남는가 —');
+  const n13a = notice(s2.id, 'role_changed', '매니저가 됐어요');           // s2 는 지금 직원 → 버린다
+  const n13b = notice(s2.id, 'role_changed', '매니저에서 해제됐어요');     // 대조군(지금 역할)
+  const seen13 = seenAfterSweep(s2.id, SWEEP_M, viaTable('member_notices', [n13a, n13b]));
+  if (!seen13.includes(n13b)) skipped('⑬(U-4)', '대조군(지금 역할 알림)도 안 보인다');
+  else check('⑬(U-4): 스윕이 버린 옛 역할 알림이 받는 사람 알림함(표 읽기)에 보인다', seen13.includes(n13a));
+
+  console.log('— ⑭ 같은 알림이 허브 벨(my_units_notif_data)에 남는가 —');
+  const n14a = notice(s2.id, 'role_changed', '매니저가 됐어요');
+  const n14b = notice(s2.id, 'role_changed', '매니저에서 해제됐어요');
+  const seen14 = seenAfterSweep(s2.id, SWEEP_M, viaHub('schednotice', [n14a, n14b]));
+  if (!seen14.includes(n14b)) skipped('⑭(U-4)', '대조군(지금 역할 알림)도 허브에 없다');
+  else check('⑭(U-4): 스윕이 버린 옛 역할 알림이 허브 벨에 보인다', seen14.includes(n14a));
+
+  console.log('— ⑮ 나간 사람의 합류 승인 알림(매장과 무관하게 읽는 길) —');
+  const n15 = notice(s1.id, 'approved', '합류가 승인됐어요', 'QA', '/stores');   // s1 은 ⑤ 에서 나갔다 → 버린다
+  const c15 = notice(s1.id, 'rejected', '합류가 반려됐어요', 'QA', '/stores');   // 대조군(재확인 없는 종류)
+  const seen15 = seenAfterSweep(s1.id, SWEEP_M, viaTable('member_notices', [n15, c15]));
+  if (!seen15.includes(c15)) skipped('⑮(U-4)', '대조군(반려 알림)도 안 보인다');
+  else check('⑮(U-4): 스윕이 버린 합류 승인 알림이 나간 사람 알림함에 보인다', seen15.includes(n15));
+
+  console.log('— ⑯ 버린 AI 한도 알림이 사장 알림함에 남는가 —');
+  // ⑧ 에서 요금제를 올렸다(한도 아래). a16 은 버리고 c16(card_renew · 재확인 없음)은 남는다.
+  const a16 = Number(psql(`with x as (insert into public.owner_alerts (unit_id, kind, period, step, title, body) values (${sq(w.unit)}, 'ai_cap', ${sq(month)}, 2, 'AI 질문을 다 썼어요', 'QA') returning id) select id from x`));
+  const c16 = Number(psql(`with x as (insert into public.owner_alerts (unit_id, kind, period, step, title, body) values (${sq(w.unit)}, 'card_renew', ${sq('qa16:' + w.s)}, 3, 'QA 결제 예고', 'QA') returning id) select id from x`));
+  const seen16 = seenAfterSweep(w.owner.id, SWEEP_A, viaTable('owner_alerts', [a16, c16]));
+  const hub16 = seenAfterSweep(w.owner.id, SWEEP_A, viaHub('alert', [a16, c16]));
+  if (!seen16.includes(c16) || !hub16.includes(c16)) skipped('⑯(U-4)', `대조군(card_renew)이 안 보인다(표 ${seen16.includes(c16)} · 허브 ${hub16.includes(c16)})`);
+  else check('⑯(U-4): 스윕이 버린 AI 한도 알림이 사장 알림함(표 · 허브)에 보인다', seen16.includes(a16) || hub16.includes(a16), `표 ${seen16.includes(a16)} · 허브 ${hub16.includes(a16)}`);
 }
 
 let crashed = null;

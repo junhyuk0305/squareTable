@@ -5,7 +5,7 @@ import type { FeedItem, TaskTemplate, DoneMark } from '@/lib/store/useWorkStore'
 import { occursOn, assigneesOf } from '@/lib/store/useWorkStore';
 import type { SwapRequest, ShiftTemplate, ScheduleNotice, ShiftTimeRequest } from '@/lib/store/useScheduleStore';
 // 교대 수락 대상 판정 SSOT(서버 accept_swap 0179 와 같은 규칙) — 벨이 근무표와 같은 답을 내게 그대로 쓴다.
-import { canAcceptSwap, swapTargets } from '@/lib/store/useScheduleStore';
+import { canAcceptSwap } from '@/lib/store/useScheduleStore';
 import type { PendingMember, JoinNotice, JoinDone } from '@/lib/store/useStaffStore';
 import type { UnknownQuery, PlaybookSuggestion, PaymentClaim, OwnerAlert } from '@/types';
 // D4 '도와줄 수 있는 질문' 판정 SSOT — 벨 배지·알림 목록이 '내 공간' 리스트와 같은 축을 보게 재사용한다.
@@ -913,21 +913,20 @@ function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
 /** ① 사장 축 중 매니저가 행동할 수 있는 것만(F-2) — 멘션(/owner/work) · 교대 승인 대기(/owner/schedule) ·
  *  근무 시간 수정 요청(0316 · 내 요청 제외 — 내가 결정할 수 없다) · 질문(/junior/chat). 질문은 물어보기 탭이 보여 주는 것(answerableQuestions)만 남긴다. 내가 물은 질문은
  *  거기서 답할 수 없어서 뺀다.
- *  제안 검토는 사장 전용(F-2 · 푸시 ownerOnly)이라 동료 제안은 넣지 않는다. 예외 하나 = 내가 공간에서 보낸 노하우(from_space · 결정 193).
- *  그건 내가 승인하는 일이라 노하우 탭 할 일 숫자(isTodoSuggestion)에 세어지는데 벨에 없었다(1112 fix 10). */
+ *  직원 제안 검토는 사장 전용(F-2 · 푸시 ownerOnly)이라 직원 제안은 넣지 않는다. 예외 = 공간에서 온 노하우(from_space · 결정 193).
+ *  내가 보낸 것이든 동료 매니저가 보낸 것이든 매니저가 승인·반려한다(서버 approve_space_proposal · review_suggestion 이 auth_can_manage ·
+ *  노하우 탭 할 일 isTodoSuggestion 에도 세어진다). 그래서 벨에도 보인다(1112 fix 10 · ★11-16 결정 U-5 동료 제안까지). 푸시는 그대로 사장에게만. */
 function managerOwnerRows(ownerArgs: Parameters<typeof ownerRows>[0], today: string): ManagerNotif[] {
   const answerable = new Set(
     answerableQuestions(ownerArgs.queue, ownerArgs.userId ?? '', ownerArgs.suggestions).map((u) => `q_${u.id}`),
   );
-  const mySpaceProposals = new Set(
-    ownerArgs.suggestions.filter((x) => x.kind === 'from_space' && x.proposer_id === ownerArgs.userId).map((x) => `s_${x.id}`),
-  );
+  const spaceProposals = new Set(ownerArgs.suggestions.filter((x) => x.kind === 'from_space').map((x) => `s_${x.id}`));
   const mine = new Set((ownerArgs.timeRequests ?? []).filter((t) => t.staff_id === ownerArgs.userId).map((t) => `shift_time_${t.id}`));
   const out: ManagerNotif[] = [];
   for (const r of ownerRows(ownerArgs, today)) {
     if (r.kind === 'mention' || r.kind === 'swap_approval' || r.kind === 'quiz_done') out.push({ ...r, kind: r.kind });
-    // 판정(대기 · 검토 대상)은 ownerRows 의 isPendingSuggestionToReview 그대로. 여기서는 내 공간 제안만 고른다.
-    else if (r.kind === 'suggestion' && mySpaceProposals.has(r.id)) out.push({ ...r, kind: 'suggestion' });
+    // 판정(대기 · 검토 대상)은 ownerRows 의 isPendingSuggestionToReview 그대로. 여기서는 공간 제안만 고른다.
+    else if (r.kind === 'suggestion' && spaceProposals.has(r.id)) out.push({ ...r, kind: 'suggestion' });
     else if (r.kind === 'shift_time' && !mine.has(r.id)) out.push({ ...r, kind: 'shift_time' });
     // 질문은 사장과 같은 처리 화면(/owner/coach?uqId= · 0315 부터 매니저 허용 · 답·노하우 저장은 RLS auth_can_manage).
     else if (r.kind === 'question' && answerable.has(r.id)) out.push({ ...r, kind: 'question' });
@@ -947,11 +946,11 @@ function managerPersonalRows(ownerArgs: Parameters<typeof ownerRows>[0], receive
     // 직원 벨과 같은 퀴즈 입력 — 멈춘 퀴즈(void) 제외 · 옛 퀴즈 포함(오류 탐지 11-03 #11).
     quizProgress: received.quizProgress, legacyQuizIds: received.legacyQuizIds,
   });
-  // 받은 교대 요청은 나를 지목한 것만 — 대타(cover) 공개 요청 푸시는 직원(staff)에게만 간다(푸시 = 목록).
-  //   지목 = swapTargets(대상 목록이 정본 · 없으면 단수 컬럼). 단수만 보면 목록으로 지정된 매니저 벨에 안 떴다(#8).
-  const targetedToMe = new Set(ownerArgs.swaps.filter((s) => swapTargets(s)?.includes(received.userId) ?? false).map((s) => `swap_${s.id}`));
+  // 받은 교대 요청 = 직원 벨과 같은 isIncomingSwap(= canAcceptSwap · 서버 accept_swap)이다. 지목된 요청과 공개 대타(대상 없음) 둘 다다.
+  //   ★11-16 결정(U-5): 매니저도 공개 대타를 받아 갈 수 있으니(서버·근무표는 원래 허용) 벨에도 보인다. 공개 대타 푸시는 그대로 직원에게만 간다.
+  //   예전엔 지목된 것만 남겨 근무표 [수락] 과 벨이 갈렸다(judgment-diff S1-매니저벨 DIFF 1).
   return rows
-    .filter((r) => MANAGER_PERSONAL.has(r.kind) && (r.kind !== 'swap' || targetedToMe.has(r.id)))
+    .filter((r) => MANAGER_PERSONAL.has(r.kind))
     .map((r) => ({ ...r, kind: r.kind as ManagerNotifKind, route: routeForRole(r.route, 'manager') }));
 }
 
