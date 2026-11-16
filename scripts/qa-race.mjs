@@ -588,6 +588,31 @@ def('M2A', 'attendance_check_out 과 attendance_edit_times 동시(0632)', async 
   check('M2A', '다시 퇴근 = already', again.split('\n').pop() === 'already', again);
 });
 
+def('F4', '24시간 넘게 열린 출근 → 옛 앱 출근 23505 · 크론이 닫은 뒤 출근 · 퇴근과 크론 동시(0697)', async (W) => {
+  const w = await W({ staffN: 1 });
+  const [A] = w.staff;
+  const old = `att_rcf4o_${w.s}`;
+  R.val(`insert into public.attendance(id, staff_id, date, check_in, unit_id) values (${q(old)}, ${q(A.id)}, to_char(now() - interval '200 days', 'YYYY-MM-DD'), now() - interval '200 days', ${q(w.unit)}); select 1;`);
+  // 옛 앱 출근 = 행 통째 upsert(on conflict id).
+  const oldIn = (k) => `${R.as(A.id)}\ninsert into public.attendance(id, unit_id, staff_id, date, check_in, check_out, work_minutes) values (${q(`att_rcf4${k}_${w.s}`)}, ${q(w.unit)}, ${q(A.id)}, ${q(today)}, now(), null, 0) on conflict (id) do update set check_in = excluded.check_in;`;
+  const r1 = R.psqlRun(oldIn('a'));
+  check('F4', '크론 전: 옛 앱 출근 = 23505 attendance_one_open_uq', r1.status !== 0 && /attendance_one_open_uq/.test(r1.stderr), (r1.stderr || 'ok').trim().slice(0, 80));
+  const c = R.psqlRun(`${R.as('service')}\nselect public.close_stale_attendance();`);
+  check('F4', '크론 1회 = 1행 이상 닫음', c.status === 0 && Number(c.stdout.trim().split('\n').pop()) >= 1, (c.stdout || c.stderr).trim().slice(-80));
+  const row = R.val(`select (check_out = check_in + interval '24 hours')::text || '/' || work_minutes || '/' || coalesce(edited_by, '-') from public.attendance where id = ${q(old)}`);
+  check('F4', '닫힌 기록 = 출근+24시간 · 1440분 · 표시 없음', row === 'true/1440/-', row);
+  const r2 = R.psqlRun(oldIn('b'));
+  check('F4', '크론 뒤: 옛 앱 출근 성공', r2.status === 0, (r2.stderr || '').trim().slice(0, 80));
+  // 직원 퇴근과 크론이 겹친다: 먼저 닫은 쪽만 남는다.
+  R.val(`update public.attendance set check_in = now() - interval '25 hours' where id = ${q(`att_rcf4b_${w.s}`)}; select 1;`);
+  const [a, b] = R.twoAtOnce(S(w, A.id, st(`public.attendance_check_out()`), true), S(w, 'service', `public.close_stale_attendance()`, false));
+  const row2 = R.val(`select (check_out > check_in + interval '24 hours')::text || '/' || work_minutes from public.attendance where id = ${q(`att_rcf4b_${w.s}`)}`);
+  check('F4', '앞 퇴근 ok · 뒤 크론은 그 행을 못 닫음', a.ok && a.v === 'ok' && b.ok && b.v === '0', `${show(a)} · ${show(b)}`);
+  check('F4', '남은 퇴근 = 직원 퇴근 시각(1440 상한)', row2 === 'true/1440', row2);
+  const r3 = R.psqlRun(`${R.as(A.id)}\nselect public.close_stale_attendance();`);
+  check('F4', '크론 실행 권한 = 직원 없음(42501)', r3.status !== 0 && /permission denied/.test(r3.stderr), (r3.stderr || 'ok').trim().slice(0, 80));
+});
+
 def('M13A', 'submit_unknown_query 두 직원 동시(첫 질문 · 같은 질문 합치기 · 0634)', async (W) => {
   const w = await W({ staffN: 2 });
   const [A, B] = w.staff;
