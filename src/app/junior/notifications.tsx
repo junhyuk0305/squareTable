@@ -13,7 +13,6 @@ import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
-import { showToast } from '@/lib/store/useToastStore';
 import { MarkAllReadButton } from '@/components/MarkAllReadButton';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -21,7 +20,7 @@ import { NotificationList, JUNIOR_KIND_UI } from '@/components/NotificationList'
 import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { SegmentTabs } from '@/components/SegmentTabs';
 import { useToday } from '@/lib/hooks/useToday';
-import { accountAckAt, buildJuniorNotifications } from '@/lib/utils/notifications';
+import { ackOfUnit, buildJuniorNotifications, joinNoticesOfUnit, notifRowKey } from '@/lib/utils/notifications';
 import { InkColors, Surface } from '@/lib/theme/colors';
 import { useLegacyQuizOpen } from '@/lib/hooks/useLegacyQuizOpen';
 import { Radius } from '@/lib/theme/elevation';
@@ -61,7 +60,6 @@ export default function JuniorNotificationsScreen() {
   const workLoaded = useWorkStore((s) => s.loaded);
   const done = useWorkStore((s) => s.done);
   const markNoticeRead = useWorkStore((s) => s.markNoticeRead);
-  const markAllRead = useWorkStore((s) => s.markAllRead);
   const swaps = useScheduleStore((s) => s.swaps);
   const templates = useScheduleStore((s) => s.templates);
   const scheduleNotices = useScheduleStore((s) => s.notices);
@@ -80,11 +78,14 @@ export default function JuniorNotificationsScreen() {
   const today = useToday();
   // '모두 읽기' 기준 시각(0078) — read 개념이 없는 배정·교대의 배지·강조 해제 축.
   const unitId = useSessionStore((s) => s.unitId);
-  const ackNotifs = useMemberPrefsStore((s) => s.ackNotifs);
+  const markAllSeen = useMemberPrefsStore((s) => s.markAllSeen);
+  const markRowRead = useMemberPrefsStore((s) => s.markRowRead);
+  const rowRead = useMemberPrefsStore((s) => s.rowRead);
   const ackAt = useMemberPrefsStore((s) => (unitId ? (s.ackByUnit[unitId] ?? null) : null));
-  // 합류 결과(계정 단위)의 읽음 기준 = 내 매장 ack 중 가장 늦은 시각(결정 3 · 허브와 같은 판정 accountAckAt).
+  // 합류 결과 = 이 매장 것만(다른 자리 것은 허브가 보인다 · 허브가 맨 위 · 2026-11-16). 읽음 기준 = 그 줄 자리의 읽은 시각.
   const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
-  const joinAckAt = accountAckAt(ackByUnit);
+  const joinAckOf = useMemo(() => ackOfUnit(ackByUnit), [ackByUnit]);
+  const storeJoinNotices = useMemo(() => joinNoticesOfUnit(joinNotices, unitId), [joinNotices, unitId]);
 
   // ── 통합 알림(전체 매장, 0077) — 다점포 소속일 때만 세그먼트 노출.
   //    판정·매핑·탭 동작(전환 후 읽음처리 포함)은 공용 훅(useCrossNotifRows) SSOT.
@@ -96,7 +97,8 @@ export default function JuniorNotificationsScreen() {
   useEffect(() => {
     if (multiStore) void hydrateCross();
   }, [multiStore, hydrateCross]);
-  const { listRows: allRows, totalUnread: allUnread, hiddenCount, openRow } = useCrossNotifRows();
+  // '전체 매장' 탭 = 매장 줄만(공간 줄은 허브) · 탭 숫자도 같은 줄을 센다. 전체 읽음 = 그 탭의 매장 자리 전부(markAll('stores')).
+  const { storeRows: allRows, storeUnread: allUnread, hiddenCount, openRow, markAll: markAllCross } = useCrossNotifRows();
 
   const rows = useMemo(
     () =>
@@ -118,10 +120,11 @@ export default function JuniorNotificationsScreen() {
         courses,
         quizProgress,
         legacyQuizIds,
-        joinNotices,
-        joinAckAt,
+        joinNotices: storeJoinNotices,
+        joinAckOf,
+        rowRead,
       }),
-    [feed, swaps, templates, owner, staff, me, today, taskTemplates, done, ackAt, suggestions, queue, scheduleNotices, assignments, courses, quizProgress, legacyQuizIds, joinNotices, joinAckAt],
+    [feed, swaps, templates, owner, staff, me, today, taskTemplates, done, ackAt, suggestions, queue, scheduleNotices, assignments, courses, quizProgress, legacyQuizIds, storeJoinNotices, joinAckOf, rowRead],
   );
 
   const initial = (userName ?? '나').trim().slice(0, 1) || '나';
@@ -140,18 +143,20 @@ export default function JuniorNotificationsScreen() {
   const ready =
     workLoaded && scheduleLoaded && staffLoaded && suggestionLoaded && queueLoaded && (!multiStore || crossLoaded);
 
+  // 전체 읽음(2026-11-16 · 0810) — 쓰기는 markAllSeen 하나(서버 시각 · 성공 뒤에만 문구).
+  //   '이 매장' = 이 매장 자리만 → 허브에서도 이 매장 줄은 읽은 것이다. '전체 매장' = 그 탭의 매장 자리 전부.
   function markAll() {
-    if (!hasUnread) return;
-    if (unreadReadIds.length > 0) markAllRead(unreadReadIds, me);
-    if (unitId) void ackNotifs(unitId);
-    showToast('모두 읽음 처리했어요', 'good');
+    if (seg === 'all' && multiStore) return void markAllCross('stores');
+    if (!hasUnread || !unitId) return;
+    void markAllSeen([unitId], unreadReadIds);
   }
+  const showMarkAll = seg === 'all' && multiStore ? allUnread > 0 : hasUnread;
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       {/* 전체 읽음 = 제목 상단바 오른쪽 끝(네이티브 헤더는 꺼져 있다 · 허브 알림 화면과 같은 부품·같은 자리).
-          이 매장 것만 읽는다('이 매장' 탭에서만) — 전 매장은 허브 알림 화면의 '전체 읽음'이 맡는다. */}
-      <ScreenTitleHeader title="알림" backFallback right={seg === 'store' && hasUnread ? <MarkAllReadButton onPress={markAll} /> : undefined} />
+          '이 매장' 탭 = 이 매장 줄 · '전체 매장' 탭 = 그 탭의 매장 줄 전부(2026-11-16 · 허브가 맨 위). */}
+      <ScreenTitleHeader title="알림" backFallback right={showMarkAll ? <MarkAllReadButton onPress={markAll} /> : undefined} />
       <Stack.Screen options={{ title: '알림' }} />
 
       <ScrollView contentContainerStyle={screenScrollStyle} showsVerticalScrollIndicator={false}>
@@ -223,7 +228,8 @@ export default function JuniorNotificationsScreen() {
             rows={rows}
             kindUI={KIND_UI}
             onPress={(r) => {
-              if (r.readFeedId) markNoticeRead(r.readFeedId, me); // 공지·멘션은 탭하면 읽음 처리
+              if (r.readFeedId) markNoticeRead(r.readFeedId, me); // 공지·멘션은 탭하면 읽음 처리(read_by)
+              markRowRead(notifRowKey(r)); // 눌러서 들어가면 그 줄은 읽음(모든 종류 · 0811)
               router.push(r.route as Href);
             }}
             empty={{

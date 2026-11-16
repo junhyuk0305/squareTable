@@ -9,9 +9,11 @@ import {
   buildOwnerNotifications,
   isPendingAssignment,
   isAfterAck,
-  juniorUnreadCount,
+  juniorNotifRows,
+  readOff,
   manageUnreadCount,
   MAX_NOTIFS,
+  type AckOf,
   type JuniorNotif,
   type ManagerNotif,
   type ManagerReceivedArgs,
@@ -26,15 +28,15 @@ export type ClosureNotif = { id: string; kind: 'closure'; title: string; body: s
  *  storeName = 내 매장 목록에 없는 매장의 이름(반려된 합류 신청 매장) — 화면이 칩 폴백으로 쓴다. */
 export type CrossNotifRow = (JuniorNotif | OwnerNotif | ManagerNotif | ClosureNotif) & { unitId: string; storeName?: string };
 
-/** 합류 결과(0247 · 계정 단위) → 허브 행. 행 빌더·읽음 판정은 매장 벨과 같은 것(buildJoinNotifRows · accountAckAt).
+/** 합류 결과(0247) → 허브 행. 행 빌더·읽음 판정은 매장 벨과 같은 것(buildJoinNotifRows · 줄 자리의 읽은 시각 ackOf).
  *  unitId = 그 알림의 매장(반려된 매장은 내 매장 목록에 없다 → storeName 으로 칩을 그린다). */
-export function buildJoinCrossNotifs(joinNotices: JoinNotice[], joinAckAt: string | null): CrossNotifRow[] {
+export function buildJoinCrossNotifs(joinNotices: JoinNotice[], ackOf: AckOf, rowRead?: ReadonlySet<string>): CrossNotifRow[] {
   // 행 id 앞자리 = buildJoinNotifRows 가 붙이는 것과 같다(공간 두 종류 · 0460).
   const prefix = (k: JoinNotice['kind']) =>
     k === 'removed' ? 'member_removed' : k === 'approved' ? 'join_approved' : k === 'join_approved' ? 'space_join_approved'
       : k === 'space_join_request' ? 'space_join_request' : 'join_rejected';
   const byId = new Map(joinNotices.map((n) => [`${prefix(n.kind)}_${n.id}`, n]));
-  return buildJoinNotifRows(joinNotices, joinAckAt).map((r) => {
+  return buildJoinNotifRows(joinNotices, ackOf, rowRead).map((r) => {
     const n = byId.get(r.id);
     return { ...r, unitId: n?.unit_id ?? '', storeName: n?.store_name ?? undefined };
   });
@@ -44,18 +46,19 @@ export function buildJoinCrossNotifs(joinNotices: JoinNotice[], joinAckAt: strin
 export function buildClosureNotifs(
   rows: { id: number; unit_id: string; title: string; body: string; created_at: string }[],
   ackOf: (uid: string) => string | null | undefined,
+  rowRead?: ReadonlySet<string>,
 ): CrossNotifRow[] {
-  return rows.map((r) => ({
+  return readOff(rows.map((r) => ({
     id: `closure-${r.id}`, kind: 'closure' as const, title: r.title, body: r.body, at: r.created_at,
     unread: isAfterAck(r.created_at, ackOf(r.unit_id)), unitId: r.unit_id,
-  }));
+  })), rowRead);
 }
 
 // 매장 하나에서 쓸 인자 묶음 — 카운트와 목록이 **같은 입력**을 보게 한 곳에서 만든다.
 //   0313: 입금 결과·사장 알림·퀴즈 완료·시간 수정 요청도 벨과 같은 자리에(매장 벨 owner/notifications.tsx ownerArgs 와 같은 키).
-const ownerArgsOf = (d: UnitNotifData, me: string, nameOf: (id: string) => string, ackAt?: string | null) =>
+const ownerArgsOf = (d: UnitNotifData, me: string, nameOf: (id: string) => string, ackAt?: string | null, rowRead?: ReadonlySet<string>) =>
   ({ queue: d.queue, suggestions: d.suggestions, swaps: d.swaps, pending: d.pending, nameOf, feed: d.feed, userId: me, ackAt,
-     claims: d.claims, alerts: d.alerts, assignments: d.assignments, courses: d.courses, timeRequests: d.timeRequests, joinDone: d.joinDone });
+     claims: d.claims, alerts: d.alerts, assignments: d.assignments, courses: d.courses, timeRequests: d.timeRequests, joinDone: d.joinDone, rowRead });
 const receivedArgsOf = (
   d: UnitNotifData, me: string, today: string, nameOf: (id: string) => string, ackAt?: string | null,
 ): ManagerReceivedArgs =>
@@ -64,32 +67,36 @@ const receivedArgsOf = (
 
 /** 매장 하나의 안읽음 카운트 — 그 매장에서의 역할(unit_members.role)에 맞는 기존 카운터 재사용.
  *  ackAt = 그 매장의 '모두 읽기' 기준 시각(0078, unit_member_prefs — 전 매장 행을 이미 당겨둠). */
-export function storeUnreadCount(d: UnitNotifData, role: string, me: string, today: string, ackAt?: string | null): number {
+export function storeUnreadCount(d: UnitNotifData, role: string, me: string, today: string, ackAt?: string | null, rowRead?: ReadonlySet<string>): number {
   const nameOf = nameOfFor(d, role, me);
   // 직원 매장의 d.queue(동료 질문 D4 · 내 질문에 온 답)는 0313 부터 서버가 채운다(#14 (a) 채택 · 매장 안 벨과 같은 수).
   //   합류 결과(계정 단위)는 여기서 세지 않는다 — buildJoinCrossNotifs 행을 훅이 따로 센다.
   // 0332: 안 푼 퀴즈는 서버 상태(d.quizProgress)로 매장 벨과 같은 quizTodo 를 쓴다. 옛 서버는 undefined → 완료 여부만.
-  if (!canManage(role)) return juniorUnreadCount(d.feed, d.swaps, me, today, d.taskTemplates, d.done, ackAt, d.suggestions, d.queue, d.scheduleNotices, d.assignments, undefined, undefined, d.quizProgress, d.courses, d.legacyQuizIds);
+  //   목록(buildStoreNotifs)과 같은 줄 배열에서 센다(눌러 본 줄 포함 · 0811).
+  if (!canManage(role)) return juniorNotifRows(juniorArgsOf(d, me, today, nameOf, ackAt, rowRead)).filter((r) => r.unread).length;
   // 0093: 매니저 매장 = 사장 축 중 매니저가 행동할 수 있는 것 + 매니저가 받는 쪽인 축(공지·배정·내 제안 결과).
   //       목록(buildStoreNotifs)과 같은 인자·같은 배열에서 센다(F-2).
   // 사장도 나에게 온 공지·배정을 센다(D11) — 목록(buildStoreNotifs)과 같은 인자(0313: 입금 결과·사장 알림·퀴즈 완료·시간 수정 요청).
   //   역할 분기는 manageUnreadCount 하나(매장 벨·앱 아이콘 배지와 같은 함수).
-  return manageUnreadCount(role, ownerArgsOf(d, me, nameOf, ackAt), receivedArgsOf(d, me, today, nameOf, ackAt));
+  return manageUnreadCount(role, ownerArgsOf(d, me, nameOf, ackAt, rowRead), receivedArgsOf(d, me, today, nameOf, ackAt));
 }
+
+const juniorArgsOf = (d: UnitNotifData, me: string, today: string, nameOf: (id: string) => string, ackAt?: string | null, rowRead?: ReadonlySet<string>) =>
+  ({ feed: d.feed, swaps: d.swaps, templates: [], nameOf, userId: me, today, taskTemplates: d.taskTemplates, done: d.done, ackAt, suggestions: d.suggestions, queue: d.queue,
+     scheduleNotices: d.scheduleNotices, assignments: d.assignments, courses: d.courses, quizProgress: d.quizProgress, legacyQuizIds: d.legacyQuizIds, rowRead });
 
 const nameOfFor = (d: UnitNotifData, role: string, me: string) => (id: string) =>
   id === me ? '나' : d.names[id] || (canManage(role) ? '직원' : '동료');
 
 /** 매장 하나의 알림 목록 — 기존 빌더 재사용(교대 시간표기용 ShiftTemplate 은 cross-store 미제공 → 날짜만). */
-export function buildStoreNotifs(d: UnitNotifData, role: string, me: string, today: string, ackAt?: string | null): CrossNotifRow[] {
+export function buildStoreNotifs(d: UnitNotifData, role: string, me: string, today: string, ackAt?: string | null, rowRead?: ReadonlySet<string>): CrossNotifRow[] {
   const nameOf = nameOfFor(d, role, me);
   const rows: (JuniorNotif | OwnerNotif | ManagerNotif)[] =
     role === 'manager'
-      ? buildManagerNotifications(ownerArgsOf(d, me, nameOf, ackAt), receivedArgsOf(d, me, today, nameOf, ackAt))
+      ? buildManagerNotifications(ownerArgsOf(d, me, nameOf, ackAt, rowRead), receivedArgsOf(d, me, today, nameOf, ackAt))
       : canManage(role)
-        ? buildOwnerNotifications(ownerArgsOf(d, me, nameOf, ackAt), receivedArgsOf(d, me, today, nameOf, ackAt))
-        : buildJuniorNotifications({ feed: d.feed, swaps: d.swaps, templates: [], nameOf, userId: me, today, taskTemplates: d.taskTemplates, done: d.done, ackAt, suggestions: d.suggestions, queue: d.queue,
-            scheduleNotices: d.scheduleNotices, assignments: d.assignments, courses: d.courses, quizProgress: d.quizProgress, legacyQuizIds: d.legacyQuizIds });
+        ? buildOwnerNotifications(ownerArgsOf(d, me, nameOf, ackAt, rowRead), receivedArgsOf(d, me, today, nameOf, ackAt))
+        : buildJuniorNotifications(juniorArgsOf(d, me, today, nameOf, ackAt, rowRead));
   return rows.map((r) => ({ ...r, unitId: d.unitId }));
 }
 

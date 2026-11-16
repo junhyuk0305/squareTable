@@ -7,10 +7,9 @@ import { Stack, Redirect, useRouter, type Href } from 'expo-router';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
-import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
-import { showToast } from '@/lib/store/useToastStore';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
-import { MAX_NOTIFS } from '@/lib/utils/notifications';
+import { MAX_NOTIFS, notifRowKey } from '@/lib/utils/notifications';
+import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useStoreDisplay } from '@/components/StoreHeaderTitle';
 import { NotificationList, ALL_KIND_UI, type NotifRow } from '@/components/NotificationList';
@@ -50,32 +49,25 @@ export default function HubNotificationsScreen() {
     void useSessionStore.getState().refreshMembership({ soft: true, source: 'foreground' });
     void hydrateCross();
   });
-  // '모두 읽기' = 내 매장 전부 ack(결정 3 · 훅이 매장 벨과 같은 ackNotifs 를 매장마다 부른다).
-  const { listRows, spaceRows, openRow, hasUnread: storeUnread, markAll } = useCrossNotifRows();
-  // ★야간 g4a 공간 줄(my_space_notif_data) — 매장 줄과 같은 목록에 시간순으로 섞는다. 읽음 기준은 계정 단위 축(accountAckAt).
+  // 전체 읽음 = 내 모든 자리(매장·공간) — 허브가 맨 위다(2026-11-16 · 훅 markAll('hub')). 매장 안 화면에서도 읽은 것이 된다.
+  const { listRows, spaceRows, openRow, hasUnread, markAll } = useCrossNotifRows();
+  // ★야간 g4a 공간 줄(my_space_notif_data) — 매장 줄과 같은 목록에 시간순으로 섞는다. 읽음 기준은 그 공간의 읽은 시각.
   //   누르면 매장 전환 없이 그 주소로 간다(공간 _layout 이 그 공간에 먼저 들어간다 · /link 는 앱 안 링크).
   //   행은 훅이 만든다(허브 벨 숫자와 같은 배열 · 1112 fix 16).
-  const ackNotifs = useMemberPrefsStore((s) => s.ackNotifs);
-  const sessionStores = useSessionStore((s) => s.stores);
   const rows = useMemo(
     () => [...listRows, ...spaceRows].sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_NOTIFS),
     [listRows, spaceRows],
   );
   const spaceIds = useMemo(() => new Set(spaceRows.map((r) => r.id)), [spaceRows]);
-  const hasUnread = storeUnread || spaceRows.some((r) => r.unread);
   const onPress = (r: NotifRow) => {
     if (spaceIds.has(r.id)) {
+      useMemberPrefsStore.getState().markRowRead(notifRowKey(r)); // 눌러서 들어가면 그 줄은 읽음(0811)
       if (r.route) router.push(r.route as Href);
       return;
     }
     void openRow(r);
   };
-  // 매장 줄이 안 읽음이면 지금 '모두 읽기' 그대로. 공간 줄만 남았으면 같은 ack(내 매장 전부)로 지운다(계정 단위 축 = 최대 ack).
-  const onMarkAll = () => {
-    if (storeUnread) return markAll();
-    for (const s of sessionStores) void ackNotifs(s.unit_id);
-    showToast('모두 읽음 처리했어요', 'good');
-  };
+  const onMarkAll = () => void markAll('hub');
   // ⛔`&&` 안에서 훅을 부르지 않는다 — 훅을 각각 받은 뒤 AND 한다.
   const ready = crossLoaded && prefsLoaded;
 

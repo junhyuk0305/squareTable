@@ -121,7 +121,7 @@ try {
   };
   const personal = /const MANAGER_PERSONAL = new Set<[^>]+>\(\[([^\]]*)\]\)/.exec(lib)?.[1] ?? '';
   const REGION = {
-    junior: fnBody('buildJuniorNotifications') + fnBody('roleNoticeRow'),
+    junior: fnBody('juniorNotifRows') + fnBody('roleNoticeRow'), // 2026-11-16: 직원 줄 본문은 juniorNotifRows(buildJuniorNotifications 는 정렬·상한만)
     owner: fnBody('ownerRows') + fnBody('ownerReceivedRows'),
     // 매니저 = 사장 축 중 행동할 것 + 나에게 온 것 + 직원 빌더 재사용분(MANAGER_PERSONAL 에 적힌 kind 만).
     manager: fnBody('managerOwnerRows') + fnBody('buildManagerReceived') + personal,

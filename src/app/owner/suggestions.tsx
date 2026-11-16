@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, ScrollView, TextInput, StyleSheet } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Screen } from '@/components/Screen';
@@ -12,6 +12,7 @@ import { LoadErrorState } from '@/components/LoadErrorState';
 import { BottomSheet } from '@/components/BottomSheet';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
+import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
 import { isPendingSuggestionToReview } from '@/lib/utils/notifications';
 import { SUGGESTION_STATUS_CHIP, SUGGESTION_STATUS_LABEL } from '@/lib/suggestion/labels';
 import { showToast } from '@/lib/store/useToastStore';
@@ -26,6 +27,9 @@ import { screenScrollStyle } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import type { PlaybookSuggestion } from '@/types';
 
+/** 알림으로 들어온 제안 카드로 스크롤하기 전 등장 애니메이션이 가라앉는 시간(사장 근무표와 같다). */
+const FOCUS_SETTLE_MS = 520;
+
 /**
  * 노하우 제안함(사장) — 알바가 올린 ① 개선 제안 / ② 신규 등록 신청을 검토.
  *  - 승인: 신규 → 제안 원문을 자동 구조화한 초안을 보고 수정(생략 가능) 후 추가 여부 결정(coach 제안검토 모드)
@@ -35,6 +39,8 @@ import type { PlaybookSuggestion } from '@/types';
  */
 export default function OwnerSuggestionsScreen() {
   const router = useRouter();
+  // ?suggestion=<제안 id> — 직원 제안 알림에서 들어오면 그 제안 카드를 강조하고 한 번 스크롤한다(사장 근무표 ?request= 와 같은 방식).
+  const { suggestion: focusSuggestionId } = useLocalSearchParams<{ suggestion?: string }>();
   const suggestions = useSuggestionStore((s) => s.suggestions);
   const hydrate = useSuggestionStore((s) => s.hydrate);
   const subscribe = useSuggestionStore((s) => s.subscribe);
@@ -61,6 +67,21 @@ export default function OwnerSuggestionsScreen() {
     () => suggestions.filter((s) => s.status !== 'pending').slice(0, 20),
     [suggestions],
   );
+
+  // 제안 카드 위치 = 목록 y + 카드 y(onLayout · 스크롤 내용 기준). 처리된 제안은 행 강조만 한다.
+  const scrollRef = useRef<ScrollView>(null);
+  const focusY = useRef({ list: 0, card: 0 });
+  const [pendingFocus, focusDone] = useOpenFromParam(focusSuggestionId);
+  const focusShown = !!pendingFocus && pending.some((s) => s.id === pendingFocus);
+  useEffect(() => {
+    if (!focusShown) return;
+    const t = setTimeout(() => {
+      const { list, card } = focusY.current;
+      scrollRef.current?.scrollTo({ y: Math.max(0, list + card - 8), animated: true });
+      focusDone();
+    }, FOCUS_SETTLE_MS);
+    return () => clearTimeout(t);
+  }, [focusShown, focusDone]);
 
   // 승인 → 반영 화면으로.
   //  - 개선: 대상 노하우 수정 화면으로. 고쳐서 **저장했을 때만** 승인된다(D12 · 신규 분기와 같은 규칙).
@@ -134,7 +155,7 @@ export default function OwnerSuggestionsScreen() {
         <LoadErrorState screen title="직원 제안을 불러오지 못했어요" onRetry={() => void retry()} />
       ) : (
       <KeyboardShift>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Appear delay={stagger(0)}>
           <Text style={styles.subline}>직원이 올린 제안이에요. 승인하면 노하우에 반영돼요</Text>
         </Appear>
@@ -146,15 +167,21 @@ export default function OwnerSuggestionsScreen() {
           </View>
           </Appear>
         ) : (
-          <View style={styles.list}>
+          <View style={styles.list} onLayout={(e) => { focusY.current.list = e.nativeEvent.layout.y; }}>
             {pending.map((s, i) => (
-              <Appear key={s.id} delay={stagger(i + 1)}>
+              <View
+                key={s.id}
+                style={s.id === focusSuggestionId ? styles.focusCard : undefined}
+                onLayout={s.id === focusSuggestionId ? (e) => { focusY.current.card = e.nativeEvent.layout.y; } : undefined}
+              >
+              <Appear delay={stagger(i + 1)}>
                 {s.kind === 'from_space' ? (
                   <SpaceProposalCard s={s} busy={approving === s.id} onApprove={() => reflect(s)} onReject={() => setDeclineFor(s)} />
                 ) : (
                   <SuggestionCard s={s} onApprove={() => reflect(s)} onReject={() => setDeclineFor(s)} />
                 )}
               </Appear>
+              </View>
             ))}
           </View>
         )}
@@ -166,7 +193,7 @@ export default function OwnerSuggestionsScreen() {
             {/* 처리된 행 = 흰 행 목록 카드(R-14 · 2026-11-16). 머리글 "처리됨" 은 바탕 위. */}
             <View style={styles.handledCard}>
             {handled.map((s, i) => (
-              <View key={s.id} style={[styles.handledRow, i > 0 && styles.handledDivider]}>
+              <View key={s.id} style={[styles.handledRow, i > 0 && styles.handledDivider, s.id === focusSuggestionId && styles.focusCard]}>
                 <View style={[styles.statusChip, { backgroundColor: SUGGESTION_STATUS_CHIP[s.status].bg }]}>
                   <Text style={[styles.statusChipText, { color: SUGGESTION_STATUS_CHIP[s.status].fg }]}>
                     {SUGGESTION_STATUS_LABEL[s.status]}
@@ -390,4 +417,6 @@ const styles = StyleSheet.create({
   statusChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.pill },
   statusChipText: { ...Type.micro, fontWeight: '800' },
   handledText: { ...Type.tag, flex: 1, color: TextColor.secondary, fontWeight: '600' },
+  // 알림(?suggestion=)으로 들어온 제안 강조 — 사장 근무표 focusCard 와 같은 테두리.
+  focusCard: { borderWidth: 2, borderColor: BrandColors.accentSolid, borderRadius: Radius.md },
 });

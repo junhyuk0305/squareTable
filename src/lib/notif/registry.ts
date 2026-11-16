@@ -103,11 +103,13 @@ export const NOTIF = {
   },
   suggestion: {
     title: (actor) => `${actor}님의 노하우 제안`,
-    route: (_s) => '/owner/suggestions',
+    // 제안함에서 그 제안 카드를 강조한다(?suggestion=<제안 id>).
+    route: (_s, id) => `/owner/suggestions${id ? `?suggestion=${enc(id)}` : ''}`,
     pushTag: 'suggestion', badgeUnit: '검토할 제안', audience: ['owners'],
   },
   suggestion_result: {
-    route: (_s) => '/junior/chat',
+    // 물어보기 탭 '내 활동'의 보낸 제안 목록을 펼치고 그 제안을 강조한다(?suggestion=<제안 id>).
+    route: (_s, id) => `/junior/chat${id ? `?suggestion=${enc(id)}` : ''}`,
     pushTag: 'suggestion-result', badgeUnit: '내 제안 결과', audience: ['user'],
   },
   // ── 명부 ──
@@ -213,17 +215,19 @@ export const NOTIF = {
     pushTag: 'role', badgeUnit: '역할 변경', audience: ['user'],
   },
   // ── 근무표 ──
+  // 교대 셋은 근무표의 그 요청 카드로 간다(?swap=<요청 id>). 직원 근무표는 '교대 요청' 칸을 연다.
+  //   매니저의 받은 요청·내 결과는 직원 근무표에서만 처리한다 → routeForRole 이 ?swap= 이 붙은 /junior/schedule 은 뒤집지 않는다.
   swap: {
-    route: (s) => schedule(s),
+    route: (s, id) => `${schedule(s)}${id ? `?swap=${enc(id)}` : ''}`,
     pushTag: 'swap-req', badgeUnit: '받은 교대 요청', audience: ['staff', 'user'],
   },
   swap_result: {
-    route: (s) => schedule(s),
+    route: (s, id) => `${schedule(s)}${id ? `?swap=${enc(id)}` : ''}`,
     pushTag: 'swap-result', badgeUnit: '내 교대 결과', audience: ['user'],
   },
   swap_approval: {
     title: (actor) => `${actor}님 교대가 승인을 기다려요`,
-    route: (_s) => '/owner/schedule',
+    route: (_s, id) => `/owner/schedule${id ? `?swap=${enc(id)}` : ''}`,
     pushTag: 'swap-approval', badgeUnit: '승인 대기 교대', audience: ['owners'],
   },
   // 근무 시간 수정 요청(0243 shift_change_requests · status=pending) → 사장 근무표 승인 칸의 그 요청(?request=<요청 id>).

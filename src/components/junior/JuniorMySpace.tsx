@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -29,6 +29,10 @@ import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery } from '@/types';
 import { STORE_WORDS, ANSWER_LIVE } from '@/lib/place/words';
 import { answerGoesLive } from '@/lib/utils/answerPolicy';
 import { buildDirectUq, buildPlaybookEntryFromSquare } from '@/lib/utils/buildEntry';
+import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
+
+/** 알림으로 들어온 제안 행으로 스크롤하기 전 등장 애니메이션이 가라앉는 시간(사장 근무표와 같다). */
+const FOCUS_SETTLE_MS = 520;
 
 /**
  * 히트맵 범례 — **직원 축**(§7-8 표의 세 번째 열). 색은 "내가 아는가" 하나뿐이고, 사장 축의
@@ -48,7 +52,14 @@ const MY_HEAT_LEGEND: HeatLegend = {
  * 물어본 것)을 눌러 아래로 펼친다. 전부 자기 목록이고 랭킹이 아니다(D5).
  * 사장 화면엔 세그먼트가 없으므로 직원 전용.
  */
-export function JuniorMySpace({ me }: { me: string }) {
+export function JuniorMySpace({
+  me,
+  focusSuggestionId,
+}: {
+  me: string;
+  /** 내 제안 결과 알림(?suggestion=)으로 들어온 제안 — 보낸 제안을 펼치고 그 행을 강조·스크롤한다. */
+  focusSuggestionId?: string;
+}) {
   const queue = useUnknownQueueStore((s) => s.queue);
   const resolveUq = useUnknownQueueStore((s) => s.resolve);
   const answerUq = useUnknownQueueStore((s) => s.answer);
@@ -146,7 +157,33 @@ export function JuniorMySpace({ me }: { me: string }) {
   }, [publishedEntries, myPassedAt]);
 
   // 내 기록 롤업(L5) — 어느 줄을 펼쳤나. 기본은 접힘(펼침은 아래로).
-  const [openRecord, setOpenRecord] = useState<'answered' | 'proposals' | 'questions' | null>(null);
+  const [openRecord, setOpenRecord] = useState<'answered' | 'proposals' | 'questions' | null>(
+    focusSuggestionId ? 'proposals' : null,
+  );
+  // 알림으로 온 제안 — 보낸 제안을 펼치고, 첫 3개 밖이면 다 펼친다. 값이 바뀌면 다시(렌더 중 조정 · 같은 값으로는 한 번만).
+  const [openFocus, openFocusDone] = useOpenFromParam(focusSuggestionId);
+  if (openFocus) {
+    openFocusDone();
+    if (openRecord !== 'proposals') setOpenRecord('proposals');
+    if (!showAllProposals && myProposals.findIndex((p) => p.id === openFocus) >= 3) setShowAllProposals(true);
+  }
+  // 제안 행 위치 = 내 기록 섹션 y + 제안 목록 y + 행 y(각각 onLayout · 스크롤 내용 기준). 같은 id 로는 한 번만 움직인다.
+  const scrollRef = useRef<ScrollView>(null);
+  const focusY = useRef({ section: 0, list: 0, row: 0 });
+  const [pendingFocus, focusDone] = useOpenFromParam(focusSuggestionId);
+  const focusShown =
+    !!pendingFocus &&
+    openRecord === 'proposals' &&
+    (showAllProposals ? myProposals : myProposals.slice(0, 3)).some((p) => p.id === pendingFocus);
+  useEffect(() => {
+    if (!focusShown) return;
+    const t = setTimeout(() => {
+      const { section, list, row } = focusY.current;
+      scrollRef.current?.scrollTo({ y: Math.max(0, section + list + row - 8), animated: true });
+      focusDone();
+    }, FOCUS_SETTLE_MS);
+    return () => clearTimeout(t);
+  }, [focusShown, focusDone]);
 
   const onResolveWith = async (uqId: string, entryId: string) => {
     setAnswerFor(null);
@@ -199,7 +236,7 @@ export function JuniorMySpace({ me }: { me: string }) {
   }
 
   return (
-    <ScrollView keyboardShouldPersistTaps="handled" style={s.flex} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+    <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" style={s.flex} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
       {/* ── 히어로 — 내가 아는 노하우 히트맵(H5). 노하우가 0개면 그리지 않는다(빈 격자 금지).
              ★2026-08-27 오밀조밀 확산 6-4. 옛 판본은 히어로가 없고 groupCard 4장이 연달아 있었고,
                그 사이를 MiniStats 숫자 3칸이 끊고 있었다 — 숫자 3개는 대상이 없어 아무 말도 못 했다.
@@ -264,6 +301,7 @@ export function JuniorMySpace({ me }: { me: string }) {
              각 행은 대표 대상 1줄을 갖는다(R2) — 숫자 1은 대상 없이는 아무 말도 안 한다. ── */}
       {(myAnswered.length > 0 || myProposals.length > 0 || myQuestions.length > 0) && (
         // 펼친 목록도 섹션 안에 둔다 — 롤업 행 ↔ 목록 = 섹션 안 간격(8).
+        <View onLayout={(e) => { focusY.current.section = e.nativeEvent.layout.y; }}>
         <Section icon="albums-outline" title="내 기록">
           <RollupRows
             rows={[
@@ -330,9 +368,14 @@ export function JuniorMySpace({ me }: { me: string }) {
 
           {/* ② 내가 보낸 제안 — 롤업에서 펼쳤을 때만. 검토 중·반려가 위(정렬은 myProposals에서) */}
           {openRecord === 'proposals' && myProposals.length > 0 && (
-            <View style={s.groupCard}>
+            <View style={s.groupCard} onLayout={(e) => { focusY.current.list = e.nativeEvent.layout.y; }}>
               {(showAllProposals ? myProposals : myProposals.slice(0, 3)).map((sug, i) => (
-                <Appear key={sug.id} delay={stagger(i)}>
+                <View
+                  key={sug.id}
+                  style={sug.id === focusSuggestionId ? s.focusCard : undefined}
+                  onLayout={sug.id === focusSuggestionId ? (e) => { focusY.current.row = e.nativeEvent.layout.y; } : undefined}
+                >
+                <Appear delay={stagger(i)}>
                   <View style={i > 0 ? s.rowDivider : undefined}>
                     <View style={s.groupRow}>
                       <Ionicons name={sug.status === 'approved' ? 'checkmark-circle' : sug.status === 'rejected' ? 'close-circle' : 'time-outline'} size={16} color={sug.status === 'approved' ? BrandColors.good : sug.status === 'rejected' ? BrandColors.bad : InkColors.ink3} />
@@ -346,6 +389,7 @@ export function JuniorMySpace({ me }: { me: string }) {
                     )}
                   </View>
                 </Appear>
+                </View>
               ))}
               {!showAllProposals && myProposals.length > 3 && (
                 <MoreRow count={myProposals.length - 3} onPress={() => setShowAllProposals(true)} />
@@ -374,6 +418,7 @@ export function JuniorMySpace({ me }: { me: string }) {
             </View>
           )}
         </Section>
+        </View>
       )}
 
       {/* 맨 아래 여백 — 스크롤 gap(섹션 간격 20)과 더해 32. */}
@@ -538,6 +583,8 @@ const s = StyleSheet.create({
   groupCard: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: Space.md, marginBottom: Space.sm, ...Elevation.e1 },
   groupRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.md },
   rowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
+  // 알림(?suggestion=)으로 들어온 제안 강조 — 사장 근무표 focusCard 와 같은 테두리.
+  focusCard: { borderWidth: 2, borderColor: BrandColors.accentSolid, borderRadius: Radius.md },
   rejectNote: { fontSize: 12, color: InkColors.ink2, fontWeight: '600', lineHeight: 17, backgroundColor: InkColors.bgSoft, borderRadius: Radius.sm, paddingHorizontal: Space.sm, paddingVertical: Space.xs, marginBottom: Space.md },
   rowText: { flex: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink },
   statusTag: { fontSize: 11, fontWeight: '800', color: InkColors.ink3 },

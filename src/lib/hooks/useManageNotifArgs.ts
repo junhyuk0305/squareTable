@@ -45,14 +45,15 @@ export function useManageNotifArgs(): { ownerArgs: ManageOwnerArgs; received: Ma
   const claims = usePaymentClaimStore((s) => s.claims);
   const alerts = useOwnerAlertStore((s) => s.alerts);
   const today = useToday();
+  const rowRead = useMemberPrefsStore((s) => s.rowRead); // 눌러 본 줄(0811) — 목록·벨·앱 배지가 같은 값을 본다
 
   return useMemo(() => {
     // 매니저에게 배정한 사람은 사장이다 — 명부 SSOT(memberNameOf · 사장 포함). '직원'은 명부에 없을 때만.
     const nameOf = (id: string) => memberNameOf({ owner, staff }, id) ?? '직원';
     const quizProgress = quizProgressError ? undefined : quizProgressRaw;
     return {
-      ownerArgs: { queue, suggestions, swaps, pending, nameOf, feed, userId: me, ackAt, claims, alerts, assignments, courses, timeRequests, joinDone },
-      received: { feed, taskTemplates: templates, done, today, suggestions, userId: me, nameOf, ackAt, scheduleNotices, shiftTemplates, quizProgress, legacyQuizIds },
+      ownerArgs: { queue, suggestions, swaps, pending, nameOf, feed, userId: me, ackAt, claims, alerts, assignments, courses, timeRequests, joinDone, rowRead },
+      received: { feed, taskTemplates: templates, done, today, suggestions, userId: me, nameOf, ackAt, scheduleNotices, shiftTemplates, quizProgress, legacyQuizIds, rowRead },
     };
-  }, [queue, suggestions, swaps, pending, owner, staff, feed, me, ackAt, claims, alerts, assignments, courses, timeRequests, joinDone, templates, done, today, scheduleNotices, shiftTemplates, quizProgressRaw, quizProgressError, legacyQuizIds]);
+  }, [queue, suggestions, swaps, pending, owner, staff, feed, me, ackAt, claims, alerts, assignments, courses, timeRequests, joinDone, templates, done, today, scheduleNotices, shiftTemplates, quizProgressRaw, quizProgressError, legacyQuizIds, rowRead]);
 }

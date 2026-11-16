@@ -25,6 +25,7 @@ import { InkColors } from '@/lib/theme/colors';
 import { injectPwaHead } from '@/lib/pwa/head';
 import { usePushBootstrap } from '@/lib/push/usePushBootstrap';
 import { useAppBadgeSync } from '@/lib/push/appBadge';
+import { useNotifSeenSync } from '@/lib/app/useNotifSeenSync';
 import { initAnalytics, installGlobalErrorHandlers, track } from '@/lib/analytics/track';
 import { useScreenTracking } from '@/lib/analytics/useScreenTracking';
 import { guardMarketingRoutes } from '@/lib/web/marketingGuard';
@@ -85,6 +86,7 @@ export default function RootLayout() {
   usePushBootstrap();
   // 앱 아이콘 배지(숫자) — 안 읽은 알림 수를 OS 아이콘에 동기화(Android PWA/데스크톱, iOS는 no-op).
   useAppBadgeSync();
+  useNotifSeenSync();
 
   // 진입 스플래시 모션(~1.9s). 이 구간에 폰트/세션 체크 시간을 숨긴다.
   //

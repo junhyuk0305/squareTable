@@ -272,6 +272,13 @@ export async function clearDeviceNotifications(): Promise<void> {
   await Notifications.setBadgeCountAsync(0).catch(() => {});
 }
 
+/** 앱 아이콘 배지 숫자(2026-11-16 · R-13) — 앱이 열려 있는 동안 허브 알림 숫자와 같게 둔다(appBadge.useAppBadgeSync).
+ *  런처가 숫자 배지를 안 그리는 안드로이드 기기에서는 OS 가 무시한다. */
+export function setNativeBadge(count: number): void {
+  if (!pushSupported()) return;
+  void Notifications.setBadgeCountAsync(Math.max(0, count)).catch(() => {});
+}
+
 /** 이미 권한이 있으면 조용히 토큰을 등록/갱신한다. 부팅 시(웹의 ensurePushSubscribed 와 대응). */
 export async function ensureNativePushRegistered(unitId: string | null): Promise<void> {
   if (!pushSupported()) return;

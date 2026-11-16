@@ -21,3 +21,5 @@ export function releasePendingPushToken(_token?: string): Promise<unknown> {
   return Promise.resolve();
 }
 export async function clearDeviceNotifications(): Promise<void> {}
+/** 웹 배지는 appBadge.setAppBadge(Badging API)가 맡는다. */
+export function setNativeBadge(_count: number): void {}

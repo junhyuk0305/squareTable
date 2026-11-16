@@ -27,7 +27,8 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 export default function JuniorChatScreen() {
   // 홈의 예시 질문 칩이 넘긴 문구 — 입력칸을 채우기만 한다(전송은 직원이).
   // ?uqId=<미답질문 id> — 알림(레지스트리 q_answered·question route)에서 들어온 질문(역 ⑤).
-  const { seed, uqId } = useLocalSearchParams<{ seed?: string; uqId?: string }>();
+  // ?suggestion=<제안 id> — 내 제안 결과 알림에서 들어오면 '내 공간'의 보낸 제안에서 그 제안을 연다.
+  const { seed, uqId, suggestion } = useLocalSearchParams<{ seed?: string; uqId?: string; suggestion?: string }>();
   const entries = usePlaybookStore((s) => s.entries);
   const me = useSessionStore((s) => s.userId);
   const queue = useUnknownQueueStore((s) => s.queue);
@@ -67,7 +68,10 @@ export default function JuniorChatScreen() {
     () => (focusUq && focusUq.junior_id === me ? history.find((q) => q.query_text.trim() === focusUq.query_text.trim())?.id : undefined),
     [focusUq, me, history],
   );
-  const initialSeg = focusUq && !focusTurnId ? 'mine' : 'ask';
+  // ?suggestion= 은 내 제안일 때만 연다(남의 제안은 내 공간 목록에 없다).
+  const focusSuggestionId =
+    suggestion && suggestions.some((s) => s.id === suggestion && s.proposer_id === me) ? suggestion : undefined;
+  const initialSeg = focusSuggestionId || (focusUq && !focusTurnId) ? 'mine' : 'ask';
 
   return (
     // 바탕(Surface.screen · 채팅도 예외 없음)·탭바는 <Screen> 이 든다. 세그먼트·채팅이 자기 스크롤을 가져 scroll={false}.
@@ -91,7 +95,7 @@ export default function JuniorChatScreen() {
             />
           }
           ask={<JuniorAsk seed={seed} focusId={focusTurnId} />}
-          mine={<JuniorMySpace me={me} />}
+          mine={<JuniorMySpace me={me} focusSuggestionId={focusSuggestionId} />}
           mineCount={answerableCount}
         />
       )}

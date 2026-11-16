@@ -172,18 +172,18 @@ function clientPushRoute(audience: string | undefined, tag: string | undefined, 
   switch (tag) {
     case 'join': return `/owner/staff${id ? `?member=${id}` : ''}`;
     case 'question': return owner ? `/owner/coach${id ? `?uqId=${id}` : ''}` : `/junior/chat${id ? `?uqId=${id}` : ''}`;
-    case 'suggestion': return '/owner/suggestions';
-    case 'swap-approval': return '/owner/schedule';
+    case 'suggestion': return `/owner/suggestions${id ? `?suggestion=${id}` : ''}`;
+    case 'swap-approval': return `/owner/schedule${id ? `?swap=${id}` : ''}`;
     case 'shift-time': return `/owner/schedule${id ? `?request=${id}` : ''}`;
     case 'quiz-done': return id ? `/owner/quiz/${id}?tab=result` : '/owner/quiz-list';
     case 'role': return '/junior/home';
     case 'swap-req':
-    case 'swap-result': return owner ? '/owner/schedule' : '/junior/schedule';
+    case 'swap-result': return `${owner ? '/owner/schedule' : '/junior/schedule'}${id ? `?swap=${id}` : ''}`;
     case 'mention': return `${work}${id ? `?feed=${id}` : ''}`;
     case 'assign': return id ? `${work}?view=todo&task=${id}` : `${work}?view=todo`;
     case 'training': return `/junior/work${id ? `?quiz=${id}` : ''}`;
     case 'q-answered': return `/junior/chat${id ? `?uqId=${id}` : ''}`;
-    case 'suggestion-result': return '/junior/chat';
+    case 'suggestion-result': return `/junior/chat${id ? `?suggestion=${id}` : ''}`;
     default: return '/';
   }
 }

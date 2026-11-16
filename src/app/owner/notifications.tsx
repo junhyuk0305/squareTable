@@ -16,14 +16,13 @@ import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { useManageNotifArgs } from '@/lib/hooks/useManageNotifArgs';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
-import { showToast } from '@/lib/store/useToastStore';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { MarkAllReadButton } from '@/components/MarkAllReadButton';
 import { NotificationList, ALL_KIND_UI } from '@/components/NotificationList';
 import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { SegmentTabs } from '@/components/SegmentTabs';
-import { buildManagerNotifications, buildOwnerNotifications } from '@/lib/utils/notifications';
+import { buildManagerNotifications, buildOwnerNotifications, notifRowKey } from '@/lib/utils/notifications';
 import { honorific } from '@/lib/utils/roles';
 import { InkColors, Surface } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -50,10 +49,10 @@ export default function OwnerNotificationsScreen() {
   const role = useSessionStore((s) => s.role);
   const storeName = useSessionStore((s) => s.storeName) || '우리 매장';
   const markNoticeRead = useWorkStore((s) => s.markNoticeRead);
-  const markAllRead = useWorkStore((s) => s.markAllRead);
   // '모두 읽기' 기준 시각(0078) — 처리형 항목(합류·질문·제안·교대)의 배지·강조 해제 축.
   const unitId = useSessionStore((s) => s.unitId);
-  const ackNotifs = useMemberPrefsStore((s) => s.ackNotifs);
+  const markAllSeen = useMemberPrefsStore((s) => s.markAllSeen);
+  const markRowRead = useMemberPrefsStore((s) => s.markRowRead);
 
   // ★'전체 매장' 탭에만 crossLoaded 게이트가 있고 '이 매장' 탭은 게이트가 없었다 — 그래서
   //   "지금 처리할 알림이 없어요"가 먼저 떴다. 이 목록은 7개 축을 합성해 만든다(rows) — 하나라도
@@ -90,7 +89,8 @@ export default function OwnerNotificationsScreen() {
   useEffect(() => {
     if (multiStore) void hydrateCross();
   }, [multiStore, hydrateCross]);
-  const { listRows: allRows, totalUnread: allUnread, hiddenCount, openRow } = useCrossNotifRows();
+  // '전체 매장' 탭 = 매장 줄만(공간 줄은 허브) · 탭 숫자도 같은 줄을 센다. 전체 읽음 = 그 탭의 매장 자리 전부(markAll('stores')).
+  const { storeRows: allRows, storeUnread: allUnread, hiddenCount, openRow, markAll: markAllCross } = useCrossNotifRows();
 
   const initial = (userName ?? '나').trim().slice(0, 1) || '나';
 
@@ -111,18 +111,20 @@ export default function OwnerNotificationsScreen() {
   );
   const hasUnread = useMemo(() => rows.some((r) => r.unread), [rows]);
 
+  // 전체 읽음(2026-11-16 · 0810) — 쓰기는 markAllSeen 하나(서버 시각 · 성공 뒤에만 문구).
+  //   '이 매장' = 이 매장 자리만 → 허브에서도 이 매장 줄은 읽은 것이다. '전체 매장' = 그 탭의 매장 자리 전부.
   function markAll() {
-    if (!hasUnread) return;
-    if (unreadReadIds.length > 0) markAllRead(unreadReadIds, me);
-    if (unitId) void ackNotifs(unitId);
-    showToast('모두 읽음 처리했어요', 'good');
+    if (seg === 'all' && multiStore) return void markAllCross('stores');
+    if (!hasUnread || !unitId) return;
+    void markAllSeen([unitId], unreadReadIds);
   }
+  const showMarkAll = seg === 'all' && multiStore ? allUnread > 0 : hasUnread;
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       {/* 전체 읽음 = 제목 상단바 오른쪽 끝(네이티브 헤더는 꺼져 있다 · 허브 알림 화면과 같은 부품·같은 자리).
-          이 매장 것만 읽는다('이 매장' 탭에서만) — 전 매장은 허브 알림 화면의 '전체 읽음'이 맡는다. */}
-      <ScreenTitleHeader title="알림" backFallback right={seg === 'store' && hasUnread ? <MarkAllReadButton onPress={markAll} /> : undefined} />
+          '이 매장' 탭 = 이 매장 줄 · '전체 매장' 탭 = 그 탭의 매장 줄 전부(2026-11-16 · 허브가 맨 위). */}
+      <ScreenTitleHeader title="알림" backFallback right={showMarkAll ? <MarkAllReadButton onPress={markAll} /> : undefined} />
       <Stack.Screen options={{ title: '알림' }} />
       {!ready ? (
         <ScreenLoading label="알림을 불러오고 있어요…" />
@@ -190,7 +192,8 @@ export default function OwnerNotificationsScreen() {
             rows={rows}
             kindUI={KIND_UI}
             onPress={(r) => {
-              if (r.readFeedId) markNoticeRead(r.readFeedId, me); // 멘션은 탭하면 읽음 처리
+              if (r.readFeedId) markNoticeRead(r.readFeedId, me); // 멘션은 탭하면 읽음 처리(공지 읽음 현황 · read_by)
+              markRowRead(notifRowKey(r)); // 눌러서 들어가면 그 줄은 읽음(모든 종류 · 0811)
               if (r.route) router.push(r.route as Href);
             }}
             empty={{
