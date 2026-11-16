@@ -62,7 +62,8 @@ const TODAY_LINE = 18;
 export default function OwnerScheduleScreen() {
   const router = useRouter();
   // ?request=<요청 id> — 근무 시간 수정 요청 알림(레지스트리 shift_time route)에서 들어오면 그 요청 카드를 강조하고 한 번 스크롤한다(역 ⑤).
-  const { request: focusRequestId } = useLocalSearchParams<{ request?: string }>();
+  // ?swap=<교대 요청 id> — 교대 승인 대기 알림에서 들어오면 그 교대 카드를 같은 방식으로 강조·스크롤한다. 둘 중 하나만 온다.
+  const { request: focusRequestId, swap: focusSwapId } = useLocalSearchParams<{ request?: string; swap?: string }>();
   const staff = useStaffStore((s) => s.staff);
   const owner = useStaffStore((s) => s.owner);
   // 직원 관리·매장 설정은 사장 전용 — 매니저에겐 그리로 가는 버튼을 그리지 않는다.
@@ -115,8 +116,9 @@ export default function OwnerScheduleScreen() {
   // 요청 카드 위치 = 승인 섹션 y + 카드 목록 y + 카드 y(각각 onLayout · 스크롤 내용 기준). 같은 id 로는 한 번만 움직인다.
   const scrollRef = useRef<ScrollView>(null);
   const focusY = useRef({ section: 0, list: 0, card: 0 });
-  const [pendingFocus, focusDone] = useOpenFromParam(focusRequestId);
-  const focusShown = !!pendingFocus && timePending.some((r) => r.id === pendingFocus);
+  const [pendingFocus, focusDone] = useOpenFromParam(focusRequestId ?? focusSwapId);
+  const focusShown =
+    !!pendingFocus && (timePending.some((r) => r.id === pendingFocus) || pending.some((r) => r.id === pendingFocus));
   useEffect(() => {
     if (!focusShown) return;
     const t = setTimeout(() => {
@@ -333,7 +335,12 @@ export default function OwnerScheduleScreen() {
                 </View>
               ))}
               {pending.map((r, i) => (
-                <Appear key={r.id} delay={stagger(i)}>
+                <View
+                  key={r.id}
+                  style={r.id === focusSwapId ? styles.focusCard : undefined}
+                  onLayout={r.id === focusSwapId ? (e) => { focusY.current.card = e.nativeEvent.layout.y; } : undefined}
+                >
+                <Appear delay={stagger(i)}>
                   <PendingCard
                     r={r}
                     nameOf={nameOf}
@@ -343,6 +350,7 @@ export default function OwnerScheduleScreen() {
                     onReject={() => rejectSwap(r.id)}
                   />
                 </Appear>
+                </View>
               ))}
             </View>
           )}

@@ -159,19 +159,21 @@ export const notifyStoreQuestion = (q: string, uqId?: string) => {
 };
 
 // 제안 검토는 사장만 한다(F-2). 매니저에게 보내면 열 수 없는 /owner/suggestions 로 간다.
-export const notifyOwnersSuggestion = (name: string, text: string) =>
+export const notifyOwnersSuggestion = (name: string, text: string, suggestionId?: string) =>
   pushNotify({
     audience: 'owners',
     kind: 'suggestion',
+    itemId: suggestionId,
     ownerOnly: true,
     title: NOTIF.suggestion.title(name),
     body: text,
   });
 
-export const notifyOwnersSwapApproval = (when: string) =>
+export const notifyOwnersSwapApproval = (when: string, swapId?: string) =>
   pushNotify({
     audience: 'owners',
     kind: 'swap_approval',
+    itemId: swapId,
     title: '교대 승인 대기',
     body: `교대 요청이 승인을 기다려요 · ${when}`,
   });
@@ -204,28 +206,31 @@ export const notifyOwnersQuizDone = (courseId: string, name: string, courseName:
 // 직원이 받는 것들 (사장/동료 행동 → 직원)
 // 공지는 푸시하지 않는다(2026-10-16 사용자 결정) — 공지 패널에서 본다.
 /** 대타 요청 — 아무나 수락 가능하므로 매장 직원 전체에게. */
-export const notifyStaffSwapRequest = (when: string) =>
+export const notifyStaffSwapRequest = (when: string, swapId?: string) =>
   pushNotify({
     audience: 'staff',
     kind: 'swap',
+    itemId: swapId,
     title: '대타 요청',
     body: `교대 대타를 찾고 있어요 · ${when}`,
   });
 
 /** 맞교환 요청 — 상대가 지정된 경우 그 직원에게만. */
-export const notifyUserSwapRequest = (userId: string, when: string) =>
+export const notifyUserSwapRequest = (userId: string, when: string, swapId?: string) =>
   pushNotify({
     audience: 'user',
     kind: 'swap',
+    itemId: swapId,
     userId,
     title: '맞교환 요청',
     body: `나에게 맞교환을 요청했어요 · ${when}`,
   });
 
-export const notifyUserSwapResult = (userId: string, ok: boolean, when: string) =>
+export const notifyUserSwapResult = (userId: string, ok: boolean, when: string, swapId?: string) =>
   pushNotify({
     audience: 'user',
     kind: 'swap_result',
+    itemId: swapId,
     userId,
     title: ok ? '교대 확정' : '교대 반려',
     body: when,
@@ -244,10 +249,11 @@ export const notifyUserQuestionAnswered = (userId: string, uqId: string, answere
   });
 
 /** 내 노하우 제안 결과(반영·반려, D12) — 제안한 사람에게만. 반려 사유는 '내가 보낸 제안'에서 본다. */
-export const notifyUserSuggestionResult = (userId: string, approved: boolean, text: string) =>
+export const notifyUserSuggestionResult = (userId: string, approved: boolean, text: string, suggestionId?: string) =>
   pushNotify({
     audience: 'user',
     kind: 'suggestion_result',
+    itemId: suggestionId,
     userId,
     title: approved ? '내 노하우 제안이 승인됐어요' : '내 노하우 제안이 반려됐어요',
     body: text,

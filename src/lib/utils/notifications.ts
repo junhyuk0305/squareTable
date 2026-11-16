@@ -328,7 +328,7 @@ export function juniorNotifRows(args: {
       body: `${fmtDateKo(r.date)}${tpl ? ` ${tpl.start}~${tpl.end}` : ''}`,
       at: r.created_at,
       unread: isAfterAck(r.created_at, ackAt),
-      route: NOTIF.swap.route('junior'),
+      route: NOTIF.swap.route('junior', r.id),
     });
   }
 
@@ -357,7 +357,7 @@ export function juniorNotifRows(args: {
       body: !ok && sg.owner_note ? `${sg.text}\n사유: ${sg.owner_note}` : sg.text,
       at: sg.reviewed_at as string,
       unread: isAfterAck(sg.reviewed_at, ackAt),
-      route: NOTIF.suggestion_result.route('junior'),
+      route: NOTIF.suggestion_result.route('junior', sg.id),
     });
   }
 
@@ -372,7 +372,7 @@ export function juniorNotifRows(args: {
       body: fmtDateKo(r.date),
       at: r.updated_at,
       unread: false,
-      route: NOTIF.swap_result.route('junior'),
+      route: NOTIF.swap_result.route('junior', r.id),
     });
   }
 
@@ -787,7 +787,7 @@ function ownerRows(args: {
       body: s.text,
       at: s.created_at,
       unread: isAfterAck(s.created_at, ackAt),
-      route: NOTIF.suggestion.route('owner'),
+      route: NOTIF.suggestion.route('owner', s.id),
     });
   }
 
@@ -800,7 +800,7 @@ function ownerRows(args: {
       body: fmtDateKo(r.date),
       at: r.updated_at,
       unread: isAfterAck(r.updated_at, ackAt),
-      route: NOTIF.swap_approval.route('owner'),
+      route: NOTIF.swap_approval.route('owner', r.id),
     });
   }
 
@@ -925,7 +925,7 @@ function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
       at: sg.reviewed_at as string,
       unread: isAfterAck(sg.reviewed_at, ackAt),
       // 물어보기 탭 '내 공간'에 내가 보낸 제안 목록이 있다(직원과 같은 곳 · F-2). /owner/categories 는 허용 목록 밖이다.
-      route: NOTIF.suggestion_result.route('junior'),
+      route: NOTIF.suggestion_result.route('junior', sg.id),
     });
   }
 

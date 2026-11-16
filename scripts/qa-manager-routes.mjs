@@ -137,7 +137,7 @@ check('shift_time 푸시: 매니저도 받는다(ownerOnly 아님)', !/kind: 'sh
 check('엣지: 잠긴 매니저는 관리자 푸시 제외(seat_locked_for)', /audience === 'owners'[\s\S]{0,400}seat_locked_for/.test(read('supabase/functions/push/index.ts')));
 check('내가 물은 질문은 안 뜬다(물어보기 탭에서 답할 수 없다)', !ids.includes('q_uq_mine'));
 const res = mgr.find((r) => r.id === 'sugres_sg_mine_done');
-check('내 제안 결과 → /junior/chat', res?.route === '/junior/chat', show(res?.route));
+check('내 제안 결과 → /junior/chat(그 제안 · ?suggestion=<id>)', res?.route === '/junior/chat?suggestion=sg_mine_done', show(res?.route));
 // 공지는 벨·푸시에서 뺐다(2026-10-16 사용자 결정 · 채팅 맨 위 고정 공지).
 check('남기는 행: 멘션·배정·교대 승인', ['mention_f_mention', 'assign_t1', 'swap_sw_acc'].every((i) => ids.includes(i)), show(ids));
 check('공지 행 없음(10-16)', !ids.includes('notice_f_notice'));

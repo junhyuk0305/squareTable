@@ -71,6 +71,8 @@ export function routeForRole(url: string, role: string): string {
     if (managerMayOpen(path)) return url;
     return '/junior/home';
   }
+  // 받은 교대 요청·내 교대 결과(?swap=)는 직원 근무표에서만 수락·확인한다. 사장 근무표에는 그 칸이 없다.
+  if (path === '/junior/schedule' && /[?&]swap=/.test(url)) return url;
   if (isJunior && MANAGER_FLIP.some((p) => path === `/junior/${p}` || path.startsWith(`/junior/${p}/`))) {
     return '/owner/' + url.slice('/junior/'.length);
   }

@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
-import { Stack } from 'expo-router';
+import { View, Text, Pressable, StyleSheet, ScrollView, type LayoutChangeEvent } from 'react-native';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Screen, SectionStack } from '@/components/Screen';
@@ -36,6 +36,7 @@ import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { EmptyStyles } from '@/lib/theme/empty';
+import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
 
 const STATUS_META: Record<
   SwapRequest['status'],
@@ -48,7 +49,13 @@ const STATUS_META: Record<
   cancelled: { label: '취소', color: TextColor.secondary, bg: InkColors.bgSoft },
 };
 
+/** 알림으로 들어온 교대 카드로 스크롤하기 전 등장 애니메이션이 가라앉는 시간(사장 근무표와 같다). */
+const FOCUS_SETTLE_MS = 520;
+
 export default function JuniorScheduleScreen() {
+  // ?swap=<교대 요청 id> — 교대 알림(받은 요청·내 결과)에서 들어오면 교대 탭을 열고 그 요청을 강조·스크롤한다.
+  //   사장 근무표 ?request= 와 같은 방식. 매니저도 이 화면으로 온다.
+  const { swap: focusSwapId } = useLocalSearchParams<{ swap?: string }>();
   const me = useSessionStore((s) => s.userId);
   const staff = useStaffStore((s) => s.staff);
   const staffLoaded = useStaffStore((s) => s.loaded);
@@ -64,7 +71,13 @@ export default function JuniorScheduleScreen() {
   const cancelSwap = useScheduleStore((s) => s.cancelSwap);
 
   const today = todayStr();
-  const [tab, setTab] = useState<'week' | 'swap'>('week');
+  const [tab, setTab] = useState<'week' | 'swap'>(focusSwapId ? 'swap' : 'week');
+  // 알림을 또 눌러 값이 바뀌면 교대 탭을 다시 연다(렌더 중 조정 · 같은 값으로는 한 번만).
+  const [tabFocus, tabFocusDone] = useOpenFromParam(focusSwapId);
+  if (tabFocus) {
+    tabFocusDone();
+    if (tab !== 'swap') setTab('swap');
+  }
   const [monday, setMonday] = useState(() => mondayOf(today));
   const [composer, setComposer] = useState<{ date: string; template: ShiftTemplate } | null>(null);
   // 근무표에서 내 근무를 눌렀을 때 먼저 뜨는 시트 — 시간 고치기 / 교대 요청 중에서 고른다.
@@ -124,6 +137,46 @@ export default function JuniorScheduleScreen() {
   const HISTORY_CAP = 8;
   const history = useMemo(() => historyAll.slice(0, HISTORY_CAP), [historyAll]);
 
+  // 알림으로 온 요청 위치 = 섹션 묶음 y + 섹션 y + 목록 y + 카드 y(각각 onLayout · 스크롤 내용 기준). 같은 id 로는 한 번만 움직인다.
+  const scrollRef = useRef<ScrollView>(null);
+  const focusY = useRef({ stack: 0, incoming: 0, incomingList: 0, mine: 0, mineList: 0, history: 0, historyList: 0, card: 0 });
+  const [pendingFocus, focusDone] = useOpenFromParam(focusSwapId);
+  // 지난 요청에 있으면 접힌 목록을 편다. 표시 8건 밖이면 그릴 행이 없으니 펼침만 하고 끝낸다.
+  const historyIdx = pendingFocus ? historyAll.findIndex((r) => r.id === pendingFocus) : -1;
+  if (historyIdx >= 0 && !showHistory) setShowHistory(true);
+  if (historyIdx >= HISTORY_CAP) focusDone();
+  const focusIn: 'incoming' | 'mine' | 'history' | null =
+    !pendingFocus || tab !== 'swap'
+      ? null
+      : incoming.some((r) => r.id === pendingFocus)
+        ? 'incoming'
+        : myOpen.some((r) => r.id === pendingFocus)
+          ? 'mine'
+          : showHistory && history.some((r) => r.id === pendingFocus)
+            ? 'history'
+            : null;
+  useEffect(() => {
+    if (!focusIn) return;
+    const t = setTimeout(() => {
+      const y = focusY.current;
+      const section =
+        focusIn === 'incoming'
+          ? y.incoming + y.incomingList
+          : focusIn === 'mine'
+            ? y.mine + y.mineList
+            : y.history + y.historyList;
+      scrollRef.current?.scrollTo({ y: Math.max(0, y.stack + section + y.card - 8), animated: true });
+      focusDone();
+    }, FOCUS_SETTLE_MS);
+    return () => clearTimeout(t);
+  }, [focusIn, focusDone]);
+  const focusCardLayout = (id: string) =>
+    id === focusSwapId
+      ? (e: LayoutChangeEvent) => {
+          focusY.current.card = e.nativeEvent.layout.y;
+        }
+      : undefined;
+
   // 현재 시각 "HH:MM"(오늘 이미 끝난 근무 제외용). 순수 헬퍼로 분리 — useMemo 안에서 new Date()를
   // 부르면 비순수라 React Compiler가 메모이즈를 못 한다(컴파일러가 헬퍼 호출 결과를 자동 메모이즈).
   const now = new Date();
@@ -151,7 +204,7 @@ export default function JuniorScheduleScreen() {
         onChange={(k) => setTab(k as 'week' | 'swap')}
       />
 
-      <ScrollView contentContainerStyle={screenScrollStyle} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} contentContainerStyle={screenScrollStyle} showsVerticalScrollIndicator={false}>
         {!ready ? (
           <ScreenLoading label="근무표를 불러오고 있어요…" />
         ) : scheduleLoadError ? (
@@ -214,6 +267,7 @@ export default function JuniorScheduleScreen() {
             </Appear>
           </>
         ) : (
+          <View onLayout={(e) => { focusY.current.stack = e.nativeEvent.layout.y; }}>
           <SectionStack>
             {/* 교대 요청 올리기 — 이 탭의 유일한 Primary(카드 안 수락 버튼은 보조 형태로 내렸다) */}
             <Appear delay={stagger(0)}>
@@ -229,15 +283,25 @@ export default function JuniorScheduleScreen() {
             </Appear>
 
             {/* 내가 대응할 수 있는 요청 — 읽고 판단해서 수락까지 하는 유일한 목록이라 카드로 남긴다(배치⑤) */}
+            <View onLayout={(e) => { focusY.current.incoming = e.nativeEvent.layout.y; }}>
             <Appear delay={stagger(1)}>
-            <Section icon="people-outline" title="동료가 올린 요청">
+            <Section
+              icon="people-outline"
+              title="동료가 올린 요청"
+              onListLayout={(e) => { focusY.current.incomingList = e.nativeEvent.layout.y; }}
+            >
               {incoming.length === 0 ? (
                 <Empty text="지금 대응할 교대 요청이 없어요." />
               ) : (
                 incomingSorted.map((r, i) => {
                   const conflict = conflictOf(r);
                   return (
-                    <Appear key={r.id} delay={stagger(i)}>
+                    <View
+                      key={r.id}
+                      style={r.id === focusSwapId ? styles.focusCard : undefined}
+                      onLayout={focusCardLayout(r.id)}
+                    >
+                    <Appear delay={stagger(i)}>
                     <SwapCard r={r} nameOf={nameOf} tplById={tplById} forMe={isForMe(r)}>
                       {conflict && (
                         <View style={styles.conflict}>
@@ -258,22 +322,33 @@ export default function JuniorScheduleScreen() {
                       </Pressable>
                     </SwapCard>
                     </Appear>
+                    </View>
                   );
                 })
               )}
             </Section>
             </Appear>
+            </View>
 
             {/* 내가 올린 요청 — 상태만 확인하고 넘기는 목록이라 카드가 아니라 구분선 행으로 내린다(배치①) */}
+            <View onLayout={(e) => { focusY.current.mine = e.nativeEvent.layout.y; }}>
             <Appear delay={stagger(2)}>
-            <Section icon="paper-plane-outline" title="내가 올린 요청">
+            <Section
+              icon="paper-plane-outline"
+              title="내가 올린 요청"
+              onListLayout={(e) => { focusY.current.mineList = e.nativeEvent.layout.y; }}
+            >
               {myOpen.length === 0 ? (
                 <Empty text="진행 중인 요청이 없어요. 위 ‘교대 요청하기’로 올려보세요." />
               ) : (
                 <View>
                   {myOpen.map((r, i) => (
-                    <SwapRow
+                    <View
                       key={r.id}
+                      style={r.id === focusSwapId ? styles.focusCard : undefined}
+                      onLayout={focusCardLayout(r.id)}
+                    >
+                    <SwapRow
                       r={r}
                       nameOf={nameOf}
                       tplById={tplById}
@@ -289,14 +364,17 @@ export default function JuniorScheduleScreen() {
                         </Pressable>
                       }
                     />
+                    </View>
                   ))}
                 </View>
               )}
             </Section>
             </Appear>
+            </View>
 
             {/* 처리 결과 — 세 번째 목록. 접기 행 하나로 강등하고, 토글은 펼친 뒤에도 자리에 남는다 */}
             {history.length > 0 && (
+              <View onLayout={(e) => { focusY.current.history = e.nativeEvent.layout.y; }}>
               <Appear delay={stagger(3)}>
               <View>
                 <Pressable
@@ -315,16 +393,21 @@ export default function JuniorScheduleScreen() {
                   />
                 </Pressable>
                 {showHistory && (
-                  <View>
+                  <View onLayout={(e) => { focusY.current.historyList = e.nativeEvent.layout.y; }}>
                     {history.map((r, i) => (
-                      <SwapRow
+                      <View
                         key={r.id}
+                        style={r.id === focusSwapId ? styles.focusCard : undefined}
+                        onLayout={focusCardLayout(r.id)}
+                      >
+                      <SwapRow
                         r={r}
                         nameOf={nameOf}
                         tplById={tplById}
                         showRequester
                         divider={i > 0}
                       />
+                      </View>
                     ))}
                     {/* 잘렸으면 잘렸다고 말한다 — 조용한 절단은 "이게 전부"로 읽힌다. */}
                     {historyAll.length > HISTORY_CAP && (
@@ -336,8 +419,10 @@ export default function JuniorScheduleScreen() {
                 )}
               </View>
               </Appear>
+              </View>
             )}
           </SectionStack>
+          </View>
         )}
 
         {/* 가게 기본 정보 — 보조로 강등(하단 한 줄 칩) */}
@@ -397,17 +482,20 @@ export default function JuniorScheduleScreen() {
 function Section({
   icon,
   title,
+  onListLayout,
   children,
 }: {
   icon?: React.ComponentProps<typeof Ionicons>['name'];
   title: string;
+  /** 알림 착지 스크롤용 — 카드 목록의 y(섹션 기준). */
+  onListLayout?: (e: LayoutChangeEvent) => void;
   children: React.ReactNode;
 }) {
   return (
     // 제목 ↔ 카드 10(SectionLabel 아래 2 + 8) · 카드끼리 Gap.item. 섹션 사이는 SectionStack 이 정한다.
     <View style={styles.section}>
       <SectionLabel icon={icon} title={title} />
-      <View style={styles.sectionCards}>{children}</View>
+      <View style={styles.sectionCards} onLayout={onListLayout}>{children}</View>
     </View>
   );
 }
@@ -659,4 +747,6 @@ const styles = StyleSheet.create({
   disclosure: { ...CardStyles.rows, flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48 },
   disclosureText: { ...Type.body, flex: 1, fontWeight: '700', color: TextColor.secondary },
   historyMore: { ...Type.desc, paddingVertical: Space.sm, textAlign: 'center' },
+  // 알림(?swap=)으로 들어온 교대 요청 강조 — 사장 근무표 focusCard 와 같은 테두리.
+  focusCard: { borderWidth: 2, borderColor: BrandColors.accentSolid, borderRadius: Radius.md },
 });

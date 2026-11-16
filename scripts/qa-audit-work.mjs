@@ -169,7 +169,7 @@ console.log('\n[D12] 노하우 개선 제안은 실제로 고쳐 저장해야 �
   const rv = (store.match(/const review = async \([\s\S]*?\n  \};/) || [''])[0];
   const okBranch = (rv.match(/else if \(result\.decision === 'ok'\) \{[\s\S]*?\n    \}/) || [''])[0];
   check('★반영되면 제안한 사람에게 알린다(서버가 이번에 바꿨을 때만)', /approve: \(id, resultingEntryId\) => review\(id, 'approved'/.test(store)
-    && /notifyUserSuggestionResult\(before\.proposer_id, status === 'approved', status === 'approved' \? before\.text : resultBody\(before\)\)/.test(okBranch), okBranch.slice(0, 300));
+    && /notifyUserSuggestionResult\(before\.proposer_id, status === 'approved', status === 'approved' \? before\.text : resultBody\(before\), id\)/.test(okBranch), okBranch.slice(0, 300));
   check('★반려되면 제안한 사람에게 알린다(같은 갈래 · 본문 resultBody)', /reject: \(id, note\) => review\(id, 'rejected'/.test(store)
     && /const resultBody = \(s: PlaybookSuggestion\): string =>[^;]*: s\.text;/.test(store)
     && (rv.match(/notifyUserSuggestionResult\(/g) || []).length === 1, rv.slice(0, 300));
@@ -178,8 +178,8 @@ console.log('\n[D12] 노하우 개선 제안은 실제로 고쳐 저장해야 �
   // 주소·tag 는 레지스트리(P1 · 2026-10-16)가 정한다 — 헬퍼는 kind 만 말한다.
   const reg = strip(read('src/lib/notif/registry.ts'));
   check('알림은 제안한 사람 한 명에게(audience user) · 내 공간(/junior/chat)으로', /audience: 'user'/.test(nf) && /kind: 'suggestion_result'/.test(nf)
-    && /suggestion_result: \{[\s\S]*?route: \(_s\) => '\/junior\/chat'[\s\S]*?pushTag: 'suggestion-result'/.test(reg));
-  check('엣지 탭 경로표에 suggestion-result 가 있다', /case 'suggestion-result': return '\/junior\/chat';/.test(strip(read('supabase/functions/push/index.ts'))));
+    && /suggestion_result: \{[\s\S]*?route: \(_s, id\) => `\/junior\/chat\$\{id \? `\?suggestion=\$\{enc\(id\)\}` : ''\}`[\s\S]*?pushTag: 'suggestion-result'/.test(reg));
+  check('엣지 탭 경로표에 suggestion-result 가 있다', /case 'suggestion-result': return `\/junior\/chat\$\{id \? `\?suggestion=\$\{id\}` : ''\}`;/.test(strip(read('supabase/functions/push/index.ts'))));
 }
 
 console.log('\n[D13] 채팅방 만들기 — 멤버 초대 하나가 실패해도 이미 만든 방을 지우지 않는다');

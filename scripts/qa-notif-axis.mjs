@@ -235,5 +235,31 @@ check('⑥ 사장: 직원 제안 2건 모두 검토함에(자기 것 아님)', o
   check('⑫ #7 매니저 배지 == 목록 안읽음(같은 입력)', manageUnreadCount('manager', oA, rA) === buildManagerNotifications(oA, rA).filter((r) => r.unread).length);
 }
 
+// ⑬ 교대·제안 알림은 그 항목으로 간다(11-16 · ?swap=<요청 id> · ?suggestion=<제안 id>).
+//   매니저의 받은 교대는 직원 근무표에서만 수락한다 → ?swap= 이 붙은 /junior/schedule 은 뒤집지 않는다.
+{
+  const { buildJuniorNotifications } = await import(pathToFileURL(join(ROOT, 'src/lib/utils/notifications.ts')).href);
+  const { routeForRole } = await import(pathToFileURL(join(ROOT, 'src/lib/utils/roles.ts')).href);
+  const JR = 'u_b';
+  const jSwaps = [
+    { id: 'sw_in', unit_id: 'u1', kind: 'cover', requester_id: 'u_junior', status: 'open', date: '2026-08-20', target_staff_ids: [JR], created_at: iso(4), updated_at: iso(4) },
+    { id: 'sw_res', unit_id: 'u1', kind: 'cover', requester_id: JR, status: 'approved', date: '2026-08-21', created_at: iso(3), updated_at: iso(5) },
+  ];
+  const jSug = [{ id: 'sg_res', unit_id: 'u1', kind: 'new', proposer_id: JR, proposer_name: '최', text: '제안', status: 'approved', created_at: iso(2), reviewed_at: iso(3) }];
+  const jr = buildJuniorNotifications({ feed: [], swaps: jSwaps, templates: [], nameOf, userId: JR, today: TODAY, ackAt: null, suggestions: jSug });
+  const rt = (id) => jr.find((r) => r.id === id)?.route;
+  check('⑬ 직원 벨: 받은 교대 → /junior/schedule?swap=<id>', rt('swap_sw_in') === '/junior/schedule?swap=sw_in', rt('swap_sw_in'));
+  check('⑬ 직원 벨: 내 교대 결과 → /junior/schedule?swap=<id>', rt('swapres_sw_res') === '/junior/schedule?swap=sw_res', rt('swapres_sw_res'));
+  check('⑬ 직원 벨: 내 제안 결과 → /junior/chat?suggestion=<id>', rt('sugres_sg_res') === '/junior/chat?suggestion=sg_res', rt('sugres_sg_res'));
+  const ownRows = buildOwnerNotifications({ ...ownerArgs, userId: OWNER });
+  const ort = (id) => ownRows.find((r) => r.id === id)?.route;
+  check('⑬ 사장 벨: 제안 검토 → /owner/suggestions?suggestion=<id>', ort('s_sg_other') === '/owner/suggestions?suggestion=sg_other', ort('s_sg_other'));
+  check('⑬ 사장 벨: 교대 승인 대기 → /owner/schedule?swap=<id>', ownRows.find((r) => r.id === 'swap_sw_acc' && r.kind === 'swap_approval')?.route === '/owner/schedule?swap=sw_acc', ort('swap_sw_acc'));
+  const mOpen = mgr.find((r) => r.id === 'swap_sw_open');
+  check('⑬ 매니저 벨: 받은 교대 → /junior/schedule?swap=sw_open(뒤집지 않음)', mOpen?.route === '/junior/schedule?swap=sw_open', mOpen?.route);
+  check('⑬ routeForRole: 매니저 + /junior/schedule?swap= = 그대로', routeForRole('/junior/schedule?swap=x', 'manager') === '/junior/schedule?swap=x');
+  check('⑬ routeForRole: 매니저 + /junior/schedule(id 없음) = /owner/schedule', routeForRole('/junior/schedule', 'manager') === '/owner/schedule');
+}
+
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

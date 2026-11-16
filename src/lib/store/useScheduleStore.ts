@@ -469,8 +469,8 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
         : input.target_staff_id
           ? [input.target_staff_id]
           : [];
-      if (targets.length) targets.forEach((uid) => notifyUserSwapRequest(uid, fmtDateKo(input.date)));
-      else notifyStaffSwapRequest(fmtDateKo(input.date));
+      if (targets.length) targets.forEach((uid) => notifyUserSwapRequest(uid, fmtDateKo(input.date), req.id));
+      else notifyStaffSwapRequest(fmtDateKo(input.date), req.id);
     });
   },
   acceptSwap: (id, byStaffId) => {
@@ -484,7 +484,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     const rollback = () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) }));
     void acceptSwapRpc(id).then((d) => {
       if (settleDecision(d, rollback, '교대 수락에 실패했어요. 다시 시도해 주세요.', null, get().hydrate, '이미 다른 분이 수락했어요. 목록을 새로 불러올게요.')) {
-        notifyOwnersSwapApproval(fmtDateKo(before.date));
+        notifyOwnersSwapApproval(fmtDateKo(before.date), id);
       }
     });
   },
@@ -514,7 +514,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     const failMsg = '교대 승인에 실패했어요. 그 근무가 아직 있는지 확인해 주세요.';
     void approveSwapRpc(id, confirmPast).then(async ({ decision, code }) => {
       if (decision === 'ok') {
-        notifyUserSwapResult(before.requester_id, true, fmtDateKo(before.date));
+        notifyUserSwapResult(before.requester_id, true, fmtDateKo(before.date), id);
         void get().hydrate();
         return;
       }
@@ -576,7 +576,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     const rollback = () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) }));
     void updateSwap(id, { status: 'rejected', updated_at: at }, ['accepted']).then((d) => {
       if (settleDecision(d, rollback, '교대 반려에 실패했어요. 다시 시도해 주세요.', null, get().hydrate)) {
-        notifyUserSwapResult(before.requester_id, false, fmtDateKo(before.date));
+        notifyUserSwapResult(before.requester_id, false, fmtDateKo(before.date), id);
       }
     });
   },
