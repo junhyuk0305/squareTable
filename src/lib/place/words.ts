@@ -298,11 +298,12 @@ export const SPACE_MEMBERS = {
   rejectBody: (name: string) => `${name}님의 합류 신청을 거절할까요? 30분이 지나면 다시 신청할 수 있어요.`,
   rejected: '거절했어요.',
   // S06 설정 · 초대코드
-  inviteTitle: '초대코드',
+  inviteSection: '멤버 초대',
   inviteHint: '멤버에게 알려 주세요. 최신 앱에서 넣을 수 있어요.',
-  inviteNone: '초대코드가 없어요',
-  inviteCopied: '초대코드를 복사했어요.',
-  inviteCopyFail: '복사하지 못했어요. 코드를 직접 알려 주세요.',
+  inviteMessageCopy: '초대 문구 복사',
+  inviteMessageCopied: '초대 문구를 복사했어요.',
+  // 카톡에 그대로 붙는 한 덩어리 · 넣는 곳 = 매장 탭의 SPACE_WORDS.enterCode
+  inviteMessage: (code: string) => `매장의 정석 공간에 초대할게요.\n앱 매장 탭 → 초대코드 넣기 → ${code} 입력`,
   // S06 설정 · 공간 지우기(0430 · 되돌리기 없음)
   deleteRow: '공간 지우기',
   deleteHint: '멤버가 모두 나가고 30일 뒤 기록이 지워져요',
