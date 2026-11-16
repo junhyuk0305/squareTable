@@ -622,6 +622,13 @@ def('H4B', '동시 승인에서 진 쪽 사본 정리(매니저 · 사장) · �
   const r5 = await review(M, s5, tM);
   check('H4B', '대조: 고치기 제안 대상(이긴 쪽 노하우)은 안 지운다', live(tM) && r5?.copyArchived !== true, `${JSON.stringify(r5)} · 살아 있음 ${live(tM)}`);
 
+  // ⑤-b 대조(CSO): 이긴 쪽 노하우가 없으면(노하우 없이 승인 · 이긴 쪽 노하우를 이미 지움) 내 사본이 유일한 노하우다 → 안 지운다
+  const s6 = `sug_rcb6_${w.s}`; seed(s6);
+  R.val(`update public.playbook_suggestions set status = 'approved', reviewed_by = ${q(w.owner.id)}, reviewed_at = now(), resulting_entry_id = null where id = ${q(s6)}; select 1;`);
+  const kM = `pb_rcb6m_${w.s}`;
+  await put(M, kM); const r6 = await review(M, s6, kM);
+  check('H4B', '대조: 이긴 쪽 노하우가 없으면 내 사본(유일한 노하우)은 안 지운다', live(kM) && r6?.copyArchived !== true, `${JSON.stringify(r6)} · 살아 있음 ${live(kM)}`);
+
   // ⑥ 앱이 inserted_by · inserted_at 을 바꾸지 못한다(사본 판정의 근거)
   const u6 = await M.c.from('playbook_entries').update({ inserted_by: M.id, inserted_at: new Date().toISOString() }).eq('id', gO2).select('id');
   const by6 = R.val(`select coalesce(inserted_by::text, '') from public.playbook_entries where id = ${q(gO2)}`);
