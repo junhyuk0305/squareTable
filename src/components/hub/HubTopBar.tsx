@@ -27,8 +27,8 @@ export function HubTopBar() {
 
 const styles = StyleSheet.create({
   // zIndex — 매장 드롭다운이 아래 콘텐츠 위로 겹쳐 열린다. 상단바가 형제보다 위에 그려져야 한다.
-  // 높이 = 83 - 스크롤 위 여백 16 - 첫 간격 20 = 47(2026-11-02). 매장 토글 칸이 32 로 낮아져도(트랙 47 → 42)
-  //   허브 헤더 높이는 매장 층 상단바(Layout.headerH 83)와 그대로 같다.
+  // 높이 = Layout.headerH - 스크롤 위 여백 - 첫 간격(73 - 16 - 20 = 37 · 2026-11-16 R-6). 버튼(44)이 더 커서
+  //   실제 줄 높이는 44 다 — 버튼 가운데가 매장 층 상단바(73) 가운데와 2px 안으로 맞는다.
   topbar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', zIndex: 20,
     minHeight: Layout.headerH - Layout.screenTop - Layout.sectionGap,

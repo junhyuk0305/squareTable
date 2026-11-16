@@ -65,11 +65,12 @@ export const Gap = {
 /**
  * 화면 틀 치수 — `<Screen>`·`<Stack>`·탭 헤더가 읽는다(2026-11-02 사용자 결정).
  * 화면마다 첫 여백(0~24)·섹션 간격(8~24)을 직접 적던 것을 여기 한 곳으로 모은다.
- *  headerH = 탭 루트 헤더 높이(홈 상단바 기준). 위 안전 영역(insets.top)은 **빼고** 잰 값이다.
+ *  headerH = 모든 상단 헤더 높이(2026-11-16 사용자 결정 R-6 "모든 헤더 73" · 탭·상세·뒤로가기 없는 화면·본사 머리 줄 같음).
+ *   위 안전 영역(insets.top)은 **빼고** 잰 값이다. 식은 useHeaderFrame() 한 곳.
  *  업무 채팅(떠 있는 알약 헤더)은 이 규칙에서 뺀다.
  */
 export const Layout = {
-  headerH: 83,
+  headerH: 73,
   screenTop: Space.lg, // 16 — 헤더 아래 첫 여백
   screenX: SCREEN_GUTTER, // 20
   sectionGap: 20,

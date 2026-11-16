@@ -12,7 +12,7 @@ import { Space, screenScrollStyle } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
-import { HeaderBackButton } from '@/components/HeaderBackButton';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { SegmentTabs } from '@/components/SegmentTabs';
 import { Appear } from '@/components/Appear';
 import { Wordmark } from '@/components/Wordmark';
@@ -94,11 +94,8 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       {/* 뒤로가기는 웹에서만 — 웹은 랜딩(welcome)에서 들어오니 돌아갈 곳이 있지만,
           네이티브는 index 가 곧장 여기로 Redirect 하는 **첫 화면**이라 뒤로 갈 곳이 없다(2026-09-03 실기기). */}
-      {Platform.OS === 'web' && (
-        <View style={styles.topbar}>
-          <HeaderBackButton fallback="/" />
-        </View>
-      )}
+      {/* 헤더 높이 = 다른 모든 헤더와 같은 73(2026-11-16 R-6). 제목은 본문이 크게 든다. */}
+      {Platform.OS === 'web' && <ScreenTitleHeader title="" backFallback="/" />}
 
       <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
@@ -192,7 +189,6 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Surface.screen },
-  topbar: { height: 48, justifyContent: 'center' },
   // 좌우·아래 = 화면 틀 값. 위는 웹 뒤로가기 줄 바로 아래라 좁게, 세로 가운데 정렬·블록 사이 28 은 이 화면 고유.
   scroll: { ...screenScrollStyle, flexGrow: 1, paddingTop: Space.xs, justifyContent: 'center', gap: 28 },
   header: { alignItems: 'center', gap: Space.md },

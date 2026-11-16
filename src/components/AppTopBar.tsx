@@ -14,11 +14,10 @@
 // ★공간 홈도 같은 상단바다(2026-11-16 사용자 결정 · 실측 결함 R-1 · 공간 전용 헤더를 따로 만들지 않는다).
 //   place='space' = 전환 칩 오른쪽 칸이 지금 공간 · 벨이 지금 공간 알림(SpaceNotificationBell). 계정 버튼은 같다.
 //
-// ★높이·위 안전 영역(2026-11-02 사용자 결정): 높이 = insets.top + `Layout.headerH`(83) 고정, 내용은 세로 가운데.
-//   탭 루트 헤더(ScreenTitleHeader variant="tab")가 같은 값을 읽어 두 헤더 높이가 구조로 같다.
+// ★높이·위 안전 영역: 높이 = useHeaderFrame()(insets.top + `Layout.headerH` 73) 고정, 내용은 세로 가운데.
+//   ScreenTitleHeader(탭·상세)가 같은 식을 읽어 모든 헤더 높이가 구조로 같다(2026-11-16 R-6).
 //   위 안전 영역(insets.top)은 **이 컴포넌트가 든다** — `<Screen>` 은 edges=[] 이다. 호출부가 SafeAreaView top 을 또 주면 이중이다.
 import { View, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { StoreToggle } from '@/components/StoreToggle';
@@ -26,10 +25,11 @@ import { NotificationBell, OwnerNotificationBell, SpaceNotificationBell } from '
 import { AccountAvatarButton } from '@/components/AccountAvatarButton';
 import { Appear } from '@/components/Appear';
 import { Surface } from '@/lib/theme/colors';
-import { Layout, SCREEN_GUTTER, Space } from '@/lib/theme/layout';
+import { SCREEN_GUTTER, Space } from '@/lib/theme/layout';
+import { useHeaderFrame } from '@/lib/hooks/useHeaderFrame';
 
 export function AppTopBar({ place = 'store' }: { place?: 'store' | 'space' } = {}) {
-  const insets = useSafeAreaInsets();
+  const frame = useHeaderFrame();
   const role = useSessionStore((s) => s.role);
   const ownerAxis = role === 'owner' || role === 'manager';
 
@@ -37,7 +37,7 @@ export function AppTopBar({ place = 'store' }: { place?: 'store' | 'space' } = {
     // A11(2026-08-08) — 틀이 먼저, 내용이 나중. 상단바가 화면보다 먼저 앉는다(내용은 각 화면의 Appear).
     // 둘이 동시에 뜨면 화면이 통째로 깜빡인 것처럼 보인다.
     <Appear offsetY={6} duration={340} style={styles.barWrap}>
-      <View style={[styles.bar, { paddingTop: insets.top, height: insets.top + Layout.headerH }]}>
+      <View style={[styles.bar, frame]}>
         <StoreToggle scope={place} />
         <View style={styles.right}>
           {place === 'space' ? (
@@ -62,9 +62,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SCREEN_GUTTER,
-    // 높이는 위에서 고정한다(insets.top + Layout.headerH 83). 83 의 출처 = 옛 위 20·아래 16 여백 + 옛 내용 47(매장 토글 트랙).
-    // 2026-11-02 매장 토글 칸이 32 로 낮아져 내용(트랙 42)이 줄었지만 높이는 83 그대로다.
-    // 허브 상단바(HubTopBar)는 minHeight 47(= 83 - 스크롤 위 여백 16 - 첫 간격 20)로 같은 83 을 맞춘다.
+    // 높이는 위에서 고정한다(useHeaderFrame · Layout.headerH 73 · 2026-11-16 R-6 에서 83 → 73).
+    // 허브 상단바(HubTopBar)는 Layout.headerH 에서 스크롤 위 여백·첫 간격을 뺀 파생 식으로 따라온다.
     // 바탕 = 흰 헤더(Surface.header). 화면 바탕(Surface.screen 회색)과 띠로 갈라진다 — 비교 시안 적용 후 그림과 같다.
     backgroundColor: Surface.header,
   },
