@@ -52,7 +52,7 @@ export default function OwnerStoreConfigScreen() {
       {!loaded ? (
         <ScreenLoading label="매장 정보를 불러오고 있어요…" />
       ) : configLoadError ? (
-        <LoadErrorState title="매장 정보를 불러오지 못했어요" onRetry={() => void retry()} />
+        <LoadErrorState screen title="매장 정보를 불러오지 못했어요" onRetry={() => void retry()} />
       ) : (
         <StoreConfigForm />
       )}

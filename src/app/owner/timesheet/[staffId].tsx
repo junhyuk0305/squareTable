@@ -52,7 +52,7 @@ export default function OwnerTimesheetScreen() {
     return (
       <Screen header={header} tabBar="owner" scroll={false}>
         <Stack.Screen options={{ title: '출근 기록' }} />
-        <LoadErrorState title="직원 정보를 불러오지 못했어요" onRetry={() => void useStaffStore.getState().hydrate()} />
+        <LoadErrorState screen title="직원 정보를 불러오지 못했어요" onRetry={() => void useStaffStore.getState().hydrate()} />
       </Screen>
     );
   }

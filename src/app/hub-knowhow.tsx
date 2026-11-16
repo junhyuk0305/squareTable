@@ -128,13 +128,13 @@ export default function HubKnowhowScreen() {
         <ScreenLoading label="노하우를 불러오고 있어요…" />
       ) : loadErr ? (
         // 읽기 실패를 "노하우 없음"으로 위장하지 않는다(무음 실패 방지).
-        <EmptyState
+        <EmptyState screen
           title="노하우를 불러오지 못했어요"
           body="연결을 확인하고 다시 시도해 주세요."
           cta={{ label: '다시 시도', onPress: retry }}
         />
       ) : total === 0 ? (
-        <EmptyState
+        <EmptyState screen
           title="아직 등록된 노하우가 없어요"
           body="노하우 탭의 '노하우 추가'로 첫 노하우를 적어 보세요."
         />

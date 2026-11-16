@@ -98,7 +98,7 @@ export default function SpaceConnect() {
     return (
       <Screen header={header} scroll={false}>
         <Stack.Screen options={{ headerShown: false }} />
-        <EmptyState
+        <EmptyState screen
           title={CONNECT.noStoreTitle}
           body={CONNECT.connectNoStore}
           cta={{ label: SPACE_WORDS.enterCode, onPress: () => router.push('/junior/hub') }}

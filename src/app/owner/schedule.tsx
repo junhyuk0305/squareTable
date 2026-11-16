@@ -241,7 +241,7 @@ export default function OwnerScheduleScreen() {
     return (
       <Screen header={header} tabBar="owner" scroll={false}>
         <Stack.Screen options={{ title: '근무표' }} />
-        <LoadErrorState title="근무표를 불러오지 못했어요" onRetry={() => void retrySchedule()} />
+        <LoadErrorState screen title="근무표를 불러오지 못했어요" onRetry={() => void retrySchedule()} />
       </Screen>
     );
   }

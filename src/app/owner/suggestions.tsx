@@ -131,7 +131,7 @@ export default function OwnerSuggestionsScreen() {
         <ScreenLoading label="직원 제안을 불러오고 있어요…" />
       ) : loadError ? (
         // 읽기 실패를 "대기 중인 제안이 없어요 🤝"로 위장하지 않는다(#19) — 사장이 제안을 놓친다.
-        <LoadErrorState title="직원 제안을 불러오지 못했어요" onRetry={() => void retry()} />
+        <LoadErrorState screen title="직원 제안을 불러오지 못했어요" onRetry={() => void retry()} />
       ) : (
       <KeyboardShift>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>

@@ -231,11 +231,11 @@ export default function SpaceWrite() {
   const header = <ScreenTitleHeader title={title} backFallback={questionId ? QUEUE : LIST} />;
 
   let body;
-  if (failed) body = <LoadErrorState title={SPACE_KNOWHOW.loadFail} onRetry={retry} />;
+  if (failed) body = <LoadErrorState screen title={SPACE_KNOWHOW.loadFail} onRetry={retry} />;
   else if (!entries) body = <ScreenLoading label={SPACE_KNOWHOW.loading} />;
   else if (editId && !editEntry)
     body = (
-      <EmptyState
+      <EmptyState screen
         title={SPACE_KNOWHOW.notFoundTitle}
         body={SPACE_KNOWHOW.notFoundBody}
         cta={{ label: SPACE_KNOWHOW.backToList, onPress: () => router.replace(LIST) }}
@@ -243,7 +243,7 @@ export default function SpaceWrite() {
     );
   else if (questionId && !answerable)
     body = (
-      <EmptyState
+      <EmptyState screen
         title={SPACE_KNOWHOW.answeredTitle}
         body={SPACE_KNOWHOW.answeredBody}
         cta={{ label: SPACE_KNOWHOW.backToQueue, onPress: () => leave(QUEUE) }}

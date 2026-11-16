@@ -204,7 +204,7 @@ function DowngradeBody() {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <Stack.Screen options={{ headerShown: false }} />
-        <LoadErrorState
+        <LoadErrorState screen
           title="요금제 정보를 불러오지 못했어요"
           onRetry={() => {
             setLoading(true);

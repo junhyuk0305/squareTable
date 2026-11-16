@@ -1,8 +1,8 @@
 {
   "totals": {
-    "hex": 166,
+    "hex": 165,
     "fontSize": 599,
-    "spacing": 1536
+    "spacing": 1533
   },
   "files": {
     "src/app/+html.tsx": {
@@ -242,8 +242,8 @@
       "spacing": 17
     },
     "src/app/stores.tsx": {
-      "hex": 4,
-      "spacing": 9
+      "hex": 3,
+      "spacing": 8
     },
     "src/app/terms.tsx": {
       "fontSize": 2,
@@ -366,8 +366,7 @@
       "spacing": 9
     },
     "src/components/EmptyState.tsx": {
-      "fontSize": 3,
-      "spacing": 2
+      "fontSize": 3
     },
     "src/components/EntryDetailModal.tsx": {
       "fontSize": 2,

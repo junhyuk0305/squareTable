@@ -145,13 +145,13 @@ export default function JuniorTermPracticeScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
         {loadError ? (
-          <EmptyState
+          <EmptyState screen
             title="노하우를 불러오지 못했어요"
             body="연결을 확인하고 다시 시도해 주세요."
             cta={{ label: '다시 시도', onPress: () => hydrate() }}
           />
         ) : (
-          <EmptyState
+          <EmptyState screen
             title="아직 연습할 값이 없어요"
             body={"숫자가 적힌 노하우가 아직 없어요.\n'샷 2개'처럼 개수가 있어야 카드를 만들 수 있어요."}
             cta={{ label: '노하우 둘러보기', onPress: () => router.replace('/junior/chat') }}

@@ -51,7 +51,7 @@ export default function StoreEduLinkListScreen() {
     return (
       <Screen header={header} scroll={false}>
         <Stack.Screen options={{ headerShown: false }} />
-        <LoadErrorState title={STORE_LINK_LIST.loadFail} onRetry={() => setRetry((n) => n + 1)} />
+        <LoadErrorState screen title={STORE_LINK_LIST.loadFail} onRetry={() => setRetry((n) => n + 1)} />
       </Screen>
     );
   }

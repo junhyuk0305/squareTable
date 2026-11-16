@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { SectionLabel } from '@/components/SectionLabel';
+import { CardStyles } from '@/lib/theme/card';
 import { Surface } from '@/lib/theme/colors';
 import { Layout, Space, screenScrollStyle } from '@/lib/theme/layout';
 
@@ -55,12 +56,14 @@ export function SectionStack({ children, style }: { children: ReactNode; style?:
 /**
  * 섹션 — 카드 밖 제목(SectionLabel) + 내용. 제목 ↔ 내용은 한 덩어리라 섹션 간격보다 좁게 붙인다.
  * 섹션 사이는 Screen·SectionStack 이 정한다.
+ * card: 내용을 흰 카드 하나로 감싼다(2026-11-16 R-14 규칙: 제목·설명 = 바탕 위 · 내용 = 흰 카드 위).
+ *   기본은 감싸지 않는다 — 이미 카드인 자식(목록 카드·SettingsSection 등)에 씌우면 카드가 겹친다.
  */
-export function Section({ children, ...label }: ComponentProps<typeof SectionLabel> & { children: ReactNode }) {
+export function Section({ children, card, ...label }: ComponentProps<typeof SectionLabel> & { children: ReactNode; card?: boolean }) {
   return (
     <View style={styles.section}>
       <SectionLabel {...label} />
-      {children}
+      {card ? <View style={styles.card}>{children}</View> : children}
     </View>
   );
 }
@@ -72,4 +75,5 @@ const styles = StyleSheet.create({
   stack: { gap: Layout.sectionGap },
   // SectionLabel 아래 2 + 여기 8 = 제목 ↔ 카드 10(2026-10-14 사용자 결정 그대로).
   section: { gap: Space.sm },
+  card: { ...CardStyles.list, gap: Space.md },
 });

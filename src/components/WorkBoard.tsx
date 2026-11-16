@@ -978,7 +978,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     return (
       <SafeAreaView style={st.safe} edges={safeEdges}>
         <Stack.Screen options={headerOptions} />
-        <LoadErrorState
+        <LoadErrorState screen
           title="업무를 불러오지 못했어요"
           onRetry={() => {
             void retryWork();
@@ -998,16 +998,16 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       {/* 어떤 코스 카드가 몇 장 뜨는지는 trainingCards 메모가 판정(하한·주기·1회성 우선·요청 예외).
           ★대화방 **위쪽 흐름**에 둔다 — 떠 있는 헤더·칩바는 WorkChat 안에서 뜨므로 카드를 덮지 않는다. */}
       {view === 'chat' && quizProgressError && !isOwner && (
-        <LoadErrorState title="퀴즈 진행 상태를 불러오지 못했어요" onRetry={() => void useWorkStore.getState().hydrate()} />
+        <LoadErrorState screen title="퀴즈 진행 상태를 불러오지 못했어요" onRetry={() => void useWorkStore.getState().hydrate()} />
       )}
       {view === 'chat' && !isOwner && lastSubmissions?.key === lastScopeKey && lastSubmissions.data === null && (
-        <LoadErrorState title="지난번 퀴즈를 불러오지 못했어요" onRetry={() => setLastRetry((n) => n + 1)} />
+        <LoadErrorState screen title="지난번 퀴즈를 불러오지 못했어요" onRetry={() => setLastRetry((n) => n + 1)} />
       )}
       {view === 'chat' &&
         trainingCards.map((c, i) => (
           <Appear key={c.course.key} delay={stagger(i)}>
             {c.completionRecovery ? (
-              <LoadErrorState title={`${c.course.name} 답안은 제출됐어요. 완료 상태를 갱신해 주세요.`} onRetry={() => startTrainingCheck(c.items[0].id, c.course.id, c.assignmentId)} />
+              <LoadErrorState screen title={`${c.course.name} 답안은 제출됐어요. 완료 상태를 갱신해 주세요.`} onRetry={() => startTrainingCheck(c.items[0].id, c.course.id, c.assignmentId)} />
             ) : (
             <TrainingCard
               course={c.course}

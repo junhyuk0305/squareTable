@@ -588,7 +588,7 @@ export default function QuizNewScreen() {
     return (
       <SafeAreaView style={st.safe} edges={['bottom']}>
         <ScreenTitleHeader title="퀴즈 만들기" backFallback />
-        <EmptyState title="퀴즈를 불러오지 못했어요" body="잠시 후 다시 시도해 주세요." cta={{ label: '다시 시도', onPress: () => { reloadCourses(); bumpQuiz(); bumpSends(); } }} />
+        <EmptyState screen title="퀴즈를 불러오지 못했어요" body="잠시 후 다시 시도해 주세요." cta={{ label: '다시 시도', onPress: () => { reloadCourses(); bumpQuiz(); bumpSends(); } }} />
       </SafeAreaView>
     );
   }

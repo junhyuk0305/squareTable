@@ -22,7 +22,6 @@ import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Type } from '@/lib/theme/type';
 import { Radius } from '@/lib/theme/elevation';
 import { CardStyles } from '@/lib/theme/card';
-import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Gap, Space, screenScrollStyle } from '@/lib/theme/layout';
 import { canUseMultistore } from '@/lib/config/tiers';
 import { showBillingEntry } from '@/lib/config/store-policy';
@@ -30,6 +29,7 @@ import { HubTopBar } from '@/components/hub/HubTopBar';
 import { HubTabBar } from '@/components/HubTabBar';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { EmptyState } from '@/components/EmptyState';
 import { Section } from '@/components/Screen';
 import { TwoPane, Pane } from '@/components/shell/TwoPane';
 import { useStoreEntryStore } from '@/lib/store/useStoreEntryStore';
@@ -288,23 +288,15 @@ export default function StoresHub() {
         {visibleStores.length === 0 ? (
           // ── 빈 상태(매장 0곳): 마법사로 튕기지 않고 허브에서 시작 ──
           <Appear delay={stagger(1)}>
-            <View style={styles.empty}>
-              <View style={styles.emptyIcon}>
-                <Ionicons name="storefront-outline" size={30} color="#7a5f10" />
-              </View>
-              <Text style={styles.emptyTitle}>아직 매장이 없어요</Text>
-              <Text style={styles.emptyBody}>
-                {canCreateStore
-                  ? '업종만 고르면 그 업종 기본 노하우가 담긴 매장이 만들어져요.'
-                  : '사장님께 받은 초대코드로 매장에 합류하세요.'}
-              </Text>
-              {/* 사장 계정은 매장 만들기, 직원 계정은 합류 — 한 사람에게 한 경로만 준다.
-                  판정이 role 이 아니라 canCreateStore 인 이유는 위 정의 참고(매장 생성 전 사장 = role junior). */}
-              <Pressable onPress={canCreateStore ? addStore : joinStore} style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.88 }]}>
-                <Ionicons name={canCreateStore ? 'add' : 'enter-outline'} size={18} color={InkColors.ink} />
-                <Text style={styles.emptyBtnText}>{canCreateStore ? '매장 만들기' : '합류 신청'}</Text>
-              </Pressable>
-            </View>
+            {/* 사장 계정은 매장 만들기, 직원 계정은 합류 — 한 사람에게 한 경로만 준다.
+                판정이 role 이 아니라 canCreateStore 인 이유는 위 정의 참고(매장 생성 전 사장 = role junior). */}
+            <EmptyState
+              title="아직 매장이 없어요"
+              body={canCreateStore
+                ? '업종만 고르면 그 업종 기본 노하우가 담긴 매장이 만들어져요.'
+                : '사장님께 받은 초대코드로 매장에 합류하세요.'}
+              cta={{ label: canCreateStore ? '매장 만들기' : '합류 신청', onPress: canCreateStore ? addStore : joinStore }}
+            />
           </Appear>
         ) : (
           <>
@@ -482,16 +474,4 @@ const styles = StyleSheet.create({
   addIcon: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
   addTitle: { ...Type.body, lineHeight: 21, fontWeight: '800' },
   addSub: { ...Type.tag, color: TextColor.secondary, marginTop: 2 },
-
-  empty: { alignItems: 'center', paddingVertical: Space.xl, gap: Space.md },
-  emptyIcon: { width: 64, height: 64, borderRadius: Radius.lg, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
-  emptyTitle: { ...Type.title },
-  emptyBody: { fontSize: Type.body.fontSize, color: TextColor.secondary, textAlign: 'center', lineHeight: 22, maxWidth: 260 },
-  // 빈 화면 버튼 = 주 버튼(52 · 모서리 16 · 가로 꽉 · 16/800 · 그림자 없음). 색은 그대로(EmptyState 와 같은 규칙).
-  emptyBtn: {
-    ...ButtonStyles.primary,
-    flexDirection: 'row', gap: 6,
-    backgroundColor: BrandColors.yellow,
-  },
-  emptyBtnText: { ...ButtonTextStyles.primary, color: InkColors.ink },
 });

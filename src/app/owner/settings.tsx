@@ -142,7 +142,7 @@ export default function OwnerSettings() {
       {!ready ? (
         <ScreenLoading label="매장 설정을 불러오고 있어요…" />
       ) : prefsLoadError ? (
-        <LoadErrorState title="매장 설정을 불러오지 못했어요" onRetry={() => void retryPrefs()} />
+        <LoadErrorState screen title="매장 설정을 불러오지 못했어요" onRetry={() => void retryPrefs()} />
       ) : (
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 매장 헤더 — 색 점 + 매장명 + (있으면) 내 별칭. 탭하면 개인화 시트. 직원 설정과 같은 부품(SettingsStoreHead). */}

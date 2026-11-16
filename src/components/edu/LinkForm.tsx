@@ -126,7 +126,7 @@ export function EduLinkNewForm({
     return (
       <Screen header={header} scroll={false}>
         <Stack.Screen options={{ headerShown: false }} />
-        <LoadErrorState title="노하우를 불러오지 못했어요" onRetry={() => setRetry((n) => n + 1)} />
+        <LoadErrorState screen title="노하우를 불러오지 못했어요" onRetry={() => setRetry((n) => n + 1)} />
       </Screen>
     );
   }
@@ -278,7 +278,7 @@ export function EduLinkDetailForm({
     return (
       <Screen header={header} scroll={false}>
         <Stack.Screen options={{ headerShown: false }} />
-        <LoadErrorState title="링크를 불러오지 못했어요" onRetry={() => setRetry((n) => n + 1)} />
+        <LoadErrorState screen title="링크를 불러오지 못했어요" onRetry={() => setRetry((n) => n + 1)} />
       </Screen>
     );
   }
