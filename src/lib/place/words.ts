@@ -109,6 +109,17 @@ export const SPACE_SCREEN = {
   // S03 홈
   homeLoading: '숫자를 불러오고 있어요…',
   homeLoadFail: '숫자를 불러오지 못했어요.',
+  // S03 홈 골격(화면조립표 2026-11-17 · 첫날·준비 안내 한 줄 · 미리보기 · 바로가기 상태)
+  homeFirstLine: '노하우를 남기면 AI가 신입 질문에 답해요',
+  homeReadyLine: '교육 링크를 보내면 신입이 물어볼 수 있어요',
+  homeStatEmpty: '질문이 오면 여기에 쌓여요.',
+  homeRecent: '최근 노하우',
+  seeAll: '전체보기',
+  starterProgress: (done: number, total: number) => `${done}/${total}`,
+  shortcutCount: (n: number) => `${n}개`,
+  shortcutOpen: (n: number) => `${n}개 열림`,
+  shortcutPeople: (n: number) => `${n}명`,
+  shortcutNone: '없어요',
   // S06 설정
   settingsName: '공간 이름',
   settingsAi: 'AI 사용량',
@@ -184,9 +195,8 @@ export const SPACE_KNOWHOW = {
   queueEmptyTitle: '답할 질문이 없어요',
   queueEmptyBody: '노하우에 없는 질문이 오면 여기에 모여요.\n노하우를 늘려 두면 AI가 먼저 답해요.',
   sameAsked: (n: number) => `${n}명이 물었어요`,
-  // S05 교육 링크 칸 · 처음 순서 안내(2026-11-16 R-4 · 지금 할 단계만 주 버튼)
+  // S05 교육 링크 칸 · 처음 순서 안내(2026-11-16 R-4 · 지금 할 단계만 주 버튼 · 2026-11-17 안내는 홈 시작 카드 한 곳)
   linksTitle: '교육 링크',
-  guideTitle: '처음이면 이 순서로 해 보세요',
   guideWrite: '노하우 쓰기',
   guideWriteHint: '신입이 자주 묻는 일을 남겨요',
   guideLink: '교육 링크 만들기',
