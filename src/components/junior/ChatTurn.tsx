@@ -17,6 +17,8 @@ import { knowhowSourceLabel } from '@/lib/utils/knowhowSource';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
+import { Space } from '@/lib/theme/layout';
 
 import type { ChatQuery, PlaybookEntry } from '@/types';
 
@@ -242,19 +244,21 @@ export function ChatTurn({
 
         {/* 더 나은 방법을 아는 직원 → 이 노하우 개선 제안(사장 검토 후 반영). 매니저는 직접 수정. */}
         {block && matchedEntry && (
-          <Pressable
-            onPress={() =>
-              manager
-                ? router.push(`/owner/edit/${matchedEntry.id}` as never)
-                : router.push({ pathname: '/junior/suggest', params: { entryId: matchedEntry.id, title: matchedEntry.title } })
-            }
-            style={({ pressed }) => [turnStyles.improveLink, pressed && { opacity: 0.6 }]}
-          >
-            <Ionicons name="create-outline" size={13} color={InkColors.ink3} />
-            <Text style={turnStyles.improveText}>
-              {manager ? '더 좋은 방법이 있나요? 노하우 수정하기' : '더 좋은 방법이 있나요? 개선 제안하기'}
-            </Text>
-          </Pressable>
+          <View style={turnStyles.improveCard}>
+            <Pressable
+              onPress={() =>
+                manager
+                  ? router.push(`/owner/edit/${matchedEntry.id}` as never)
+                  : router.push({ pathname: '/junior/suggest', params: { entryId: matchedEntry.id, title: matchedEntry.title } })
+              }
+              style={({ pressed }) => [turnStyles.improveLink, pressed && { opacity: 0.6 }]}
+            >
+              <Ionicons name="create-outline" size={13} color={InkColors.ink3} />
+              <Text style={turnStyles.improveText}>
+                {manager ? '더 좋은 방법이 있나요? 노하우 수정하기' : '더 좋은 방법이 있나요? 개선 제안하기'}
+              </Text>
+            </Pressable>
+          </View>
         )}
 
         {/* (👎 직후 안내문은 2026-08-11에 삭제 — 답변 카드에 '사장님께 물어보기'가 상시로 붙어
@@ -359,12 +363,13 @@ const turnStyles = StyleSheet.create({
   },
   srcChipText: { ...Type.tag, fontWeight: '700', color: InkColors.ink2, flexShrink: 1 },
   srcChipGone: { opacity: 0.6, backgroundColor: InkColors.paper },
+  // 개선 제안 줄 = 흰 카드(R-14). SquareCard 는 아래 자리를 받지 않아 그 밖에 따로 둔다.
+  improveCard: { ...CardStyles.list, marginTop: Space.sm },
   improveLink: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
     gap: 5,
-    marginTop: 8,
     paddingVertical: 7,
     paddingHorizontal: 11,
     borderRadius: Radius.pill,

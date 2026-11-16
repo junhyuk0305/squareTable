@@ -217,15 +217,17 @@ export default function JuniorScheduleScreen() {
           <SectionStack>
             {/* 교대 요청 올리기 — 이 탭의 유일한 Primary(카드 안 수락 버튼은 보조 형태로 내렸다) */}
             <Appear delay={stagger(0)}>
-            <Pressable
-              onPress={() => setPicking(true)}
-              accessibilityRole="button"
-              accessibilityLabel="교대 요청하기"
-              style={({ pressed }) => [styles.reqBtn, pressed && { opacity: 0.85 }]}
-            >
-              <Ionicons name="add-circle-outline" size={18} color={InkColors.bubbleText} />
-              <Text style={styles.reqText}>교대 요청하기</Text>
-            </Pressable>
+            <View style={styles.reqCard}>
+              <Pressable
+                onPress={() => setPicking(true)}
+                accessibilityRole="button"
+                accessibilityLabel="교대 요청하기"
+                style={({ pressed }) => [styles.reqBtn, pressed && { opacity: 0.85 }]}
+              >
+                <Ionicons name="add-circle-outline" size={18} color={InkColors.bubbleText} />
+                <Text style={styles.reqText}>교대 요청하기</Text>
+              </Pressable>
+            </View>
             </Appear>
 
             {/* 내가 대응할 수 있는 요청 — 읽고 판단해서 수락까지 하는 유일한 목록이라 카드로 남긴다(배치⑤) */}
@@ -270,7 +272,7 @@ export default function JuniorScheduleScreen() {
               {myOpen.length === 0 ? (
                 <Empty text="진행 중인 요청이 없어요. 위 ‘교대 요청하기’로 올려보세요." />
               ) : (
-                <View>
+                <View style={styles.rowsCard}>
                   {myOpen.map((r, i) => (
                     <SwapRow
                       key={r.id}
@@ -315,7 +317,7 @@ export default function JuniorScheduleScreen() {
                   />
                 </Pressable>
                 {showHistory && (
-                  <View>
+                  <View style={styles.historyCard}>
                     {history.map((r, i) => (
                       <SwapRow
                         key={r.id}
@@ -621,6 +623,9 @@ const styles = StyleSheet.create({
   // 주 버튼 — 그림자 없음(결정표).
   reqBtn: { ...ButtonStyles.primary, flexDirection: 'row', gap: 7, backgroundColor: InkColors.ink },
   reqText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  reqCard: { ...CardStyles.list },
+  rowsCard: { ...CardStyles.rows },
+  historyCard: { ...CardStyles.rows, marginTop: Space.sm },
 
   card: { ...CardStyles.list, gap: 6 },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },

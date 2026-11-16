@@ -383,7 +383,7 @@ export default function OwnerCoachScreen() {
       <SafeAreaView style={styles.container} edges={['bottom']}>
         <Stack.Screen options={{ title: '답 쓰기' }} />
         <ScreenTitleHeader title="답 쓰기" backFallback />
-        <LoadErrorState title="질문을 불러오지 못했어요" onRetry={() => void retryQueue()} />
+        <LoadErrorState screen title="질문을 불러오지 못했어요" onRetry={() => void retryQueue()} />
       </SafeAreaView>
     );
   }
@@ -395,7 +395,7 @@ export default function OwnerCoachScreen() {
       <SafeAreaView style={styles.container} edges={['bottom']}>
         <Stack.Screen options={{ title: '답 쓰기' }} />
         <ScreenTitleHeader title="답 쓰기" backFallback />
-        <EmptyState
+        <EmptyState screen
           title="이미 처리된 질문이에요"
           body="다른 답변으로 해결되었거나 보관됐어요."
           cta={{

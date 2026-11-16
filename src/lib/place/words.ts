@@ -56,6 +56,10 @@ export const SPACE_WORDS = {
   link: '교육 링크',
   emptyLink: (owner: string) => `${subj(owner)} 아직 담은 노하우가 없어요. 궁금한 걸 물어보세요.`,
   linkClose: '링크 닫기',
+  // 교육 링크 기간(만들기·상세 같은 이름 · 줄이기·늘리기 둘 다 · 2026-11-16 R-8). 상한 = 만든 날 + 30일(서버 edu_link_create·update).
+  linkPeriod: '기간',
+  linkPeriodHint: '만든 날부터 30일 안',
+  linkUntil: (day: string) => `${day}까지 열려요.`,
   // 교육 링크 화면(EduLinkView)과 오류 코드 link_closed 가 같이 쓴다. 공간 링크·매장 링크 공통.
   linkClosed: '이 링크는 닫혔어요. 보낸 분께 새 링크를 받아 주세요.',
   askSoon: '묻기는 곧 열려요. 지금은 아래 노하우를 읽어 주세요.',
@@ -146,7 +150,11 @@ export const SPACE_KNOWHOW = {
   loadFail: '노하우를 불러오지 못했어요.',
   emptyTitle: '아직 노하우가 없어요',
   emptyBody: '신입이 자주 묻는 일을 하나 남겨 보세요.\n남긴 노하우로 AI가 대신 답해요.',
-  count: (n: number) => `노하우 ${n}개`,
+  // 개수 줄 · 톱니(매장 노하우 목록과 같은 말 · 2026-11-16 R-3)
+  totalCount: (n: number) => `총 ${n}개`,
+  filteredCount: (all: number, n: number) => `${all}개 중 ${n}개`,
+  editCategories: '카테고리 편집',
+  categorySaveFail: '카테고리를 저장하지 못했어요. 다시 눌러 주세요.',
   // S07 쓰기(코치 대화 · OwnerCoachChat space 갈래)
   writeTitle: '노하우 쓰기',
   editTitle: '노하우 고치기',
@@ -176,6 +184,16 @@ export const SPACE_KNOWHOW = {
   queueEmptyTitle: '답할 질문이 없어요',
   queueEmptyBody: '노하우에 없는 질문이 오면 여기에 모여요.\n노하우를 늘려 두면 AI가 먼저 답해요.',
   sameAsked: (n: number) => `${n}명이 물었어요`,
+  // S05 교육 링크 칸 · 처음 순서 안내(2026-11-16 R-4 · 지금 할 단계만 주 버튼)
+  linksTitle: '교육 링크',
+  guideTitle: '처음이면 이 순서로 해 보세요',
+  guideWrite: '노하우 쓰기',
+  guideWriteHint: '신입이 자주 묻는 일을 남겨요',
+  guideLink: '교육 링크 만들기',
+  guideLinkHint: '노하우를 담아 신입에게 보내요',
+  guideAnswer: '질문에 답하기',
+  guideAnswerHint: '노하우에 없는 질문이 여기로 와요',
+  guideDone: '완료',
   // S09 답하기
   answerTitle: '답하기',
   asked: '받은 질문',
@@ -284,11 +302,12 @@ export const SPACE_MEMBERS = {
   rejectBody: (name: string) => `${name}님의 합류 신청을 거절할까요? 30분이 지나면 다시 신청할 수 있어요.`,
   rejected: '거절했어요.',
   // S06 설정 · 초대코드
-  inviteTitle: '초대코드',
+  inviteSection: '멤버 초대',
   inviteHint: '멤버에게 알려 주세요. 최신 앱에서 넣을 수 있어요.',
-  inviteNone: '초대코드가 없어요',
-  inviteCopied: '초대코드를 복사했어요.',
-  inviteCopyFail: '복사하지 못했어요. 코드를 직접 알려 주세요.',
+  inviteMessageCopy: '초대 문구 복사',
+  inviteMessageCopied: '초대 문구를 복사했어요.',
+  // 카톡에 그대로 붙는 한 덩어리 · 넣는 곳 = 매장 탭의 SPACE_WORDS.enterCode
+  inviteMessage: (code: string) => `매장의 정석 공간에 초대할게요.\n앱 매장 탭 → 초대코드 넣기 → ${code} 입력`,
   // S06 설정 · 공간 지우기(0430 · 되돌리기 없음)
   deleteRow: '공간 지우기',
   deleteHint: '멤버가 모두 나가고 30일 뒤 기록이 지워져요',

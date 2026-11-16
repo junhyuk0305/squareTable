@@ -98,7 +98,7 @@ export default function SpaceConnect() {
     return (
       <Screen header={header} scroll={false}>
         <Stack.Screen options={{ headerShown: false }} />
-        <EmptyState
+        <EmptyState screen
           title={CONNECT.noStoreTitle}
           body={CONNECT.connectNoStore}
           cta={{ label: SPACE_WORDS.enterCode, onPress: () => router.push('/junior/hub') }}
@@ -166,16 +166,18 @@ export default function SpaceConnect() {
       </Section>
 
       {entries && entries.length > 0 ? (
-        <Pressable
-          onPress={() => void send()}
-          disabled={!canSend}
-          accessibilityRole="button"
-          accessibilityLabel={CONNECT.send}
-          accessibilityState={{ disabled: !canSend, busy }}
-          style={({ pressed }) => [styles.primary, !canSend && styles.off, pressed && styles.pressed]}
-        >
-          <Text style={styles.primaryText}>{busy ? CONNECT.sending : CONNECT.send}</Text>
-        </Pressable>
+        <View style={styles.sendCard}>
+          <Pressable
+            onPress={() => void send()}
+            disabled={!canSend}
+            accessibilityRole="button"
+            accessibilityLabel={CONNECT.send}
+            accessibilityState={{ disabled: !canSend, busy }}
+            style={({ pressed }) => [styles.primary, !canSend && styles.off, pressed && styles.pressed]}
+          >
+            <Text style={styles.primaryText}>{busy ? CONNECT.sending : CONNECT.send}</Text>
+          </Pressable>
+        </View>
       ) : null}
     </Screen>
   );
@@ -183,6 +185,8 @@ export default function SpaceConnect() {
 
 const styles = StyleSheet.create({
   card: { ...CardStyles.rows },
+  // 보내기 = 흰 카드 안(R-14). 위 PickRow 는 자기 카드라 그 안에 넣지 못한다.
+  sendCard: { ...CardStyles.list },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: TouchSize.inline, paddingVertical: Space.md },
   rowLine: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: InkColors.line },
   rowTitle: { ...Type.body, fontWeight: '700', flex: 1 },

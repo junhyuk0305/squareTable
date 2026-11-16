@@ -21,6 +21,7 @@ import { useGuideOnce } from '@/lib/store/useGuideStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { confirmAction } from '@/lib/utils/confirm';
 import { styles } from '@/styles/juniorHomeStyles';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 /** 홈 목록은 3건 + "전체보기 ›" — 전 화면 공통 배치 규칙(2026-08-05 블록 어휘). */
 // 홈 목록 상한 — 사장 홈(owner/dashboard.tsx)과 같은 값을 유지한다(2026-08-12: 3 → 4).
@@ -153,10 +154,10 @@ export default function JuniorHomeScreen() {
                   onPress={() => goToTab('/junior/work?view=todo')}
                   accessibilityRole="button"
                   accessibilityLabel="오늘 업무 전체보기"
-                  style={({ pressed }) => pressed && { opacity: 0.6 }}
+                  style={({ pressed }) => [ButtonStyles.secondary, pressed && { opacity: 0.6 }]}
                 >
                   {/* 잘린 개수를 말한다 — "4개가 전부"와 "4개만 보여주는 중"은 화면만 봐선 구분이 안 된다. */}
-                  <Text style={styles.moreLink}>
+                  <Text style={ButtonTextStyles.secondary}>
                     {taskTotal > HOME_LIST_LIMIT ? `전체보기 (${taskTotal - HOME_LIST_LIMIT}개 더) ›` : '전체보기 ›'}
                   </Text>
                 </Pressable>

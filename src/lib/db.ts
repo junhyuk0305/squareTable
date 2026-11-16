@@ -4098,8 +4098,18 @@ export async function fetchScheduleConfig(): Promise<ReadResult<StoreConfig | nu
 // ★ReadResult 로 올린 이유(#21): 레지스트리 읽기 실패가 customCategories=[] 로 위장되고,
 //   그 상태에서 카테고리 편집을 저장하면 **레지스트리를 통째로 덮어써 커스텀 카테고리가 영구 삭제**된다.
 //   error=true 면 스토어가 customCategories 를 건드리지 않고 편집 진입을 막는다.
-export async function fetchKnowhowCategories(): Promise<ReadResult<unknown>> {
+// ★0780: 공간은 표를 직접 못 읽고 못 쓴다(sc_read·sc_write = 현재 매장만). 공간 번호를 주면 공간 전용 함수로 간다(공간 주인만).
+//   인자가 없으면 지금 그대로 = 현재 매장 행(RLS 한 행).
+export async function fetchKnowhowCategories(spaceId?: string): Promise<ReadResult<unknown>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
+  if (spaceId) {
+    const { data, error } = await supabase.rpc('space_knowhow_categories', { p_unit: spaceId });
+    if (error) {
+      readFail('fetchKnowhowCategories', error);
+      return { data: [], error: true };
+    }
+    return { data: data ?? [], error: false };
+  }
   const { data, error } = await supabase
     .from('schedule_config')
     .select('knowhow_categories')
@@ -4111,8 +4121,9 @@ export async function fetchKnowhowCategories(): Promise<ReadResult<unknown>> {
   return { data: data?.knowhow_categories ?? [], error: false };
 }
 
-export async function saveKnowhowCategories(cats: CustomCategory[]): Promise<boolean> {
+export async function saveKnowhowCategories(cats: CustomCategory[], spaceId?: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
+  if (spaceId) return write('saveKnowhowCategories', supabase.rpc('space_save_knowhow_categories', { p_unit: spaceId, p_cats: cats }));
   return write(
     'saveKnowhowCategories',
     supabase.from('schedule_config').upsert({

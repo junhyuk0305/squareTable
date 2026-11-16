@@ -255,7 +255,7 @@ export default function OwnerOnboardingScreen() {
             </Appear>
           )}
 
-          <Appear delay={stagger(4)} style={styles.doneStretch}>
+          <Appear delay={stagger(4)} style={styles.doneCtaCard}>
             <PressableScale onPress={goDashboard} scaleTo={0.97} style={styles.primary}>
               <Text style={styles.primaryText}>홈으로 들어가기</Text>
             </PressableScale>
@@ -504,8 +504,8 @@ const styles = StyleSheet.create({
   groups: { gap: Layout.sectionGap, marginTop: Space.xs },
   // 글자 링크 = 글자 그대로 · 누르는 높이 44(2026-11-02 사용자 결정). RN-web 은 hitSlop 을 무시한다.
   //   위아래 -12 로 자리는 20 만 차지한다 → 섹션 제목 줄(22) 높이는 그대로.
-  catAll: { ...ButtonStyles.inlineHit, marginVertical: -Space.md, paddingHorizontal: Space.sm },
-  catAllText: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
+  catAll: ButtonStyles.secondary,
+  catAllText: ButtonTextStyles.secondary,
 
   rows: { gap: Space.sm },
   row: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: Space.md },
@@ -543,8 +543,8 @@ const styles = StyleSheet.create({
   ctaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   ctaTextOff: { color: TextColor.disabled },
   // 건너뛰기 = 글자 그대로 · 누르는 높이 44(2026-11-02). 옛 자리(위아래 8 + 글자 약 20 = 36)를 지키려고 위아래 -4.
-  skip: { ...ButtonStyles.inlineHit, alignSelf: 'center', marginVertical: -Space.xs, paddingHorizontal: Space.lg },
-  skipText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
+  skip: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  skipText: ButtonTextStyles.secondary,
 
   // 완료 화면
   doneWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Space.xl, gap: Space.md },
@@ -567,6 +567,8 @@ const styles = StyleSheet.create({
   },
   planTitle: { ...Type.body, fontWeight: '900' },
   planSub: { ...Type.desc, fontWeight: '600', marginTop: 1 },
-  primary: { ...ButtonStyles.primary, marginTop: Space.md, backgroundColor: InkColors.ink },
+  // 홈으로 들어가기 — 흰 카드 안(R-14 · 2026-11-16 · 버튼만 회색 위에 두지 않는다).
+  doneCtaCard: { ...CardStyles.list, alignSelf: 'stretch' },
+  primary: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
   primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

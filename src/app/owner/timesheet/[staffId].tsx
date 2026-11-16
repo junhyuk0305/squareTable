@@ -52,7 +52,7 @@ export default function OwnerTimesheetScreen() {
     return (
       <Screen header={header} tabBar="owner" scroll={false}>
         <Stack.Screen options={{ title: '출근 기록' }} />
-        <LoadErrorState title="직원 정보를 불러오지 못했어요" onRetry={() => void useStaffStore.getState().hydrate()} />
+        <LoadErrorState screen title="직원 정보를 불러오지 못했어요" onRetry={() => void useStaffStore.getState().hydrate()} />
       </Screen>
     );
   }
@@ -64,17 +64,17 @@ export default function OwnerTimesheetScreen() {
         {/* 막다른 길 금지 — 빈/오류 상태에도 다음 행동 하나를 준다(복잡도 원칙 P6). */}
         <View style={EmptyStyles.box}>
           <Text style={EmptyStyles.text}>직원을 찾을 수 없어요.{'\n'}내보냈거나 아직 합류하지 않은 직원이에요.</Text>
+          {/* 직원 관리는 사장 전용 — 매니저에겐 이 버튼을 그리지 않는다. 빈 카드 안 맨 아래(R-14 · 2026-11-16). */}
+          {isOwner ? (
+          <Pressable
+            onPress={() => router.replace('/owner/staff')}
+            style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.85 }]}
+            accessibilityRole="button"
+          >
+            <Text style={styles.backBtnText}>직원 목록 보기</Text>
+          </Pressable>
+          ) : null}
         </View>
-        {/* 직원 관리는 사장 전용 — 매니저에겐 이 버튼을 그리지 않는다. */}
-        {isOwner ? (
-        <Pressable
-          onPress={() => router.replace('/owner/staff')}
-          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.85 }]}
-          accessibilityRole="button"
-        >
-          <Text style={styles.backBtnText}>직원 목록 보기</Text>
-        </Pressable>
-        ) : null}
       </Screen>
     );
   }

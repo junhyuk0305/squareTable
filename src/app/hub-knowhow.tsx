@@ -15,9 +15,11 @@ import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { CardStyles } from '@/lib/theme/card';
+import { EmptyStyles } from '@/lib/theme/empty';
 import { Type } from '@/lib/theme/type';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import type { PlaybookEntry } from '@/types';
 
 /**
@@ -128,13 +130,13 @@ export default function HubKnowhowScreen() {
         <ScreenLoading label="노하우를 불러오고 있어요…" />
       ) : loadErr ? (
         // 읽기 실패를 "노하우 없음"으로 위장하지 않는다(무음 실패 방지).
-        <EmptyState
+        <EmptyState screen
           title="노하우를 불러오지 못했어요"
           body="연결을 확인하고 다시 시도해 주세요."
           cta={{ label: '다시 시도', onPress: retry }}
         />
       ) : total === 0 ? (
-        <EmptyState
+        <EmptyState screen
           title="아직 등록된 노하우가 없어요"
           body="노하우 탭의 '노하우 추가'로 첫 노하우를 적어 보세요."
         />
@@ -173,7 +175,7 @@ export default function HubKnowhowScreen() {
           {visible.length === 0 ? (
             <View style={st.center}>
               <Text style={st.centerText}>찾는 노하우가 없어요</Text>
-              <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="검색어 지우기">
+              <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="검색어 지우기" style={st.reset}>
                 <Text style={st.resetText}>검색어 지우기</Text>
               </Pressable>
             </View>
@@ -233,9 +235,11 @@ const st = StyleSheet.create({
   // 탭바 없는 하위 화면 — 아래 안전 영역은 SafeAreaView(bottom)가 든다. 바탕·스크롤 여백만 화면 틀 값을 쓴다.
   safe: { flex: 1, backgroundColor: Surface.screen },
   scroll: screenScrollStyle,
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.xl * 2 },
+  // 검색 결과 없음 = 흰 카드(EmptyStyles.box · 2026-11-16 R-14). 검색어 지우기 글자 버튼도 카드 안에 둔다.
+  center: EmptyStyles.box,
   centerText: { ...Type.body, color: TextColor.secondary, fontWeight: '600' },
-  resetText: { fontSize: Type.body.fontSize, fontWeight: '800', color: InkColors.ink, textDecorationLine: 'underline' },
+  reset: { ...ButtonStyles.secondary, alignSelf: 'center' },
+  resetText: ButtonTextStyles.secondary,
 
   countLabel: { fontSize: Type.desc.fontSize, fontWeight: '700', color: TextColor.secondary },
 

@@ -104,6 +104,8 @@ function OfflineBoot() {
 
   return (
     <View style={styles.offlineRoot}>
+      {/* 안내·다시 시도·다른 계정 = 흰 카드 한 장(2026-11-16 R-14). */}
+      <View style={styles.offlineCard}>
       <Ionicons name="cloud-offline-outline" size={40} color={InkColors.ink3} />
       <Text style={styles.offlineText}>인터넷 연결이 불안정해요. 연결되면 바로 다시 들어가요.</Text>
       <Pressable
@@ -114,8 +116,9 @@ function OfflineBoot() {
         {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.offerCtaText}>다시 시도</Text>}
       </Pressable>
       <Pressable onPress={() => void signOut()} hitSlop={8} style={styles.offerLogin}>
-        <Text style={styles.offlineLink}>다른 계정으로 로그인</Text>
+        <Text style={styles.offerLoginText}>다른 계정으로 로그인</Text>
       </Pressable>
+      </View>
     </View>
   );
 }
@@ -175,8 +178,8 @@ export default function LandingScreen() {
     <View style={styles.root}>
       {/* 상단 바 — 재방문자용 로그인 링크 (스크롤 없이 탈출) */}
       <View style={[styles.topbar, { paddingTop: insets.top + Space.sm }]}>
-        <Pressable onPress={goLogin} hitSlop={10} style={({ pressed }) => pressed && { opacity: 0.5 }}>
-          <Text style={styles.topLogin}>로그인</Text>
+        <Pressable onPress={goLogin} hitSlop={10} style={({ pressed }) => [styles.topLogin, pressed && { opacity: 0.5 }]}>
+          <Text style={styles.topLoginText}>로그인</Text>
         </Pressable>
       </View>
 
@@ -305,7 +308,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Surface.screen },
 
   topbar: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: SCREEN_GUTTER, paddingBottom: Space.sm },
-  topLogin: { fontSize: Type.body.fontSize, lineHeight: 20, fontWeight: '700', color: TextColor.secondary },
+  topLogin: ButtonStyles.secondary,
+  topLoginText: ButtonTextStyles.secondary,
 
   scroll: { paddingHorizontal: SCREEN_GUTTER, gap: Gap.section },
 
@@ -381,14 +385,15 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
   },
   offerCtaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
-  offerLogin: { alignItems: 'center', paddingVertical: Space.xs },
-  offerLoginText: { ...Type.desc },
+  // 보조 버튼(가로 꽉) — 첫 화면 하단 로그인·연결 안내의 다른 계정으로 로그인이 같이 쓴다(2026-11-16 R-11).
+  offerLogin: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  offerLoginText: { ...ButtonTextStyles.secondary, textAlign: 'center' },
   offerLoginStrong: { color: InkColors.ink, fontWeight: '800' },
 
   // ── 연결 안내(Q26) ──
-  offlineRoot: { flex: 1, backgroundColor: Surface.screen, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SCREEN_GUTTER, gap: Space.md },
+  offlineRoot: { flex: 1, backgroundColor: Surface.screen, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SCREEN_GUTTER },
+  offlineCard: { ...CardStyles.list, alignSelf: 'stretch', alignItems: 'center', gap: Space.md },
   offlineText: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: InkColors.ink, textAlign: 'center' },
-  offlineLink: { fontSize: Type.body.fontSize, lineHeight: 20, fontWeight: '700', color: TextColor.secondary },
 
   // ── FAB ──
   fabWrap: { position: 'absolute', right: SCREEN_GUTTER },

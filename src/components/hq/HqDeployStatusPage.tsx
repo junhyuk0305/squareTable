@@ -80,14 +80,14 @@ export function HqDeployStatusPage<C extends { unit_id: string; status: Exclude<
         ) : (
           <HqDeployCounts rows={rows} units={overview} statusOf={statusOf} kind={kind} testID={`${testID}-xtable`} />
         )}
-        <View style={styles.legend}>
+        <HqCard style={styles.legend}>
           {ORDER.map((k) => (
             <View key={k} style={styles.legendItem}>
               <HqPill tone={DEPLOY_STATUS[k].tone} label={DEPLOY_STATUS[k].label} />
               <Text style={styles.legendText}>{DEPLOY_STATUS[k].hint}</Text>
             </View>
           ))}
-        </View>
+        </HqCard>
         </View>
       </Appear>
     </HqPage>

@@ -24,6 +24,7 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { Appear, stagger } from '@/components/Appear';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Layout, Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
@@ -316,11 +317,9 @@ const styles = StyleSheet.create({
   todoText: { ...Type.body, fontWeight: '600', lineHeight: 20 },
   subLine: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, marginTop: 1 },
   subDot: { width: 6, height: 6, borderRadius: 3 },
-  moreRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
-    borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: Space.xs, paddingVertical: Space.sm,
-  },
-  moreText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
+  // 더 보기 줄 = 카드 안 맨 아래 가로 꽉 보조 알약(R-11 · 2026-11-16).
+  moreRow: { ...ButtonStyles.secondary, alignSelf: 'stretch', flexDirection: 'row', gap: Space.xs, marginTop: Space.sm },
+  moreText: ButtonTextStyles.secondary,
 
   statRow: { flexDirection: 'row', paddingVertical: Space.xs },
   statCell: { flex: 1, alignItems: 'center', gap: 2 },

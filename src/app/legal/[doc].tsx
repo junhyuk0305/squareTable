@@ -5,6 +5,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { TERMS_VERSION } from '@/lib/config/business';
 import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
 
 // 회원가입 동의의 '보기' 링크가 여는 문서들 — 동의 항목별 요약 고지.
 // 기존 /terms(이용약관)·/privacy(처리방침)와 별도로, 동의 항목별 세부 문서를 제공.
@@ -64,7 +65,10 @@ export default function LegalDocScreen() {
         <ScreenTitleHeader title="문서" backFallback />
         <ScrollView contentContainerStyle={styles.scroll}>
           <Text style={styles.h1}>문서를 찾지 못했습니다</Text>
-          <Text style={styles.body}>주소를 다시 확인해 주세요.</Text>
+          {/* 안내 본문 = 흰 카드 위(2026-11-16 R-14). */}
+          <View style={styles.card}>
+            <Text style={styles.body}>주소를 다시 확인해 주세요.</Text>
+          </View>
         </ScrollView>
       </SafeAreaView>
     );
@@ -83,7 +87,10 @@ export default function LegalDocScreen() {
         {data.sections.map((s) => (
           <View key={s.h} style={styles.section}>
             <Text style={styles.h2}>{s.h}</Text>
-            <Text style={styles.body}>{s.b}</Text>
+            {/* 항목 제목 = 바탕 위 · 본문 = 흰 카드 위(2026-11-16 R-14). */}
+            <View style={styles.card}>
+              <Text style={styles.body}>{s.b}</Text>
+            </View>
           </View>
         ))}
         {data.note && <Text style={styles.note}>{data.note}</Text>}
@@ -99,6 +106,7 @@ const styles = StyleSheet.create({
   h1: { fontSize: 22, fontWeight: '900', color: InkColors.ink },
   updated: { ...Type.tag, color: TextColor.secondary, marginTop: -8 },
   section: { gap: 5 },
+  card: CardStyles.list,
   h2: { fontSize: 15, fontWeight: '800', color: TextColor.secondary },
   body: { ...Type.body, color: TextColor.secondary, lineHeight: 22 },
   note: { ...Type.desc, marginTop: 8 },

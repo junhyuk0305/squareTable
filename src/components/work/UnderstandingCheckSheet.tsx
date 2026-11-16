@@ -432,7 +432,7 @@ function SavedQuizBody({
               {onAsk && missedTitles.length > 0 && (
                 <Pressable
                   onPress={() => onAsk(`${missedTitles[0]} 어떻게 해요?`)}
-                  style={({ pressed }) => [s.askLink, pressed && { opacity: 0.6 }]}
+                  style={({ pressed }) => [s.askLink, pressed && { opacity: 0.7 }]}
                   accessibilityRole="button"
                 >
                   <Ionicons name="chatbubble-ellipses-outline" size={15} color={InkColors.ink2} />
@@ -695,8 +695,8 @@ const s = StyleSheet.create({
 
   foot: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: InkColors.line },
   // 물어보기는 부차 경로 — Primary('다시 하기')와 경쟁하지 않게 링크 형태로 둔다.
-  askLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, marginBottom: 2 },
-  askLinkText: { fontWeight: '700', fontSize: Type.body.fontSize, color: TextColor.secondary },
+  askLink: { ...ButtonStyles.secondary, alignSelf: 'stretch', flexDirection: 'row', gap: Space.xs, marginBottom: Space.sm },
+  askLinkText: ButtonTextStyles.secondary,
   footRow: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
   // 주 버튼 모양(52 · 모서리 16 · 16/800 · 가로 꽉).
   cta: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },

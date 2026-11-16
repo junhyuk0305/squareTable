@@ -1,14 +1,14 @@
 import { type ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useNavigation, type Href } from 'expo-router';
 
 import { canManage } from '@/lib/utils/roles';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStoreDisplay } from '@/components/StoreHeaderTitle';
 import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
-import { Layout, SCREEN_GUTTER, Space } from '@/lib/theme/layout';
+import { SCREEN_GUTTER, Space } from '@/lib/theme/layout';
+import { useHeaderFrame } from '@/lib/hooks/useHeaderFrame';
 import { Type } from '@/lib/theme/type';
 
 /**
@@ -25,9 +25,9 @@ import { Type } from '@/lib/theme/type';
  * ★상단 인셋은 **이 컴포넌트가 소유한다**(insets.top). 호출부의 SafeAreaView 에 top 을 또 주면 이중이다 —
  *   대상 화면들은 전부 edges 에 top 이 없는 상태이므로 그대로 두면 된다.
  *
- * ★variant="tab"(2026-11-02 사용자 결정): 탭 루트 헤더. 높이를 홈 상단바(AppTopBar)와 같은 `Layout.headerH` 로
- *   고정하고 내용을 세로 가운데 둔다. 매장명 줄은 storeLine 과 무관하게 **항상** 보인다 — 노하우·퀴즈 탭만 빠져 있었다.
- *   하위 화면(variant 없음)은 높이·모양을 바꾸지 않는다.
+ * ★높이(2026-11-16 사용자 결정 R-6 "모든 헤더 73"): 탭·하위 화면 모두 홈 상단바(AppTopBar)와 같은
+ *   useHeaderFrame()(insets.top + `Layout.headerH`)로 고정하고 내용을 세로 가운데 둔다. 위아래 여백 합으로 키를 정하지 않는다.
+ * ★variant="tab"(2026-11-02 사용자 결정): 탭 루트 헤더. 매장명 줄은 storeLine 과 무관하게 **항상** 보인다.
  *
  * 쓰는 법: 화면에서 `<Stack.Screen options={{ headerShown: false }} />` 와 함께 최상단에 놓는다.
  */
@@ -49,7 +49,7 @@ export function ScreenTitleHeader({
   onBack?: () => void;
   /**
    * 뒤로가기 화살표를 붙이고, 뒤로 갈 곳이 없을 때(웹 새로고침·딥링크·푸시 진입) 갈 자리를 정한다.
-   * `true` 면 역할별 홈으로. 판정은 `HeaderBackButton` 과 **같은 규칙**이다 — 가장 가까운 네비게이터
+   * `true` 면 역할별 홈으로. 판정은 가장 가까운 네비게이터
    * 기준으로만 canGoBack 을 본다(전역 router 로 보면 그룹 첫 화면에서 상위 라우트로 새어 나간다).
    */
   backFallback?: Href | true;
@@ -58,7 +58,7 @@ export function ScreenTitleHeader({
   /** 매장명 줄 대신 보일 한 줄(공간 화면 = 공간 이름). 주면 매장명 줄을 그리지 않는다. */
   line?: string;
 }) {
-  const insets = useSafeAreaInsets();
+  const frame = useHeaderFrame();
   const router = useRouter();
   const navigation = useNavigation();
   const role = useSessionStore((s) => s.role);
@@ -86,12 +86,7 @@ export function ScreenTitleHeader({
   const tab = variant === 'tab';
   return (
     <View
-      style={[
-        styles.bar,
-        tab
-          ? [styles.barTab, { paddingTop: insets.top, height: insets.top + Layout.headerH }]
-          : { paddingTop: insets.top + Space.sm },
-      ]}
+      style={[styles.bar, frame]}
     >
       {back && (
         <Pressable
@@ -146,13 +141,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Space.sm,
     paddingHorizontal: SCREEN_GUTTER,
-    paddingBottom: Space.md,
     backgroundColor: Surface.header,
     borderBottomWidth: 1,
     borderBottomColor: InkColors.line,
   },
-  // 탭 루트 — 높이는 위에서 고정하고 아래 여백은 두지 않는다(내용은 alignItems center 로 가운데).
-  barTab: { paddingBottom: 0 },
   // 화살표는 거터 안쪽에서 시작한다 — 아이콘 좌우 여백만큼 당겨 제목과 같은 리듬을 만든다.
   // ★48dp 는 **상자 크기**로 지킨다 — RN-web 은 hitSlop 을 무시한다(2026-08-26 확인).
   //   paddingVertical:2 + hitSlop 조합이던 동안 실측 30dp 였다(2026-09-11 퀴즈 UI 실측).

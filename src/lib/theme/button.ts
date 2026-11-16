@@ -1,6 +1,6 @@
 import { type TextStyle, type ViewStyle } from 'react-native';
 
-import { InkColors } from '@/lib/theme/colors';
+import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
@@ -12,6 +12,9 @@ import { Space } from '@/lib/theme/layout';
  *  · chip 40 = 칩·요일 원의 누르는 크기. 요일 7개가 한 줄에 서야 해서 44 대신 40
  */
 export const TouchSize = { inlineFace: 32, inline: 44, chip: 40 } as const;
+
+/** 우하단 떠 있는 버튼(노하우 추가 · 2026-08-07 결정) — 지름 56(터치 하한 48 보다 크게) · 안 아이콘 28. 매장·공간 노하우 목록이 같이 쓴다(KnowhowFab). */
+export const FabSize = { face: 56, icon: 28 } as const;
 
 /** 누르는 상자를 키워도 줄 높이는 그대로 두는 위아래 음수 여백. 상자는 자리를 보이는 높이(face)만큼만 차지한다. */
 export const hitTrim = (face: number, hit: number = TouchSize.inline) => (face - hit) / 2;
@@ -26,17 +29,26 @@ export const hitTrim = (face: number, hit: number = TouchSize.inline) => (face -
  *  · inlineHit(누르는 상자 44): 줄 안 작은 버튼·상단바 작은 알약·글자 링크의 바깥 Pressable. 보이는 모양은 안쪽 View 가 든다.
  *  · iconCircle(흰 원 아이콘 버튼): 보이는 원 40 · 흰 면 · 선 lineStrong(2026-11-02 사용자 결정 · 근무표 주 이동·출근 기록 월 이동 화살표).
  *    누르는 상자 48 은 바깥 Pressable 이 minWidth/minHeight 48 로 든다(RN-web 은 hitSlop 을 무시한다).
+ *  · primaryYellow(노란 주 버튼 · 2026-11-16 사용자 결정 R-10): primary 모양 + 노랑 면 + yellowDeep 테두리(노하우 추가 FAB 와 같은 계열).
+ *    글자 = ButtonTextStyles.primaryOnYellow(검정). 쓰는 곳 = 매장·공간 [새 교육 링크].
+ *  · secondary(보조 · 2026-11-16 사용자 결정 R-11 "누르는 것은 모두 버튼 모양"): small 알약 + 연한 면 + 회색 선. 글자 = ButtonTextStyles.secondary.
+ *    건너뛰기·취소·다른 계정으로 로그인·더 보기·이동 글자처럼 **글자만 있던 버튼**은 전부 이것(또는 danger)으로 그린다.
+ *    가로 꽉이 필요하면 `{ ...ButtonStyles.secondary, alignSelf: 'stretch' }`.
+ *  · danger(위험): small 알약 + badSoft 면 · 글자 = ButtonTextStyles.danger(badText). 삭제·나가기·닫기·해지·신고.
+ *  ⛔ 글자만 있는 버튼(밑줄·색 글자)은 만들지 않는다. inlineHit 은 누르는 상자 크기용이지 모양이 아니다.
  * 화면 StyleSheet 에서 펼쳐 쓴다(`...ButtonStyles.primary`, 글자는 `...ButtonTextStyles.primary`).
  */
+const primaryShape: ViewStyle = {
+  minHeight: 52,
+  borderRadius: Radius.md,
+  paddingHorizontal: Space.lg,
+  alignSelf: 'stretch',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
 export const ButtonStyles = {
-  primary: {
-    minHeight: 52,
-    borderRadius: Radius.md,
-    paddingHorizontal: Space.lg,
-    alignSelf: 'stretch',
-    alignItems: 'center',
-    justifyContent: 'center',
-  } as ViewStyle,
+  primary: primaryShape,
   small: {
     minHeight: 44,
     borderRadius: Radius.pill,
@@ -48,6 +60,32 @@ export const ButtonStyles = {
   inlineHit: {
     minHeight: TouchSize.inline,
     justifyContent: 'center',
+  } as ViewStyle,
+  primaryYellow: {
+    ...primaryShape,
+    backgroundColor: BrandColors.yellow,
+    borderWidth: 1,
+    borderColor: BrandColors.yellowDeep,
+  } as ViewStyle,
+  secondary: {
+    minHeight: TouchSize.inline,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Space.lg,
+    alignSelf: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: InkColors.bgSoft,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+  } as ViewStyle,
+  danger: {
+    minHeight: TouchSize.inline,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Space.lg,
+    alignSelf: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: BrandColors.badSoft,
   } as ViewStyle,
   iconCircle: {
     width: 40,
@@ -65,4 +103,7 @@ export const ButtonStyles = {
 export const ButtonTextStyles = {
   primary: { fontSize: 16, fontWeight: '800' } as TextStyle,
   small: { fontSize: 15, fontWeight: '800' } as TextStyle,
+  primaryOnYellow: { fontSize: 16, fontWeight: '800', color: InkColors.ink } as TextStyle,
+  secondary: { fontSize: 15, fontWeight: '800', color: InkColors.ink } as TextStyle,
+  danger: { fontSize: 15, fontWeight: '800', color: BrandColors.badText } as TextStyle,
 };

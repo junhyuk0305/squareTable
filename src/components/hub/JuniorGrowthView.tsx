@@ -25,6 +25,7 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { Appear, stagger } from '@/components/Appear';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Layout, Space } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
 import { Type } from '@/lib/theme/type';
@@ -285,7 +286,7 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
           {!showAllEntries && myEntries.length > ENTRY_LIST_FIRST && (
             <Pressable
               onPress={() => setShowAllEntries(true)}
-              style={({ pressed }) => [styles.moreBtn, pressed && { opacity: 0.85 }]}
+              style={({ pressed }) => [styles.moreBtn, pressed && { opacity: 0.7 }]}
               accessibilityRole="button"
               accessibilityLabel="노하우 나머지 보기"
             >
@@ -355,7 +356,7 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
             {!showAllTraining && trainingHistory.length > ENTRY_LIST_FIRST && (
               <Pressable
                 onPress={() => setShowAllTraining(true)}
-                style={({ pressed }) => [styles.moreBtn, pressed && { opacity: 0.85 }]}
+                style={({ pressed }) => [styles.moreBtn, pressed && { opacity: 0.7 }]}
                 accessibilityRole="button"
                 accessibilityLabel="퀴즈 이력 나머지 보기"
               >
@@ -426,8 +427,9 @@ const styles = StyleSheet.create({
   statL: { fontSize: 11.5, color: InkColors.ink3 },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm + 2, borderTopWidth: 1, borderTopColor: InkColors.line },
-  moreBtn: { alignItems: 'center', paddingVertical: Space.sm + 2, borderTopWidth: 1, borderTopColor: InkColors.line },
-  moreBtnText: { fontSize: 13, fontWeight: '700', color: TextColor.secondary },
+  // 더 보기 줄 = 카드 안 맨 아래 가로 꽉 보조 알약(R-11 · 2026-11-16).
+  moreBtn: { ...ButtonStyles.secondary, alignSelf: 'stretch', marginTop: Space.sm },
+  moreBtnText: ButtonTextStyles.secondary,
   rowTitle: { flex: 1, fontSize: Type.desc.fontSize, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
   rowSub: { ...Type.tag, color: TextColor.secondary },
   dot: { width: 8, height: 8, borderRadius: 4 },

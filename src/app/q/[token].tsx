@@ -38,6 +38,8 @@ import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Type } from '@/lib/theme/type';
+import { CardStyles } from '@/lib/theme/card';
+import { EmptyStyles } from '@/lib/theme/empty';
 import type { QuizItem, QuizResponse } from '@/lib/quiz/types';
 import { LINK_SUBMIT_MESSAGE, type LinkSubmitResult } from '@/lib/quiz/errors';
 
@@ -191,12 +193,15 @@ export default function QuizLinkScreen() {
         <ScreenLoading label={phase === 'saving' ? '결과를 보내고 있어요…' : '퀴즈를 불러오고 있어요…'} />
       )}
 
-      {/* 만료·회수·오타는 서로 구분해 말하지 않는다 — 토큰이 있는지 떠보는 걸 막는다. */}
+      {/* 만료·회수·오타는 서로 구분해 말하지 않는다 — 토큰이 있는지 떠보는 걸 막는다.
+          안내·오류·결과 = 흰 카드 위(centerCard · 2026-11-16 R-14). */}
       {phase === 'closed' && (
         <Appear style={st.fill}>
           <View style={st.center}>
-            <Ionicons name="lock-closed-outline" size={26} color={InkColors.ink3} />
-            <Text style={st.centerText}>지금은 열 수 없는 링크예요.{'\n'}보내 주신 분께 다시 받아 주세요.</Text>
+            <View style={st.centerCard}>
+              <Ionicons name="lock-closed-outline" size={26} color={InkColors.ink3} />
+              <Text style={st.centerText}>지금은 열 수 없는 링크예요.{'\n'}보내 주신 분께 다시 받아 주세요.</Text>
+            </View>
           </View>
         </Appear>
       )}
@@ -205,8 +210,10 @@ export default function QuizLinkScreen() {
       {phase === 'failed' && (
         <Appear style={st.fill}>
           <View style={st.center}>
-            <Ionicons name="cloud-offline-outline" size={26} color={InkColors.ink3} />
-            <Text style={st.centerText}>지금은 불러오지 못했어요.{'\n'}연결을 확인하고 잠시 후 다시 열어 주세요.</Text>
+            <View style={st.centerCard}>
+              <Ionicons name="cloud-offline-outline" size={26} color={InkColors.ink3} />
+              <Text style={st.centerText}>지금은 불러오지 못했어요.{'\n'}연결을 확인하고 잠시 후 다시 열어 주세요.</Text>
+            </View>
           </View>
         </Appear>
       )}
@@ -225,6 +232,8 @@ export default function QuizLinkScreen() {
               </Text>
               <Text style={st.sub}>이름만 적으면 바로 시작해요. 가입은 없어요.</Text>
             </Appear>
+            {/* 이름·전화·인증 = 흰 카드 한 장(2026-11-16 R-14). */}
+            <View style={st.card}>
             <Appear delay={stagger(1)} style={st.qWrap}>
             <TextInput
               style={st.input}
@@ -291,6 +300,7 @@ export default function QuizLinkScreen() {
               </View>
             )}
             {HAS_SUPABASE && otp.verified && <Text style={st.otpOk}>확인된 번호예요</Text>}
+            </View>
           </ScrollView>
           <View style={st.foot}>
             <Appear delay={stagger(2)}>
@@ -324,6 +334,7 @@ export default function QuizLinkScreen() {
           {/* 결과는 한 덩어리로 등장한다 — 아이콘·점수·안내를 따로 띄우면 읽는 순서가 셋으로 쪼개진다. */}
           <Appear delay={stagger(0)} style={st.fill}>
             <View style={st.center}>
+            <View style={st.centerCard}>
               <Ionicons
                 name={saved ? 'ribbon-outline' : 'alert-circle-outline'}
                 size={26}
@@ -343,6 +354,7 @@ export default function QuizLinkScreen() {
               <Text style={st.centerText}>
                 {LINK_SUBMIT_MESSAGE[result]}
               </Text>
+            </View>
             </View>
           </Appear>
           {/* 저장된 경우에만 권한다 — 못 보낸 결과를 "보러 가자"고 하면 빈손으로 보낸다.
@@ -447,7 +459,8 @@ function LinkQuizBody({
           contentContainerStyle={st.body}
           showsVerticalScrollIndicator={false}
         >
-          <Appear style={st.qWrap}>
+          {/* 문제·선택지 = 흰 카드 위(2026-11-16 R-14). */}
+          <Appear style={st.card}>
             {items.map((it, i) => {
               const Renderer = QUIZ_RENDERERS[it.format];
               const ask = typeof it.payload?.ask === 'string' ? it.payload.ask : '';
@@ -516,7 +529,9 @@ const st = StyleSheet.create({
   qWrap: { gap: Space.sm },
   // Appear 가 flex:1 자식(st.center)을 감쌀 때 높이를 넘겨주는 래퍼 — 도형·간격 값이 아니다.
   fill: { flex: 1 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.md, paddingHorizontal: Space.xl },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.xl },
+  centerCard: { ...EmptyStyles.box, alignSelf: 'stretch', gap: Space.md },
+  card: { ...CardStyles.list, gap: Space.sm },
   centerText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600', textAlign: 'center', lineHeight: 23 },
   doneText: { fontSize: 17, fontWeight: '800', color: InkColors.ink, textAlign: 'center', lineHeight: 25 },
 

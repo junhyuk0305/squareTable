@@ -86,11 +86,12 @@ export const SPACE_AI_CAP_COPY = {
 
 export const PLAN_ORDER: PlanId[] = ['free', 'single', 'multi'];
 
-// 전면 무료 프로모션 문구 — 기간이 바뀌면 여기만 고친다(화면 3곳이 이걸 참조).
-// ★기간을 늘리면 스위치(app_config.billing_free_mode)도 그만큼 켜 둬야 문구와 실제가 맞는다.
+// 전면 무료 문구 — 스위치(app_config.billing_free_mode)가 켜졌을 때 결제·계정 설정 두 화면이 이걸 참조한다.
+// ★날짜를 적지 않는다(2026-11-16 사용자 결정 R-15). "8월 31일까지" 같은 끝난 약속이 스위치만 켜면 다시 보였다.
+//   기간이 있는 행사를 다시 하면 그때 문구와 끝나는 날을 같이 정한다.
 export const FREE_PROMO = {
-  headline: '8월 한 달 전면 무료',
-  until: '8월 31일',
+  headline: '전면 무료 이용 중',
+  body: '모든 기능을 무료로 쓰실 수 있어요. 매장 수·직원 수 제한도 없어요.',
 } as const;
 
 // ── 가입 체험(0134) 문구 — FREE_PROMO 와 **다른 약속이다** ────────────────────────────

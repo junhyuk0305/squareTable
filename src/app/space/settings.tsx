@@ -5,6 +5,7 @@ import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-rou
 import { Screen, Section } from '@/components/Screen';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { SettingsSection, SettingsRow } from '@/components/settings/SettingsKit';
+import { InviteBlock } from '@/components/owner/InviteBlock';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
 import {
@@ -20,7 +21,6 @@ import {
 } from '@/lib/db';
 import { track } from '@/lib/analytics/track';
 import { confirmAction, notifyAction } from '@/lib/utils/confirm';
-import { shareText } from '@/lib/utils/shareText';
 import { placeErrorMessage } from '@/lib/place/errors';
 import { SPACE_MEMBERS, SPACE_SCREEN, SPACE_WORDS } from '@/lib/place/words';
 import { BrandColors, InkColors, TextColor } from '@/lib/theme/colors';
@@ -112,12 +112,6 @@ export default function SpaceSettings() {
     void loadPeople();
   };
 
-  const copyInvite = async () => {
-    if (!inviteCode) return;
-    const r = await shareText(inviteCode);
-    showToast(r === 'copied' ? SPACE_MEMBERS.inviteCopied : SPACE_MEMBERS.inviteCopyFail, r === 'copied' ? 'good' : 'warn');
-  };
-
   const removeSpace = async () => {
     if (busy || !spaceId) return;
     const ok = await confirmAction(SPACE_MEMBERS.deleteTitle, SPACE_MEMBERS.deleteBody, SPACE_MEMBERS.deleteRow, {
@@ -157,14 +151,9 @@ export default function SpaceSettings() {
       <Stack.Screen options={{ headerShown: false }} />
       <SettingsSection>
         <SettingsRow first icon="library-outline" label={SPACE_SCREEN.settingsName} value={spaceName} />
-        <SettingsRow
-          icon="key-outline"
-          label={SPACE_MEMBERS.inviteTitle}
-          hint={inviteCode ? SPACE_MEMBERS.inviteHint : SPACE_MEMBERS.inviteNone}
-          value={inviteCode ?? undefined}
-          onPress={inviteCode ? () => void copyInvite() : undefined}
-        />
       </SettingsSection>
+      {/* 초대 = 매장 초대와 같은 카드(R-12). 코드가 없으면(주인 아님) 카드를 그리지 않는다. */}
+      {inviteCode ? <InviteBlock place="space" code={inviteCode} from="space_settings" /> : null}
 
       {requests.length > 0 ? (
         <Section title={SPACE_MEMBERS.requestsTitle(requests.length)}>
@@ -203,7 +192,9 @@ export default function SpaceSettings() {
       ) : null}
 
       {membersFailed && !members ? (
-        <Text style={styles.fail}>{SPACE_MEMBERS.membersLoadFail}</Text>
+        <View style={styles.failCard}>
+          <Text style={styles.fail}>{SPACE_MEMBERS.membersLoadFail}</Text>
+        </View>
       ) : members ? (
         <Section title={SPACE_MEMBERS.membersTitle(members.length)}>
           <View style={styles.card}>
@@ -304,5 +295,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   solidText: { ...Type.desc, fontWeight: '800', color: InkColors.bg },
+  failCard: { ...CardStyles.list },
   fail: { ...Type.desc, color: TextColor.secondary },
 });

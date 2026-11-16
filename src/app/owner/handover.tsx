@@ -21,7 +21,7 @@ import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors, Surface } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
-import { ButtonStyles } from '@/lib/theme/button';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 // edge 원문 입력 상한(ai/index.ts MAX_RAWTEXT_LEN)과 정렬. 초과분은 잘리므로 경고 후 앞부분만 처리.
 const MAX_RAWTEXT = 8000;
@@ -621,8 +621,8 @@ const styles = StyleSheet.create({
   addBtnText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
   editorWarn: { fontSize: 12, fontWeight: '700', color: BrandColors.warnText, marginTop: 12 },
 
-  backLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
-  backLinkText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
+  backLink: { ...ButtonStyles.secondary, alignSelf: 'center', flexDirection: 'row', gap: Space.xs },
+  backLinkText: ButtonTextStyles.secondary,
 
   saveBar: {
     padding: Space.gutter,

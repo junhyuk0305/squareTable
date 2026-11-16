@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space, HQ_PAGE_GUTTER } from '@/lib/theme/layout';
+import { Layout, Space, HQ_PAGE_GUTTER } from '@/lib/theme/layout';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -47,7 +47,7 @@ export function HqPage({
 }) {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollBody} testID={testID}>
-      <View style={[styles.phead, !!tabs && { paddingBottom: 0 }]}>
+      <View style={styles.phead}>
         <View style={styles.pheadRow}>
           {back ? (
             <Pressable
@@ -257,9 +257,7 @@ export function HqSlab({ title, hint, more }: { title: string; hint?: string; mo
       <Text style={styles.slabTitle}>{title}</Text>
       {hint ? <Text style={styles.slabHint}>{hint}</Text> : null}
       {more ? (
-        <Pressable onPress={more.onPress} accessibilityRole="button" style={{ marginLeft: 'auto', flexShrink: 0 }}>
-          <Text style={styles.slabMore}>{more.label}</Text>
-        </Pressable>
+        <HqButton label={more.label} onPress={more.onPress} style={{ marginLeft: 'auto', flexShrink: 0 }} />
       ) : null}
     </View>
   );
@@ -345,8 +343,9 @@ const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: InkColors.paper },
   scrollBody: { flexGrow: 1 },
   page: { paddingTop: Space.xl, paddingBottom: 60, paddingHorizontal: HQ_PAGE_GUTTER, maxWidth: 1400, width: '100%' },
-  phead: { backgroundColor: InkColors.bg, borderBottomWidth: 1, borderBottomColor: InkColors.line, paddingTop: 22, paddingBottom: 18, paddingHorizontal: HQ_PAGE_GUTTER },
-  pheadRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  // 머리 줄 높이 = 앱의 모든 헤더와 같은 Layout.headerH(73 · 2026-11-16 R-6 "모든 헤더 73"). 탭(HqTabs)이 있으면 그 아래에 붙는다.
+  phead: { backgroundColor: InkColors.bg, borderBottomWidth: 1, borderBottomColor: InkColors.line, paddingHorizontal: HQ_PAGE_GUTTER },
+  pheadRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: Layout.headerH - StyleSheet.hairlineWidth }, // 아래선(웹 1px)까지 합쳐 73
   back: { width: 36, height: 36, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: -Space.sm },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
   h1: { fontSize: 22, fontWeight: '800', letterSpacing: -0.5, color: InkColors.ink, flexShrink: 0 },
@@ -354,7 +353,7 @@ const styles = StyleSheet.create({
   psub: { fontSize: 14, color: InkColors.ink2, marginTop: Space.xs },
   pact: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, flexShrink: 0 },
 
-  tabs: { flexDirection: 'row', gap: Space.xl, marginTop: Space.lg },
+  tabs: { flexDirection: 'row', gap: Space.xl },
   tab: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent', marginBottom: -1, flexShrink: 0 },
   tabOn: { borderBottomColor: InkColors.ink },
   tabText: { fontSize: 15, fontWeight: '600', color: InkColors.ink3 },
@@ -409,7 +408,6 @@ const styles = StyleSheet.create({
   slab: { flexDirection: 'row', alignItems: 'baseline', gap: 9, marginBottom: 9 },
   slabTitle: { fontSize: 16, fontWeight: '700', color: InkColors.ink, flexShrink: 0 },
   slabHint: { fontSize: 13.5, color: InkColors.ink3, flex: 1, minWidth: 0 },
-  slabMore: { fontSize: 14, fontWeight: '600', color: InkColors.ink2, flexShrink: 0 },
 
   empty: { paddingVertical: 28, paddingHorizontal: 16, alignItems: 'center', gap: Space.md },
   emptyText: { fontSize: 14.5, color: InkColors.ink3, textAlign: 'center' },

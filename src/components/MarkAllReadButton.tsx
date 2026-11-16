@@ -5,8 +5,8 @@ import { Pressable, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { InkColors } from '@/lib/theme/colors';
-import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
-import { ButtonStyles } from '@/lib/theme/button';
+import { HEADER_EDGE_GUTTER, Space } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 export function MarkAllReadButton({ onPress }: { onPress: () => void }) {
   return (
@@ -26,12 +26,10 @@ const styles = StyleSheet.create({
   // 누르는 높이 44(2026-11-02 사용자 결정 · 상단바 작은 알약). 글자·아이콘은 그대로 가운데 — RN-web 은 hitSlop 을 무시한다.
   //   헤더 줄은 뒤로 버튼(48)이 높이를 정하므로 44 로 키워도 헤더 높이는 그대로다.
   btn: {
-    ...ButtonStyles.inlineHit,
+    ...ButtonStyles.secondary,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingLeft: 14,
-    paddingRight: HEADER_EDGE_GUTTER,
+    gap: Space.xs,
+    marginRight: HEADER_EDGE_GUTTER,
   },
-  text: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
+  text: ButtonTextStyles.secondary,
 });

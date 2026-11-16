@@ -43,7 +43,7 @@ const BLOCK_LEAF = new Set([
   'StarterChecklist', 'PlanUpgradeNotice', 'EmptyState',
   'KnowhowCarousel', 'FeatureCarousel', 'BrowseList', 'NotificationList',
   'NudgeCard', 'SegmentTabs', 'PricingTable', 'NotificationEnableCard',
-  'FreeUntilNotice', 'DeflectCard', 'TimesheetView',
+  'DeflectCard', 'TimesheetView',
   // ★ 설계안 A-1 목록에 없던 추가 1건 — SettingsKit 의 `SettingsSection` 은
   //   `{title && <SectionLabel/>} + <View style={card}>{children}</View>` 로 **정확히 '제목+내용 한 덩어리'**다.
   //   빼면 설정 3화면(/account-settings·/owner/settings·/junior/settings)이 실제 5~6 섹션인데 1~2로 나온다.
@@ -54,7 +54,7 @@ const TITLE = new Set(['SectionLabel']);
 const CHROME = new Set([
   'SafeAreaView', 'ScrollView', 'FlatList', 'KeyboardAvoidingView', 'Stack', 'Stack.Screen',
   'Redirect', 'ActivityIndicator', 'RoleTabBar', 'HubTabBar', 'HubTopBar', 'StoreToggle',
-  'NotificationBell', 'OwnerNotificationBell', 'HeaderBackButton', 'HeaderLogoutButton',
+  'NotificationBell', 'OwnerNotificationBell', 'HeaderLogoutButton',
   'StoreHeaderTitle', 'Toast', 'SyncBanner', 'CoachmarkTour', 'DialogHost', 'ErrorBoundary',
   'ResponsiveShell', 'InfoDot',
   // TransitionCover 는 화면을 '대체하는' 로딩 커버다 — 화면의 내용 블록이 아니다.

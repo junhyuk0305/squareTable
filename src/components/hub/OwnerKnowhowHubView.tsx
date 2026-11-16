@@ -35,6 +35,7 @@ import { Type } from '@/lib/theme/type';
 import { Radius } from '@/lib/theme/elevation';
 import { Layout, Space } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
+import { EmptyStyles } from '@/lib/theme/empty';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import type { Href } from 'expo-router';
 
@@ -269,6 +270,8 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
             />
           </View>
         ) : (
+          // 칸 0개 = 링 + 다음 행동 하나를 흰 카드 하나에 담는다(R-14 · 2026-11-16).
+          <View style={styles.card}>
           <ProgressRing
             value={understanding.known}
             total={understanding.cells}
@@ -279,10 +282,8 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
                 : '노하우를 담으면 직원이 얼마나 아는지 여기서 보여드려요'
             }
           />
-        )}
-        {/* 빈 상태엔 다음 행동 하나 — 어느 쪽이 0인지에 따라 목적지가 다르다(둘 다 0이면 직원부터:
-            노하우 담기는 바로 위 '노하우가 없어요' 카드가 이미 말하고 있다). */}
-        {understanding.cells === 0 && (
+          {/* 빈 상태엔 다음 행동 하나 — 어느 쪽이 0인지에 따라 목적지가 다르다(둘 다 0이면 직원부터:
+              노하우 담기는 바로 위 '노하우가 없어요' 카드가 이미 말하고 있다). */}
           <Pressable
             onPress={
               understanding.staff === 0
@@ -301,6 +302,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
             />
             <Text style={styles.emptyBtnText}>{understanding.staff === 0 ? '직원 초대하기' : '노하우 담기'}</Text>
           </Pressable>
+          </View>
         )}
       </Appear>
 
@@ -466,7 +468,9 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
 
       {allClear && totals.knowhow > 0 && (
         <Appear delay={stagger(6)}>
-          <Text style={styles.allClearText}>지금은 고칠 노하우가 없어요</Text>
+          <View style={styles.allClearBox}>
+            <Text style={styles.allClearText}>지금은 고칠 노하우가 없어요</Text>
+          </View>
         </Appear>
       )}
 
@@ -530,6 +534,8 @@ const styles = StyleSheet.create({
   emptyBtnText: { ...ButtonTextStyles.primary, color: InkColors.ink },
 
   // 빈 상태 문구 = 본문(simplicity-voice §4) → 꼬리표용 ink3(2.55:1)를 쓰지 않는다.
+  // 빈 상태 = 흰 빈 카드(R-14 · 2026-11-16).
+  allClearBox: EmptyStyles.box,
   allClearText: { ...Type.desc, textAlign: 'center' },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm + 2 },

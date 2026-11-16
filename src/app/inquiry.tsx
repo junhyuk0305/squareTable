@@ -13,7 +13,7 @@ import { Space, screenScrollStyle } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
-import { HeaderBackButton } from '@/components/HeaderBackButton';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { Appear } from '@/components/Appear';
 
 /**
@@ -70,10 +70,9 @@ export default function InquiryScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <View style={styles.topbar}>
-        <HeaderBackButton fallback="/" />
-      </View>
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
+      {/* 위 안전 영역은 헤더가 든다. 헤더 높이 = 다른 모든 헤더와 같은 73(2026-11-16 R-6). 제목은 본문이 크게 든다. */}
+      <ScreenTitleHeader title="" backFallback="/" />
 
       <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
@@ -174,7 +173,6 @@ export default function InquiryScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Surface.screen },
-  topbar: { height: 48, justifyContent: 'center' },
   // 좌우·아래 = 화면 틀 값. 위는 뒤로가기 줄 바로 아래라 좁게, 블록 사이 24 는 그대로.
   scroll: { ...screenScrollStyle, flexGrow: 1, paddingTop: Space.xs, gap: Space.xl },
   header: { gap: Space.sm },
@@ -203,6 +201,6 @@ const styles = StyleSheet.create({
   ghost: { ...ButtonStyles.primary, marginTop: Space.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
   ghostText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
 
-  mailRow: { alignItems: 'center', paddingVertical: Space.sm },
-  mailText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
+  mailRow: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  mailText: ButtonTextStyles.secondary,
 });

@@ -22,6 +22,7 @@ import { SUGGESTION_STATUS_LABEL } from '@/lib/suggestion/labels';
 import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Layout, Space } from '@/lib/theme/layout';
 import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery } from '@/types';
@@ -542,8 +543,9 @@ const s = StyleSheet.create({
   statusTag: { fontSize: 11, fontWeight: '800', color: InkColors.ink3 },
   doneMeta: { fontSize: 11, fontWeight: '600', color: InkColors.ink3 },
   waitTag: { fontSize: 10.5, fontWeight: '800', color: BrandColors.warnText, backgroundColor: BrandColors.warnSoft, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, overflow: 'hidden' },
-  moreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, borderTopWidth: 1, borderTopColor: InkColors.line, paddingVertical: Space.sm },
-  moreText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
+  // 더 보기 줄 = 카드 안 맨 아래 가로 꽉 보조 알약(R-11 · 2026-11-16). 카드는 위아래 안쪽이 없어 아래 여백을 준다.
+  moreRow: { ...ButtonStyles.secondary, alignSelf: 'stretch', flexDirection: 'row', gap: Space.xs, marginBottom: Space.md },
+  moreText: ButtonTextStyles.secondary,
 
   // 답변 시트
   sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 10 },

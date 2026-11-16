@@ -79,7 +79,7 @@ export default function JuniorChatScreen() {
       ) : playbookLoadError ? (
         // ★노하우 목록 읽기 실패를 "아직 매장에 없는 질문이에요"라는 **거짓 단정**으로 바꾸지 않는다(#23).
         //   그 문구는 사장이 답을 안 올려놨다는 뜻이라, 실제로는 있는 답을 없다고 말하는 셈이 된다.
-        <LoadErrorState title="노하우를 불러오지 못했어요" onRetry={() => void hydratePlaybook()} />
+        <LoadErrorState screen title="노하우를 불러오지 못했어요" onRetry={() => void hydratePlaybook()} />
       ) : (
         <KnowhowSegment
           role="junior"

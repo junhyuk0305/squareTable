@@ -27,8 +27,9 @@ import { useChatStore } from '@/lib/store/useChatStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 
-import { InkColors, TextColor } from '@/lib/theme/colors';
+import { InkColors } from '@/lib/theme/colors';
 import { Type } from '@/lib/theme/type';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 import type { Category, PlaybookEntry } from '@/types';
 
@@ -355,11 +356,11 @@ export function JuniorAsk({ suggestEntry = true, seed, focusId }: { suggestEntry
         {hasMoreOlder && (
           <Pressable
             onPress={loadOlder}
-            style={({ pressed }) => [{ alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 14, marginBottom: 4 }, pressed && { opacity: 0.6 }]}
+            style={({ pressed }) => [{ ...ButtonStyles.secondary, alignSelf: 'center', marginBottom: 4 }, pressed && { opacity: 0.6 }]}
             accessibilityRole="button"
             accessibilityLabel="이전 대화 더 보기"
           >
-            <Text style={{ ...Type.tag, fontWeight: '700', color: TextColor.secondary }}>⌃ 이전 대화 더 보기</Text>
+            <Text style={ButtonTextStyles.secondary}>⌃ 이전 대화 더 보기</Text>
           </Pressable>
         )}
 

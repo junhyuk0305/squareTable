@@ -15,9 +15,10 @@ import { EmptyState } from '@/components/EmptyState';
  * 화면을 나갔다 와도 TTL 때문에 실패 상태 그대로다. onRetry 는 TTL 을 무시하는 경로여야 한다.
  */
 /** title 은 호출부가 통째로 준다 — 조사('을/를')를 코드가 지어내면 어색해진다. 예: "매장 현황을 불러오지 못했어요". */
-export function LoadErrorState({ title, onRetry }: { title: string; onRetry: () => void }) {
+export function LoadErrorState({ title, onRetry, screen }: { title: string; onRetry: () => void; screen?: boolean }) {
   return (
     <EmptyState
+      screen={screen}
       title={title}
       body="연결을 확인하고 다시 시도해 주세요."
       cta={{ label: '다시 시도', onPress: onRetry }}

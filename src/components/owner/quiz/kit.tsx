@@ -222,7 +222,7 @@ export function AnswerReveal({ text }: { text: string }) {
       accessibilityLabel={shown ? '정답 가리기' : '정답 보기'}
     >
       <Ionicons name={shown ? 'eye-off-outline' : 'eye-outline'} size={15} color={InkColors.ink3} />
-      <Text style={[qst.answerText, !shown && { color: InkColors.ink3 }]} numberOfLines={2}>
+      <Text style={[qst.answerText, shown && { color: BrandColors.goodText }]} numberOfLines={2}>
         {shown ? `정답 · ${text || '없음'}` : '정답 보기'}
       </Text>
     </Pressable>
@@ -234,8 +234,8 @@ export const qst = StyleSheet.create({
   // X 없는 머리말 — 48dp 버튼이 빠지면 제목이 그립에 붙으므로 위 여백을 주고, 아래는 카드에 바싹.
   sheetHeadPlain: { paddingTop: Space.sm, paddingBottom: Space.xs },
 
-  answerRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, minHeight: 32, paddingVertical: Space.xs },
-  answerText: { flex: 1, fontSize: 15, fontWeight: '700', color: BrandColors.goodText, lineHeight: 21 },
+  answerRow: { ...ButtonStyles.secondary, flexDirection: 'row', gap: Space.xs, paddingVertical: Space.xs },
+  answerText: { ...ButtonTextStyles.secondary, flexShrink: 1, lineHeight: 21 },
   sheetClose: { minWidth: 48, minHeight: 48, alignItems: 'flex-end', justifyContent: 'center' },
   sheetTitle: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink },
 

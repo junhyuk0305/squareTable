@@ -204,7 +204,7 @@ function DowngradeBody() {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <Stack.Screen options={{ headerShown: false }} />
-        <LoadErrorState
+        <LoadErrorState screen
           title="요금제 정보를 불러오지 못했어요"
           onRetry={() => {
             setLoading(true);
@@ -527,11 +527,12 @@ const styles = StyleSheet.create({
   noteBox: { gap: Space.sm, backgroundColor: Surface.card, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: Space.lg },
   noteText: { ...Type.desc },
 
-  footer: { gap: Space.md },
+  // 주 버튼·되돌아가는 링크 = 흰 카드 한 장(2026-11-16 R-14 · 하단 고정 바는 만들지 않는다).
+  footer: { ...CardStyles.list, gap: Space.md },
   // 주 버튼(52 · 모서리 16 · 가로 꽉 · 16/800).
   primary: { ...ButtonStyles.primary, backgroundColor: BrandColors.brand },
   primaryOff: { opacity: 0.35 },
   primaryText: { ...ButtonTextStyles.primary, lineHeight: 22, color: InkColors.bubbleText },
-  link: { alignItems: 'center', paddingVertical: Space.sm, minHeight: 48, justifyContent: 'center' },
-  linkText: { fontSize: Type.body.fontSize, lineHeight: 22, fontWeight: '800', color: TextColor.secondary, textDecorationLine: 'underline' },
+  link: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  linkText: ButtonTextStyles.secondary,
 });

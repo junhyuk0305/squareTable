@@ -34,6 +34,7 @@ import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Type } from '@/lib/theme/type';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import type { PlaybookEntry, SquareBlock } from '@/types';
 
 import { StepProgress } from '@/components/blocks/StepProgress';
@@ -442,7 +443,7 @@ export function QuizEditorSheet({
             <View style={est.formatBar}>
               <Text style={est.formatText} numberOfLines={1}>{labelOf(format)}</Text>
               {!editing ? (
-                <Pressable onPress={() => setStep('pick')} hitSlop={8} accessibilityRole="button" accessibilityLabel="형태 바꾸기">
+                <Pressable onPress={() => setStep('pick')} hitSlop={8} style={est.formatChangeBtn} accessibilityRole="button" accessibilityLabel="형태 바꾸기">
                   <Text style={est.formatChange}>형태 바꾸기</Text>
                 </Pressable>
               ) : null}
@@ -556,7 +557,8 @@ const est = StyleSheet.create({
     backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, paddingHorizontal: Space.md, paddingVertical: Space.sm, minHeight: 44,
   },
   formatText: { ...Type.body, flex: 1, fontWeight: '800' },
-  formatChange: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, textDecorationLine: 'underline' },
+  formatChangeBtn: { ...ButtonStyles.secondary },
+  formatChange: ButtonTextStyles.secondary,
 
   linkBox: {
     marginTop: Space.lg, gap: Space.sm, backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.md,

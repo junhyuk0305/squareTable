@@ -21,9 +21,10 @@ import { showToast } from '@/lib/store/useToastStore';
 import { confirmAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { Layout, Space, screenScrollStyle } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
+import { EmptyStyles } from '@/lib/theme/empty';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { industryLabel } from '@/lib/config/industry';
 
@@ -98,6 +99,7 @@ export default function BrandConsentScreen() {
         // 다시 받는 동의·고지가 있으면 그것이 먼저다 — 이미 연결된 매장의 규칙이 바뀐 것이라 더 급하다.
         <ReConsent link={pending} onDone={() => { void hydrate(); router.replace('/owner/brand-link'); }} />
       ) : !invite ? (
+        <View style={styles.emptyWrap}>
         <View style={styles.empty} testID="brand-consent-empty">
           <Ionicons name="checkmark-circle-outline" size={28} color={InkColors.ink3} />
           <Text style={styles.emptyTitle}>기다리는 연결 요청이 없어요</Text>
@@ -108,6 +110,7 @@ export default function BrandConsentScreen() {
               <Text style={styles.secondaryText}>본사 연결 보기</Text>
             </Pressable>
           ) : null}
+        </View>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.body} testID="brand-consent">
@@ -186,6 +189,7 @@ export default function BrandConsentScreen() {
 
           {/* 4) 답 */}
           <Text style={styles.note}>수락한 뒤에도 설정 &gt; 본사 연결에서 공개 수준을 바꾸거나 연결을 끝낼 수 있어요. 본사가 해제해도 받은 노하우는 매장에 남아요.</Text>
+          <View style={styles.answerCard}>
           <Pressable
             testID="brand-accept"
             accessibilityRole="button"
@@ -195,9 +199,10 @@ export default function BrandConsentScreen() {
           >
             <Text style={styles.primaryText}>{picked.size > 0 ? `${picked.size}곳 연결 수락` : '연결 수락'}</Text>
           </Pressable>
-          <Pressable testID="brand-decline" accessibilityRole="button" disabled={busy} onPress={() => void respond(false)} style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.7 }]}>
-            <Text style={styles.secondaryText}>거절</Text>
+          <Pressable testID="brand-decline" accessibilityRole="button" disabled={busy} onPress={() => void respond(false)} style={({ pressed }) => [styles.danger, pressed && { opacity: 0.7 }]}>
+            <Text style={styles.dangerText}>거절</Text>
           </Pressable>
+          </View>
         </ScrollView>
       )}
     </SafeAreaView>
@@ -293,6 +298,7 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
         <Text style={styles.neverBody}>{NEVER_SHARED.join(' · ')}</Text>
       </View>
 
+      <View style={styles.answerCard}>
       <Pressable
         testID="brand-reconsent-accept"
         accessibilityRole="button"
@@ -317,11 +323,12 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
           accessibilityRole="button"
           disabled={busy}
           onPress={() => void answer(false)}
-          style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [styles.danger, pressed && { opacity: 0.7 }]}
         >
-          <Text style={styles.secondaryText}>동의하지 않기(연결 끝내기)</Text>
+          <Text style={styles.dangerText}>동의하지 않기(연결 끝내기)</Text>
         </Pressable>
       )}
+      </View>
     </ScrollView>
   );
 }
@@ -329,12 +336,14 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
 const styles = StyleSheet.create({
   // 화면 바탕(Surface.screen). 탭바가 없는 화면이라 아래 안전 영역을 SafeAreaView(bottom)가 그대로 든다.
   safe: { flex: 1, backgroundColor: Surface.screen },
-  // 좌우·섹션 사이 = screenScrollStyle. 첫 여백 16 은 hero 의 위 여백이 들어 스크롤 위 여백은 뺀다.
-  body: { ...screenScrollStyle, paddingTop: 0, paddingBottom: 48 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Space.xl, gap: Space.sm },
+  // 좌우·섹션 사이·첫 여백 16 = screenScrollStyle(hero 가 흰 카드가 되며 위 여백을 스크롤이 든다 · R-14 2026-11-16).
+  body: { ...screenScrollStyle, paddingBottom: 48 },
+  // 빈 상태 = 흰 빈 카드(R-14 · 2026-11-16). 화면에 혼자 놓여 헤더 아래 첫 여백·좌우 여백을 바깥이 든다.
+  emptyWrap: { paddingTop: Layout.screenTop, paddingHorizontal: Layout.screenX },
+  empty: EmptyStyles.box,
   emptyTitle: Type.title,
   emptyBody: { ...Type.desc, textAlign: 'center' },
-  hero: { alignItems: 'center', gap: 4, paddingVertical: Space.lg },
+  hero: { ...CardStyles.list, alignItems: 'center', gap: Space.xs },
   heroIcon: { width: 44, height: 44, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   heroTitle: { ...Type.title, letterSpacing: -0.4 },
   heroSub: Type.desc,
@@ -361,6 +370,10 @@ const styles = StyleSheet.create({
   ruleVal: { flexShrink: 1, maxWidth: '55%', textAlign: 'right' },
   primary: { ...ButtonStyles.primary, marginTop: Space.sm, backgroundColor: BrandColors.brand },
   primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
-  secondary: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  secondaryText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
+  // 수락·거절 버튼 묶음 — 흰 카드 안(R-14 · 2026-11-16).
+  answerCard: { ...CardStyles.list, gap: Space.xs },
+  secondary: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  secondaryText: ButtonTextStyles.secondary,
+  danger: { ...ButtonStyles.danger, alignSelf: 'stretch' },
+  dangerText: ButtonTextStyles.danger,
 });

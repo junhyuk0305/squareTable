@@ -160,13 +160,11 @@ export const PROBE = probeFor(CLICKABLE_SEL);
 
 /** 첫 사용 팝업을 미리 끄는 localStorage 문장(try 안에 넣어 쓴다). seedSession 이 문서마다 저장소를 비워 매 화면 다시 뜨고,
  *  덮개가 버튼을 가리면 R2 가 전부 '가려짐' 이 된다(10-17 1차 실측). 키는 소스에서 읽는다(손으로 베끼지 않음).
- *  · 직원 환영 코치 `sqt.juniorCoachSeen` · 화면 가이드 `sqt.tour.v1`(id = guideContent.ts) · 무료 기간 안내(키 = FreeUntilNotice.tsx — 로컬 DB 는 무료 모드라 뜬다) */
+ *  · 직원 환영 코치 `sqt.juniorCoachSeen` · 화면 가이드 `sqt.tour.v1`(id = guideContent.ts) */
 export function firstRunSeedJs(root) {
   const guideIds = [...new Set([...readFileSync(join(root, 'src/lib/guides/guideContent.ts'), 'utf8').matchAll(/'([a-z]+_[a-z_]+_v\d+)'/g)].map((m) => m[1]))];
   const tourSeen = JSON.stringify(Object.fromEntries(guideIds.map((id) => [id, true])));
-  const noticeKey = readFileSync(join(root, 'src/components/FreeUntilNotice.tsx'), 'utf8').match(/NOTICE_KEY = '([^']+)'/)?.[1];
-  if (!noticeKey) throw new Error('FreeUntilNotice.tsx 에서 NOTICE_KEY 를 못 찾았다 — firstRunSeedJs 를 고친다');
-  return `localStorage.setItem('sqt.juniorCoachSeen','1');localStorage.setItem('sqt.tour.v1',${JSON.stringify(tourSeen)});localStorage.setItem(${JSON.stringify(noticeKey)},'1');`;
+  return `localStorage.setItem('sqt.juniorCoachSeen','1');localStorage.setItem('sqt.tour.v1',${JSON.stringify(tourSeen)});`;
 }
 
 /** 안정 = 글자가 있고 · ScreenLoading(progressbar) 없음 · 진입 스플래시(SplashAnimation: '매장의 정석'+'우리 매장 운영의 기준' 덮개) 걷힘.

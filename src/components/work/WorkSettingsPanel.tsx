@@ -305,8 +305,8 @@ const s = StyleSheet.create({
   orderBtns: { flexDirection: 'row', alignItems: 'center' },
 
   // 2단 — 헤더/필드
-  backRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingHorizontal: Space.lg, paddingVertical: Space.md },
-  backText: { fontSize: 13, fontWeight: '800', color: TextColor.secondary },
+  backRow: { ...ButtonStyles.secondary, flexDirection: 'row', gap: Space.xs, marginHorizontal: Space.lg, marginVertical: Space.sm },
+  backText: ButtonTextStyles.secondary,
   fieldLabel: { ...Type.tag, fontWeight: '800', color: TextColor.secondary, marginBottom: Space.sm },
   fieldHint: { ...Type.desc, marginBottom: Space.md },
   empty: { ...Type.desc, marginBottom: Space.md },
@@ -350,8 +350,8 @@ const s = StyleSheet.create({
   },
   addDashedText: { fontWeight: '800', fontSize: Type.desc.fontSize, color: InkColors.ink },
 
-  delRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, paddingVertical: Space.lg, marginTop: Space.md },
-  delText: { fontSize: 13, fontWeight: '800', color: BrandColors.badText },
+  delRow: { ...ButtonStyles.danger, alignSelf: 'stretch', flexDirection: 'row', gap: Space.xs, marginTop: Space.md },
+  delText: ButtonTextStyles.danger,
   confirmBar: { marginTop: Space.lg, padding: Space.md, borderRadius: Radius.sm, backgroundColor: BrandColors.badSoft, borderWidth: 1, borderColor: BrandColors.bad },
   // 삭제 확인 안내 — 크기는 설명 단계, 색은 경고 빨강 그대로.
   confirmText: { ...Type.desc, color: BrandColors.badText, fontWeight: '700' },

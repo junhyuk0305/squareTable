@@ -11,6 +11,7 @@ import { showToast } from '@/lib/store/useToastStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
 import { InkColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { ROOM_COLORS } from '@/lib/utils/room';
@@ -151,8 +152,8 @@ export function RoomComposer({
               ))}
             </View>
             {imageUrl && (
-              <Pressable onPress={() => setImageUrl(undefined)} hitSlop={6} style={({ pressed }) => pressed && { opacity: 0.6 }}>
-                <Text style={s.clearPhoto}>사진 지우기</Text>
+              <Pressable onPress={() => setImageUrl(undefined)} style={({ pressed }) => [s.clearPhoto, pressed && { opacity: 0.7 }]}>
+                <Text style={s.clearPhotoText}>사진 지우기</Text>
               </Pressable>
             )}
           </View>
@@ -236,7 +237,8 @@ const s = StyleSheet.create({
   colorRow: { flexDirection: 'row', gap: Space.sm },
   swatch: { width: 36, height: 36, borderRadius: Radius.pill, borderWidth: 2, borderColor: 'transparent' },
   swatchOn: { borderColor: InkColors.ink },
-  clearPhoto: { ...Type.tag, fontWeight: '700', color: TextColor.secondary, paddingVertical: Space.xs },
+  clearPhoto: { ...ButtonStyles.secondary },
+  clearPhotoText: ButtonTextStyles.secondary,
 
   field: { paddingBottom: Space.lg, gap: Space.sm },
   fieldLabel: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },

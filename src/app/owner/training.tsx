@@ -45,6 +45,7 @@ import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Layout, Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { EmptyStyles } from '@/lib/theme/empty';
 
 /**
@@ -339,7 +340,7 @@ export default function OwnerTrainingScreen() {
                 </View>
               </Appear>
               <Appear delay={stagger(2)}>
-                <View style={st.actions}>
+                <View style={st.actionsCard}>
                   <PrimaryButton
                     label={picked.length > 0 ? `고른 ${picked.length}개로 퀴즈 만들기` : '노하우를 골라 주세요'}
                     disabled={picked.length === 0}
@@ -398,6 +399,11 @@ export default function OwnerTrainingScreen() {
                       ? '노하우를 적으면 직원이 아는지 확인할 수 있어요.'
                       : '직원이 합류하면 누가 어떤 노하우를 아는지 여기서 보여요.'}
                   </Text>
+                  {stats.publishedEntries === 0 ? (
+                    <View style={st.heroCta}>
+                      <PrimaryButton label="노하우 추가하기" onPress={() => router.push('/owner/coach' as never)} />
+                    </View>
+                  ) : null}
                 </View>
               )}
             </Appear>
@@ -406,15 +412,8 @@ export default function OwnerTrainingScreen() {
                 만들기로 가는 길은 **우하단 + 버튼** 하나다(노하우 탭과 같은 자리·같은 모양) —
                 "안 물어본 것만"은 만들기 2단계의 **필터**가 됐다. 목표를 버튼 이름으로 나누면
                 같은 화면으로 가는 버튼이 둘이 된다.
-                ★노하우가 0개일 때만은 예외다 — 만들 재료가 없으니 갈 곳이 퀴즈가 아니라 노하우다. */}
-            <Appear delay={stagger(1)}>
-              <View style={st.actions}>
-                {stats.publishedEntries === 0 ? (
-                  <PrimaryButton label="노하우 추가하기" onPress={() => router.push('/owner/coach' as never)} />
-                ) : null}
-
-              </View>
-            </Appear>
+                ★노하우가 0개일 때만은 예외다 — 만들 재료가 없으니 갈 곳이 퀴즈가 아니라 노하우다.
+                그 버튼은 위 빈 카드 안 맨 아래에 있다(R-14 · 2026-11-16). */}
 
             </>
             ) : null}
@@ -906,18 +905,19 @@ const st = StyleSheet.create({
   // ★hitSlop 은 RN-web 에서 안 먹는다 — 실측 높이가 곧 누를 수 있는 크기다(2026-08-26 실측 29·31dp).
   //   48dp 하한(복잡도 §4)은 상자 크기로 지켜야 한다.
   // ScreenTitleHeader 의 바가 이미 좌우 거터를 갖는다 — 오른쪽 거터를 또 주면 두 겹이 된다.
-  headerAction: {
-    minHeight: 48, justifyContent: 'center',
-    paddingLeft: Space.sm,
-  },
-  headerActionText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  //   2026-11-16 R-11: 글자만 있던 자리를 보조 알약(44)으로 바꿨다.
+  headerAction: { ...ButtonStyles.secondary, alignSelf: 'center' },
+  headerActionText: ButtonTextStyles.secondary,
 
-  // 히어로 — 카드로 감싸지 않는다(카드는 아래 목록이 갖는다 · 배치규칙⑤ "1~2개는 카드로").
-  hero: { paddingTop: Space.lg, paddingBottom: Space.sm },
+  // 히어로 빈 상태 — 흰 빈 카드(R-14 · 2026-11-16 사용자 규칙: 빈 상태는 흰 카드 위).
+  hero: EmptyStyles.box,
+  heroCta: { alignSelf: 'stretch', marginTop: Space.sm },
   heroEmpty: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: InkColors.ink, textAlign: 'center' },
   heroEmptyDesc: { ...Type.desc, textAlign: 'center' },
   // 주 액션 묶음 — Primary + 보조 링크 + (있으면) 초안 한 줄.
   actions: { gap: Space.sm },
+  // 퀴즈 0개 화면의 주 버튼 묶음 — 흰 카드 안(R-14 · 2026-11-16).
+  actionsCard: { ...CardStyles.list, gap: Space.sm },
 
   // A1 원리 카드 — 이 화면에 남는 유일한 색면(배치규칙 ② 히어로는 화면당 1개).
   // ★노랑은 yellowSoft/gold 다. accent 는 레드(= bad)라 여기 쓰면 경고로 읽힌다.
@@ -996,7 +996,7 @@ const st = StyleSheet.create({
   missIntro: { ...Type.desc, marginBottom: Space.md },
 
   // 행 안의 액션 — 48dp 는 상자 크기로 지킨다(hitSlop 은 RN-web 에서 안 먹는다).
-  rowAction: { flexShrink: 0, minHeight: 48, justifyContent: 'center', paddingLeft: Space.md },
-  rowActionText: { fontSize: 13, fontWeight: '800', color: InkColors.ink, textDecorationLine: 'underline' },
+  rowAction: { ...ButtonStyles.secondary, alignSelf: 'center', flexShrink: 0, marginLeft: Space.sm },
+  rowActionText: ButtonTextStyles.secondary,
 
 });

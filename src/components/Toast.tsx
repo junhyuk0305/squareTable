@@ -8,6 +8,7 @@ import { useToastStore, type ToastTone } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { frameCapStyle, CONTENT_MAX_WIDTH, SCREEN_GUTTER, Space } from '@/lib/theme/layout';
 import { Radius } from '@/lib/theme/elevation';
+import { TouchSize } from '@/lib/theme/button';
 import { USE_NATIVE_DRIVER } from '@/lib/anim';
 
 const TONE: Record<ToastTone, { bg: string; icon: keyof typeof Ionicons.glyphMap }> = {
@@ -89,7 +90,15 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 5 },
   },
   text: { color: '#FFFFFF', fontSize: 15, fontWeight: '700', lineHeight: 22, flexShrink: 1 },
-  // 48dp 하한은 상자 크기로 지킨다(hitSlop 은 RN-web 에서 안 먹는다).
-  action: { flexShrink: 0, minHeight: 48, justifyContent: 'center', paddingLeft: Space.md },
-  actionText: { color: '#FFFFFF', fontSize: 15, fontWeight: '900', textDecorationLine: 'underline' },
+  // 어두운 면 위 알약 — 흰 테두리로 버튼 모양을 보인다(R-11 · 2026-11-16). 누르는 상자 44 는 상자 크기로 지킨다(hitSlop 은 RN-web 에서 안 먹는다).
+  action: {
+    flexShrink: 0,
+    minHeight: TouchSize.inline,
+    justifyContent: 'center',
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: InkColors.bubbleText,
+  },
+  actionText: { color: '#FFFFFF', fontSize: 15, fontWeight: '900' },
 });

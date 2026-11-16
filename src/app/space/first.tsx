@@ -9,6 +9,7 @@ import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { ChatComposerBar } from '@/components/ChatComposerBar';
 import { UserBubble } from '@/components/UserBubble';
 import { SquareCard } from '@/components/SquareCard';
+import { useEduLinksOn } from '@/components/edu/LinkFormStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useChatStore } from '@/lib/store/useChatStore';
 import { fetchEntries } from '@/lib/db';
@@ -57,6 +58,8 @@ export default function SpaceFirst() {
   const practiceHistory = useChatStore((s) => s.practiceHistory);
 
   const [step, setStep] = useState<Step>('write');
+  // ③ 링크 단계 = 실제 링크 만들기(S10 · 2026-11-16 R-4). 공간 링크 스위치가 꺼진 계정만 옛 안내 그대로.
+  const linksOn = useEduLinksOn('space') === true;
   const [entries, setEntries] = useState<PlaybookEntry[] | null>(null);
   const [input, setInput] = useState('');
   // 이 화면에서 물은 턴만 보인다(다시 들어오면 앞 연습이 쏟아지지 않게 · OwnerFirstAsk 와 같은 방법).
@@ -98,6 +101,7 @@ export default function SpaceFirst() {
 
   const linkEntry = () => {
     track('space_first_link_tapped', {});
+    if (linksOn && spaceId) return router.push({ pathname: '/space/link/new', params: { unit: spaceId } });
     void notifyAction(SPACE_WORDS.link, SPACE_SCREEN.firstLinkSoon, '확인', { icon: 'link-outline' });
   };
 
@@ -184,12 +188,16 @@ export default function SpaceFirst() {
             </View>
           ))}
           {isLoading ? (
-            <View style={styles.row}>
+            <View style={[styles.card, styles.row]}>
               <ActivityIndicator color={InkColors.ink3} />
               <Text style={styles.note}>{SPACE_WORDS.searching(ownerName(userName))}</Text>
             </View>
           ) : null}
-          {error ? <Text style={styles.err}>{SPACE_SCREEN.firstAskFail}</Text> : null}
+          {error ? (
+            <View style={styles.card}>
+              <Text style={styles.err}>{SPACE_SCREEN.firstAskFail}</Text>
+            </View>
+          ) : null}
           <ChatComposerBar>
             <TextInput
               value={input}
@@ -211,7 +219,9 @@ export default function SpaceFirst() {
               <Ionicons name="arrow-up" size={Type.title.fontSize} color={InkColors.bubbleText} />
             </Pressable>
           </ChatComposerBar>
-          <PrimaryButton label={SPACE_SCREEN.firstNext} onPress={() => setStep('link')} />
+          <View style={styles.card}>
+            <PrimaryButton label={SPACE_SCREEN.firstNext} onPress={() => setStep('link')} />
+          </View>
         </>
       ) : null}
 
@@ -258,7 +268,7 @@ const styles = StyleSheet.create({
   stepNo: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
   title: { ...Type.title },
   card: { ...CardStyles.list, gap: Space.md },
-  leadBox: { gap: Gap.inline },
+  leadBox: { ...CardStyles.list, gap: Gap.inline },
   lead: { ...Type.body },
   note: { ...Type.desc },
   count: { ...Type.numCell, color: InkColors.ink },
@@ -279,8 +289,8 @@ const styles = StyleSheet.create({
   primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   small: { ...ButtonStyles.small, borderWidth: 1, borderColor: InkColors.lineStrong, backgroundColor: Surface.card },
   smallText: { ...ButtonTextStyles.small, color: InkColors.ink },
-  textBtn: { ...ButtonStyles.inlineHit, alignSelf: 'center', paddingHorizontal: Space.lg },
-  textBtnText: { ...ButtonTextStyles.small, color: TextColor.secondary },
+  textBtn: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  textBtnText: ButtonTextStyles.secondary,
   pressed: { opacity: 0.88 },
   disabled: { opacity: 0.5 },
 });

@@ -36,6 +36,7 @@ import { placeErrorCode, placeErrorMessage } from '@/lib/place/errors';
 import { LINK_IN_APP, SPACE_MEMBERS, SPACE_WORDS, eduOwnerWord } from '@/lib/place/words';
 import { InkColors, Surface } from '@/lib/theme/colors';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { CardStyles } from '@/lib/theme/card';
 import { Gap, Layout } from '@/lib/theme/layout';
 
 const CLOSED: EduLinkInfo = { ok: false, failed: false, placeKind: null, placeName: '', ownerName: '', title: '', entryCount: 0, expiresAt: null };
@@ -143,15 +144,18 @@ export default function LinkInApp() {
             <View style={st.askStack}>
               <EduAsk token={token} place={info.placeKind} ownerName={info.ownerName} me={me} focusUq={focusUq} onFocusCard={onFocusCard} />
               {showJoin ? (
-                <Pressable
-                  onPress={() => void join()}
-                  disabled={joinBusy}
-                  accessibilityRole="button"
-                  accessibilityLabel={LINK_IN_APP.join}
-                  style={({ pressed }) => [st.btn, pressed && st.pressed, joinBusy && st.disabled]}
-                >
-                  {joinBusy ? <ActivityIndicator color={InkColors.ink} /> : <Text style={st.btnText}>{LINK_IN_APP.join}</Text>}
-                </Pressable>
+                // 버튼은 흰 카드 위(2026-11-16 R-14). 묻는 칸은 다른 부품이라 이 줄만 감싼다.
+                <View style={st.joinCard}>
+                  <Pressable
+                    onPress={() => void join()}
+                    disabled={joinBusy}
+                    accessibilityRole="button"
+                    accessibilityLabel={LINK_IN_APP.join}
+                    style={({ pressed }) => [st.btn, pressed && st.pressed, joinBusy && st.disabled]}
+                  >
+                    {joinBusy ? <ActivityIndicator color={InkColors.ink} /> : <Text style={st.btnText}>{LINK_IN_APP.join}</Text>}
+                  </Pressable>
+                </View>
               ) : null}
             </View>
           }
@@ -165,6 +169,7 @@ export default function LinkInApp() {
 const st = StyleSheet.create({
   askStack: { gap: Gap.group },
   topMark: { position: 'absolute', top: 0, left: 0, right: 0 },
+  joinCard: CardStyles.list,
   // 보조 버튼 — 화면의 Primary 는 묻는 칸의 [질문 보내기] 하나다.
   btn: { ...ButtonStyles.small, minHeight: 48, borderWidth: 1, borderColor: InkColors.lineStrong, backgroundColor: Surface.card },
   btnText: { ...ButtonTextStyles.small, color: InkColors.ink },

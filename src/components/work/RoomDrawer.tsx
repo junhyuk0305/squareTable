@@ -9,6 +9,7 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { ChachakSwitch } from '@/components/ChachakSwitch';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { HEADER_EDGE_GUTTER, Layout, Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { confirmAction } from '@/lib/utils/confirm';
@@ -268,7 +269,7 @@ function Block({
         title={title}
         trailing={
           moreLabel && onMore ? (
-            <Pressable onPress={onMore} accessibilityRole="button" accessibilityLabel={`${title} ${moreLabel}`} style={({ pressed }) => [s.tapBox, pressed && { opacity: 0.6 }]}>
+            <Pressable onPress={onMore} accessibilityRole="button" accessibilityLabel={`${title} ${moreLabel}`} style={({ pressed }) => [s.blockMoreBtn, pressed && { opacity: 0.7 }]}>
               <Text style={s.blockMore}>{moreLabel}</Text>
             </Pressable>
           ) : undefined
@@ -335,7 +336,8 @@ const s = StyleSheet.create({
 
   block: { gap: Space.sm },
   card: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, overflow: 'hidden', ...Elevation.e1 },
-  blockMore: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
+  blockMoreBtn: { ...ButtonStyles.secondary },
+  blockMore: ButtonTextStyles.secondary,
   blockEmpty: { ...Type.body, lineHeight: 21, color: TextColor.secondary, fontWeight: '600', paddingHorizontal: Space.lg, paddingVertical: Space.md },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingHorizontal: Space.lg, paddingVertical: 13, minHeight: 52 },
@@ -348,8 +350,8 @@ const s = StyleSheet.create({
 
   inviteLabel: { ...Type.tag, fontWeight: '800', color: TextColor.secondary, paddingHorizontal: Space.lg, paddingTop: Space.md },
 
-  exit: { gap: Space.xs },
-  exitRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: 13, minHeight: 48 },
-  exitText: { ...Type.body, fontWeight: '700', color: BrandColors.badText },
+  exit: { gap: Space.sm },
+  exitRow: { ...ButtonStyles.danger, alignSelf: 'stretch', flexDirection: 'row', gap: Space.sm },
+  exitText: ButtonTextStyles.danger,
   exitNote: { ...Type.desc, fontWeight: '600' },
 });

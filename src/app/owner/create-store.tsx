@@ -190,13 +190,11 @@ export default function OwnerCreateStore() {
           >
             {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>매장 만들고 시작하기</Text>}
           </Pressable>
+          {/* 카드 밖 글자 버튼 금지(R-14 · 2026-11-16) — 폼 카드 안 맨 아래. */}
+          <Pressable onPress={() => void logout()} style={styles.logoutRow}>
+            <Text style={styles.logoutText}>다른 계정으로 로그인</Text>
+          </Pressable>
         </View>
-        </Appear>
-
-        <Appear delay={120}>
-        <Pressable onPress={() => void logout()} style={styles.logoutRow}>
-          <Text style={styles.logoutText}>다른 계정으로 로그인</Text>
-        </Pressable>
         </Appear>
       </ScrollView>
       </KeyboardShift>
@@ -255,6 +253,6 @@ const styles = StyleSheet.create({
   primary: { ...ButtonStyles.primary, marginTop: 12, backgroundColor: BrandColors.brand },
   primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   // 글자 링크 = 글자 그대로 · 누르는 높이 44(2026-11-02 사용자 결정). 위아래 -8 로 자리는 옛 높이에 가깝게(약 25 → 28).
-  logoutRow: { ...ButtonStyles.inlineHit, alignItems: 'center', marginVertical: -Space.sm },
-  logoutText: { fontSize: 13, color: TextColor.secondary, fontWeight: '700' },
+  logoutRow: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  logoutText: ButtonTextStyles.secondary,
 });

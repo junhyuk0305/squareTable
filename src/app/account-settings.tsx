@@ -256,7 +256,7 @@ export default function AccountSettings() {
                 onPress={() =>
                   notifyAction(
                     '구독 및 결제',
-                    `${FREE_PROMO.until}까지는 모든 기능을 무료로 쓰실 수 있어요. 매장 수·직원 수 제한도 없어요.`,
+                    FREE_PROMO.body,
                     '확인',
                     { icon: 'card-outline' },
                   )
@@ -270,15 +270,18 @@ export default function AccountSettings() {
               hint={multiOwner && storeName ? `${storeName} 기준` : undefined}
             >
               <PricingTable currentPlan={plan} footNote={null} />
-              <Pressable
-                onPress={() => router.push('/billing' as never)}
-                style={({ pressed }) => [styles.billingCta, pressed && { opacity: 0.9 }]}
-                accessibilityRole="button"
-                accessibilityLabel="요금제 보기·바꾸기"
-              >
-                <Text style={styles.billingCtaText}>요금제 보기 · 바꾸기</Text>
-                <Ionicons name="chevron-forward" size={16} color={InkColors.bubbleText} />
-              </Pressable>
+              {/* 2026-11-16 R-14: 버튼은 흰 카드 위. 요금제 표는 자기 카드라 버튼만 따로 감싼다. */}
+              <View style={styles.billingCtaCard}>
+                <Pressable
+                  onPress={() => router.push('/billing' as never)}
+                  style={({ pressed }) => [styles.billingCta, pressed && { opacity: 0.9 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="요금제 보기·바꾸기"
+                >
+                  <Text style={styles.billingCtaText}>요금제 보기 · 바꾸기</Text>
+                  <Ionicons name="chevron-forward" size={16} color={InkColors.bubbleText} />
+                </Pressable>
+              </View>
             </Section>
           ))}
 
@@ -340,6 +343,7 @@ const styles = StyleSheet.create({
   foot: { fontSize: 11, color: InkColors.ink3, textAlign: 'center', marginTop: 6 },
 
   // 구독 및 결제 — <Section>(카드 밖 제목) + 요금제 표 + CTA(주 버튼).
+  billingCtaCard: CardStyles.list,
   billingCta: {
     ...ButtonStyles.primary,
     flexDirection: 'row',

@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { type FeedItem, REACTIONS } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { hhmm } from '@/lib/utils/attendance';
@@ -640,11 +641,11 @@ function FeedRow({ item, me, nameOf, members, query, active, onReact, onLongPres
       {item.sendState === 'failed' && (
         <View style={s.failRow}>
           <Text style={s.failText}>전송 실패</Text>
-          <Pressable onPress={onRetry} accessibilityRole="button" style={({ pressed }) => [s.failBtn, pressed && { opacity: 0.6 }]}>
-            <Text style={s.failBtnText}>다시 보내기</Text>
+          <Pressable onPress={onRetry} accessibilityRole="button" style={({ pressed }) => [s.failRetry, pressed && { opacity: 0.85 }]}>
+            <Text style={s.failRetryText}>다시 보내기</Text>
           </Pressable>
-          <Pressable onPress={onDiscard} accessibilityRole="button" style={({ pressed }) => [s.failBtn, pressed && { opacity: 0.6 }]}>
-            <Text style={s.failBtnText}>지우기</Text>
+          <Pressable onPress={onDiscard} accessibilityRole="button" style={({ pressed }) => [s.failDiscard, pressed && { opacity: 0.7 }]}>
+            <Text style={s.failDiscardText}>지우기</Text>
           </Pressable>
         </View>
       )}
@@ -768,8 +769,10 @@ const s = StyleSheet.create({
   sheetCancel: { marginTop: 4, alignItems: 'center', paddingVertical: 13, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
   sheetCancelText: { ...Type.body, fontWeight: '800' },
   editInput: { ...Type.body, minHeight: 80, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 12, textAlignVertical: 'top' },
-  failRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
+  failRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: Space.sm, marginTop: Space.xs },
   failText: { ...Type.tag, fontWeight: '700', color: BrandColors.badText },
-  failBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
-  failBtnText: { fontSize: 13, fontWeight: '700', color: TextColor.secondary, textDecorationLine: 'underline' },
+  failRetry: { ...ButtonStyles.small, backgroundColor: InkColors.ink },
+  failRetryText: { ...ButtonTextStyles.small, color: InkColors.bubbleText },
+  failDiscard: { ...ButtonStyles.danger },
+  failDiscardText: ButtonTextStyles.danger,
 });

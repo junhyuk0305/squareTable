@@ -52,12 +52,11 @@ import { Radius } from '@/lib/theme/elevation';
 import { Space, screenScrollStyle } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
-import { ButtonStyles, ButtonTextStyles, TouchSize, hitTrim } from '@/lib/theme/button';
+import { ButtonStyles, ButtonTextStyles, TouchSize } from '@/lib/theme/button';
 import { EmptyStyles } from '@/lib/theme/empty';
 
 /** 알림으로 들어온 요청 카드로 스크롤하기 전 등장 애니메이션이 가라앉는 시간(NoticePanel · TodoScreen 과 같다). */
 const FOCUS_SETTLE_MS = 520;
-const TODAY_LINE = 18;
 
 export default function OwnerScheduleScreen() {
   const router = useRouter();
@@ -241,7 +240,7 @@ export default function OwnerScheduleScreen() {
     return (
       <Screen header={header} tabBar="owner" scroll={false}>
         <Stack.Screen options={{ title: '근무표' }} />
-        <LoadErrorState title="근무표를 불러오지 못했어요" onRetry={() => void retrySchedule()} />
+        <LoadErrorState screen title="근무표를 불러오지 못했어요" onRetry={() => void retrySchedule()} />
       </Screen>
     );
   }
@@ -567,7 +566,8 @@ function PendingCard({
 }
 
 const styles = StyleSheet.create({
-  section: { gap: Space.sm },
+  // 주 이동 줄 + 요일 스트립 = 흰 카드 하나(R-14 · 2026-11-16).
+  section: { ...CardStyles.list, gap: Space.sm },
 
   badge: { minWidth: 22, height: 22, paddingHorizontal: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.accentSolid, alignItems: 'center', justifyContent: 'center' },
   badgeText: { ...Type.tag, fontWeight: '900', color: InkColors.bubbleText },
@@ -583,9 +583,9 @@ const styles = StyleSheet.create({
   // 높이 44 = "오늘로" 누르는 상자가 부모 안에 든다(Android 는 부모 밖 터치를 안 받는다). 줄 높이는 navBtn 48 이 정한다.
   weekNavCenter: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: TouchSize.inline },
   weekRange: { ...Type.body, lineHeight: 21, fontWeight: '800' },
-  todayText: { ...Type.tag, lineHeight: TODAY_LINE, fontWeight: '800', color: BrandColors.warnText },
-  // 글자 링크 = 누르는 44(2026-11-02 요소별 누르는 영역). RN-web 은 hitSlop 을 무시해 상자로 키운다(2026-11-03 QA F3).
-  todayHit: { ...ButtonStyles.inlineHit, minWidth: TouchSize.inline, alignItems: 'center', marginVertical: hitTrim(TODAY_LINE) },
+  todayText: ButtonTextStyles.secondary,
+  // 오늘로 = 보조 알약 44(2026-11-16 R-11). 줄 높이는 navBtn 48 이 정한다.
+  todayHit: ButtonStyles.secondary,
 
   // 하루 타임라인
   total: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },

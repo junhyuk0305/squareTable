@@ -36,6 +36,7 @@ import { insertEntry, updateEntry } from '@/lib/db';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import type { PlaybookEntry, SquareBlock, Category } from '@/types';
 
 // 종류(루틴·돌발·원칙·꿀팁)는 AI 내부 비계다 — 화면에 고르게 하지 않는다(사용자 분류 = section '카테고리' 하나).
@@ -445,8 +446,8 @@ const styles = StyleSheet.create({
 
   stepRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   stepNo: { width: 18, fontSize: 13.5, fontWeight: '700', color: InkColors.ink3, textAlign: 'center' },
-  stepX: { paddingVertical: 8, paddingHorizontal: 8, minHeight: 40, justifyContent: 'center' },
-  stepXText: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
+  stepX: { ...ButtonStyles.danger, alignSelf: 'center' },
+  stepXText: ButtonTextStyles.danger,
 
   saveBar: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: 18 },
   blank: { paddingVertical: 60, alignItems: 'center' },

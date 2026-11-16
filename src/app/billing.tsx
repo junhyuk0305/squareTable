@@ -518,24 +518,6 @@ function BillingBody() {
             </Appear>
           )}
 
-          {/* 구매 화면일 때는 이 카드를 그리지 않는다 — 아래 패널이 같은 자리를 더 정확히 말한다
-              (블록 예산: hero + 잠김 + 패널 = A형 ≤5 안). */}
-          {!selling && (
-            <Appear delay={stagger(1)}>
-            <View style={styles.card}>
-              <Text style={styles.body}>
-                {freeNow
-                  ? `${FREE_PROMO.until}까지는 모든 기능을 무료로 쓰실 수 있어요. 매장 수·직원 수 제한도 없어요.\n지금은 결제하실 것이 없어요.`
-                  : expired
-                    ? isOwner
-                      ? '이 매장의 이용 기간이 끝났어요. 이용 재개는 관리자에게 문의해 주세요.'
-                      : '매장의 이용 기간이 끝났어요. 사장님께 문의해 주세요.'
-                    : '이 매장은 정상적으로 이용 중이에요.'}
-              </Text>
-            </View>
-            </Appear>
-          )}
-
           {/* 스토어 인앱결제 표면(네이티브). 웹 PG 표면(아래 본문)과 채널이 다르므로 판정도 다르다.
               판정은 store-policy 한 곳(showIapSurface) — 빌드 축·서버 스위치·전면 무료를 합친 값이다.
               ★소유 매장 수를 넘겨 기본 선택을 맞춘다 — 이미 아는 것을 다시 묻지 않는다. */}
@@ -551,6 +533,23 @@ function BillingBody() {
               renewsElsewhere={renewsElsewhere}
             />
           )}
+          {/* 상태 안내·새로고침·로그아웃 = 흰 카드 한 장(2026-11-16 R-14 · 안내 바로 옆에 다음 행동).
+              구매 화면일 때는 안내 문구를 그리지 않는다 — 위 패널이 같은 자리를 더 정확히 말한다
+              (블록 예산: hero + 잠김 + 패널 = A형 ≤5 안). */}
+          <View style={styles.card}>
+          {!selling && (
+            <Appear delay={stagger(1)}>
+              <Text style={styles.body}>
+                {freeNow
+                  ? `${FREE_PROMO.body}\n지금은 결제하실 것이 없어요.`
+                  : expired
+                    ? isOwner
+                      ? '이 매장의 이용 기간이 끝났어요. 이용 재개는 관리자에게 문의해 주세요.'
+                      : '매장의 이용 기간이 끝났어요. 사장님께 문의해 주세요.'
+                    : '이 매장은 정상적으로 이용 중이에요.'}
+              </Text>
+            </Appear>
+          )}
           <Appear delay={stagger(4)}>
           <Pressable
             disabled={busy}
@@ -564,11 +563,12 @@ function BillingBody() {
               계정 설정에 이미 로그아웃이 있다 — 구매 화면에 로그아웃을 놓지 않는다. */}
           {!entitledAtMount && (
             <Appear delay={stagger(5)}>
-            <Pressable onPress={() => void logout()} style={styles.logoutRow}>
-              <Text style={styles.logoutText}>로그아웃</Text>
+            <Pressable onPress={() => void logout()} style={styles.promoToggle}>
+              <Text style={styles.promoToggleText}>로그아웃</Text>
             </Pressable>
             </Appear>
           )}
+          </View>
             </>
           )}
         </ScrollView>
@@ -936,12 +936,9 @@ function BillingBody() {
                   </View>
                 )}
 
-                {/* 세금계산서 — 필요한 사장만 편다. 기본 접힘(무료·개인 사장에게 불필요한 입력을 강요하지 않는다). */}
-                {!bizOpen ? (
-                  <Pressable onPress={() => setBizOpen(true)} style={({ pressed }) => [styles.promoToggle, pressed && { opacity: 0.6 }]}>
-                    <Text style={styles.promoToggleText}>세금계산서 신청</Text>
-                  </Pressable>
-                ) : (
+                {/* 세금계산서 — 필요한 사장만 편다. 기본 접힘(무료·개인 사장에게 불필요한 입력을 강요하지 않는다).
+                    접힌 여는 줄은 아래 동의 카드 맨 위에 둔다(2026-11-16 R-14 · 글자 버튼도 흰 카드 위). */}
+                {bizOpen && (
                   // 펼침의 정본은 Collapse 다 — Appear(등장)로 펼치면 아래 내용이 순간이동한다.
                   <Collapse>
                   <Section title="세금계산서">
@@ -974,6 +971,14 @@ function BillingBody() {
                     </View>
                   </Section>
                   </Collapse>
+                )}
+
+                {/* 동의·입금 완료·메일 = 흰 카드 한 장(2026-11-16 R-14). 순서는 그대로다. */}
+                <View style={styles.card}>
+                {!bizOpen && (
+                  <Pressable onPress={() => setBizOpen(true)} style={({ pressed }) => [styles.promoToggle, pressed && { opacity: 0.6 }]}>
+                    <Text style={styles.promoToggleText}>세금계산서 신청</Text>
+                  </Pressable>
                 )}
 
                 {/* 주문 시점 동의(0116) — 이 기록이 계약서를 대신한다. 서버도 없으면 거부한다. */}
@@ -1012,14 +1017,17 @@ function BillingBody() {
 
                 {/* 보조 경로 — 신고는 이미 저장됐고, 급할 때 사람을 직접 부르는 창구(설계문서 B-1). */}
                 <Appear delay={stagger(6)}>
-                <Pressable onPress={() => void notifyPaid()} style={({ pressed }) => [styles.mailRow, pressed && { opacity: 0.6 }]}>
-                  <Text style={styles.mailText}>메일로도 알리기 ({BILLING_INFO.contactValue})</Text>
+                <Pressable onPress={() => void notifyPaid()} style={({ pressed }) => [styles.promoToggle, pressed && { opacity: 0.6 }]}>
+                  <Text style={styles.promoToggleText}>메일로도 알리기 ({BILLING_INFO.contactValue})</Text>
                 </Pressable>
                 </Appear>
+                </View>
                 </>
                 )}
               </>
             )}
+            {/* 도입 문의·무료 이용 코드 여는 줄 = 흰 카드 한 장(2026-11-16 R-14). */}
+            <View style={styles.card}>
             {/* 도입 문의(0105) — 표준 3티어에 안 담기는 도입(다점포 대량·프랜차이즈 본사)의 상담 창구. */}
             <Pressable
               onPress={() => router.push('/inquiry')}
@@ -1029,11 +1037,13 @@ function BillingBody() {
             </Pressable>
 
             {/* 무료 이용 코드(0092) — 캠페인으로 받은 코드. 기본 접힘, 펼침은 아래로(레이아웃 규칙). */}
-            {!promoOpen ? (
+            {!promoOpen && (
               <Pressable onPress={() => setPromoOpen(true)} style={({ pressed }) => [styles.promoToggle, pressed && { opacity: 0.6 }]}>
                 <Text style={styles.promoToggleText}>무료 이용 코드 입력</Text>
               </Pressable>
-            ) : (
+            )}
+            </View>
+            {promoOpen && (
               <Section title="무료 이용 코드">
                 <View style={styles.card}>
                   <TextInput
@@ -1062,16 +1072,16 @@ function BillingBody() {
           </>
         )}
 
+        {/* 새로고침·로그아웃 = 흰 카드 한 장(2026-11-16 R-14). */}
         <Appear delay={stagger(7)}>
+        <View style={styles.card}>
         <Pressable disabled={busy} onPress={() => void recheck()} style={({ pressed }) => [styles.ghost, pressed && { opacity: 0.7 }, busy && { opacity: 0.6 }]}>
           {busy ? <ActivityIndicator color={InkColors.ink2} /> : <Text style={styles.ghostText}>이용 상태 새로고침</Text>}
         </Pressable>
-        </Appear>
-
-        <Appear delay={stagger(7)}>
-        <Pressable onPress={() => void logout()} style={styles.logoutRow}>
-          <Text style={styles.logoutText}>로그아웃</Text>
+        <Pressable onPress={() => void logout()} style={styles.promoToggle}>
+          <Text style={styles.promoToggleText}>로그아웃</Text>
         </Pressable>
+        </View>
         </Appear>
           </>
         )}
@@ -1193,12 +1203,9 @@ const styles = StyleSheet.create({
   consentRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingHorizontal: 2 },
   consentText: { flex: 1, fontSize: Type.body.fontSize, lineHeight: 22, color: TextColor.secondary, fontWeight: '600' },
 
-  mailRow: { alignItems: 'center', paddingVertical: Space.sm },
-  mailText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
-
-  // 무료 이용 코드 — 접힘 상태 토글(보조 링크 톤, mailRow 계열).
-  promoToggle: { alignItems: 'center', paddingVertical: Space.sm },
-  promoToggleText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary, textDecorationLine: 'underline' },
+  // 보조 버튼(카드 맨 아래 단독 줄 · 가로 꽉) — 세금계산서·메일·도입 문의·무료 이용 코드·로그아웃이 같이 쓴다(2026-11-16 R-11).
+  promoToggle: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  promoToggleText: ButtonTextStyles.secondary,
 
   // 주 버튼(52 · 모서리 16 · 가로 꽉 · 16/800).
   primary: { ...ButtonStyles.primary, backgroundColor: BrandColors.brand },
@@ -1206,6 +1213,4 @@ const styles = StyleSheet.create({
   // 보조 버튼 — 주 버튼과 같은 모양, 흰 면 + 선. 옛 bgSoft 면은 회색 바탕(Surface.screen) 위에서 묻혔다.
   ghost: { ...ButtonStyles.primary, backgroundColor: Surface.card, borderWidth: 1, borderColor: InkColors.line },
   ghostText: { ...ButtonTextStyles.primary, color: TextColor.secondary },
-  logoutRow: { alignItems: 'center', paddingVertical: 4 },
-  logoutText: { fontSize: 13, color: TextColor.secondary, fontWeight: '700' },
 });

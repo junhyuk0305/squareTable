@@ -35,6 +35,7 @@ import type { QuizFormat } from '@/lib/quiz/types';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Field, TextField, IntField, qst } from './kit';
 
 type Shape = 'choices' | 'sequence' | 'order' | 'count' | 'number' | 'cards' | 'judge' | 'branch' | 'pairs';
@@ -773,6 +774,6 @@ const fst = StyleSheet.create({
   chipTextOn: { color: '#FFFFFF' },
   markText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink3 },
   markTextOn: { color: '#FFFFFF' },
-  addRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, marginTop: Space.xs },
-  addText: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink2 },
+  addRow: { ...ButtonStyles.secondary, alignSelf: 'stretch', flexDirection: 'row', gap: Space.xs, marginTop: Space.xs },
+  addText: ButtonTextStyles.secondary,
 });

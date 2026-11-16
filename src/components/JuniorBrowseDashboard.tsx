@@ -15,6 +15,7 @@ import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Layout, Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
 import type { PlaybookEntry } from '@/types';
 
 export type JuniorBrowseDashboardProps = {
@@ -270,7 +271,8 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
 
   // 상단 고정 컨트롤(스크롤과 분리 — 목록 뷰가 자체 스크롤을 가지므로 검색창을 밖에 고정).
-  controls: { paddingHorizontal: Space.gutter, paddingTop: Space.md, gap: Space.sm },
+  // 검색창 + 보기 토글 = 흰 카드(R-14). 화면 여백은 바깥 margin 으로 든다.
+  controls: { ...CardStyles.list, marginHorizontal: Space.gutter, marginTop: Space.md, gap: Space.sm },
 
 
   resultCount: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3, paddingLeft: 4 },

@@ -620,14 +620,13 @@ const styles = StyleSheet.create({
 
   // 매장 수 고르기
   moreBtn: {
+    ...ButtonStyles.secondary,
+    alignSelf: 'center',
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    minHeight: 48,
+    gap: Space.xs,
     marginBottom: Space.sm,
   },
-  moreText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
+  moreText: ButtonTextStyles.secondary,
   moreList: { gap: Space.sm, marginBottom: Space.lg },
   offer: {
     flexDirection: 'row',
@@ -672,6 +671,6 @@ const styles = StyleSheet.create({
   },
   ghostText: { ...ButtonTextStyles.primary, color: TextColor.secondary },
 
-  restoreHit: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  restoreText: { fontSize: 13, color: TextColor.secondary, fontWeight: '700', textDecorationLine: 'underline' },
+  restoreHit: { ...ButtonStyles.secondary, alignSelf: 'center' },
+  restoreText: ButtonTextStyles.secondary,
 });

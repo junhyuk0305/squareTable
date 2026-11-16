@@ -297,10 +297,12 @@ export function TimesheetView({ staffId, editedBy, badgeLabel, badgeTone = 'ink'
             </View>
           </View>
         ) : (
-          <Pressable onPress={openNew} style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.85 }]}>
-            <Ionicons name="add" size={18} color={InkColors.ink} />
-            <Text style={styles.addText}>{addLabel}</Text>
-          </Pressable>
+          <View style={styles.addCard}>
+            <Pressable onPress={openNew} style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.85 }]}>
+              <Ionicons name="add" size={18} color={InkColors.ink} />
+              <Text style={styles.addText}>{addLabel}</Text>
+            </Pressable>
+          </View>
         )}
         </Appear>
 
@@ -430,7 +432,8 @@ const styles = StyleSheet.create({
   waitRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingHorizontal: 4, paddingTop: Space.xs },
   waitText: { ...Type.desc, flex: 1, fontWeight: '700', color: BrandColors.warnText },
 
-  monthBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },
+  // 월 이동 줄 = 흰 카드(R-14).
+  monthBar: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },
   // 월 이동 = 흰 원 버튼(ButtonStyles.iconCircle · 2026-11-02 결정). 누르는 상자 48(RN-web 은 hitSlop 을 무시한다).
   monthArrow: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   monthCircle: { ...ButtonStyles.iconCircle },
@@ -447,6 +450,8 @@ const styles = StyleSheet.create({
   mismatchLine: { ...Type.desc, fontWeight: '600' },
   mismatchMore: { ...Type.tag, color: TextColor.secondary, fontWeight: '700' },
 
+  // 기록 추가 버튼 = 흰 카드 안(R-14).
+  addCard: { ...CardStyles.list },
   // 주 버튼 모양(52 · 모서리 16 · 가로 꽉). 점선 테두리·흰 면은 그대로.
   addBtn: {
     ...ButtonStyles.primary,
@@ -504,9 +509,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   editActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  // 삭제 = 글자 링크 · 누르는 높이 44(2026-11-02 사용자 결정). 옆 작은 버튼(44)과 같은 높이라 줄 높이는 그대로.
-  delBtn: { ...ButtonStyles.inlineHit, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10 },
-  delText: { fontSize: 13, fontWeight: '700', color: BrandColors.accentText },
+  // 삭제 = 위험 알약 44(R-11 · 2026-11-16). 옆 작은 버튼(44)과 같은 높이라 줄 높이는 그대로.
+  delBtn: { ...ButtonStyles.danger, flexDirection: 'row', gap: Space.xs },
+  delText: ButtonTextStyles.danger,
   // 작은 버튼(44 알약 · 15/800 · 내용 폭).
   cancelBtn: { ...ButtonStyles.small, borderWidth: 1, borderColor: InkColors.line },
   cancelText: { ...ButtonTextStyles.small, color: TextColor.secondary },

@@ -24,7 +24,8 @@ import { showToast } from '@/lib/store/useToastStore';
 import { confirmAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space, screenScrollStyle } from '@/lib/theme/layout';
+import { Layout, Space, screenScrollStyle } from '@/lib/theme/layout';
+import { EmptyStyles } from '@/lib/theme/empty';
 import { Type } from '@/lib/theme/type';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
@@ -46,10 +47,16 @@ export default function BrandLinkScreen() {
       {!loaded ? (
         <ScreenLoading label="본사 연결을 확인하는 중" />
       ) : links.length === 0 ? (
+        <View style={styles.emptyWrap}>
         <View style={styles.empty} testID="brand-link-empty">
           <Ionicons name="unlink-outline" size={28} color={InkColors.ink3} />
           <Text style={styles.emptyTitle}>연결된 본사가 없어요</Text>
           <Text style={styles.emptyBody}>본사가 내 번호로 초대를 보내면 홈에 요청 카드가 떠요. 연결은 초대로만 시작돼요.</Text>
+          {/* 돌아가기 = 빈 카드 안 맨 아래(R-14 · 2026-11-16). 끝난 연결 카드는 이 카드 아래에 따로 선다. */}
+          <Pressable accessibilityRole="button" onPress={() => router.back()} style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.7 }]}>
+            <Text style={styles.secondaryText}>돌아가기</Text>
+          </Pressable>
+        </View>
           {/* 0250(Q29) — "연결이 끝났어요" 알림을 누르고 온 점주가 무엇이 끝났는지 본다. 180일 안의 끝난 연결만. */}
           {history.map((h) => (
             <View key={`${h.unit_id}:${h.brand_name}`} style={[styles.card, styles.endedCard]} testID="brand-link-ended">
@@ -59,9 +66,6 @@ export default function BrandLinkScreen() {
               </Pressable>
             </View>
           ))}
-          <Pressable accessibilityRole="button" onPress={() => router.back()} style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.7 }]}>
-            <Text style={styles.secondaryText}>돌아가기</Text>
-          </Pressable>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.body} testID="brand-link">
@@ -285,7 +289,9 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Surface.screen },
   // 첫 여백·좌우·섹션 사이 = screenScrollStyle. 아래는 넉넉히 48.
   body: { ...screenScrollStyle, paddingBottom: 48 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Space.xl, gap: Space.sm },
+  // 빈 상태 = 흰 빈 카드(R-14 · 2026-11-16). 화면에 혼자 놓여 헤더 아래 첫 여백·좌우 여백을 바깥이 든다.
+  emptyWrap: { paddingTop: Layout.screenTop, paddingHorizontal: Layout.screenX, gap: Space.md },
+  empty: EmptyStyles.box,
   emptyTitle: Type.title,
   emptyBody: { ...Type.desc, textAlign: 'center' },
   card: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, backgroundColor: InkColors.bg, overflow: 'hidden', ...Elevation.e1 },
@@ -327,8 +333,8 @@ const styles = StyleSheet.create({
   note: Type.desc,
   endedCard: { alignSelf: 'stretch', padding: Space.md, gap: Space.sm, alignItems: 'flex-start' },
   endedText: { fontSize: Type.desc.fontSize, lineHeight: 20, color: InkColors.ink },
-  secondary: { minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.lg },
-  secondaryText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
+  secondary: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  secondaryText: ButtonTextStyles.secondary,
   lvRow: { paddingVertical: 10, paddingHorizontal: Space.md, gap: 2 },
   lvName: { fontSize: Type.desc.fontSize, fontWeight: '800', color: InkColors.ink },
   lvItems: Type.desc,

@@ -215,8 +215,8 @@ export function CardBillingPanel({ sub, selectedPlan, storeCount, userName, open
           {!sub.livemode && <Text style={styles.hint}>테스트 결제 환경이에요. 실제로 청구되지 않아요.</Text>}
           {!!lastPay?.receipt_url && (
             // ios-preflight: ok 웹 전용 패널(SHOW_CARD_BILLING) — 목적지는 토스 매출전표, 결제 페이지가 아니다
-            <Pressable onPress={() => void Linking.openURL(lastPay.receipt_url as string)} accessibilityRole="link">
-              <Text style={styles.link}>최근 결제 영수증 보기 ({formatKrw(lastPay.amount_krw)})</Text>
+            <Pressable onPress={() => void Linking.openURL(lastPay.receipt_url as string)} style={styles.link} accessibilityRole="link">
+              <Text style={styles.linkText}>최근 결제 영수증 보기 ({formatKrw(lastPay.amount_krw)})</Text>
             </Pressable>
           )}
         </View>
@@ -428,9 +428,10 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: 13, color: TextColor.secondary, fontWeight: '600' },
   rowValue: { ...Type.body, flexShrink: 1, textAlign: 'right', fontWeight: '700' },
   rowValueStrong: { fontSize: Type.body.fontSize, fontWeight: '900' },
-  link: { fontSize: 13, fontWeight: '700', color: TextColor.secondary, textDecorationLine: 'underline' },
-  linkRow: { alignItems: 'center', paddingVertical: Space.sm },
-  linkMuted: { ...Type.tag, fontWeight: '700', color: TextColor.secondary, textDecorationLine: 'underline' },
+  link: { ...ButtonStyles.secondary },
+  linkText: ButtonTextStyles.secondary,
+  linkRow: { ...ButtonStyles.danger, alignSelf: 'center' },
+  linkMuted: ButtonTextStyles.danger,
   storeRow: {
     flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48,
     paddingHorizontal: Space.md, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,

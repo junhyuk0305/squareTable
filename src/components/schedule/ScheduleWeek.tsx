@@ -32,7 +32,7 @@ import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Gap, Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
-import { ButtonStyles } from '@/lib/theme/button';
+import { ButtonStyles, ButtonTextStyles, TouchSize, hitTrim } from '@/lib/theme/button';
 import { CardStyles } from '@/lib/theme/card';
 import { BadgeStyles } from '@/lib/theme/badge';
 
@@ -153,7 +153,7 @@ export function ScheduleWeek({
 
   return (
     <View style={s.wrap}>
-      <View>
+      <View style={s.navCard}>
         {/* 주 이동 네비 */}
         {!hideNav && (
           <View style={s.nav}>
@@ -168,7 +168,9 @@ export function ScheduleWeek({
                 <Text style={s.navThis}>이번 주</Text>
               ) : (
                 <Pressable onPress={goToday} accessibilityRole="button" style={({ pressed }) => [s.todayHit, pressed && { opacity: 0.6 }]}>
-                  <Text style={s.navToday}>오늘로</Text>
+                  <View style={s.todayFace}>
+                    <Text style={s.navToday}>오늘로</Text>
+                  </View>
                 </Pressable>
               )}
             </View>
@@ -198,6 +200,8 @@ export function ScheduleWeek({
 const s = StyleSheet.create({
   // 요일 띠 묶음 ↔ 그날 목록 = 묶음 사이.
   wrap: { gap: Gap.group },
+  // 주 이동 줄 + 요일 띠 = 흰 카드 하나(R-14 · owner/schedule 과 같다).
+  navCard: { ...CardStyles.list },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4, marginBottom: 12 },
   // 주 이동 = 흰 원 버튼(ButtonStyles.iconCircle · 2026-11-02 결정). 누르는 상자 48(RN-web 은 hitSlop 을 무시한다).
   navBtn: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
@@ -205,10 +209,10 @@ const s = StyleSheet.create({
   navCenter: { alignItems: 'center', gap: 2 },
   navRange: { fontSize: 16, fontWeight: '900', color: InkColors.ink },
   navThis: { ...Type.tag, fontWeight: '700', color: BrandColors.warnText },
-  navToday: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
-  // 글자 링크 = 누르는 높이 44(2026-11-02 누르는 영역 기준). RN-web 은 hitSlop 을 무시해 상자로 키운다.
-  //   위아래 음수 margin 으로 상자만 넓히고 줄 높이는 그대로 둔다(글자 줄 ≈ 18).
-  todayHit: { minHeight: 44, minWidth: 64, marginVertical: -13, alignItems: 'center', justifyContent: 'center' },
+  navToday: ButtonTextStyles.secondary,
+  // 보조 알약(R-11 · 2026-11-16). 보이는 높이 32 · 누르는 상자 44 — 상자만 음수 margin 으로 넓혀 주 이동 줄 높이를 덜 키운다.
+  todayHit: { ...ButtonStyles.inlineHit, marginVertical: hitTrim(TouchSize.inlineFace) },
+  todayFace: { ...ButtonStyles.secondary, minHeight: TouchSize.inlineFace, paddingHorizontal: Space.md },
 
   // 제목 ↔ 카드 10(SectionLabel 아래 2 + 8).
   section: { gap: Space.sm },

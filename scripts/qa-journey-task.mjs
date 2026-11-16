@@ -178,8 +178,6 @@ async function open(port, session) {
   const w = await launch({ origin: ORIGIN, storageKey: STORAGE_KEY, width: 460, height: 900, port });
   await w.page.seedSession(session);
   await w.page.send('Page.addScriptToEvaluateOnNewDocument', { source: INJECT });
-  // 전면 무료 스위치(billing_free_mode)가 켜진 백엔드(로컬 기본값)에선 무료 공지 모달이 화면을 덮는다 — 본 것으로 둔다(qa-journey-join 과 같은 방식 · L-3).
-  await w.page.send('Page.addScriptToEvaluateOnNewDocument', { source: `try{localStorage.setItem('sqt.notice.free-until.v3','1')}catch(e){}` });
   w.page.errSeen = 0;
   return w;
 }

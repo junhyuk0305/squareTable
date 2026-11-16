@@ -20,7 +20,7 @@ import { useChatStore } from '@/lib/store/useChatStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { isServable } from '@/lib/utils/entryStatus';
-import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, SCREEN_GUTTER, CONTENT_MAX_WIDTH, frameCapStyle, screenScrollStyle } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
@@ -140,7 +140,7 @@ export function OwnerFirstAsk({ onNext, nextLabel }: { onNext: () => void; nextL
         {error && (
           <View style={styles.errorRow}>
             <Text style={styles.errorText}>{error}</Text>
-            <Pressable onPress={() => void retryLast()} hitSlop={8}>
+            <Pressable onPress={() => void retryLast()} hitSlop={8} style={styles.errorRetryBtn}>
               <Text style={styles.errorRetry}>다시 시도</Text>
             </Pressable>
           </View>
@@ -221,7 +221,8 @@ const styles = StyleSheet.create({
   deflectBtnText: { fontSize: Type.body.fontSize, fontWeight: '800', color: InkColors.ink },
   deflectDoneText: { ...Type.desc, fontWeight: '700', marginTop: Space.xs },
 
-  loading: { paddingVertical: Space.md, alignItems: 'center' },
+  // 찾는 중 = 흰 카드 안(R-14 · 2026-11-16). 오류 줄(errorRow)은 경고색 면이라 그대로 카드로 친다.
+  loading: { ...CardStyles.list, alignItems: 'center' },
   loadingText: Type.desc,
 
   errorRow: {
@@ -235,7 +236,8 @@ const styles = StyleSheet.create({
     padding: Space.md,
   },
   errorText: { ...Type.desc, flex: 1 },
-  errorRetry: { fontSize: Type.desc.fontSize, fontWeight: '800', color: InkColors.ink },
+  errorRetryBtn: { ...ButtonStyles.secondary },
+  errorRetry: ButtonTextStyles.secondary,
 
   barWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center' },
   bar: {
@@ -272,6 +274,6 @@ const styles = StyleSheet.create({
   // 주 버튼(52 · 모서리 16 · 가로 꽉 · 그림자 없음).
   nextBtn: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
   nextText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
-  skip: { alignSelf: 'center', paddingVertical: Space.sm, paddingHorizontal: Space.lg },
-  skipText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
+  skip: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  skipText: ButtonTextStyles.secondary,
 });

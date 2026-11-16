@@ -12,6 +12,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { rotateInviteCode } from '@/lib/db';
 import { friendlyError } from '@/lib/utils/userError';
 import { inviteExpiryLabel, INVITE_ROTATE_LABEL, INVITE_ASK_OWNER_TEXT } from '@/lib/invite/inviteExpiry';
+import { SPACE_MEMBERS } from '@/lib/place/words';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -32,40 +33,50 @@ import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
  *
  * ★네 자리(온보딩 완료·홈·직원 관리·설정)가 같은 이 컴포넌트를 쓴다. 자리마다 다른 건 밀도뿐이다.
  *   자리별로 복제하면 문구가 갈라져 사장이 자리마다 다른 설명을 읽게 된다.
+ *
+ * ★공간 설정도 같은 카드를 쓴다(place="space" · 2026-11-16 R-12). 공간은 서버에 있는 것만 보인다:
+ *   코드 · 코드 복사 · 초대 문구 복사. 공간엔 가입 링크·만료(my_spaces 가 안 내려줌)·코드 바꾸기 함수
+ *   (rotate_invite_code 는 활성 매장만 받는다 · 0356)가 없어 그 줄은 그리지 않는다.
  */
 export function InviteBlock({
   code,
   from,
   action,
   style,
+  place = 'store',
 }: {
   /** 매장 초대코드 6자리. */
   code: string;
   /** 관측용 — 사장이 어느 자리에서 뿌렸는지. */
-  from: 'onboarding' | 'home' | 'staff' | 'settings';
+  from: 'onboarding' | 'home' | 'staff' | 'settings' | 'space_settings';
   /** 코드 줄 오른쪽 추가 액션(직원 관리의 '코드 변경'). */
   action?: React.ReactNode;
   /** 바깥 여백만 — 부모 목록에 gap 이 없는 화면(설정)이 아래 간격을 준다. */
   style?: StyleProp<ViewStyle>;
+  /** 어느 자리의 코드인가. 공간이면 링크·만료·코드 바꾸기가 없다. */
+  place?: 'store' | 'space';
 }) {
+  const isSpace = place === 'space';
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const [rotating, setRotating] = useState(false);
   // Q21: 만료일은 세션 코드의 것이다. 온보딩은 params 코드를 보여 줄 수 있어 같은 코드일 때만 쓴다.
   const sessionCode = useSessionStore((st) => st.inviteCode);
   const expiresAt = useSessionStore((st) => st.inviteExpiresAt);
   const isOwner = useSessionStore((st) => st.role) === 'owner';
-  const expiry = code === sessionCode ? inviteExpiryLabel(expiresAt, new Date()) : null;
+  const expiry = !isSpace && code === sessionCode ? inviteExpiryLabel(expiresAt, new Date()) : null;
   const expired = expiry?.state === 'expired';
 
   const link = `${siteOrigin()}/signup?role=junior&code=${code}`;
   // 카톡에 그대로 붙는 한 덩어리. 링크만 보내면 받은 사람이 무엇을 해야 하는지 모른다.
-  const message = `매장의 정석에 초대할게요.\n1) 링크 열기 → 2) ‘직원’으로 가입 → 3) 초대코드 ${code} 입력\n${link}`;
+  const message = isSpace
+    ? SPACE_MEMBERS.inviteMessage(code)
+    : `매장의 정석에 초대할게요.\n1) 링크 열기 → 2) ‘직원’으로 가입 → 3) 초대코드 ${code} 입력\n${link}`;
 
   const done = (what: 'code' | 'link', r: ShareTextResult) => {
     if (r === 'copied') {
       setCopied(what);
       setTimeout(() => setCopied(null), 1500);
-      showToast(what === 'code' ? '초대코드를 복사했어요' : '초대 링크를 복사했어요', 'good');
+      showToast(what === 'code' ? '초대코드를 복사했어요' : isSpace ? SPACE_MEMBERS.inviteMessageCopied : '초대 링크를 복사했어요', 'good');
       return;
     }
     // 'shared'·'dismissed'(옛 공유 시트 경로)는 그 자체가 피드백이라 조용히 둔다. 실패만 말한다.
@@ -101,11 +112,11 @@ export function InviteBlock({
 
   return (
     <View style={[s.root, style]}>
-      <SectionLabel title="직원 초대" />
+      <SectionLabel title={isSpace ? SPACE_MEMBERS.inviteSection : '직원 초대'} />
       <View style={s.card}>
         <View style={s.head}>
           <Text style={s.howTitle}>초대코드</Text>
-          <Text style={s.desc}>직원이 가입하고 초대코드를 넣으면 합류 신청이 돼요.</Text>
+          <Text style={s.desc}>{isSpace ? SPACE_MEMBERS.inviteHint : '직원이 가입하고 초대코드를 넣으면 합류 신청이 돼요.'}</Text>
         </View>
 
         <View style={s.codeRow}>
@@ -134,11 +145,11 @@ export function InviteBlock({
           disabled={expired || !code}
           scaleTo={0.97}
           accessibilityRole="button"
-          accessibilityLabel="초대 링크 복사"
+          accessibilityLabel={isSpace ? SPACE_MEMBERS.inviteMessageCopy : '초대 링크 복사'}
           style={[s.primary, (expired || !code) && s.dim]}
         >
-          <Ionicons name="link-outline" size={16} color={InkColors.bubbleText} />
-          <Text style={s.primaryText}>{copied === 'link' ? '복사됨' : '초대 링크 복사'}</Text>
+          <Ionicons name={isSpace ? 'chatbubble-outline' : 'link-outline'} size={16} color={InkColors.bubbleText} />
+          <Text style={s.primaryText}>{copied === 'link' ? '복사됨' : isSpace ? SPACE_MEMBERS.inviteMessageCopy : '초대 링크 복사'}</Text>
         </PressableScale>
 
         {expired &&

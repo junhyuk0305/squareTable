@@ -61,7 +61,7 @@ export default function EditKnowledgeScreen() {
       <SafeAreaView style={styles.safe} edges={['bottom']}>
         <Stack.Screen options={{ title: '노하우 수정' }} />
         <ScreenTitleHeader title="노하우 수정" backFallback />
-        <EmptyState
+        <EmptyState screen
           title="이미 삭제된 노하우예요."
           cta={{ label: '돌아가기', onPress: () => router.back() }}
         />

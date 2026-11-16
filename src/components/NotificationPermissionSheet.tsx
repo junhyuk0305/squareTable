@@ -15,7 +15,7 @@ import {
 } from '@/lib/push/nativepush';
 import { canManage } from '@/lib/utils/roles';
 import { SHOW_BILLING, WEB_PUSH_ENABLED } from '@/lib/config/store-policy';
-import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
+import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space, SCREEN_GUTTER } from '@/lib/theme/layout';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
@@ -201,6 +201,6 @@ const s = StyleSheet.create({
     marginTop: Space.md, backgroundColor: InkColors.ink,
   },
   primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
-  ghost: { paddingVertical: 13, alignItems: 'center' },
-  ghostText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
+  ghost: { ...ButtonStyles.secondary, alignSelf: 'stretch', marginTop: Space.sm },
+  ghostText: ButtonTextStyles.secondary,
 });

@@ -103,8 +103,6 @@ async function openWindow(name, port, session, path) {
   windows.push(close);
   await page.seedSession(session);
   await page.send('Page.addScriptToEvaluateOnNewDocument', { source: FETCH_SPY });
-  // 전면 무료 스위치(billing_free_mode)가 켜진 백엔드(로컬 기본값)에선 새 프로필마다 무료 공지 모달이 화면을 덮는다 — 본 것으로 둔다.
-  await page.send('Page.addScriptToEvaluateOnNewDocument', { source: `try{localStorage.setItem('sqt.notice.free-until.v3','1')}catch(e){}` });
   await page.goto(path);
   let ce = 0;
   let bad = 0;

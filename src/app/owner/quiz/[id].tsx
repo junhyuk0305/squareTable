@@ -373,7 +373,7 @@ export default function QuizDetailScreen() {
     return (
       <SafeAreaView style={st.safe} edges={['bottom']}>
         <ScreenTitleHeader title="퀴즈" backFallback />
-        <EmptyState title="퀴즈를 불러오지 못했어요" body="잠시 후 다시 시도해 주세요." cta={{ label: '다시 시도', onPress: () => { reloadCourses(); bumpSends(); bumpQuiz(); setItemsReload((n) => n + 1); } }} />
+        <EmptyState screen title="퀴즈를 불러오지 못했어요" body="잠시 후 다시 시도해 주세요." cta={{ label: '다시 시도', onPress: () => { reloadCourses(); bumpSends(); bumpQuiz(); setItemsReload((n) => n + 1); } }} />
       </SafeAreaView>
     );
   }
@@ -395,7 +395,7 @@ export default function QuizDetailScreen() {
       <SafeAreaView style={st.safe} edges={['bottom']}>
         <Stack.Screen options={{ title: '퀴즈' }} />
         <ScreenTitleHeader title="퀴즈" backFallback />
-        <EmptyState
+        <EmptyState screen
           title="이 퀴즈를 찾을 수 없어요"
           body="보관했거나 지워졌을 수 있어요."
           cta={{ label: '퀴즈 목록', onPress: () => router.replace('/owner/training' as never) }}
@@ -860,7 +860,7 @@ const st = StyleSheet.create({
   feedbackCta: { ...ButtonStyles.primary, marginTop: Space.sm, backgroundColor: InkColors.ink },
   feedbackCtaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 
-  thinBox: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.lg, gap: Space.sm, ...Elevation.e1 },
+  thinBox: { ...CardStyles.list, gap: Space.sm },
   thinTitle: { ...Type.body, fontWeight: '800', lineHeight: 22 },
   thinRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   thinName: { ...Type.body, flex: 1, minWidth: 0, fontWeight: '700' },

@@ -7,6 +7,7 @@ import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, frameCapStyle } from '@/lib/theme/layout';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Type } from '@/lib/theme/type';
+import { EmptyStyles } from '@/lib/theme/empty';
 import { showBillingEntry } from '@/lib/config/store-policy';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
@@ -22,6 +23,8 @@ export function PlanUpgradeNotice({ description }: { description: string }) {
   const entry = showBillingEntry(iapEnabled, freeMode);
   return (
     <View style={[styles.center, frameCapStyle]}>
+      {/* 안내·버튼 = 흰 카드 위(2026-11-16 R-14). */}
+      <View style={styles.card}>
       <View style={styles.iconWrap}>
         <Ionicons name="lock-closed-outline" size={24} color={InkColors.ink2} />
       </View>
@@ -40,12 +43,14 @@ export function PlanUpgradeNotice({ description }: { description: string }) {
           <Text style={styles.ctaText}>요금제 보기</Text>
         </Pressable>
       )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.sm, padding: Space.xl },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Space.xl },
+  card: { ...EmptyStyles.box, alignSelf: 'stretch' },
   iconWrap: {
     width: 52, height: 52, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft,
     alignItems: 'center', justifyContent: 'center', marginBottom: Space.xs,
