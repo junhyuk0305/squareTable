@@ -181,8 +181,9 @@ export function ShiftQuickSheet({
       );
     } else {
       // 이 날부터 그만 — 같은 요일의 뒤 구간도 끝낸다. 안 끝내면 뒤 구간 시작일부터 근무가 다시 선다.
+      // 셋 중 지우는 범위가 가장 크고 되돌리기가 없다 → 날짜와 상관없이 늘 묻는다(2026-11-16 사용자 결정 R-16).
       const ops = planFromScope(templates, editing.templateId, date, null);
-      run('삭제', date < today, (cp) => applySeriesOps('', ops, editing.start, editing.end, cp));
+      run('끝내기', date < today, (cp) => applySeriesOps('', ops, editing.start, editing.end, cp), `${fmtDateKo(date)}부터 이 근무를 끝낼까요?`);
     }
   }
 
