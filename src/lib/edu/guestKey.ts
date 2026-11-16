@@ -67,7 +67,7 @@ export async function forgetEduGuests(slots: string[]): Promise<void> {
   }
 }
 
-/** 이 링크의 손님 열쇠를 이 기기에서 지운다. 서버가 더 풀어 주지 않는 열쇠(계정으로 옮김 · 0691)를 화면이 알아챘을 때 쓴다. */
+/** 이 링크의 손님 열쇠를 이 기기에서 지운다. 서버가 더 풀어 주지 않는 열쇠(계정으로 옮김 · 0751)를 화면이 알아챘을 때 쓴다. */
 export async function forgetEduGuest(token: string): Promise<void> {
   await forgetEduGuests([slot(token)]);
 }

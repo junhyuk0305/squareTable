@@ -6,13 +6,13 @@
 --   재현 = KST 12-01 01:30 질문 → month = 2026-11-01.
 --
 -- ── 무엇이 바뀌나 ───────────────────────────────────────────────────────────
---   purge_deleted_store — 베이스 0361 본문 통째(정의 전수 0361 하나). ★0694 두 줄: 통계 달 = asked_at at time zone 'Asia/Seoul' 의 달.
+--   purge_deleted_store — 베이스 0361 본문 통째(정의 전수 0361 하나). ★0754 두 줄: 통계 달 = asked_at at time zone 'Asia/Seoul' 의 달.
 --   이미 쌓인 통계 행은 다시 나눌 수 없어 그대로 둔다(질문 원본은 파기 때 지워졌다).
 --   0361 머리말(무엇이 바뀌나 1)~6))은 아래 함수 위에 그대로 둔다.
 --
 -- 옛 앱 호환(⑪): 안전 | 서버 크론만 부른다(클라 호출 0건 · 권한 0). 이름·인자·반환형 그대로.
 -- 하니스: qa-store-retention.mjs 의 통계 달 기대 세 줄을 같은 작업에서 KST 로 바꿨다(4-5 · 4-7 · 4-5b).
--- 되돌리기: scripts/rollback/0694.sql
+-- 되돌리기: scripts/rollback/0754.sql
 
 -- (0361) purge_deleted_store(unit) — 지운 지 30일이 지난 매장 하나를 파기한다(service_role·내부 전용).
 --   1) 통계 — 질문 건수를 업종 × 노하우 카테고리 × 월 × 출처(AI 질문/모르는 질문)로 더한다(retained_question_stats).
@@ -49,7 +49,7 @@ begin
   v_names := public.retained_scrub_names(p_unit);
 
   -- 1) 질문 통계 — 업종 × 카테고리 × 월 × 출처
-  --    ★0694: 달은 KST 로 센다(다른 "이번 달" 셈과 같다 · 세션 시간대 UTC 를 믿지 않는다).
+  --    ★0754: 달은 KST 로 센다(다른 "이번 달" 셈과 같다 · 세션 시간대 UTC 를 믿지 않는다).
   insert into public.retained_question_stats as s (industry, category, month, source, questions)
   select v_ind, coalesce(pe.category, 'unmatched'), date_trunc('month', cq.asked_at at time zone 'Asia/Seoul')::date, 'chat', count(*)
     from public.chat_queries cq
@@ -61,7 +61,7 @@ begin
   get diagnostics n = row_count; c := c || jsonb_build_object('question_stats_chat', n);
 
   insert into public.retained_question_stats as s (industry, category, month, source, questions)
-  select v_ind, coalesce(nullif(uq.presumed_category, ''), 'unmatched'), date_trunc('month', uq.asked_at at time zone 'Asia/Seoul')::date, 'unknown', count(*)   -- ★0694 KST 달
+  select v_ind, coalesce(nullif(uq.presumed_category, ''), 'unmatched'), date_trunc('month', uq.asked_at at time zone 'Asia/Seoul')::date, 'unknown', count(*)   -- ★0754 KST 달
     from public.unknown_queries uq
    where uq.unit_id = p_unit
    group by 2, 3
@@ -194,14 +194,14 @@ declare d text := pg_get_functiondef('public.purge_deleted_store(text)'::regproc
 begin
   if d not like '%date_trunc(''month'', cq.asked_at at time zone ''Asia/Seoul'')%'
      or d not like '%date_trunc(''month'', uq.asked_at at time zone ''Asia/Seoul'')%' then
-    raise exception '0694 자가점검 실패: 통계 달이 KST 가 아니다';
+    raise exception '0754 자가점검 실패: 통계 달이 KST 가 아니다';
   end if;
   if d not like '%scrub_retained_jsonb(q.payload%' or d not like '%retained_scrub_names(p_unit)%' or d not like '%unit_has_labor_records(p_unit)%' then
-    raise exception '0694 자가점검 실패: purge_deleted_store 본문이 0361 베이스가 아니다';
+    raise exception '0754 자가점검 실패: purge_deleted_store 본문이 0361 베이스가 아니다';
   end if;
   if has_function_privilege('authenticated', 'public.purge_deleted_store(text)', 'execute')
      or has_function_privilege('anon', 'public.purge_deleted_store(text)', 'execute') then
-    raise exception '0694 자가점검 실패: purge_deleted_store 가 클라에 열렸다';
+    raise exception '0754 자가점검 실패: purge_deleted_store 가 클라에 열렸다';
   end if;
-  raise notice '0694 자가점검 통과';
+  raise notice '0754 자가점검 통과';
 end $$;

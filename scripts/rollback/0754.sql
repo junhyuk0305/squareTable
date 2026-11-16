@@ -1,5 +1,5 @@
--- rollback/0694.sql — 0694 를 되돌린다(purge_deleted_store = 0361 본문 · 통계 달 UTC). 원장은 건드리지 않는다.
--- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0694.sql --linked
+-- rollback/0754.sql — 0754 를 되돌린다(purge_deleted_store = 0361 본문 · 통계 달 UTC). 원장은 건드리지 않는다.
+-- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0754.sql --linked
 -- 클라는 이 함수를 부르지 않는다. 순서 제약 없음. 되돌리면 qa-store-retention 4-5b(KST 달)가 RED 가 된다.
 begin;
 create or replace function public.purge_deleted_store(p_unit text)

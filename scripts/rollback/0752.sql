@@ -1,5 +1,5 @@
--- rollback/0692.sql — 0692 을 되돌린다(relabel_withdrawn_author = 0359 본문). 원장은 건드리지 않는다.
--- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0692.sql --linked
+-- rollback/0752.sql — 0752 을 되돌린다(relabel_withdrawn_author = 0359 본문). 원장은 건드리지 않는다.
+-- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0752.sql --linked
 -- 웹·앱은 이 내부 함수를 부르지 않는다. 순서 제약 없음. 이미 "탈퇴한 직원"으로 바꾼 손님 이름은 되돌리지 않는다(되살리기 없음 · 0359).
 begin;
 create or replace function public.relabel_withdrawn_author(p_uid uuid)

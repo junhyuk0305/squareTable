@@ -18,7 +18,7 @@
 -- 옛 앱 호환: 안전 | 표·열·인덱스를 바꾸지 않는다. 옛 앱은 닫힌 기록을 "출근 ~ 다음날 같은 시각 · 24시간"으로 본다.
 --   옛 앱이 같은 기록을 통째 upsert 로 퇴근시키면 그 값이 크론 값을 덮는다(실제 퇴근 쪽이 남는다).
 -- realtime: 표를 바꾸지 않는다. 크론의 update 는 기존 구독으로 화면에 온다.
--- 되돌리기: scripts/rollback/0697.sql
+-- 되돌리기: scripts/rollback/0757.sql
 
 create or replace function public.close_stale_attendance()
 returns int language plpgsql volatile security definer set search_path = public as $$
@@ -36,7 +36,7 @@ begin
   return v_n;
 end $$;
 comment on function public.close_stale_attendance() is
-  '0697 열린 지 24시간이 넘은 출근을 출근+24시간으로 닫는다(근무 분 1440). 닫은 행 수를 돌려준다. 크론 전용(service_role).';
+  '0757 열린 지 24시간이 넘은 출근을 출근+24시간으로 닫는다(근무 분 1440). 닫은 행 수를 돌려준다. 크론 전용(service_role).';
 revoke all on function public.close_stale_attendance() from public, anon, authenticated;
 grant execute on function public.close_stale_attendance() to service_role;
 

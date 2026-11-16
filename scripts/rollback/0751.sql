@@ -1,5 +1,5 @@
--- rollback/0691.sql — 0691 을 되돌린다(_edu_guest_of = 0552 본문). 원장은 건드리지 않는다.
--- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0691.sql --linked
+-- rollback/0751.sql — 0751 을 되돌린다(_edu_guest_of = 0552 본문). 원장은 건드리지 않는다.
+-- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0751.sql --linked
 -- 웹·앱은 이 내부 함수를 직접 부르지 않는다. 순서 제약 없음. 되돌리면 옮긴 손님 열쇠가 다시 풀린다(C-1).
 begin;
 create or replace function public._edu_guest_of(p_link text, p_key text)

@@ -1,5 +1,5 @@
--- rollback/0690.sql — 0690 을 되돌린다(트리거·함수·표 drop · retained_scrub_names = 0430 본문). 원장은 건드리지 않는다.
--- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0690.sql --linked
+-- rollback/0750.sql — 0750 을 되돌린다(트리거·함수·표 drop · retained_scrub_names = 0430 본문). 원장은 건드리지 않는다.
+-- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0750.sql --linked
 -- 웹·앱은 이 표·함수를 부르지 않는다. 순서 제약 없음. 되돌리면 떠난 공간 멤버 이름이 다시 보관 글에 남을 수 있다(B-2).
 begin;
 drop trigger if exists space_member_names_keep on public.unit_members;

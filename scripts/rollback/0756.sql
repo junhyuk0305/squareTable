@@ -1,15 +1,15 @@
--- rollback/0696.sql — 0696 을 되돌린다(_edu_guest_of = 0691 · edu_link_claim_guest = 0583 · edu_link_ask = 0695 본문). 원장은 건드리지 않는다.
--- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0696.sql --linked
--- 웹·앱 순서 제약 없음. 이름·인자·반환형이 같다. 되돌리면 계정 파기 뒤 옮긴 손님 열쇠가 다시 풀린다(claimed_by 판정 · 0696 머리말).
+-- rollback/0756.sql — 0756 을 되돌린다(_edu_guest_of = 0751 · edu_link_claim_guest = 0583 · edu_link_ask = 0755 본문). 원장은 건드리지 않는다.
+-- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0756.sql --linked
+-- 웹·앱 순서 제약 없음. 이름·인자·반환형이 같다. 되돌리면 계정 파기 뒤 옮긴 손님 열쇠가 다시 풀린다(claimed_by 판정 · 0756 머리말).
 begin;
--- _edu_guest_of (0691 본문)
+-- _edu_guest_of (0751 본문)
 create or replace function public._edu_guest_of(p_link text, p_key text)
 returns public.edu_link_guests language sql stable security definer set search_path = public as $$
   with k as (select encode(extensions.digest(p_key, 'sha256'), 'hex') as h
               where p_key is not null and length(p_key) between 20 and 100)
   select g.* from public.edu_link_guests g, k
    where g.link_id = p_link
-     -- ★0691: 계정으로 옮긴 행(claimed_by)은 원래 손님 열쇠로 풀지 않는다(기기에 남은 열쇠로 다음 사람이 보지 않게 · C-1).
+     -- ★0751: 계정으로 옮긴 행(claimed_by)은 원래 손님 열쇠로 풀지 않는다(기기에 남은 열쇠로 다음 사람이 보지 않게 · C-1).
      and ((g.key_hash = k.h and g.claimed_by is null)
           -- ★0552: 로그인한 링크 사용자의 기기별 열쇠(edu_link_me_key). 같은 손님 행으로 푼다.
           or exists (select 1 from public.edu_link_guest_keys gk where gk.key_hash = k.h and gk.guest_id = g.id))
@@ -43,7 +43,7 @@ end $$;
 revoke all on function public.edu_link_claim_guest(text) from public, anon;
 grant execute on function public.edu_link_claim_guest(text) to authenticated;
 
--- edu_link_ask (0695 본문)
+-- edu_link_ask (0755 본문)
 create or replace function public.edu_link_ask(p_token text, p_key text, p_name text, p_text text, p_req text default null)
 returns table (cq_id text, guest_key text, ai_ready boolean, sent boolean)
 language plpgsql volatile security definer set search_path = public as $$
@@ -80,7 +80,7 @@ begin
          or (g.id is not null and g.id is distinct from v_pair.guest_id) then
         raise exception 'invalid_argument';
       end if;
-      -- ★0695: 10분 지난 요청은 따로 알린다(앱이 내 질문을 다시 읽고 요청 열쇠를 비운다 · A-5). 내 것이 아닌 요청은 위에서 끝났다.
+      -- ★0755: 10분 지난 요청은 따로 알린다(앱이 내 질문을 다시 읽고 요청 열쇠를 비운다 · A-5). 내 것이 아닌 요청은 위에서 끝났다.
       if v_old.asked_at < now() - interval '10 minutes' then raise exception 'request_expired'; end if;
       if g.id is null then
         -- 앞 응답이 끊겨 열쇠를 못 받았다. 그 손님 열쇠를 새로 만든다(앞 열쇠를 받은 사람은 없다).

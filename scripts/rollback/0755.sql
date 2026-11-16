@@ -1,5 +1,5 @@
--- rollback/0695.sql — 0695 를 되돌린다(edu_link_ask = 0681 본문 · 10분 지난 요청 = invalid_argument). 원장은 건드리지 않는다.
--- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0695.sql --linked
+-- rollback/0755.sql — 0755 를 되돌린다(edu_link_ask = 0681 본문 · 10분 지난 요청 = invalid_argument). 원장은 건드리지 않는다.
+-- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0755.sql --linked
 -- 주의: 웹을 먼저 되돌릴 필요는 없다. 새 웹은 request_expired 가 안 와도 지금처럼 invalid_argument 로 요청 열쇠를 비운다
 --   (문구만 "빈 칸이 있어요"로 돌아간다). 서명이 같아 함수 없음 오류는 없다.
 begin;

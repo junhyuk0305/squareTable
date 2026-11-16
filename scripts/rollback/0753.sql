@@ -1,5 +1,5 @@
--- rollback/0693.sql — 0693 을 되돌린다(suggestion_withdraw = 0582 본문 · delete_space = 0553 본문 · _suggestion_move_withdrawn drop).
--- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0693.sql --linked
+-- rollback/0753.sql — 0753 을 되돌린다(suggestion_withdraw = 0582 본문 · delete_space = 0553 본문 · _suggestion_move_withdrawn drop).
+-- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0753.sql --linked
 -- 웹·앱이 부르는 함수 둘은 이름·인자·반환형이 같다. 순서 제약 없음. 이미 보관 표로 옮긴 제안은 되돌리지 않는다.
 begin;
 create or replace function public.suggestion_withdraw(p_id text)

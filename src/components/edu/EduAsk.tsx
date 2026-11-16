@@ -126,7 +126,7 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard, expi
       if (!alive || !g) return;
       setGuest(g);
       const list = await refresh(g);
-      // ★0691(C-1): 웹 손님 열쇠는 첫 질문과 함께 생긴다. 그런데 서버가 질문을 하나도 안 주면 그 열쇠는 계정으로 옮겼거나 못 쓰는 열쇠다.
+      // ★0751(C-1): 웹 손님 열쇠는 첫 질문과 함께 생긴다. 그런데 서버가 질문을 하나도 안 주면 그 열쇠는 계정으로 옮겼거나 못 쓰는 열쇠다.
       //   이 기기에서 지우고 처음 화면(이름 칸)으로 둔다. 공용 기기의 다음 사람이 앞사람 이름으로 묻지 않게 한다. 앱 안 링크(me)는 대상이 아니다.
       if (!alive || me || !list || list.length > 0) return;
       // 링크가 닫히거나 마감이 지나도 서버는 0행을 준다(0401 edu_link_answers). 그때는 열쇠 탓이 아니라 지우지 않는다.
@@ -164,7 +164,7 @@ export function EduAsk({ token, place, ownerName, me, focusUq, onFocusCard, expi
       const code = placeErrorCode(r.error);
       // 서버가 요청 열쇠를 더 받지 않으면(10분 지남 등) 다음 누름은 새 열쇠로 보낸다(/cso L-3).
       if (code === 'invalid_argument' || code === 'request_expired') reqRef.current = null;
-      // ★0695(A-5): 10분 지난 다시 보내기. 앞 질문은 서버에 이미 있을 수 있다 → 내 질문을 다시 읽고, 같은 글이 있으면 보낸 것으로 보고 입력칸을 비운다.
+      // ★0755(A-5): 10분 지난 다시 보내기. 앞 질문은 서버에 이미 있을 수 있다 → 내 질문을 다시 읽고, 같은 글이 있으면 보낸 것으로 보고 입력칸을 비운다.
       if (code === 'request_expired') {
         const list = await refresh(guest);
         if (list?.some((a) => a.queryText.trim() === q)) setText('');

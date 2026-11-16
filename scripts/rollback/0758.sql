@@ -1,15 +1,15 @@
--- rollback/0698.sql — 0698 을 되돌린다(relabel_withdrawn_author = 0692 본문 · retained_scrub_names = 0690 본문 · 새 함수 둘 drop). 원장은 건드리지 않는다.
--- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0698.sql --linked
+-- rollback/0758.sql — 0758 을 되돌린다(relabel_withdrawn_author = 0752 본문 · retained_scrub_names = 0750 본문 · 새 함수 둘 drop). 원장은 건드리지 않는다.
+-- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0758.sql --linked
 -- 웹·앱은 이 내부 함수를 부르지 않는다. 순서 제약 없음. 이미 "탈퇴한 멤버"로 바꾼 공간 기록 이름은 되돌리지 않는다(되살리기 없음 · 0359).
 --   되돌린 뒤 retained_scrub_names 는 "탈퇴한 멤버"를 이름으로 센다. 공간 파기 때 보관 글 속 그 말이 [이름]으로 바뀔 수 있다.
 begin;
--- relabel_withdrawn_author = 0692 본문
+-- relabel_withdrawn_author = 0752 본문
 create or replace function public.relabel_withdrawn_author(p_uid uuid)
 returns void language plpgsql security definer set search_path = public as $$
 declare
   v_label text := public.withdrawn_staff_label();
   v_id    text := p_uid::text;
-  v_sub    text;   -- ★0692: 요청 신원 잠깐 비우기(아래 답할 질문 줄)
+  v_sub    text;   -- ★0752: 요청 신원 잠깐 비우기(아래 답할 질문 줄)
   v_claims text;
 begin
   if p_uid is null then return; end if;
@@ -35,7 +35,7 @@ begin
    where answered_by = p_uid and answerer_name is not null and answerer_name is distinct from v_label;
   update public.quiz_attempts set former_guest_name = v_label
    where staff_id = p_uid and former_guest_name is not null and former_guest_name is distinct from v_label;
-  -- ★0692: 계정으로 옮긴 교육 링크 손님(claimed_by)도 그 계정의 기록이다(B-1). 손님 질문은 junior_id 가 비어 위 줄에 안 걸린다.
+  -- ★0752: 계정으로 옮긴 교육 링크 손님(claimed_by)도 그 계정의 기록이다(B-1). 손님 질문은 junior_id 가 비어 위 줄에 안 걸린다.
   update public.edu_link_guests set name = v_label
    where claimed_by = p_uid and name is distinct from v_label;
   update public.chat_queries c set junior_name = v_label
@@ -58,7 +58,7 @@ begin
 end $$;
 revoke all on function public.relabel_withdrawn_author(uuid) from public, anon, authenticated;
 
--- retained_scrub_names = 0690 본문
+-- retained_scrub_names = 0750 본문
 create or replace function public.retained_scrub_names(p_unit text)
 returns text[] language sql stable security definer set search_path = public as $$
   select coalesce(array_agg(y.n order by char_length(y.n) desc, y.n), '{}')
@@ -80,7 +80,7 @@ returns text[] language sql stable security definer set search_path = public as 
                      where p.id::text in (select pe.creator_id from public.playbook_entries pe where pe.unit_id = p_unit
                                           union select cq.junior_id from public.chat_queries cq where cq.unit_id = p_unit
                                           union select uq.junior_id from public.unknown_queries uq where uq.unit_id = p_unit)
-          -- ★0690: 공간을 떠난 멤버(나가기·내보내기·공간 지우기)의 떠날 때 이름. 기록을 안 남긴 멤버도 잡는다.
+          -- ★0750: 공간을 떠난 멤버(나가기·내보내기·공간 지우기)의 떠날 때 이름. 기록을 안 남긴 멤버도 잡는다.
           union all select s.name from public.space_member_names s where s.space_id = p_unit
         ) x
        where x.n is not null and char_length(btrim(x.n)) >= 2

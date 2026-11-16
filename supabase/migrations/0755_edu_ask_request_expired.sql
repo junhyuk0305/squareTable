@@ -9,19 +9,19 @@
 --   (EduAsk.tsx · 문구 = src/lib/place/errors.ts · 같은 커밋 · AGENTS ⑨). 10분 뒤 새 질문으로 받는 설계(/cso L-3)는 그대로다.
 --
 -- ── 무엇이 바뀌나 ───────────────────────────────────────────────────────────
---   edu_link_ask — 베이스 0681 본문 통째(정의 전수 0401 · 0550 · 0681). ★0695 한 분기: 시간 검사를 앞 검사에서 떼어
+--   edu_link_ask — 베이스 0681 본문 통째(정의 전수 0401 · 0550 · 0681). ★0755 한 분기: 시간 검사를 앞 검사에서 떼어
 --   맨 뒤에 둔다(남의 요청·다른 링크면 시각을 알려 주지 않는다 · 검사 순서 = 내 것인가 → 아직 받는가).
 --
 -- 옛 앱 호환(⑪): 안전 | 이름·인자 5개·반환형 그대로(create or replace). 옛 앱·지금 웹(p_req 없음)은 이 분기에 오지 않는다(0550 동작).
 --   p_req 를 싣는 새 웹만 새 코드를 받는다. 모르는 코드는 일반 문구로 떨어진다(placeErrorMessage).
 -- realtime: 표를 바꾸지 않는다.
--- 되돌리기: scripts/rollback/0695.sql
+-- 되돌리기: scripts/rollback/0755.sql
 
 -- (0681) edu_link_ask(0550 본문 · ★0681 줄만 다름)
 --   인자 p_req(요청 열쇠 · 앱이 한 질문에 한 번 만든다 · 다시 보내기에도 같은 값)를 받는다.
 --   질문 번호를 (링크, p_req)에서 정해 같은 요청을 다시 받으면 앞 질문을 그대로 돌려준다. 같은 요청 동시 2번은 advisory 잠금으로 한 줄로 선다.
 --   첫 질문을 다시 받았는데 열쇠가 없으면(앞 응답이 끊겨 열쇠를 못 받았다) 그 손님 열쇠를 새로 만들어 준다.
---   앞 열쇠는 받은 사람이 없다. p_req 는 그 앱만 안다. 10분이 지난 요청은 다시 받지 않는다(★0695 request_expired).
+--   앞 열쇠는 받은 사람이 없다. p_req 는 그 앱만 안다. 10분이 지난 요청은 다시 받지 않는다(★0755 request_expired).
 --   다시 받은 질문의 ai_ready = 아직 답도 없고 주인에게 가지도 않았을 때만(AI 를 두 번 돌리지 않는다).
 --   p_req 가 없으면(옛 앱) 0550 그대로다.
 create or replace function public.edu_link_ask(p_token text, p_key text, p_name text, p_text text, p_req text default null)
@@ -60,7 +60,7 @@ begin
          or (g.id is not null and g.id is distinct from v_pair.guest_id) then
         raise exception 'invalid_argument';
       end if;
-      -- ★0695: 10분 지난 요청은 따로 알린다(앱이 내 질문을 다시 읽고 요청 열쇠를 비운다 · A-5). 내 것이 아닌 요청은 위에서 끝났다.
+      -- ★0755: 10분 지난 요청은 따로 알린다(앱이 내 질문을 다시 읽고 요청 열쇠를 비운다 · A-5). 내 것이 아닌 요청은 위에서 끝났다.
       if v_old.asked_at < now() - interval '10 minutes' then raise exception 'request_expired'; end if;
       if g.id is null then
         -- 앞 응답이 끊겨 열쇠를 못 받았다. 그 손님 열쇠를 새로 만든다(앞 열쇠를 받은 사람은 없다).
@@ -107,13 +107,13 @@ do $$
 declare d text := (select prosrc from pg_proc where oid = 'public.edu_link_ask(text, text, text, text, text)'::regprocedure);
 begin
   if to_regprocedure('public.edu_link_ask(text, text, text, text)') is not null then
-    raise exception '0695 자가점검 실패: 옛 4인자 edu_link_ask 가 있다';
+    raise exception '0755 자가점검 실패: 옛 4인자 edu_link_ask 가 있다';
   end if;
   if d not like '%request_expired%' or d not like '%pg_advisory_xact_lock%' or d not like '%_edu_ai_exceeded%' then
-    raise exception '0695 자가점검 실패: edu_link_ask 본문이 0681 베이스 + request_expired 가 아니다';
+    raise exception '0755 자가점검 실패: edu_link_ask 본문이 0681 베이스 + request_expired 가 아니다';
   end if;
   if not has_function_privilege('anon', 'public.edu_link_ask(text, text, text, text, text)', 'execute') then
-    raise exception '0695 자가점검 실패: edu_link_ask 실행 권한';
+    raise exception '0755 자가점검 실패: edu_link_ask 실행 권한';
   end if;
-  raise notice '0695 자가점검 통과';
+  raise notice '0755 자가점검 통과';
 end $$;

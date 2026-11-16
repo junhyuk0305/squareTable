@@ -227,7 +227,7 @@ insert into public.playbook_suggestions(id, unit_id, kind, proposer_id, proposer
 update public.unknown_queries set status = 'archived' where id = 'qa_sluq1_${rnd}';
 ${val('대기가 아니던 질문의 상태 변경 = 정리 안 함', `select status from public.playbook_suggestions where id = 'qa_slc1x_${rnd}'`, 'pending')}
 
--- ★0693(B-3): 공간을 지우면 그 공간이 매장에 보낸 대기 제안을 보관 표로 거둔다(0582 취소 길). 승인된 것·다른 공간 제안은 그대로.
+-- ★0753(B-3): 공간을 지우면 그 공간이 매장에 보낸 대기 제안을 보관 표로 거둔다(0582 취소 길). 승인된 것·다른 공간 제안은 그대로.
 --   이 묶음은 공간 SP 를 지운다 → 이 트랜잭션의 마지막 검사로 둔다.
 select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
 insert into public.playbook_suggestions(id, unit_id, kind, proposer_id, proposer_name, text, status, source_unit_id, source_entry_id, source_snapshot) values

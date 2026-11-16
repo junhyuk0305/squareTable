@@ -24,7 +24,7 @@
 --      앞 둘은 FK 를 어기지 않으려고, 셋째는 탈퇴한 사람 이름을 새로 쌓지 않으려고 뺀다(0359 · 탈퇴는 계정 정보를 지운다).
 --      매장 자리는 건드리지 않는다(매장은 재직 기간 스냅샷이 있다 · 0246).
 --   ③ 이미 떠난 멤버 채우기(한 번) — 남은 출처 셋(내보낸 기록 · 합류 요청 · 공간 알림의 받는 사람과 보낸 사람)에서 지금 멤버가 아닌 사람.
---   ④ retained_scrub_names — 베이스 0430 본문 통째(정의 전수 0361 · 0430) + 출처 한 줄(★0690 space_member_names).
+--   ④ retained_scrub_names — 베이스 0430 본문 통째(정의 전수 0361 · 0430) + 출처 한 줄(★0750 space_member_names).
 --
 -- ── 바꾸지 않는 것 ──────────────────────────────────────────────────────────
 --   delete_space · leave_space · space_remove_member · purge_deleted_store 본문. 파기 순서(이름 목록을 먼저 만들고 지운다 · 0361).
@@ -35,7 +35,7 @@
 -- 옛 앱 호환(⑪): 안전 | 새 표 · 새 트리거 · 내부 함수 본문 확장. 옛 앱은 공간을 모른다. 트리거는 공간 자리 행에만 쓰고
 --   매장 나가기·내보내기(옛 앱 길)에서는 공간 행을 찾지 못해 아무것도 하지 않는다. retained_scrub_names 는 클라 권한 0.
 -- realtime: 새 표는 클라가 구독하지 않는다.
--- 되돌리기: scripts/rollback/0690.sql
+-- 되돌리기: scripts/rollback/0750.sql
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- ① 표
@@ -53,7 +53,7 @@ drop policy if exists account_access_allowed on public.space_member_names;
 create policy account_access_allowed on public.space_member_names as restrictive for all to authenticated
   using ((select public.account_access_allowed())) with check ((select public.account_access_allowed()));
 comment on table public.space_member_names is
-  '0690 공간을 떠난 멤버의 떠날 때 이름. 30일 파기 때 보관 글에서 이름을 지우는 데만 쓴다(retained_scrub_names). 클라 권한·정책 0 · 공간·계정 cascade.';
+  '0750 공간을 떠난 멤버의 떠날 때 이름. 30일 파기 때 보관 글에서 이름을 지우는 데만 쓴다(retained_scrub_names). 클라 권한·정책 0 · 공간·계정 cascade.';
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- ② 트리거
@@ -72,7 +72,7 @@ begin
   return old;
 end $$;
 comment on function public.space_member_names_keep() is
-  '0690 unit_members AFTER DELETE: 공간 자리 멤버십이 지워지면 떠날 때 이름을 space_member_names 에 남긴다. 트리거 전용.';
+  '0750 unit_members AFTER DELETE: 공간 자리 멤버십이 지워지면 떠날 때 이름을 space_member_names 에 남긴다. 트리거 전용.';
 revoke all on function public.space_member_names_keep() from public, anon, authenticated;
 
 drop trigger if exists space_member_names_keep on public.unit_members;
@@ -99,7 +99,7 @@ select distinct on (x.space_id, x.user_id) x.space_id, x.user_id, btrim(p.name)
 on conflict (space_id, user_id) do nothing;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- ④ retained_scrub_names (0430 본문 통째 · ★0690 출처 한 줄)
+-- ④ retained_scrub_names (0430 본문 통째 · ★0750 출처 한 줄)
 -- ════════════════════════════════════════════════════════════════════════════
 -- (0361) 그 매장 사람 이름 → [이름]: 재직 기간 스냅샷 · 퇴사 스냅샷 · 지금·예전 구성원과 사장의 profiles.name.
 --   두 글자 미만 이름은 오탐이 커서 건너뛴다. 긴 이름부터 바꾼다. 이름은 글자 그대로 바꾼다(replace · 정규식 아님).
@@ -128,7 +128,7 @@ returns text[] language sql stable security definer set search_path = public as 
                      where p.id::text in (select pe.creator_id from public.playbook_entries pe where pe.unit_id = p_unit
                                           union select cq.junior_id from public.chat_queries cq where cq.unit_id = p_unit
                                           union select uq.junior_id from public.unknown_queries uq where uq.unit_id = p_unit)
-          -- ★0690: 공간을 떠난 멤버(나가기·내보내기·공간 지우기)의 떠날 때 이름. 기록을 안 남긴 멤버도 잡는다.
+          -- ★0750: 공간을 떠난 멤버(나가기·내보내기·공간 지우기)의 떠날 때 이름. 기록을 안 남긴 멤버도 잡는다.
           union all select s.name from public.space_member_names s where s.space_id = p_unit
         ) x
        where x.n is not null and char_length(btrim(x.n)) >= 2
@@ -159,6 +159,6 @@ begin
      or (select prosrc from pg_proc where oid = 'public.retained_scrub_names(text)'::regprocedure) not like '%name_snapshot%' then
     v_bad := v_bad || 'retained_scrub_names 본문 ';
   end if;
-  if v_bad <> '' then raise exception '0690 자가점검 실패: %', v_bad; end if;
-  raise notice '0690 자가점검 통과';
+  if v_bad <> '' then raise exception '0750 자가점검 실패: %', v_bad; end if;
+  raise notice '0750 자가점검 통과';
 end $$;

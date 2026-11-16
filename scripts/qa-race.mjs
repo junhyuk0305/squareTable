@@ -588,7 +588,7 @@ def('M2A', 'attendance_check_out 과 attendance_edit_times 동시(0632)', async 
   check('M2A', '다시 퇴근 = already', again.split('\n').pop() === 'already', again);
 });
 
-def('F4', '24시간 넘게 열린 출근 → 옛 앱 출근 23505 · 크론이 닫은 뒤 출근 · 퇴근과 크론 동시(0697)', async (W) => {
+def('F4', '24시간 넘게 열린 출근 → 옛 앱 출근 23505 · 크론이 닫은 뒤 출근 · 퇴근과 크론 동시(0757)', async (W) => {
   const w = await W({ staffN: 1 });
   const [A] = w.staff;
   const old = `att_rcf4o_${w.s}`;

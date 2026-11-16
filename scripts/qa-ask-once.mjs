@@ -10,11 +10,11 @@
 //   F 못 보는 방의 행은 여전히 세지 않는다(0).
 //   H 열쇠 가진 손님의 둘째 질문 요청 열쇠를 열쇠 없이 다시 보내면 거절 · 앞 열쇠 그대로(/cso M-1).
 //   G submit_unknown_query(0634) 가 남의 자리 id 를 받으면 잠그기 전에 not_member(찾은결함 I1-3).
-//   I 10분 지난 요청 열쇠를 다시 보내면 request_expired(0695 · A-5 · 전 = invalid_argument) · 질문 수 그대로.
-//   J 계정으로 옮긴 손님 행은 원래 손님 열쇠로 안 풀린다(0691 · C-1 · 전 = 앞사람 질문이 보임): 답 목록 0 · 신고 거절 ·
+//   I 10분 지난 요청 열쇠를 다시 보내면 request_expired(0755 · A-5 · 전 = invalid_argument) · 질문 수 그대로.
+//   J 계정으로 옮긴 손님 행은 원래 손님 열쇠로 안 풀린다(0751 · C-1 · 전 = 앞사람 질문이 보임): 답 목록 0 · 신고 거절 ·
 //     그 열쇠로 물으면 새 손님(새 열쇠) · 옮긴 사람의 계정 길(edu_link_me_key 열쇠)은 그대로 읽는다.
 //   K 옮겨 간 계정이 파기돼 claimed_by 가 비어도(on delete set null) 옛 열쇠는 안 풀린다 · 다른 계정이 그 열쇠로 옮기지 못한다
-//     (0696 · 판정 = claimed_at · 전 = 답 목록 1 · 옮기기 true).
+//     (0756 · 판정 = claimed_at · 전 = 답 목록 1 · 옮기기 true).
 // 쓰는 법: node scripts/qa-ask-once.mjs --local
 import { spawnSync } from 'node:child_process';
 
@@ -130,7 +130,7 @@ ${out('J 옛 열쇠로 묻기', `(select case when v like 'gk_%' then 'new_key' 
 ${out('J 옮긴 행 질문 수 그대로', `(select count(*) from public.edu_guest_questions q join public.edu_link_guests g on g.id = q.guest_id where g.claimed_by = ${q(U.J)})`)}
 select pg_temp.put('jm', ${as('J', 'authenticated', `select key from public.edu_link_me_key(${q(LK)})`)});
 ${out('J 계정 길 열쇠로 읽기', `${as(null, 'anon', `select count(*)::text from public.edu_link_answers(${q(TK)}, {V:jm})`)}`)}
--- K 옮겨 간 J 계정이 파기된다(탈퇴 30일 · auth.users 삭제 → claimed_by on delete set null) → 같은 기기의 옛 열쇠 kd 가 되살아나면 안 된다(0696)
+-- K 옮겨 간 J 계정이 파기된다(탈퇴 30일 · auth.users 삭제 → claimed_by on delete set null) → 같은 기기의 옛 열쇠 kd 가 되살아나면 안 된다(0756)
 delete from auth.users where id = ${q(U.J)};
 ${out('K 전제', `(select (claimed_by is null and claimed_at is not null)::text from public.edu_link_guests where key_hash = encode(extensions.digest((select v from ao_v where k = 'kd'), 'sha256'), 'hex'))`)}
 ${out('K 옛 열쇠 답 목록', `${as(null, 'anon', `select count(*)::text from public.edu_link_answers(${q(TK)}, {V:kd})`)}`)}
@@ -161,7 +161,7 @@ check('F 못 보는 방 = 0', got.F === '0', got.F);
 check('H 둘째 질문 요청 열쇠를 열쇠 없이 = invalid_argument(열쇠 안 바꿈)', /invalid_argument/.test(got.H ?? ''), got.H);
 check('H 앞 열쇠로 그대로 읽는다(질문 셋)', Number(got['H 앞 열쇠 그대로']) >= 2, got['H 앞 열쇠 그대로']);
 check('G 남의 공간 id 로 질문 보내기 = 잠그기 전에 not_member(I1-3)', /not_member/.test(got.G ?? ''), got.G);
-console.log('\n[0691 · 0695] 옮긴 손님 열쇠 · 10분 지난 요청');
+console.log('\n[0751 · 0755] 옮긴 손님 열쇠 · 10분 지난 요청');
 check('I 10분 지난 요청 다시 보내기 = request_expired(A-5)', /request_expired/.test(got.I ?? ''), got.I);
 check('I 질문 수 그대로 1', got['I 질문 수'] === '1', got['I 질문 수']);
 check('J 전제: 손님 행을 계정으로 옮김', got['J 옮긴 손님 행'] === '1', got['J 옮긴 손님 행']);
@@ -170,7 +170,7 @@ check('J 옛 열쇠로 신고 = question_not_found', /question_not_found/.test(g
 check('J 옛 열쇠로 물으면 새 손님(새 열쇠)', got['J 옛 열쇠로 묻기'] === 'new_key', got['J 옛 열쇠로 묻기']);
 check('J 옮긴 행에 새 질문이 붙지 않는다(질문 둘 그대로)', got['J 옮긴 행 질문 수 그대로'] === '2', got['J 옮긴 행 질문 수 그대로']);
 check('J 옮긴 사람의 계정 길 열쇠로는 읽는다(질문 둘)', got['J 계정 길 열쇠로 읽기'] === '2', got['J 계정 길 열쇠로 읽기']);
-console.log('\n[0696] 옮겨 간 계정이 파기된 뒤');
+console.log('\n[0756] 옮겨 간 계정이 파기된 뒤');
 check('K 전제: 파기 뒤 claimed_by 빔 · claimed_at 남음', got['K 전제'] === 'true', got['K 전제']);
 check('K 파기 뒤 기기의 옛 열쇠로 답 목록 = 0(되살아나지 않음)', got['K 옛 열쇠 답 목록'] === '0', got['K 옛 열쇠 답 목록']);
 check('K 파기 뒤 다른 계정이 옛 열쇠로 옮기기 = false', got['K 다른 계정이 옮기기'] === 'false', got['K 다른 계정이 옮기기']);

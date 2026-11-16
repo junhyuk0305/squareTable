@@ -9,7 +9,7 @@
 -- 판정(결함목록 판정 원칙): 탈퇴 뒤 개인 기록 규칙(0359)을 손님 이름에도 적용한다. 옮긴 손님 행은 그 계정의 것이다.
 --
 -- ── 무엇이 바뀌나 ───────────────────────────────────────────────────────────
---   relabel_withdrawn_author — 베이스 0359 본문 통째(정의 전수 0359 하나). ★0692 줄 셋:
+--   relabel_withdrawn_author — 베이스 0359 본문 통째(정의 전수 0359 하나). ★0752 줄 셋:
 --     옮긴 손님 행 이름 · 그 손님 질문 짝(edu_guest_questions)이 가리키는 질문과 답할 질문의 이름 칸을 같은 표시 이름으로.
 --     표시 이름 = withdrawn_staff_label()(같은 계정의 다른 질문과 같다). 손님 이름 칸 CHECK(1~20자)에 맞는다.
 --     답할 질문 줄은 요청 신원을 잠깐 비우고 돈다. 질문 쓰기 가드(0382)가 junior_id 빈 행의 이름 바꾸기를 동료 수정으로 막아서다.
@@ -23,7 +23,7 @@
 --
 -- 옛 앱 호환(⑪): 안전 | 내부 함수(클라 권한 0) · 이름·인자·반환형 그대로. 저장된 이름 문자열만 바뀐다.
 -- realtime: 표를 바꾸지 않는다(값만 바뀐다).
--- 되돌리기: scripts/rollback/0692.sql
+-- 되돌리기: scripts/rollback/0752.sql
 
 -- 이름 고쳐 쓰기 — 내부 전용. 정의자 권한으로 돌아서 작성자 고정 트리거(0319 · current_user = authenticated 일 때만)를 지나지 않는다.
 create or replace function public.relabel_withdrawn_author(p_uid uuid)
@@ -31,7 +31,7 @@ returns void language plpgsql security definer set search_path = public as $$
 declare
   v_label text := public.withdrawn_staff_label();
   v_id    text := p_uid::text;
-  v_sub    text;   -- ★0692: 요청 신원 잠깐 비우기(아래 답할 질문 줄)
+  v_sub    text;   -- ★0752: 요청 신원 잠깐 비우기(아래 답할 질문 줄)
   v_claims text;
 begin
   if p_uid is null then return; end if;
@@ -57,7 +57,7 @@ begin
    where answered_by = p_uid and answerer_name is not null and answerer_name is distinct from v_label;
   update public.quiz_attempts set former_guest_name = v_label
    where staff_id = p_uid and former_guest_name is not null and former_guest_name is distinct from v_label;
-  -- ★0692: 계정으로 옮긴 교육 링크 손님(claimed_by)도 그 계정의 기록이다(B-1). 손님 질문은 junior_id 가 비어 위 줄에 안 걸린다.
+  -- ★0752: 계정으로 옮긴 교육 링크 손님(claimed_by)도 그 계정의 기록이다(B-1). 손님 질문은 junior_id 가 비어 위 줄에 안 걸린다.
   update public.edu_link_guests set name = v_label
    where claimed_by = p_uid and name is distinct from v_label;
   update public.chat_queries c set junior_name = v_label
@@ -98,15 +98,15 @@ begin
   if d not like '%edu_link_guests set name = v_label%' or d not like '%edu_guest_questions%'
      or d not like '%former_guest_name%' or d not like '%peer_answer_log%'
      or d not like '%set_config(''request.jwt.claims'', coalesce(v_claims, ''''), true)%' then
-    raise exception '0692 자가점검 실패: relabel_withdrawn_author 본문이 0359 베이스 + 손님 줄이 아니다';
+    raise exception '0752 자가점검 실패: relabel_withdrawn_author 본문이 0359 베이스 + 손님 줄이 아니다';
   end if;
   if has_function_privilege('authenticated', 'public.relabel_withdrawn_author(uuid)', 'execute')
      or has_function_privilege('anon', 'public.relabel_withdrawn_author(uuid)', 'execute') then
-    raise exception '0692 자가점검 실패: relabel_withdrawn_author 가 클라에 열렸다';
+    raise exception '0752 자가점검 실패: relabel_withdrawn_author 가 클라에 열렸다';
   end if;
   if exists (select 1 from public.edu_link_guests g join public.profiles p on p.id = g.claimed_by
               where p.deleted_at is not null and g.name is distinct from public.withdrawn_staff_label()) then
-    raise exception '0692 자가점검 실패: 탈퇴한 계정의 옮긴 손님 이름이 남았다';
+    raise exception '0752 자가점검 실패: 탈퇴한 계정의 옮긴 손님 이름이 남았다';
   end if;
-  raise notice '0692 자가점검 통과';
+  raise notice '0752 자가점검 통과';
 end $$;
