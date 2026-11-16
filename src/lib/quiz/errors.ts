@@ -10,7 +10,7 @@ const MESSAGES: Record<string, string> = {
   // 0348 다시 알리기(quiz_resend). 10 = schedule.ts RESEND_COOLDOWN_MINUTES(이 파일은 import 를 못 해 숫자로 둔다 · qa:quiz-resend 가 대조).
   resend_cooldown: '방금 보냈어요. 10분 뒤에 다시 보낼 수 있어요',
   forbidden: '사장님이나 매니저만 다시 알릴 수 있어요.',
-  quiz_not_found: '퀴즈를 찾을 수 없어요. 화면을 새로고침해 주세요.',
+  quiz_not_found: '퀴즈를 찾을 수 없어요. 화면에서 나갔다가 다시 들어와 주세요.',
 };
 
 /**

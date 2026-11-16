@@ -4,7 +4,7 @@
 import type { DbErr } from '@/lib/db';
 
 const MESSAGES: Record<string, string> = {
-  not_found: '제안을 찾을 수 없어요. 화면을 새로고침해 주세요.',
+  not_found: '제안을 찾을 수 없어요. 화면에서 나갔다가 다시 들어와 주세요.',
   not_pending: '사장님이 이미 처리한 제안이에요. 이제 바꿀 수 없어요.',
   forbidden: '내가 보낸 제안만 바꿀 수 있어요.',
   invalid_argument: '제안 내용을 적어 주세요.',

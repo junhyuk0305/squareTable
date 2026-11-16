@@ -20,13 +20,13 @@ const MESSAGES: Record<string, string> = {
   not_space_member: '이 공간의 멤버가 아니에요. 공간 주인에게 초대코드를 받아 주세요.',
   not_space_owner: '공간 주인만 할 수 있어요.',
   // ── 답하기(0378 · 0379) ──
-  feature_off: '여기서는 쓸 수 없는 기능이에요. 화면을 새로고침해 주세요.',
-  question_not_found: '질문을 찾을 수 없어요. 화면을 새로고침해 주세요.',
+  feature_off: '여기서는 쓸 수 없는 기능이에요. 화면에서 나갔다가 다시 들어와 주세요.',
+  question_not_found: '질문을 찾을 수 없어요. 화면에서 나갔다가 다시 들어와 주세요.',
   not_pending: '이미 답한 질문이에요.',
-  suggestion_not_found: '제안을 찾을 수 없어요. 화면을 새로고침해 주세요.',
+  suggestion_not_found: '제안을 찾을 수 없어요. 화면에서 나갔다가 다시 들어와 주세요.',
   invalid_argument: '빈 칸이 있어요. 다시 적어 주세요.',
   not_manager: '사장님이나 매니저만 할 수 있어요.',
-  forbidden: '지금 있는 곳의 정보만 볼 수 있어요. 화면을 새로고침해 주세요.',
+  forbidden: '지금 있는 곳의 정보만 볼 수 있어요. 화면에서 나갔다가 다시 들어와 주세요.',
   // ── 노하우 지우기(0376 archive_knowhow) ── entry_not_found 는 아래 5번 묶음 문구를 같이 쓴다.
   restore_not_allowed: '지운 노하우는 되살릴 수 없어요.',
   not_owner: '노하우를 지울 수 있는 사람만 할 수 있어요.',
@@ -35,7 +35,7 @@ const MESSAGES: Record<string, string> = {
   not_store_member: '매장에 합류하면 여기서 노하우를 보낼 수 있어요.',
   store_not_accepting: '지금은 이 매장에 보낼 수 없어요.',
   no_entries: '보낼 노하우를 하나 이상 골라 주세요.',
-  entry_not_found: '노하우를 찾을 수 없어요. 화면을 새로고침해 주세요.',
+  entry_not_found: '노하우를 찾을 수 없어요. 화면에서 나갔다가 다시 들어와 주세요.',
   already_proposed: '이미 보낸 노하우예요. 사장님 승인을 기다리고 있어요.',
   suggestion_not_pending: '이미 처리한 제안이에요.',
   too_many_entries: '한 번에 50개까지 보낼 수 있어요.',
@@ -45,7 +45,7 @@ const MESSAGES: Record<string, string> = {
   //   EDU_LINK_ENTRY_DENIED 처럼 userError.ts 에 있는 코드는 그쪽 문구를 쓴다.
   link_closed: SPACE_WORDS.linkClosed,
   link_expired: '기간이 끝난 링크예요. 새 링크를 만들어 주세요.',
-  link_not_found: '링크를 찾을 수 없어요. 화면을 새로고침해 주세요.',
+  link_not_found: '링크를 찾을 수 없어요. 화면에서 나갔다가 다시 들어와 주세요.',
   // ── 공간 삭제 · 공간 주인 탈퇴(0430) ──
   space_has_members: '공간에 멤버가 남아 있어요. 공간을 먼저 지우면 탈퇴할 수 있어요.',
   // ── 합류 · 멤버 요청 · 내보내기 · 나가기(0460) ── not_space_member · feature_off · PHONE_NOT_VERIFIED 는 위 문구를 같이 쓴다.

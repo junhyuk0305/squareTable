@@ -21,7 +21,7 @@ const MESSAGES: Record<string, string> = {
   // 노하우 사진(set_knowhow_photos)
   too_many_photos: '사진은 더 넣을 수 없어요. 몇 장을 뺀 뒤 다시 시도해 주세요.',
   // 할 일 완료(0630) · 피드(0635)
-  task_not_found: '이 할 일을 찾을 수 없어요. 화면을 새로고침해 주세요.',
+  task_not_found: '이 할 일을 찾을 수 없어요. 화면에서 나갔다가 다시 들어와 주세요.',
   feed_parent_gone: '글이 지워져 댓글을 달 수 없어요.',
 };
 
