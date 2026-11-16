@@ -109,6 +109,17 @@ export const SPACE_SCREEN = {
   // S03 홈
   homeLoading: '숫자를 불러오고 있어요…',
   homeLoadFail: '숫자를 불러오지 못했어요.',
+  // S03 홈 골격(화면조립표 2026-11-17 · 첫날·준비 안내 한 줄 · 미리보기 · 바로가기 상태)
+  homeFirstLine: '노하우를 남기면 AI가 신입 질문에 답해요',
+  homeReadyLine: '교육 링크를 보내면 신입이 물어볼 수 있어요',
+  homeStatEmpty: '질문이 오면 여기에 쌓여요.',
+  homeRecent: '최근 노하우',
+  seeAll: '전체보기',
+  starterProgress: (done: number, total: number) => `${done}/${total}`,
+  shortcutCount: (n: number) => `${n}개`,
+  shortcutOpen: (n: number) => `${n}개 열림`,
+  shortcutPeople: (n: number) => `${n}명`,
+  shortcutNone: '없어요',
   // S06 설정
   settingsName: '공간 이름',
   settingsAi: 'AI 사용량',
