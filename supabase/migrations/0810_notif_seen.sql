@@ -15,6 +15,9 @@
 --   새 함수는 멤버인 자리에 notif_ack_at 도 같이 쓴다 → 옛 앱 기기도 같은 읽음 상태를 본다.
 --   옛 앱이 쓴 notif_ack_at 은 새 앱이 max 로 읽는다.
 --
+-- 옛 앱 호환: 안전 | 근거 = 새 표·새 함수만 더한다 · 옛 앱이 부르는 ack_notifications·mark_all_feed_read·mark_feed_read·save_unit_member_prefs 본문 그대로
+--   (grep "rpc('ack_notifications'\|rpc('mark_all_feed_read'" src/ · ios-v1.1.1 도 같은 호출) · unit_member_prefs 열·정책 그대로(publication 추가만).
+--
 -- 실시간: unit_member_prefs · notif_seen 을 supabase_realtime 에 넣는다. 한 기기에서 읽으면 같은 계정의 다른 기기에서 바로 꺼진다.
 --   두 표 모두 SELECT 정책이 본인 행만 보여 준다 → 남의 읽음 시각은 흘러가지 않는다.
 
@@ -22,7 +25,7 @@ begin;
 
 create table if not exists public.notif_seen (
   user_id uuid not null references auth.users(id) on delete cascade,
-  unit_id text not null,          -- FK 를 걸지 않는다: 지운(purge) 자리의 줄도 14일은 남는다
+  unit_id text not null,          -- FK 를 걸지 않는다: 읽은 시각 행이 자리 삭제(purge)를 막거나 지연시키지 않게 · 남은 행은 판정에 안 쓰인다
   seen_at timestamptz not null,
   primary key (user_id, unit_id)
 );
@@ -51,6 +54,11 @@ with mx as (
   union
   select m.user_id, m.unit_id from public.unit_members m join public.units u on u.id = m.unit_id
    where u.kind = 'space'
+  union   -- 손님으로 쓴 교육 링크 답 줄(link_answered)의 자리
+  select g.claimed_by, q.unit_id from public.edu_guest_questions gq
+    join public.edu_link_guests g on g.id = gq.guest_id
+    join public.unknown_queries q on q.id = gq.uq_id
+   where g.claimed_by is not null
 )
 insert into public.notif_seen (user_id, unit_id, seen_at)
 select c.user_id, c.unit_id, mx.at
@@ -83,7 +91,8 @@ begin
   v_me := to_jsonb(v_uid::text);
 
   -- 자리별 읽은 시각 — 앱이 보낸 id 중 실제 있는 자리만. 남의 행은 못 쓴다(user_id = 나).
-  --   멤버십을 보지 않는 이유: 반려·내보냄·지운 공간 줄도 꺼야 한다. 쓰는 것은 내 읽음 시각뿐이다.
+  --   멤버십을 보지 않는 이유: 반려·내보냄·지운(deleted_at) 공간 줄도 꺼야 한다. 쓰는 것은 내 읽음 시각뿐이다.
+  --   units 행이 사라진(purge) 자리는 건너뛰어도 된다: member_notices.unit_id 가 ON DELETE CASCADE 라 그 줄도 같이 사라진다(qa:notif-read B5b).
   insert into public.notif_seen as s (user_id, unit_id, seen_at)
   select v_uid, x.id, v_now
     from (select distinct unnest(p_unit_ids) as id) x

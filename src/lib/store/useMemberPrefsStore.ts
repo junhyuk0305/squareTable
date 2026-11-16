@@ -89,7 +89,9 @@ export const useMemberPrefsStore = create<State>((set, get) => ({
       return;
     }
     const byUnit: Record<string, MemberPref> = {};
-    const ackByUnit: Record<string, string | null> = {};
+    // 읽은 시각은 로컬 값과 합친다(늦은 쪽) — 조회가 나간 뒤 전체 읽음·실시간으로 받은 값을 옛 응답이 덮으면 읽은 줄이 다시 켜진다.
+    //   계정이 바뀌면 tenantReset 이 이 스토어를 비우므로 남의 값이 섞이지 않는다.
+    const ackByUnit: Record<string, string | null> = { ...get().ackByUnit };
     for (const r of data) {
       byUnit[r.unit_id] = {
         nickname: r.nickname,
@@ -99,9 +101,11 @@ export const useMemberPrefsStore = create<State>((set, get) => ({
         quiet_start: r.quiet_start,
         quiet_end: r.quiet_end,
       };
-      ackByUnit[r.unit_id] = r.notif_ack_at ?? null;
+      ackByUnit[r.unit_id] = later(ackByUnit[r.unit_id], r.notif_ack_at);
     }
-    // 0810 자리별 읽은 시각 — 멤버가 아닌 자리도 있다. 못 읽었으면 0078 값만으로 본다(readFail 이 배너를 띄운다).
+    // 0810 자리별 읽은 시각 — 멤버가 아닌 자리도 있다. 못 읽었으면 다음 진입에서 바로 다시 읽는다(TTL 미적용).
+    //   그동안은 로컬에 이미 있던 값을 지킨다(위 합치기) — 없던 자리만 안 읽음으로 남는다.
+    if (seen.error) _lastHydrateAt = 0;
     for (const r of seen.data ?? []) ackByUnit[r.unit_id] = later(ackByUnit[r.unit_id], r.seen_at);
     set({ byUnit, ackByUnit, loaded: true, loadError: false });
   },

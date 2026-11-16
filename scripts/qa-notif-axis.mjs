@@ -147,7 +147,7 @@ check('⑥ 사장: 직원 제안 2건 모두 검토함에(자기 것 아님)', o
 {
   const { buildStoreNotifs, storeUnreadCount, buildJoinCrossNotifs } =
     await import(pathToFileURL(join(ROOT, 'src/lib/utils/crossStoreNotifs.ts')).href);
-  const { accountAckAt, buildJuniorNotifications, juniorUnreadCount } =
+  const { ackOfUnit, joinNoticesOfUnit, buildJuniorNotifications, juniorUnreadCount } =
     await import(pathToFileURL(join(ROOT, 'src/lib/utils/notifications.ts')).href);
   const JR = 'u_junior';
   const uqAnswered = { id: 'uq1', unit_id: 'u1', junior_id: JR, junior_name: '이수민', query_text: '얼음 어디?', status: 'resolved_with_entry', answered_by: OWNER, asked_at: iso(2) };
@@ -193,20 +193,24 @@ check('⑥ 사장: 직원 제안 2건 모두 검토함에(자기 것 아님)', o
   const mgrJ = buildStoreNotifs(dj, 'manager', ME, TODAY, null);
   check('⑪ 매니저 목록에는 join_done 이 없다(승인·반려가 사장 전용)', !mgrJ.some((r) => r.kind === 'join_done'), mgrJ.map((r) => r.id).join(','));
 
-  // 합류 결과 — 반려된 매장(u3)엔 prefs 행이 없다. 읽음 기준 = 내 매장 ack 중 최댓값(iso(5)).
+  // 합류 결과 — 읽음 기준 = 그 줄 자리의 읽은 시각(2026-11-16 · R-13 · 0810 notif_seen 은 멤버 아닌 자리도 받는다).
+  //   예전(accountAckAt = 내 매장 ack 최댓값)과 갈리는 곳: 반려 매장(u3)에 시각이 없으면 다른 매장(u1)이 읽었어도 안 읽음이다.
   const ackByUnit = { u1: iso(5), u2: iso(3) };
   const joinNotices = [
     { id: 1, unit_id: 'u3', kind: 'rejected', store_name: '셋째 매장', body: '셋째 매장', created_at: iso(4) },
     { id: 2, unit_id: 'u2', kind: 'approved', store_name: '둘째 매장', body: '둘째 매장 직원이 됐어요', created_at: iso(6) },
   ];
-  check('⑩ accountAckAt = 내 매장 ack 중 가장 늦은 시각', accountAckAt(ackByUnit) === iso(5) && accountAckAt({}) === null);
-  const hub = buildJoinCrossNotifs(joinNotices, accountAckAt(ackByUnit));
+  check('⑩ ackOfUnit = 그 자리 시각만(없으면 null)', ackOfUnit(ackByUnit)('u1') === iso(5) && ackOfUnit(ackByUnit)('u3') === null);
+  const hub = buildJoinCrossNotifs(joinNotices, ackOfUnit(ackByUnit));
   const rej = hub.find((r) => r.id === 'join_rejected_1'), app = hub.find((r) => r.id === 'join_approved_2');
-  check('⑩ 허브 합류 결과: 반려(최대 ack 이전 · 그 매장 ack 행 없음)=읽음 · 승인(이후)=안 읽음 · unitId=그 알림 매장 · storeName 칩 폴백',
-    rej?.unread === false && rej?.unitId === 'u3' && rej?.storeName === '셋째 매장' && app?.unread === true && app?.unitId === 'u2', JSON.stringify(hub));
-  const bell = buildJuniorNotifications({ feed: [], swaps: [], templates: [], nameOf, userId: JR, today: TODAY, ackAt: null, joinNotices, joinAckAt: accountAckAt(ackByUnit) });
-  check('⑩ 매장 벨 합류 결과도 같은 판정(unread 동일) · 배지 == 목록', bell.find((r) => r.id === 'join_rejected_1')?.unread === false && bell.find((r) => r.id === 'join_approved_2')?.unread === true
-    && juniorUnreadCount([], [], JR, TODAY, [], {}, null, [], [], [], [], joinNotices, accountAckAt(ackByUnit)) === 1);
+  check('⑩ 허브 합류 결과: 반려(그 매장 시각 없음 → 다른 매장이 읽어도)=안 읽음 · 승인(그 매장 시각 이후)=안 읽음 · unitId=그 알림 매장 · storeName 칩 폴백',
+    rej?.unread === true && rej?.unitId === 'u3' && rej?.storeName === '셋째 매장' && app?.unread === true && app?.unitId === 'u2', JSON.stringify(hub));
+  const hubRead = buildJoinCrossNotifs(joinNotices, ackOfUnit({ ...ackByUnit, u3: iso(5) }));
+  check('⑩ 허브 전체 읽음(반려 매장 자리도 시각) 뒤 반려 줄 = 읽음', hubRead.find((r) => r.id === 'join_rejected_1')?.unread === false);
+  const storeJoins = joinNoticesOfUnit(joinNotices, 'u2');
+  const bell = buildJuniorNotifications({ feed: [], swaps: [], templates: [], nameOf, userId: JR, today: TODAY, ackAt: null, joinNotices: storeJoins, joinAckOf: ackOfUnit(ackByUnit) });
+  check('⑩ 매장 벨(u2) 합류 결과 = 그 매장 것만 · 같은 판정 · 배지 == 목록', !bell.some((r) => r.id === 'join_rejected_1') && bell.find((r) => r.id === 'join_approved_2')?.unread === true
+    && juniorUnreadCount([], [], JR, TODAY, [], {}, null, [], [], [], [], storeJoins, ackOfUnit(ackByUnit)) === 1);
 }
 
 // ⑫ 오류 탐지 11-03 B 묶음(2026-11-05) — 벨이 근무표 수락 판정(canAcceptSwap)·직원 벨 퀴즈 입력과 같은 답을 내는가.

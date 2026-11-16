@@ -137,6 +137,32 @@ await test('S4 불러오기 = 자리마다 max(0078 notif_ack_at, 0810 seen_at) 
   const a = s.getState().ackByUnit;
   if (a.A !== T2 || a.B !== T1) throw new Error(JSON.stringify(a));
 });
+const PREF = (unit, at) => ({ unit_id: unit, nickname: null, color: null, muted: false, quiet_enabled: false, quiet_start: '22:00', quiet_end: '08:00', notif_ack_at: at });
+await test('S5 불러오기가 늦게 와도 그 사이 읽은 값을 덮지 않는다(조회 출발 → 전체 읽음 → 옛 응답 도착)', async () => {
+  let release;
+  const { s } = setupPrefs({
+    fetchMemberPrefs: () => new Promise((r) => { release = () => r({ data: [PREF('A', T0)], error: null }); }),
+    fetchNotifSeen: async () => ({ data: [], error: null }),
+    markNotifsSeen: async () => T2,
+  });
+  const h = s.getState().hydrate();
+  await s.getState().markAllSeen(['A'], []);
+  release();
+  await h;
+  if (s.getState().ackByUnit.A !== T2) throw new Error('옛 응답이 덮었다 ' + s.getState().ackByUnit.A);
+});
+await test('S6 notif_seen 조회만 실패해도 로컬에 있던 자리 시각은 지킨다 · 다음 진입에서 바로 다시 읽는다', async () => {
+  let n = 0;
+  const { s } = setupPrefs({
+    fetchMemberPrefs: async () => ({ data: [PREF('A', T0)], error: null }),
+    fetchNotifSeen: async () => (++n === 1 ? { data: null, error: { message: 'x' } } : { data: [{ unit_id: 'sp1', seen_at: T2 }], error: null }),
+  });
+  s.setState({ ackByUnit: { sp1: T1 } });
+  await s.getState().hydrate();
+  if (s.getState().ackByUnit.sp1 !== T1) throw new Error('실패가 로컬 값을 지웠다');
+  await s.getState().hydrate(); // TTL 을 건너뛰어 바로 다시 읽어야 한다
+  if (n !== 2 || s.getState().ackByUnit.sp1 !== T2) throw new Error(`다시 안 읽음 n=${n}`);
+});
 
 // ══ B 서버(로컬 실세션) ══
 console.log('— B 서버(로컬 · 실세션) —');
@@ -230,6 +256,8 @@ if (space && owner && staff) {
       if (ackOf(staff.uid, notStaffUnit)) throw new Error('멤버 아닌데 0078 행이 생겼다');
       if (seenOf(staff.uid, `${tag}_none`)) throw new Error('없는 자리를 썼다');
     });
+    await test('B5b 전제: units 행이 사라지면 그 자리 알림(member_notices)도 같이 사라진다(CASCADE) → 없는 자리를 건너뛰어도 켜진 채 남는 줄이 없다', () =>
+      psql(`select confdeltype from pg_constraint where conname = 'member_notices_unit_id_fkey'`) === 'c');
     await test('B6 남의 멘션 read_by 는 못 쓴다(멤버 아닌 매장 줄)', async () => {
       await staff.c.rpc('mark_notifs_seen', { p_unit_ids: [notStaffUnit], p_feed_ids: [fid] });
       return psql(`select (data->'read_by') @> to_jsonb('${staff.uid}'::text) from work_feed where id = '${fid}'`) !== 't';
