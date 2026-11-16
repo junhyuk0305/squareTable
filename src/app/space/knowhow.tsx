@@ -11,7 +11,7 @@ import { LoadErrorState } from '@/components/LoadErrorState';
 import { CategoryEditSheetView } from '@/components/owner/CategoryEditSheet';
 import {
   KnowhowCountRow, KnowhowEmptyResult, KnowhowEntryRow, KnowhowFab, KnowhowFindBar, KNOWHOW_FAB_SPACE, PagedRows,
-  filterKnowhow, knowhowChipCategories,
+  filterKnowhow, knowhowChipCategories, knowhowChipCounts,
 } from '@/components/knowhow/KnowhowListParts';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
@@ -34,7 +34,7 @@ const NO_INDUSTRY = undefined;
 
 /**
  * S04 공간 노하우 탭(주인) — 매장 노하우 목록과 같은 부품(KnowhowListParts · 실측 결함 R-2·R-3 · 2026-11-16).
- *  총 개수 · 검색 · 카테고리 칩 · 톱니(카테고리 편집) · 행 → 상세(S08) · 우하단 노란 + → 쓰기(S07).
+ *  검색 · 카테고리 칩(건수) · 총 개수 · 톱니(카테고리 편집) · 행 → 상세(S08) · 우하단 노란 알약 [노하우 쓰기] → 쓰기(S07 · 0개면 없음).
  *  매장 전용 블록(히트맵 · 목록 탭 · "사장님 검증"·"안 쓰임" 배지 · 할 일 칸)은 없다(사용자 결정).
  * 읽기는 fetchEntries(공간 번호) 한 번(매장 스토어 usePlaybookStore 를 안 쓴다 · 공간 화면은 공간 번호를 넘긴다).
  * 카테고리 목록은 공간 전용 함수로 읽고 쓴다(0780 · useSpaceKnowhowCategories). 못 읽으면 톱니를 안 그린다(덮어쓰기 = 삭제).
@@ -91,6 +91,7 @@ export default function SpaceKnowhow() {
   const visible = useMemo(() => (entries ?? []).filter((e) => e.status !== 'draft'), [entries]);
   const customs = useMemo<CustomCategory[]>(() => cats.customs ?? [], [cats.customs]);
   const allCats = useMemo(() => knowhowChipCategories(visible, NO_INDUSTRY, customs), [visible, customs]);
+  const chipCounts = useMemo(() => ({ total: visible.length, by: knowhowChipCounts(visible) }), [visible]);
   // 노하우가 지워져 카테고리가 사라졌는데 활성 필터로 남았으면 전체 취급(매장과 같은 파생).
   const effectiveCat = activeCat && allCats.includes(activeCat) ? activeCat : null;
   const filtered = useMemo(
@@ -115,7 +116,8 @@ export default function SpaceKnowhow() {
   let body;
   if (failed && !entries) body = <LoadErrorState title={SPACE_KNOWHOW.loadFail} onRetry={() => void load()} />;
   else if (!entries) body = <ScreenLoading label={SPACE_KNOWHOW.loading} />;
-  else if (visible.length === 0) body = <EmptyState title={SPACE_KNOWHOW.emptyTitle} body={SPACE_KNOWHOW.emptyBody} cta={{ label: SPACE_KNOWHOW.add, onPress: write }} />;
+  // 0개면 떠 있는 버튼 없이 빈 상태의 노란 버튼 하나(11절 2번 보충).
+  else if (visible.length === 0) body = <EmptyState title={SPACE_KNOWHOW.emptyTitle} body={SPACE_KNOWHOW.emptyBody} cta={{ label: SPACE_KNOWHOW.add, onPress: write }} ctaTone="yellow" />;
   else
     body = (
       <>
@@ -134,6 +136,17 @@ export default function SpaceKnowhow() {
             <Ionicons name="chevron-forward" size={Type.body.fontSize} color={TextColor.iconMuted} />
           </Pressable>
         ) : null}
+        {/* 찾기 줄이 개수 줄 위(1차 추천대로 · 화면조립표 3-2). 칩에 건수. */}
+        <KnowhowFindBar
+          query={query}
+          onQuery={setQuery}
+          cats={allCats}
+          active={effectiveCat}
+          onSelect={selectCat}
+          onAll={() => setActiveCat(null)}
+          customs={customs}
+          counts={chipCounts}
+        />
         <KnowhowCountRow
           label={countLabel}
           manage={
@@ -142,7 +155,6 @@ export default function SpaceKnowhow() {
               : undefined
           }
         />
-        <KnowhowFindBar query={query} onQuery={setQuery} cats={allCats} active={effectiveCat} onSelect={selectCat} onAll={() => setActiveCat(null)} customs={customs} />
         {filtered.length === 0 ? (
           <KnowhowEmptyResult onReset={() => { setQuery(''); setActiveCat(null); }} />
         ) : (
@@ -163,7 +175,8 @@ export default function SpaceKnowhow() {
       <ScrollView style={styles.flex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {body}
       </ScrollView>
-      <KnowhowFab onPress={write} label={SPACE_KNOWHOW.add} />
+      {/* 만들기 입구 = 오른쪽 아래 떠 있는 노란 알약(11절 2번). 0개·읽는 중·실패면 그리지 않는다(빈 상태 버튼이 같은 일). */}
+      {visible.length > 0 ? <KnowhowFab onPress={write} label={SPACE_KNOWHOW.add} showLabel /> : null}
       {catSheet && cats.customs ? (
         <CategoryEditSheetView
           entries={visible}

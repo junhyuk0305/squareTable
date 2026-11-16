@@ -146,10 +146,10 @@ export function InviteBlock({
           scaleTo={0.97}
           accessibilityRole="button"
           accessibilityLabel={isSpace ? SPACE_MEMBERS.inviteMessageCopy : '초대 링크 복사'}
-          style={[s.primary, (expired || !code) && s.dim]}
+          style={[s.primary, isSpace && s.primaryYellow, (expired || !code) && s.dim]}
         >
-          <Ionicons name={isSpace ? 'chatbubble-outline' : 'link-outline'} size={16} color={InkColors.bubbleText} />
-          <Text style={s.primaryText}>{copied === 'link' ? '복사됨' : isSpace ? SPACE_MEMBERS.inviteMessageCopy : '초대 링크 복사'}</Text>
+          <Ionicons name={isSpace ? 'chatbubble-outline' : 'link-outline'} size={16} color={isSpace ? InkColors.ink : InkColors.bubbleText} />
+          <Text style={isSpace ? ButtonTextStyles.primaryOnYellow : s.primaryText}>{copied === 'link' ? '복사됨' : isSpace ? SPACE_MEMBERS.inviteMessageCopy : '초대 링크 복사'}</Text>
         </PressableScale>
 
         {expired &&
@@ -197,6 +197,12 @@ const s = StyleSheet.create({
   // 주 버튼(52 · 모서리 16 · 가로 꽉).
   primary: { ...ButtonStyles.primary, flexDirection: 'row', gap: 6, backgroundColor: BrandColors.brand },
   primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  // 공간 설정 탭의 [초대 문구 복사] = 그 화면의 노란 버튼(화면조립표 2026-11-17 11절 1번). 매장 쪽 색은 매장 묶음이 정한다.
+  primaryYellow: {
+    backgroundColor: ButtonStyles.primaryYellow.backgroundColor,
+    borderWidth: ButtonStyles.primaryYellow.borderWidth,
+    borderColor: ButtonStyles.primaryYellow.borderColor,
+  },
 
   dim: { opacity: 0.4 },
   expiry: { ...Type.tag, marginTop: 2, lineHeight: 17, fontWeight: '700', color: TextColor.secondary },

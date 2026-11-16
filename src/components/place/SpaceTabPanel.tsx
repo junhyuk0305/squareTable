@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Section } from '@/components/Screen';
+import { EmptyState } from '@/components/EmptyState';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useOpenSpace } from '@/lib/hooks/useOpenSpace';
@@ -17,7 +18,7 @@ type IconName = keyof typeof Ionicons.glyphMap;
 /**
  * S18 매장 탭의 [공간] 칸(4번 덩이 · 2번 덩이 임시 입구 SpaceEntryRow 를 대신한다).
  *  · 내 공간(주인) → 들어가기(enter_space) → /space/home · 대기 중인 합류 신청 수를 줄에 붙인다(벨과 같은 파생 행).
- *  · 내 공간이 없고 만들 수 있는 계정 → "공간 만들기" → /space/start(사장 계정은 서버가 거절 → 줄 없음).
+ *  · 내 공간이 없고 만들 수 있는 계정 → 빈 상태 "아직 공간이 없어요" + 노란 [공간 만들기] → /space/start(사장 계정은 서버가 거절 → 카드 없음).
  *  · 참여 중인 공간(멤버) → /space/joined/<번호>(S17 · 공간 _layout 이 그 번호로 들어간다).
  *  · 초대코드 넣기(S19) → 직원 허브의 코드 칸(/junior/hub · 공간 코드와 매장 코드를 같이 받는다).
  * 보이는 조건(입구가 열린 계정)은 부르는 화면(stores.tsx)이 정한다.
@@ -38,9 +39,8 @@ export function SpaceTabPanel() {
 
   return (
     <View style={styles.stack}>
-      {mine || canCreate ? (
-      <Section title={SPACE_MEMBERS.mineTitle}>
-        {mine ? (
+      {mine ? (
+        <Section title={SPACE_MEMBERS.mineTitle}>
           <Row
             icon="library-outline"
             title={mine.name}
@@ -48,10 +48,15 @@ export function SpaceTabPanel() {
             badge={requestsOf(mine.id) > 0 ? SPACE_MEMBERS.requestBadge(requestsOf(mine.id)) : undefined}
             onPress={() => void openSpace(mine)}
           />
-        ) : (
-          <Row icon="add" title={SPACE_SCREEN.entryCreate} hint={SPACE_SCREEN.entryCreateHint} onPress={() => router.push('/space/start')} />
-        )}
-      </Section>
+        </Section>
+      ) : canCreate ? (
+        // 공간이 없으면 빈 상태 카드 + 노란 [공간 만들기] 하나(1차 추천대로 · 매장 칸 "아직 매장이 없어요"와 같은 부품).
+        <EmptyState
+          title={SPACE_SCREEN.entryEmptyTitle}
+          body={SPACE_SCREEN.startLead}
+          cta={{ label: SPACE_SCREEN.entryCreate, onPress: () => router.push('/space/start') }}
+          ctaTone="yellow"
+        />
       ) : null}
       {joined.length > 0 ? (
         <Section title={SPACE_MEMBERS.joinedTitle}>

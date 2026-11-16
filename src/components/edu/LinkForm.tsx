@@ -20,6 +20,7 @@
  * ★닫으면 되돌릴 수 없다. 받은 사람 쪽이 전부 끊긴다. 그래서 confirmAction 으로 한 번 묻고, 닫은 뒤 앞 화면으로 간다.
  * ★닫힌 링크·기간 끝난 링크는 고칠 수 없다(서버 link_closed · link_expired). 화면도 고치는 칸을 그리지 않는다.
  *   기간 끝난 링크는 닫을 수 있다(서버가 받는다).
+ *   닫힌 링크·기간 끝난 링크에는 [새 교육 링크](onNewLink)를 둔다(2026-11-17 1차 추천대로 · 매장·공간 같이).
  * 담긴 노하우가 나중에 지워졌거나 보관됐으면 목록에 안 보인다. 그 번호는 그대로 둔다(서버가 담긴 번호는 다시 검사하지 않는다).
  */
 import { useEffect, useMemo, useState } from 'react';
@@ -48,7 +49,7 @@ import {
 } from '@/lib/db';
 import { placeErrorMessage } from '@/lib/place/errors';
 import { EDU_LINK_DEFAULT_DAYS, EDU_LINK_MAX_DAYS, createdPlusDays, daysLeft, eduLinkUrl, kstYmd } from '@/lib/edu/link';
-import { LINK_IN_APP, SPACE_WORDS } from '@/lib/place/words';
+import { LINK_IN_APP, SPACE_WORDS, STORE_LINK_LIST } from '@/lib/place/words';
 import { copyLinkToast, COPY_LINK_LABEL } from '@/lib/quiz/link';
 import { shareText } from '@/lib/utils/shareText';
 import { confirmAction } from '@/lib/utils/confirm';
@@ -160,6 +161,15 @@ export function EduLinkNewForm({
           <Text style={st.doneTitle}>링크를 만들었어요</Text>
           <UrlBox url={eduLinkUrl(made.token)} label={COPY_LINK_LABEL} onCopy={() => void copy()} />
           <Text style={st.desc}>주소를 복사해 카톡으로 보내 주세요.</Text>
+          {/* 만든 뒤 주 버튼 = [링크 복사](1차 추천대로 · 노랑 = 10절 7번). 주소 상자도 그대로 누르면 복사한다. */}
+          <Pressable
+            onPress={() => void copy()}
+            accessibilityRole="button"
+            accessibilityLabel={COPY_LINK_LABEL}
+            style={({ pressed }) => [st.cta, pressed && st.pressed]}
+          >
+            <Text style={st.ctaText}>{COPY_LINK_LABEL}</Text>
+          </Pressable>
           <Pressable
             onPress={() => onOpenDetail(made.id)}
             accessibilityRole="button"
@@ -242,11 +252,14 @@ export function EduLinkDetailForm({
   linkId,
   loadPick,
   pickNote,
+  onNewLink,
 }: {
   unitId: string;
   linkId: string;
   loadPick: EduLinkPickLoader;
   pickNote?: string;
+  /** 닫힌 링크·기간 끝난 링크의 [새 교육 링크]가 갈 곳(자리마다 경로가 다르다 · 1차 추천대로). */
+  onNewLink: () => void;
 }) {
   const router = useRouter();
   const [link, setLink] = useState<EduLinkRow | null>(null);
@@ -358,6 +371,18 @@ export function EduLinkDetailForm({
     if (t) showToast(t.text, t.tone);
   };
 
+  // 닫힌 링크·기간 끝난 링크에서 누를 곳(1차 추천대로). 이름과 노랑 = 교육 탭의 [새 교육 링크].
+  const newLinkButton = (
+    <Pressable
+      onPress={onNewLink}
+      accessibilityRole="button"
+      accessibilityLabel={STORE_LINK_LIST.newLink}
+      style={({ pressed }) => [st.cta, pressed && st.pressed]}
+    >
+      <Text style={st.ctaText}>{STORE_LINK_LIST.newLink}</Text>
+    </Pressable>
+  );
+
   return (
     <Screen header={header}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -384,6 +409,8 @@ export function EduLinkDetailForm({
             {closed ? '닫힌 링크예요. 새 링크를 만들어 주세요.' : placeErrorMessage({ message: 'link_expired' })}
           </Text>
         )}
+        {/* 닫힌 링크 = 안내 문장과 같은 카드에 [새 교육 링크](버튼만 든 카드 금지 · 11절 4번). */}
+        {closed ? newLinkButton : null}
       </Appear>
 
       {editable ? (
@@ -420,9 +447,10 @@ export function EduLinkDetailForm({
         </>
       ) : null}
 
-      {/* 저장·닫기 = 카드 한 장(R-14 · 버튼도 흰 카드 위). */}
+      {/* 저장·닫기 = 카드 한 장(R-14 · 버튼도 흰 카드 위). 기간 끝난 링크는 [새 교육 링크] → 링크 닫기. */}
       {editable || !closed ? (
         <View style={st.card}>
+          {expired ? newLinkButton : null}
           {editable ? (
             <Pressable
               onPress={() => void save()}
@@ -458,8 +486,9 @@ const st = StyleSheet.create({
     ...Type.body,
   },
   desc: { ...Type.desc, fontWeight: '600' },
-  cta: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
-  ctaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  // 주 버튼 = 노랑(화면조립표 2026-11-17 10절 7번) · 링크 만들기 · 링크 복사 · 저장 · 새 교육 링크. 한 프레임에 하나.
+  cta: ButtonStyles.primaryYellow,
+  ctaText: ButtonTextStyles.primaryOnYellow,
   busy: { opacity: 0.5 },
   off: { opacity: 0.4 },
   pressed: { opacity: 0.85 },

@@ -10,6 +10,8 @@ import { EmptyState } from '@/components/EmptyState';
 import { EduLinkRows } from '@/components/edu/EduLinkRows';
 import { useEduLinksOn } from '@/components/edu/LinkFormStore';
 import { SpaceQuestionRows } from '@/components/place/SpaceQuestionRows';
+import { CountBadge } from '@/components/place/CountBadge';
+import { spaceTeachPlan } from '@/lib/place/screenPlans';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { fetchEduLinks, fetchEntries, fetchUnknownQueue, subscribeUnknownQueue, type EduLinkRow } from '@/lib/db';
 import { subscribeDebounced } from '@/lib/store/realtimeSync';
@@ -18,11 +20,13 @@ import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import type { UnknownQuery } from '@/types';
 
 /**
- * S05 공간 교육 탭(주인) — 교육 링크 칸(+ 새 교육 링크 → S10 · 링크 줄 → S11) + "답할 질문" 목록(대기 중 · 오래 기다린 것부터 · 줄 → S09).
+ * S05 공간 교육 탭(주인) — "답할 질문" 목록(배지 · 대기 중 · 오래 기다린 것부터 · 줄 → S09)이 위,
+ *   그 아래 교육 링크 카드(카드 맨 위 노란 [새 교육 링크] → S10 · 링크 줄 → S11 · 화면조립표 2026-11-17 10절 1번).
  * 교육 링크 칸은 공간 교육 링크 스위치(eduLinksOpenOf(features,'space') · 매장과 같은 판정)가 켜졌을 때만 그린다(2026-11-16 R-4).
  * 답할 질문이 없으면 빈 상태 + 다음 행동 버튼 하나(노하우 0개 = 노하우 쓰기 · 링크 0개 = 교육 링크 만들기 · 둘 다 있으면 버튼 없음).
+ *   링크 카드가 있으면(노란 버튼이 이미 있으면) 빈 상태 버튼은 보조 모양이다. 판정 = spaceTeachPlan.
  *   처음 순서 안내(3단계)는 2026-11-17 홈 시작 카드 한 곳으로 옮겼다(화면조립표 7절 · 묶음 J-2).
- *   링크가 아직 없으면 링크 칸을 따로 그리지 않는다(빈 상태의 "교육 링크 만들기"와 같은 버튼이 둘 생긴다).
+ *   링크가 아직 없으면 링크 칸을 그리지 않는다(버튼만 든 카드가 되고 빈 상태의 "교육 링크 만들기"와 겹친다).
  * 읽기 = fetchUnknownQueue · fetchEntries · fetchEduLinks(공간 번호). 매장 질문 스토어(useUnknownQueueStore)를 안 쓴다(매장 큐·앱 푸시와 섞이지 않게).
  * 탭에 돌아올 때마다 다시 읽는다(답한 질문이 바로 빠지고 만든 링크가 바로 보이게).
  * ★night-1111 g5: 새 질문·다른 기기에서 답한 질문도 실시간으로 맞춘다(subscribeUnknownQueue(공간 번호) · 300ms 묶음).
@@ -88,37 +92,43 @@ export default function SpaceTeach() {
     );
   }
 
-  const hasLinks = linksOn && links.length > 0;
-  // 빈 상태의 다음 행동(홈 시작 카드와 같은 순서). 둘 다 했으면 할 일이 없으니 버튼 없이 문구만.
-  const next = knowhowCount === 0 ? { label: SPACE_KNOWHOW.guideWrite, onPress: write } : linksOn && links.length === 0 ? { label: SPACE_KNOWHOW.guideLink, onPress: newLink } : undefined;
+  // 링크 카드·빈 상태 버튼의 판정 = spaceTeachPlan 한 곳(홈 시작 카드와 같은 순서).
+  const plan = spaceTeachPlan({ knowhow: knowhowCount, links: links.length, linksOn });
+  const next =
+    plan.emptyNext === 'write' ? { label: SPACE_KNOWHOW.guideWrite, onPress: write }
+    : plan.emptyNext === 'link' ? { label: SPACE_KNOWHOW.guideLink, onPress: newLink }
+    : undefined;
 
+  // 위에서 아래(10절 1번): 답할 질문(배지) → 교육 링크 카드(맨 위 노란 [새 교육 링크]).
   return (
     <Screen header={header} tabBar="space">
       <Stack.Screen options={{ headerShown: false }} />
-      {/* [새 교육 링크] = 매장 교육 링크 목록과 같은 노란 주 버튼(2026-11-16 R-10). */}
-      {hasLinks ? (
-        <Pressable
-          onPress={newLink}
-          accessibilityRole="button"
-          accessibilityLabel={STORE_LINK_LIST.newLink}
-          style={({ pressed }) => [styles.newLink, pressed && styles.pressed]}
-        >
-          <Text style={styles.newLinkText}>{STORE_LINK_LIST.newLink}</Text>
-        </Pressable>
-      ) : null}
-      {hasLinks ? (
-        <Section title={SPACE_KNOWHOW.linksTitle}>
-          <EduLinkRows links={links} onOpen={openLink} />
-        </Section>
-      ) : null}
-
       {questions.length === 0 ? (
-        <EmptyState title={SPACE_KNOWHOW.queueEmptyTitle} body={SPACE_KNOWHOW.queueEmptyBody} cta={next} />
+        <EmptyState title={SPACE_KNOWHOW.queueEmptyTitle} body={SPACE_KNOWHOW.queueEmptyBody} cta={next} ctaTone={plan.emptyTone} />
       ) : (
-        <Section title={`${SPACE_KNOWHOW.queueTitle} ${questions.length}`}>
+        <Section title={SPACE_KNOWHOW.queueTitle} titleAccessory={<CountBadge count={questions.length} label={SPACE_KNOWHOW.queueTitle} />}>
           <SpaceQuestionRows questions={questions} onOpen={(q) => router.push({ pathname: '/space/answer/[qid]', params: { qid: q.id } })} />
         </Section>
       )}
+
+      {plan.linkCard ? (
+        <Section title={SPACE_KNOWHOW.linksTitle}>
+          <EduLinkRows
+            links={links}
+            onOpen={openLink}
+            top={
+              <Pressable
+                onPress={newLink}
+                accessibilityRole="button"
+                accessibilityLabel={STORE_LINK_LIST.newLink}
+                style={({ pressed }) => [styles.newLink, pressed && styles.pressed]}
+              >
+                <Text style={styles.newLinkText}>{STORE_LINK_LIST.newLink}</Text>
+              </Pressable>
+            }
+          />
+        </Section>
+      ) : null}
     </Screen>
   );
 }

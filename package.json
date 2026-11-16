@@ -79,6 +79,7 @@
     "qa:space-isolation:local": "node scripts/qa-space-isolation.mjs --local",
     "qa:space-categories:local": "node scripts/qa-space-categories.mjs --local",
     "qa:space-home-stage": "node scripts/qa-space-home-stage.mjs",
+    "qa:space-screen-plans": "node scripts/qa-space-screen-plans.mjs",
     "qa:session-load": "node scripts/qa-session-load.mjs --allow-remote",
     "qa:split": "node scripts/qa-knowhow-split.mjs",
     "qa:knowhow-accuracy": "node scripts/qa-knowhow-accuracy.mjs --allow-remote",

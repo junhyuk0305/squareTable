@@ -94,7 +94,8 @@ export const SPACE_SCREEN = {
   // 계정 층 입구(stores.tsx)
   entryTitle: '내 공간',
   entryCreate: '공간 만들기',
-  entryCreateHint: '내 노하우를 모아 신입에게 알려 줄 곳',
+  // 공간이 없을 때 빈 상태(화면조립표 2026-11-17 1차 추천대로 · 설명 = startLead)
+  entryEmptyTitle: '아직 공간이 없어요',
   entryEnterHint: '눌러서 들어가기',
   entryOpening: '공간에 들어가고 있어요…',
   // S02 만들기 단계
@@ -128,6 +129,8 @@ export const SPACE_SCREEN = {
   settingsBack: '매장으로 돌아가기',
   settingsBackHint: '공간에서 나와 내 매장 목록으로 가요',
   moreUseTitle: '더 쓰기',
+  /** 안내 한 장을 닫는 버튼(버튼 이름에 "확인"을 쓰지 않는다 · 2026-11-17). */
+  noticeClose: '닫기',
   // S02 첫 5분(/space/first) · 묻기 결과 문구는 SPACE_WORDS(practiceNotFound·practiceKeep)
   firstTitle: '시작하기',
   firstStepWrite: '노하우 3개 써 보기',
@@ -137,8 +140,6 @@ export const SPACE_SCREEN = {
   firstWriteLead: '신입이 자주 묻는 일을 노하우로 남겨 보세요.',
   firstWriteCount: (n: number) => `지금 ${n}개 / 3개`,
   firstWriteDo: '노하우 쓰기',
-  firstSkip: '건너뛰기',
-  firstNext: '다음',
   firstAskLead: '신입처럼 물어보세요. 내 노하우로 AI가 답해요.',
   firstAskNote: '연습 질문은 저장하지 않아요.',
   firstAskSend: '질문 보내기',
@@ -179,9 +180,6 @@ export const SPACE_KNOWHOW = {
   backToList: '노하우 목록으로',
   // S08 상세
   detailTitle: '노하우',
-  situation: '상황',
-  steps: '할 일',
-  dont: '하지 말 것',
   edit: '고치기',
   remove: '지우기',
   removeTitle: '노하우 지우기',
@@ -304,7 +302,8 @@ export const SPACE_MEMBERS = {
   removeBody: (name: string) => `${name}님을 내보내요. 다시 들어오려면 내 승인이 필요해요.`,
   removed: '내보냈어요.',
   // S06 설정 · 합류 신청
-  requestsTitle: (n: number) => `합류 신청 ${n}명`,
+  /** 묶음 제목. 건수는 옆 배지에 한 번만 적는다(2026-11-17). */
+  requestsTitle: '합류 신청',
   approve: '승인',
   reject: '거절',
   approved: (name: string) => `${name}님이 멤버가 됐어요.`,
@@ -465,8 +464,9 @@ export const CONNECT = {
   rowHint: '내 노하우를 일하는 매장 사장님께 보내요',
   sendToStore: '매장에 보내기',
   // S12
-  pickStore: '어느 매장에 보낼까요?',
-  pickEntries: '보낼 노하우를 골라 주세요',
+  // 묶음 제목 = 명사형(2026-11-17 1차 추천대로)
+  pickStore: '보낼 매장',
+  pickEntries: '보낼 노하우',
   pickedCount: (n: number) => `${n}개 고름`,
   pickMax: '한 번에 50개까지 고를 수 있어요.',
   noEntriesTitle: '보낼 노하우가 없어요',

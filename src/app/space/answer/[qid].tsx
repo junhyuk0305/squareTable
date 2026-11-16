@@ -1,10 +1,9 @@
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 
 import { KeyboardShift } from '@/components/KeyboardShift';
-import { Screen } from '@/components/Screen';
+import { Screen, Section } from '@/components/Screen';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -19,7 +18,6 @@ import { SPACE_KNOWHOW, SPACE_WORDS } from '@/lib/place/words';
 import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { CardStyles } from '@/lib/theme/card';
 import { ButtonStyles, ButtonTextStyles, TouchSize } from '@/lib/theme/button';
-import { ChipStyles } from '@/lib/theme/chip';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
@@ -34,7 +32,8 @@ const BODY_MAX = 2000;
  *  · [보내기](Primary) = reply_unknown_query(0378): 질문한 사람에게만 가는 답 글 한 번 · 못 고침 · 노하우·AI 검색에 안 쓴다.
  *    알림은 서버가 보낸다(앱 푸시 notifyUserQuestionAnswered 를 쓰지 않는다).
  *  · [노하우로 남기기](보조) = 쓰기 화면(S07 ?uqId=&seed=)으로 → 정리 → 겹침 확인 → save_unknown_answer(0379).
- *  · 칩 "있는 노하우로 답하기" = 공간 노하우 하나를 골라 resolveUnknown(매장과 같은 있는 노하우 길).
+ *  · [있는 노하우로 답하기](보조) = 공간 노하우 하나를 골라 resolveUnknown(매장과 같은 있는 노하우 길).
+ *  버튼 셋은 맨 아래 카드 하나에 모은다(2026-11-17 1차 추천대로). 입력 위 라벨 = "직접 답변".
  * 끝나면 답할 질문(S05)으로 돌아간다. 이미 답한 질문(다른 기기)이면 그 사실만 말하고 돌려보낸다.
  */
 export default function SpaceAnswer() {
@@ -153,38 +152,33 @@ export default function SpaceAnswer() {
     <KeyboardShift>
     <Screen header={header}>
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.card}>
-        <Text style={styles.label}>{SPACE_KNOWHOW.asked}</Text>
-        <Text style={styles.question}>{question.query_text}</Text>
-        <Text style={styles.meta}>
-          {[question.junior_name || SPACE_WORDS.guest, formatRelative(question.asked_at)].join(', ')}
-        </Text>
-        <Pressable
-          onPress={() => setPicking(true)}
-          disabled={busy}
-          accessibilityRole="button"
-          accessibilityLabel={SPACE_WORDS.answerPick}
-          style={({ pressed }) => [styles.chipHit, pressed && styles.pressed]}
-        >
-          <View style={styles.chip}>
-            <Ionicons name="albums-outline" size={Type.desc.fontSize} color={InkColors.ink2} />
-            <Text style={styles.chipText}>{SPACE_WORDS.answerPick}</Text>
-          </View>
-        </Pressable>
-      </View>
+      {/* 폼 꼴(화면조립표 3-4 · 1차 추천대로): 묶음 제목은 카드 밖 · 입력 위 라벨 "직접 답변" · 버튼은 맨 아래 카드 하나. */}
+      <Section title={SPACE_KNOWHOW.asked}>
+        <View style={styles.card}>
+          <Text style={styles.question}>{question.query_text}</Text>
+          <Text style={styles.meta}>
+            {[question.junior_name || SPACE_WORDS.guest, formatRelative(question.asked_at)].join(', ')}
+          </Text>
+        </View>
+      </Section>
+
+      <Section title={SPACE_WORDS.statDirect}>
+        <View style={styles.card}>
+          <TextInput
+            value={body}
+            onChangeText={setBody}
+            editable={!busy}
+            multiline
+            maxLength={BODY_MAX}
+            placeholder={SPACE_KNOWHOW.answerPlaceholder}
+            placeholderTextColor={TextColor.placeholder}
+            style={styles.input}
+            accessibilityLabel={SPACE_WORDS.statDirect}
+          />
+        </View>
+      </Section>
 
       <View style={styles.card}>
-        <TextInput
-          value={body}
-          onChangeText={setBody}
-          editable={!busy}
-          multiline
-          maxLength={BODY_MAX}
-          placeholder={SPACE_KNOWHOW.answerPlaceholder}
-          placeholderTextColor={TextColor.placeholder}
-          style={styles.input}
-          accessibilityLabel={SPACE_KNOWHOW.answerPlaceholder}
-        />
         <Text style={styles.meta}>{SPACE_KNOWHOW.answerOnce}</Text>
         <Pressable
           onPress={() => void send()}
@@ -194,20 +188,31 @@ export default function SpaceAnswer() {
           style={({ pressed }) => [styles.primary, pressed && styles.pressed, !canSend && styles.disabled]}
         >
           {busy ? (
-            <ActivityIndicator color={InkColors.bubbleText} />
+            <ActivityIndicator color={InkColors.ink} />
           ) : (
             <Text style={styles.primaryText}>{SPACE_WORDS.answerSend}</Text>
           )}
         </Pressable>
-        <Pressable
-          onPress={keep}
-          disabled={busy}
-          accessibilityRole="button"
-          accessibilityLabel={SPACE_WORDS.answerKeep}
-          style={({ pressed }) => [styles.secondary, pressed && styles.pressed, busy && styles.disabled]}
-        >
-          <Text style={styles.secondaryText}>{SPACE_WORDS.answerKeep}</Text>
-        </Pressable>
+        <View style={styles.pair}>
+          <Pressable
+            onPress={keep}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel={SPACE_WORDS.answerKeep}
+            style={({ pressed }) => [styles.secondary, pressed && styles.pressed, busy && styles.disabled]}
+          >
+            <Text style={styles.secondaryText}>{SPACE_WORDS.answerKeep}</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setPicking(true)}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel={SPACE_WORDS.answerPick}
+            style={({ pressed }) => [styles.secondary, pressed && styles.pressed, busy && styles.disabled]}
+          >
+            <Text style={styles.secondaryText}>{SPACE_WORDS.answerPick}</Text>
+          </Pressable>
+        </View>
       </View>
 
       {picking && (
@@ -242,12 +247,8 @@ export default function SpaceAnswer() {
 
 const styles = StyleSheet.create({
   card: { ...CardStyles.list, gap: Space.sm },
-  label: { ...Type.desc, fontWeight: '700' },
   question: { ...Type.body, fontWeight: '700' },
   meta: { ...Type.desc },
-  chipHit: { minHeight: TouchSize.inline, justifyContent: 'center', alignSelf: 'flex-start' },
-  chip: { ...ChipStyles.chip, flexDirection: 'row', alignItems: 'center', gap: Space.xs },
-  chipText: { ...ChipStyles.text },
   input: {
     ...Type.body,
     minHeight: TouchSize.inline * 3,
@@ -259,10 +260,12 @@ const styles = StyleSheet.create({
     paddingVertical: Space.md,
     backgroundColor: Surface.input,
   },
-  primary: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
-  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
-  secondary: { ...ButtonStyles.primary, borderWidth: 1, borderColor: InkColors.lineStrong, backgroundColor: Surface.card },
-  secondaryText: { ...ButtonTextStyles.primary, color: InkColors.ink },
+  // 주 버튼 = 노랑(10절 7번) · 보조 둘 = 알약(1차 추천대로). 좁은 폭·큰 글자에서는 둘이 아래로 감긴다.
+  primary: ButtonStyles.primaryYellow,
+  primaryText: ButtonTextStyles.primaryOnYellow,
+  pair: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
+  secondary: { ...ButtonStyles.secondary, flexGrow: 1 },
+  secondaryText: ButtonTextStyles.secondary,
   pressed: { opacity: 0.88 },
   disabled: { opacity: 0.5 },
   sheet: { maxHeight: '80%' },

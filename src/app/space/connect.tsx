@@ -27,7 +27,7 @@ const MAX_PICK = 50;
 
 /**
  * S12 매장과 연결하기(공간 주인 · 결정 128·130·143·192~194 · night-1111 g5).
- *  ① 어느 매장에 보낼까요? = 내가 직원·매니저인 매장(세션 매장 목록 · 사장 매장은 서버가 거절한다). 하나면 골라 둔다.
+ *  ① 보낼 매장 = 내가 직원·매니저인 매장(세션 매장 목록 · 사장 매장은 서버가 거절한다). 하나면 골라 둔다.
  *     없으면 안내 + [초대코드 넣기] → 직원 허브 코드 칸.
  *  ② 보낼 노하우 = 발행된 공간 노하우 체크(50개까지 · ?entry= 로 오면 그 노하우를 골라 둔다).
  *  [사장님께 보내기] → propose_to_store(0580 판정 · 사장 알림은 서버가 보낸다) → 토스트 → S04.
@@ -192,6 +192,7 @@ const styles = StyleSheet.create({
   rowTitle: { ...Type.body, fontWeight: '700', flex: 1 },
   pressed: { opacity: 0.7 },
   off: { opacity: 0.4 },
-  primary: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
-  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  // 주 버튼 = 노랑(화면조립표 2026-11-17 10절 7번).
+  primary: ButtonStyles.primaryYellow,
+  primaryText: ButtonTextStyles.primaryOnYellow,
 });

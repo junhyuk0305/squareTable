@@ -6,6 +6,7 @@ import { Screen, Section } from '@/components/Screen';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { SettingsSection, SettingsRow } from '@/components/settings/SettingsKit';
 import { InviteBlock } from '@/components/owner/InviteBlock';
+import { CountBadge } from '@/components/place/CountBadge';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
 import {
@@ -26,12 +27,12 @@ import { SPACE_MEMBERS, SPACE_SCREEN, SPACE_WORDS } from '@/lib/place/words';
 import { BrandColors, InkColors, TextColor } from '@/lib/theme/colors';
 import { CardStyles } from '@/lib/theme/card';
 import { Radius } from '@/lib/theme/elevation';
-import { TouchSize, hitTrim } from '@/lib/theme/button';
+import { ButtonStyles, ButtonTextStyles, TouchSize, hitTrim } from '@/lib/theme/button';
 import { Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 
 /**
- * S06 공간 설정(주인) — 공간 이름 · 초대코드 · 합류 신청(승인·거절) · 멤버(내보내기) · AI 사용량 · 더 쓰기 · 매장으로 돌아가기 · 공간 지우기.
+ * S06 공간 설정(주인) — 합류 신청(배지 · 승인·거절) · 공간 이름 · 초대코드(노란 [초대 문구 복사] · 11절 1번) · 멤버(내보내기) · AI 사용량 · 더 쓰기 · 매장으로 돌아가기 · 공간 지우기(위험 버튼).
  * 더 쓰기 = v1 결제 없음. 누른 수만 센다(space_more_use_tapped) → 안내 한 장.
  * 합류 신청·멤버는 0460 함수(주인만)를 공간 번호로 부른다. 확인 단계 = confirmAction 한 번 · 되돌리기 없음.
  * ?member=<요청한 사람> = N7 알림 착지(0460 url) → 그 신청 줄을 강조한다. ?space= 는 공간 _layout 이 먼저 들어가는 데 쓴다.
@@ -138,7 +139,7 @@ export default function SpaceSettings() {
     const used = quota?.used ?? 0;
     const cap = quota?.cap ?? 0;
     track('space_more_use_tapped', { used, cap, used_pct: cap > 0 ? Math.round((used / cap) * 100) : 0 });
-    void notifyAction(SPACE_SCREEN.moreUseTitle, SPACE_WORDS.moreUseSoon, '확인', { icon: 'sparkles-outline' });
+    void notifyAction(SPACE_SCREEN.moreUseTitle, SPACE_WORDS.moreUseSoon, SPACE_SCREEN.noticeClose, { icon: 'sparkles-outline' });
   };
 
   const backToStores = () => {
@@ -149,20 +150,16 @@ export default function SpaceSettings() {
   return (
     <Screen header={<ScreenTitleHeader variant="tab" title={SPACE_SCREEN.tabSettings} line={spaceName} />} tabBar="space">
       <Stack.Screen options={{ headerShown: false }} />
-      <SettingsSection>
-        <SettingsRow first icon="library-outline" label={SPACE_SCREEN.settingsName} value={spaceName} />
-      </SettingsSection>
-      {/* 초대 = 매장 초대와 같은 카드(R-12). 코드가 없으면(주인 아님) 카드를 그리지 않는다. */}
-      {inviteCode ? <InviteBlock place="space" code={inviteCode} from="space_settings" /> : null}
-
+      {/* 처리할 것이 맨 위(화면조립표 2026-11-17 1차 추천대로). 건수는 제목 옆 배지에 한 번. 신청이 없으면 묶음을 그리지 않는다. */}
       {requests.length > 0 ? (
-        <Section title={SPACE_MEMBERS.requestsTitle(requests.length)}>
+        <Section title={SPACE_MEMBERS.requestsTitle} titleAccessory={<CountBadge count={requests.length} label={SPACE_MEMBERS.requestsTitle} />}>
           <View style={styles.card}>
             {requests.map((r, i) => (
               <View key={r.requestId} style={[styles.row, i > 0 && styles.rowLine, r.userId === focusMember && styles.focus]}>
                 <Text style={styles.name} numberOfLines={1}>
                   {r.name}
                 </Text>
+                {/* 줄 안 승인 = 작은 검정 알약 · 거절 = 연한 빨강 알약(10절 2번). */}
                 <Pressable
                   onPress={() => void decide(r, false)}
                   disabled={busy}
@@ -170,8 +167,8 @@ export default function SpaceSettings() {
                   accessibilityLabel={`${r.name} ${SPACE_MEMBERS.reject}`}
                   style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
                 >
-                  <View style={styles.ghostBtn}>
-                    <Text style={styles.ghostText}>{SPACE_MEMBERS.reject}</Text>
+                  <View style={styles.dangerBtn}>
+                    <Text style={styles.dangerText}>{SPACE_MEMBERS.reject}</Text>
                   </View>
                 </Pressable>
                 <Pressable
@@ -190,6 +187,12 @@ export default function SpaceSettings() {
           </View>
         </Section>
       ) : null}
+
+      <SettingsSection>
+        <SettingsRow first icon="library-outline" label={SPACE_SCREEN.settingsName} value={spaceName} />
+      </SettingsSection>
+      {/* 초대 = 매장 초대와 같은 카드(R-12). 코드가 없으면(주인 아님) 카드를 그리지 않는다. */}
+      {inviteCode ? <InviteBlock place="space" code={inviteCode} from="space_settings" /> : null}
 
       {membersFailed && !members ? (
         <View style={styles.failCard}>
@@ -213,7 +216,7 @@ export default function SpaceSettings() {
                     accessibilityLabel={`${m.name} ${SPACE_MEMBERS.remove}`}
                     style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
                   >
-                    <View style={styles.ghostBtn}>
+                    <View style={styles.dangerBtn}>
                       <Text style={styles.dangerText}>{SPACE_MEMBERS.remove}</Text>
                     </View>
                   </Pressable>
@@ -251,16 +254,19 @@ export default function SpaceSettings() {
           onPress={backToStores}
         />
       </SettingsSection>
-      <SettingsSection>
-        <SettingsRow
-          first
-          danger
-          icon="trash-outline"
-          label={SPACE_MEMBERS.deleteRow}
-          hint={SPACE_MEMBERS.deleteHint}
+      {/* 공간 지우기 = 위험 버튼 모양(1차 추천대로 · 직원 설정의 "매장 나가기"와 같은 꼴). 설명과 같은 카드 안. */}
+      <View style={styles.deleteCard}>
+        <Text style={styles.deleteHint}>{SPACE_MEMBERS.deleteHint}</Text>
+        <Pressable
           onPress={() => void removeSpace()}
-        />
-      </SettingsSection>
+          disabled={busy}
+          accessibilityRole="button"
+          accessibilityLabel={SPACE_MEMBERS.deleteRow}
+          style={({ pressed }) => [styles.deleteBtn, pressed && styles.pressed]}
+        >
+          <Text style={ButtonTextStyles.danger}>{SPACE_MEMBERS.deleteRow}</Text>
+        </Pressable>
+      </View>
     </Screen>
   );
 }
@@ -275,17 +281,16 @@ const styles = StyleSheet.create({
   tag: { ...Type.desc, color: TextColor.secondary },
   hit: { minWidth: TouchSize.inline, minHeight: TouchSize.inline, alignItems: 'center', justifyContent: 'center', marginVertical: hitTrim(TouchSize.inlineFace) },
   pressed: { opacity: 0.7 },
-  ghostBtn: {
+  // 거절·내보내기 = 연한 빨강 알약(10절 2번 · ButtonStyles.danger 의 색 · 줄 안 높이 32).
+  dangerBtn: {
     minHeight: TouchSize.inlineFace,
     paddingHorizontal: Space.md,
     borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: InkColors.lineStrong,
+    backgroundColor: BrandColors.badSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ghostText: { ...Type.desc, fontWeight: '800', color: InkColors.ink },
-  dangerText: { ...Type.desc, fontWeight: '800', color: BrandColors.accentText },
+  dangerText: { ...Type.desc, fontWeight: '800', color: BrandColors.badText },
   solidBtn: {
     minHeight: TouchSize.inlineFace,
     paddingHorizontal: Space.md,
@@ -297,4 +302,7 @@ const styles = StyleSheet.create({
   solidText: { ...Type.desc, fontWeight: '800', color: InkColors.bg },
   failCard: { ...CardStyles.list },
   fail: { ...Type.desc, color: TextColor.secondary },
+  deleteCard: { ...CardStyles.list, gap: Space.md },
+  deleteHint: { ...Type.desc },
+  deleteBtn: { ...ButtonStyles.danger, alignSelf: 'stretch' },
 });
