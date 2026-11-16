@@ -81,8 +81,15 @@ try {
   if (promoErr) throw new Error('set_member_role: ' + promoErr.message);
 
   // ── 방 셋업 ───────────────────────────────────────────────
-  // 기본방: create_store 는 안 만든다(클라 useRoomStore.hydrate 가 사장 첫 진입 때 만든다).
-  //         그래서 여기서 **그 클라 경로와 같은 id 규칙**으로 심는다.
+  // 기본방: ★0720 부터 매장이 생길 때 서버가 만든다(사장이 앱을 안 연 채 직원이 합류해도 방이 있다 · 11-16 결정 U-3).
+  {
+    const { data: def } = await admin.from('work_rooms').select('id, is_default').eq('unit_id', UNIT).eq('is_default', true);
+    const okDef = (def ?? []).length === 1 && def[0].id === `room_main_${UNIT}`;
+    M('★매장을 만들면 서버가 전체방을 만든다(0720)', '사장', `room_main_${UNIT} 1개`, okDef, (def ?? []).map((r) => r.id).join(',') || '없음');
+  }
+  // 아래 정책 검사(0373 · 0383)는 "전체방이 아직 없는 매장"이 전제다. 서버가 만든 전체방을 잠시 지우고 잰다.
+  //   옛 매장(0720 이전 · 백필 전)이나 옛 앱 첫 진입 경로가 이 모양이다. 마지막에 사장 세션 경로로 다시 만든다.
+  await admin.from('work_rooms').delete().eq('id', `room_main_${UNIT}`);
   //   ★0373: 전체방이 아직 없을 때 다른 번호로 첫 전체방을 넣는 것. 색인은 이걸 못 막고 정책(wr_insert)만 막는다.
   {
     const FAKE0 = `wr_p5_fakefirst_${s}`;

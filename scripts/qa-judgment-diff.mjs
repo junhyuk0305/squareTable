@@ -138,7 +138,7 @@ for (const kind of ['cover', 'swap']) for (const single of [null, 'ME', 'O']) fo
   s1(`격자 ${kind}·단수=${single ?? 'null'}·ids=${lk}`, swap({ kind, target_staff_id: single, target_staff_ids: lv }), 'ME');
 }
 note('S1-수신자', 'S1-5 서버', 'accept_swap(0179) 는 coalesce(ids,…)=\'{}\' → any(\'{}\') 거짓으로 거부한다고 A1 은 읽었다. 클라 둘은 빈 배열을 null(누구나)로 본다. ids=[] 가 실제 저장되는지가 전제(SQL 이라 여기선 못 잰다).');
-// 매니저 벨(managerPersonalRows targetedToMe) vs canAcceptSwap
+// 매니저 벨(managerPersonalRows · 11-16 전엔 지목된 것만 남겼다) vs canAcceptSwap
 const managerSwapRows = (r, me) => N.buildManagerNotifications(
   { queue: [], suggestions: [], swaps: [r], pending: [], nameOf, feed: [], userId: me, ackAt: null, claims: [], alerts: [], assignments: [], timeRequests: [] },
   { feed: [], taskTemplates: [], done: {}, today: TODAY, suggestions: [], userId: me, nameOf, ackAt: null, scheduleNotices: [] },
@@ -275,6 +275,18 @@ const sPair = (name, list, me) => compare('S9-제안대기', name, () => ({ a: d
 sPair('사장이 올린 pending', [sg({ proposer_id: 'OWN' })], 'OWN');
 sPair('직원이 올린 pending', [sg({})], 'OWN');
 sPair('반영됨', [sg({ status: 'approved' })], 'OWN');
+// 매니저 벨(buildManagerNotifications 'suggestion') vs 노하우 탭 할 일(isTodoSuggestion = isPendingSuggestionToReview)
+//   ★11-16 결정(U-5): 공간에서 온 노하우는 매니저가 처리한다(서버 approve_space_proposal · review_suggestion = auth_can_manage).
+//   처리하는 사람의 벨에 보여야 한다. 직원 제안(new · improve)은 사장 전용이라 매니저 벨엔 없는 게 맞다(B 도 그렇게 기대한다).
+const mgrSugRows = (s, me) => N.buildManagerNotifications(
+  { queue: [], suggestions: [s], swaps: [], pending: [], nameOf, feed: [], userId: me, ackAt: null, claims: [], alerts: [], assignments: [], timeRequests: [] },
+  { feed: [], taskTemplates: [], done: {}, today: TODAY, suggestions: [], userId: me, nameOf, ackAt: null, scheduleNotices: [] },
+).filter((x) => x.kind === 'suggestion').length;
+const mPair = (name, s, me) => compare('S9-매니저벨', name, () => ({ a: mgrSugRows(s, me), b: s.kind === 'from_space' && N.isPendingSuggestionToReview(s, me) ? 1 : 0 }));
+mPair('내가 보낸 공간 노하우', sg({ kind: 'from_space', proposer_id: 'MGR' }), 'MGR');
+mPair('동료 매니저가 보낸 공간 노하우', sg({ kind: 'from_space', proposer_id: 'MGR2' }), 'MGR');
+mPair('직원 새 노하우 제안(사장 전용)', sg({ kind: 'new', proposer_id: 'J' }), 'MGR');
+mPair('처리 끝난 공간 노하우', sg({ kind: 'from_space', proposer_id: 'MGR2', status: 'rejected' }), 'MGR');
 // 요금제: effectivePlanOf(쓸 수 있는 요금제) vs deriveSubscription(entitled) — 원시 plan 을 넘기는 경우
 const NOW = Date.parse('2026-11-03T00:00:00Z');
 // A = 세션 경로(effectivePlanOf 로 강등한 plan 을 deriveSubscription 에 · 호출부 billing.tsx 가 실제로 쓰는 길).

@@ -561,6 +561,73 @@ def('H4A', 'review_suggestion 두 관리자 동시 승인 · 승인과 반려 �
   check('H4A', '직원 = not_manager', r5.status !== 0 && /not_manager/.test(r5.stderr), (r5.stderr || '').trim().slice(0, 80));
 });
 
+// ★11-16 결정: 동시 승인에서 진 쪽(매니저 포함)이 방금 만든 사본은 남지 않는다. 진 쪽 화면(coach)은 "노하우 저장 → 승인" 순서다.
+//   진 순서를 확정하려고 이긴 쪽 승인을 먼저 끝내고, 진 쪽이 자기 세션으로 사본을 넣은 뒤 승인한다(경합 결과와 같은 상태).
+//   남의 노하우·내 옛 노하우·고치기 제안의 대상 노하우는 지우면 안 된다(대조 3건).
+def('H4B', '동시 승인에서 진 쪽 사본 정리(매니저 · 사장) · 남의 노하우는 안 지움', async (W) => {
+  const { w, M } = await managerWorld(W, 2);
+  const [P] = w.staff;
+  const seed = (id, kind = 'new', target = null) => R.val(`insert into public.playbook_suggestions(id, unit_id, kind, target_entry_id, proposer_id, proposer_name, text, status)
+    values (${q(id)}, ${q(w.unit)}, ${q(kind)}, ${target ? q(target) : 'null'}, ${q(P.id)}, 'RC', 'RC 제안', 'pending'); select 1;`);
+  const put = async (who, id) => {
+    const r = await who.c.from('playbook_entries').insert({ id, unit_id: w.unit, category: 'Routine', title: `RC ${id}`, status: 'published' });
+    if (r.error) throw new Error(`entry ${id}: ${r.error.message}`);
+  };
+  const review = async (who, sug, entry) => {
+    const r = await who.c.rpc('review_suggestion', { p_id: sug, p_status: 'approved', p_resulting_entry_id: entry });
+    if (r.error) throw new Error(`review ${sug}: ${r.error.message}`);
+    return r.data;
+  };
+  const live = (id) => R.val(`select (archived_at is null)::text from public.playbook_entries where id = ${q(id)}`) === 'true';
+  const liveOf = (ids) => ids.filter(live).length;
+
+  // ① 매니저가 진다
+  const s1 = `sug_rcb1_${w.s}`; seed(s1);
+  const eO = `pb_rcb1o_${w.s}`, eM = `pb_rcb1m_${w.s}`;
+  await put(w.owner, eO); await review(w.owner, s1, eO);
+  await put(M, eM); const r1 = await review(M, s1, eM);
+  check('H4B', '매니저가 지면 노하우 1건(자기 사본 정리)', r1?.status === 'already' && liveOf([eO, eM]) === 1 && live(eO), `${JSON.stringify(r1)} · 살아 있는 ${liveOf([eO, eM])}`);
+  check('H4B', '매니저 진 쪽 응답 copyArchived = true', r1?.copyArchived === true, JSON.stringify(r1));
+
+  // ② 사장이 진다(서버가 같은 규칙으로 정리 · 화면은 그대로 보관을 불러도 된다)
+  const s2 = `sug_rcb2_${w.s}`; seed(s2);
+  const fM = `pb_rcb2m_${w.s}`, fO = `pb_rcb2o_${w.s}`;
+  await put(M, fM); await review(M, s2, fM);
+  await put(w.owner, fO); const r2 = await review(w.owner, s2, fO);
+  check('H4B', '사장이 지면 노하우 1건', r2?.status === 'already' && liveOf([fM, fO]) === 1 && live(fM), `${JSON.stringify(r2)} · 살아 있는 ${liveOf([fM, fO])}`);
+
+  // ③ 대조: 매니저가 이미 승인된 제안에 사장이 막 만든 노하우를 넘긴다 → 안 지운다
+  const s3 = `sug_rcb3_${w.s}`; seed(s3);
+  const gO = `pb_rcb3o_${w.s}`, gO2 = `pb_rcb3o2_${w.s}`;
+  await put(w.owner, gO); await review(w.owner, s3, gO);
+  await put(w.owner, gO2);
+  const r3 = await review(M, s3, gO2);
+  check('H4B', '대조: 남(사장)의 노하우를 넘기면 안 지운다', live(gO2) && r3?.copyArchived !== true, `${JSON.stringify(r3)} · 살아 있음 ${live(gO2)}`);
+
+  // ④ 대조: 제안보다 먼저 만든 내 노하우를 넘긴다 → 안 지운다
+  const hM = `pb_rcb4m_${w.s}`;
+  await put(M, hM);
+  R.val(`update public.playbook_entries set inserted_at = now() - interval '2 days' where id = ${q(hM)}; select 1;`);
+  const s4 = `sug_rcb4_${w.s}`; seed(s4);
+  const hO = `pb_rcb4o_${w.s}`;
+  await put(w.owner, hO); await review(w.owner, s4, hO);
+  const r4 = await review(M, s4, hM);
+  check('H4B', '대조: 제안 전에 만든 내 노하우는 안 지운다', live(hM) && r4?.copyArchived !== true, `${JSON.stringify(r4)} · 살아 있음 ${live(hM)}`);
+
+  // ⑤ 대조: 고치기 제안의 대상 노하우(내가 막 만든 것이어도)는 안 지운다
+  const tM = `pb_rcb5t_${w.s}`;
+  await put(M, tM);
+  const s5 = `sug_rcb5_${w.s}`; seed(s5, 'improve', tM);
+  await review(w.owner, s5, tM);
+  const r5 = await review(M, s5, tM);
+  check('H4B', '대조: 고치기 제안 대상(이긴 쪽 노하우)은 안 지운다', live(tM) && r5?.copyArchived !== true, `${JSON.stringify(r5)} · 살아 있음 ${live(tM)}`);
+
+  // ⑥ 앱이 inserted_by · inserted_at 을 바꾸지 못한다(사본 판정의 근거)
+  const u6 = await M.c.from('playbook_entries').update({ inserted_by: M.id, inserted_at: new Date().toISOString() }).eq('id', gO2).select('id');
+  const by6 = R.val(`select coalesce(inserted_by::text, '') from public.playbook_entries where id = ${q(gO2)}`);
+  check('H4B', '앱이 만든 사람 표시를 못 바꾼다', by6 === w.owner.id, `${u6.error?.message ?? 'update ok'} · inserted_by ${by6}`);
+});
+
 def('M1A', 'attendance_check_in 두 기기 동시(0632)', async (W) => {
   const w = await W({ staffN: 1 });
   const [A] = w.staff;
