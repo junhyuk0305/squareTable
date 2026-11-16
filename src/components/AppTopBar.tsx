@@ -11,6 +11,9 @@
 // 벨은 역할에 따라 세는 축이 다르다(사장=합류·질문·제안·교대·입금 / 직원=공지·배정·내 제안 결과).
 // 호출부가 고르게 하면 두 홈이 또 갈라지므로 여기서 role 로 가른다 — 매니저는 사장 축이다.
 //
+// ★공간 홈도 같은 상단바다(2026-11-16 사용자 결정 · 실측 결함 R-1 · 공간 전용 헤더를 따로 만들지 않는다).
+//   place='space' = 전환 칩 오른쪽 칸이 지금 공간 · 벨이 지금 공간 알림(SpaceNotificationBell). 계정 버튼은 같다.
+//
 // ★높이·위 안전 영역(2026-11-02 사용자 결정): 높이 = insets.top + `Layout.headerH`(83) 고정, 내용은 세로 가운데.
 //   탭 루트 헤더(ScreenTitleHeader variant="tab")가 같은 값을 읽어 두 헤더 높이가 구조로 같다.
 //   위 안전 영역(insets.top)은 **이 컴포넌트가 든다** — `<Screen>` 은 edges=[] 이다. 호출부가 SafeAreaView top 을 또 주면 이중이다.
@@ -19,13 +22,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { StoreToggle } from '@/components/StoreToggle';
-import { NotificationBell, OwnerNotificationBell } from '@/components/NotificationBell';
+import { NotificationBell, OwnerNotificationBell, SpaceNotificationBell } from '@/components/NotificationBell';
 import { AccountAvatarButton } from '@/components/AccountAvatarButton';
 import { Appear } from '@/components/Appear';
 import { Surface } from '@/lib/theme/colors';
 import { Layout, SCREEN_GUTTER, Space } from '@/lib/theme/layout';
 
-export function AppTopBar() {
+export function AppTopBar({ place = 'store' }: { place?: 'store' | 'space' } = {}) {
   const insets = useSafeAreaInsets();
   const role = useSessionStore((s) => s.role);
   const ownerAxis = role === 'owner' || role === 'manager';
@@ -35,9 +38,15 @@ export function AppTopBar() {
     // 둘이 동시에 뜨면 화면이 통째로 깜빡인 것처럼 보인다.
     <Appear offsetY={6} duration={340} style={styles.barWrap}>
       <View style={[styles.bar, { paddingTop: insets.top, height: insets.top + Layout.headerH }]}>
-        <StoreToggle />
+        <StoreToggle scope={place} />
         <View style={styles.right}>
-          {ownerAxis ? <OwnerNotificationBell edge={false} /> : <NotificationBell edge={false} />}
+          {place === 'space' ? (
+            <SpaceNotificationBell edge={false} />
+          ) : ownerAxis ? (
+            <OwnerNotificationBell edge={false} />
+          ) : (
+            <NotificationBell edge={false} />
+          )}
           <AccountAvatarButton />
         </View>
       </View>

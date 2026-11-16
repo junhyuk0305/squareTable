@@ -497,6 +497,11 @@
       "fontSize": 2,
       "spacing": 6
     },
+    "src/components/knowhow/KnowhowListParts.tsx": {
+      "hex": 1,
+      "fontSize": 4,
+      "spacing": 16
+    },
     "src/components/KnowhowCarousel.tsx": {
       "spacing": 1
     },
@@ -552,9 +557,8 @@
       "spacing": 1
     },
     "src/components/owner/OwnerKnowhowBrowse.tsx": {
-      "hex": 1,
-      "fontSize": 6,
-      "spacing": 21
+      "fontSize": 2,
+      "spacing": 5
     },
     "src/components/owner/OwnerKnowhowImport.tsx": {
       "fontSize": 6,

@@ -1,9 +1,9 @@
 // 상단 헤더 우측 알림 벨 — 안 읽은 공지 + 나에게 온 교대 요청 수를 배지로.
 // 탭하면 알림 화면(/junior/notifications)으로. 매장명·내 이름은 그 화면 맨 위에서 보여준다.
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
@@ -12,6 +12,9 @@ import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
+import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
+import { buildJoinCrossNotifs } from '@/lib/utils/crossStoreNotifs';
+import { buildSpaceNotifRows, spaceBellCount } from '@/lib/utils/spaceNotifications';
 import { useToday } from '@/lib/hooks/useToday';
 import { accountAckAt, juniorUnreadCount, manageUnreadCount } from '@/lib/utils/notifications';
 import { useLegacyQuizOpen } from '@/lib/hooks/useLegacyQuizOpen';
@@ -98,6 +101,28 @@ export function OwnerNotificationBell({ edge = true }: { edge?: boolean } = {}) 
   const count = useMemo(() => manageUnreadCount(role, ownerArgs, received), [role, ownerArgs, received]);
 
   return <BellButton count={count} onPress={() => router.push('/owner/notifications')} edge={edge} />;
+}
+
+/** 공간 알림 벨(2026-11-16 · R-1) — 공간 홈 상단바. 배지 = 지금 공간의 안 읽은 줄(대기 질문 · 합류 신청 등 · spaceBellCount).
+ *  누르면 계정 층 알림 목록(/notifications)으로 — 공간 줄이 이미 거기 있고, 줄을 누르면 지금 착지 규칙대로 공간 화면으로 간다.
+ *  원천은 계정 층 스토어(useCrossNotifStore · 5초 TTL)라 화면에 올 때마다 한 번 당긴다. 매장 벨 수는 섞지 않는다. */
+export function SpaceNotificationBell({ edge = true }: { edge?: boolean } = {}) {
+  const router = useRouter();
+  const spaceId = useSessionStore((s) => s.spaceId);
+  const spaceRaw = useCrossNotifStore((s) => s.spaceRows);
+  const joinNotices = useCrossNotifStore((s) => s.joinNotices);
+  const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
+  useFocusEffect(
+    useCallback(() => {
+      void useCrossNotifStore.getState().hydrate();
+    }, []),
+  );
+  const count = useMemo(() => {
+    const ack = accountAckAt(ackByUnit);
+    return spaceBellCount(spaceId, buildSpaceNotifRows(spaceRaw, ack), buildJoinCrossNotifs(joinNotices, ack));
+  }, [spaceId, spaceRaw, joinNotices, ackByUnit]);
+
+  return <BellButton count={count} edge={edge} onPress={() => router.push('/notifications')} />;
 }
 
 const styles = StyleSheet.create({

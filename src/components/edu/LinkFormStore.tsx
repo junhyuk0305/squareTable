@@ -17,19 +17,24 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { canManage } from '@/lib/utils/roles';
 import { Layout, Space } from '@/lib/theme/layout';
 
-/** 매장 교육 링크 스위치. null = 아직 모름(꺼짐처럼 그린다). */
-export function useStoreEduLinksOn(): boolean | null {
+/** 교육 링크 스위치(매장 · 공간 같은 판정 eduLinksOpenOf). null = 아직 모름(꺼짐처럼 그린다). 공간 교육 탭도 쓴다(2026-11-16 R-4). */
+export function useEduLinksOn(kind: 'store' | 'space'): boolean | null {
   const uid = useSessionStore((s) => s.userId);
   const [on, setOn] = useState<{ uid: string; on: boolean } | null>(null);
   useEffect(() => {
     if (!uid) return;
     let alive = true;
     void myKindFeatures().then(({ data }) => {
-      if (alive) setOn({ uid, on: data ? eduLinksOpenOf(data, 'store') : false });
+      if (alive) setOn({ uid, on: data ? eduLinksOpenOf(data, kind) : false });
     });
     return () => { alive = false; };
-  }, [uid]);
+  }, [uid, kind]);
   return on && on.uid === uid ? on.on : null;
+}
+
+/** 매장 교육 링크 스위치. */
+export function useStoreEduLinksOn(): boolean | null {
+  return useEduLinksOn('store');
 }
 
 /** 본사 노하우가 있는 매장에만 고르기 아래 안내 한 줄. */

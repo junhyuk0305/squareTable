@@ -13,6 +13,9 @@ import { Space } from '@/lib/theme/layout';
  */
 export const TouchSize = { inlineFace: 32, inline: 44, chip: 40 } as const;
 
+/** 우하단 떠 있는 버튼(노하우 추가 · 2026-08-07 결정) — 지름 56(터치 하한 48 보다 크게) · 안 아이콘 28. 매장·공간 노하우 목록이 같이 쓴다(KnowhowFab). */
+export const FabSize = { face: 56, icon: 28 } as const;
+
 /** 누르는 상자를 키워도 줄 높이는 그대로 두는 위아래 음수 여백. 상자는 자리를 보이는 높이(face)만큼만 차지한다. */
 export const hitTrim = (face: number, hit: number = TouchSize.inline) => (face - hit) / 2;
 

@@ -146,7 +146,11 @@ export const SPACE_KNOWHOW = {
   loadFail: '노하우를 불러오지 못했어요.',
   emptyTitle: '아직 노하우가 없어요',
   emptyBody: '신입이 자주 묻는 일을 하나 남겨 보세요.\n남긴 노하우로 AI가 대신 답해요.',
-  count: (n: number) => `노하우 ${n}개`,
+  // 개수 줄 · 톱니(매장 노하우 목록과 같은 말 · 2026-11-16 R-3)
+  totalCount: (n: number) => `총 ${n}개`,
+  filteredCount: (all: number, n: number) => `${all}개 중 ${n}개`,
+  editCategories: '카테고리 편집',
+  categorySaveFail: '카테고리를 저장하지 못했어요. 다시 눌러 주세요.',
   // S07 쓰기(코치 대화 · OwnerCoachChat space 갈래)
   writeTitle: '노하우 쓰기',
   editTitle: '노하우 고치기',
@@ -176,6 +180,16 @@ export const SPACE_KNOWHOW = {
   queueEmptyTitle: '답할 질문이 없어요',
   queueEmptyBody: '노하우에 없는 질문이 오면 여기에 모여요.\n노하우를 늘려 두면 AI가 먼저 답해요.',
   sameAsked: (n: number) => `${n}명이 물었어요`,
+  // S05 교육 링크 칸 · 처음 순서 안내(2026-11-16 R-4 · 지금 할 단계만 주 버튼)
+  linksTitle: '교육 링크',
+  guideTitle: '처음이면 이 순서로 해 보세요',
+  guideWrite: '노하우 쓰기',
+  guideWriteHint: '신입이 자주 묻는 일을 남겨요',
+  guideLink: '교육 링크 만들기',
+  guideLinkHint: '노하우를 담아 신입에게 보내요',
+  guideAnswer: '질문에 답하기',
+  guideAnswerHint: '노하우에 없는 질문이 여기로 와요',
+  guideDone: '완료',
   // S09 답하기
   answerTitle: '답하기',
   asked: '받은 질문',

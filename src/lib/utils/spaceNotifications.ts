@@ -68,3 +68,13 @@ export function buildSpaceNotifRows(rows: SpaceNotifRow[], ackAt: string | null)
   }
   return out;
 }
+
+/**
+ * 공간 홈 상단바 벨 숫자(2026-11-16 · R-1) — 그 공간 줄 중 안 읽은 것만 센다. 매장 벨 수를 섞지 않는다.
+ * 입력은 계정 층 벨(useCrossNotifRows · /notifications)과 같은 행이다: 공간 줄(buildSpaceNotifRows) + 합류 줄(buildJoinCrossNotifs ·
+ * 그 공간 합류 신청). 읽음 기준도 같다(accountAckAt). 누르면 그 목록(/notifications)으로 가고, 줄을 누른 뒤 착지는 지금 규칙 그대로다.
+ */
+export function spaceBellCount(spaceId: string, spaceRows: { unitId: string; unread: boolean }[], joinRows: { unitId: string; unread: boolean }[]): number {
+  if (!spaceId) return 0;
+  return [...spaceRows, ...joinRows].filter((r) => r.unitId === spaceId && r.unread).length;
+}
