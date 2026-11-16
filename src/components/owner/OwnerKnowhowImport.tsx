@@ -187,6 +187,8 @@ export function OwnerKnowhowImport() {
         screen
         title="복사할 다른 매장이 없어요"
         body="매장이 2개 이상일 때 한 매장의 노하우를 다른 매장으로 복사할 수 있어요."
+        // 다음 행동 = 매장 추가. 추가 판정(이용권·결제 경로)은 매장 탭 한 곳에 있어 그리로 보낸다(복제하지 않는다).
+        cta={{ label: '내 매장으로', onPress: () => router.push('/stores') }}
       />
     );
   }

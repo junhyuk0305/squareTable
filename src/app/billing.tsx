@@ -518,24 +518,6 @@ function BillingBody() {
             </Appear>
           )}
 
-          {/* 구매 화면일 때는 이 카드를 그리지 않는다 — 아래 패널이 같은 자리를 더 정확히 말한다
-              (블록 예산: hero + 잠김 + 패널 = A형 ≤5 안). */}
-          {!selling && (
-            <Appear delay={stagger(1)}>
-            <View style={styles.card}>
-              <Text style={styles.body}>
-                {freeNow
-                  ? `${FREE_PROMO.until}까지는 모든 기능을 무료로 쓰실 수 있어요. 매장 수·직원 수 제한도 없어요.\n지금은 결제하실 것이 없어요.`
-                  : expired
-                    ? isOwner
-                      ? '이 매장의 이용 기간이 끝났어요. 이용 재개는 관리자에게 문의해 주세요.'
-                      : '매장의 이용 기간이 끝났어요. 사장님께 문의해 주세요.'
-                    : '이 매장은 정상적으로 이용 중이에요.'}
-              </Text>
-            </View>
-            </Appear>
-          )}
-
           {/* 스토어 인앱결제 표면(네이티브). 웹 PG 표면(아래 본문)과 채널이 다르므로 판정도 다르다.
               판정은 store-policy 한 곳(showIapSurface) — 빌드 축·서버 스위치·전면 무료를 합친 값이다.
               ★소유 매장 수를 넘겨 기본 선택을 맞춘다 — 이미 아는 것을 다시 묻지 않는다. */}
@@ -551,8 +533,23 @@ function BillingBody() {
               renewsElsewhere={renewsElsewhere}
             />
           )}
-          {/* 새로고침·로그아웃 = 흰 카드 한 장(2026-11-16 R-14). */}
+          {/* 상태 안내·새로고침·로그아웃 = 흰 카드 한 장(2026-11-16 R-14 · 안내 바로 옆에 다음 행동).
+              구매 화면일 때는 안내 문구를 그리지 않는다 — 위 패널이 같은 자리를 더 정확히 말한다
+              (블록 예산: hero + 잠김 + 패널 = A형 ≤5 안). */}
           <View style={styles.card}>
+          {!selling && (
+            <Appear delay={stagger(1)}>
+              <Text style={styles.body}>
+                {freeNow
+                  ? `${FREE_PROMO.until}까지는 모든 기능을 무료로 쓰실 수 있어요. 매장 수·직원 수 제한도 없어요.\n지금은 결제하실 것이 없어요.`
+                  : expired
+                    ? isOwner
+                      ? '이 매장의 이용 기간이 끝났어요. 이용 재개는 관리자에게 문의해 주세요.'
+                      : '매장의 이용 기간이 끝났어요. 사장님께 문의해 주세요.'
+                    : '이 매장은 정상적으로 이용 중이에요.'}
+              </Text>
+            </Appear>
+          )}
           <Appear delay={stagger(4)}>
           <Pressable
             disabled={busy}
