@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { EmptyState } from '@/components/EmptyState';
 import { Appear, stagger } from '@/components/Appear';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { friendlyError } from '@/lib/utils/userError';
@@ -82,13 +83,14 @@ export default function PreviousStores() {
         {!ready ? (
           <ScreenLoading label="이전 매장을 불러오고 있어요…" />
         ) : rows.length === 0 ? (
+          // 빈 상태 = 공용 EmptyState + 다음 행동 버튼(화면조립표 2026-11-17 추천대로). 이동 버튼이라 보조 모양.
           <Appear delay={stagger(0)}>
-            <View style={styles.card}>
-              <Text style={styles.body}>이전 매장이 없어요. 이용권이 끝나 닫힌 매장이 여기에 보관돼요.</Text>
-              <Pressable onPress={() => router.replace('/stores')} accessibilityRole="button" style={({ pressed }) => [styles.ghost, pressed && { opacity: 0.7 }]}>
-                <Text style={styles.ghostText}>매장 목록으로</Text>
-              </Pressable>
-            </View>
+            <EmptyState
+              title="이전 매장이 없어요"
+              body="이용권이 끝나 닫힌 매장이 여기에 보관돼요."
+              cta={{ label: '매장 목록으로', onPress: () => router.replace('/stores') }}
+              ctaTone="secondary"
+            />
           </Appear>
         ) : (
           <>
@@ -151,7 +153,6 @@ const styles = StyleSheet.create({
   icon: { width: 40, height: 40, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
   name: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
   meta: { fontSize: 13, color: TextColor.secondary, marginTop: 2 },
-  body: { ...Type.body, lineHeight: 22, color: TextColor.secondary },
   // 카드 안 보조 버튼 = 주 버튼 모양(52 · 모서리 16) + 회색 면·선.
   ghost: { ...ButtonStyles.primary, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bgSoft },
   ghostText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },

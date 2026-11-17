@@ -7,6 +7,8 @@ import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { ContactModal } from '@/components/ContactModal';
+// 고르는 칩 = 공용 부품(화면조립표 2026-11-17 추천대로 · 파일 안에서 따로 만든 칩을 뺐다).
+import { Chip } from '@/components/owner/quiz/kit';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchReportTargets, submitUserReport, type ReportTargetRow } from '@/lib/db';
@@ -25,7 +27,6 @@ import { SPACE_WORDS } from '@/lib/place/words';
 import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space, screenScrollStyle } from '@/lib/theme/layout';
-import { ChipStyles } from '@/lib/theme/chip';
 import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
@@ -267,20 +268,6 @@ function ReportBody() {
   );
 }
 
-function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.chip, on && styles.chipOn, pressed && { opacity: 0.8 }]}
-      accessibilityRole="button"
-      accessibilityState={{ selected: on }}
-      accessibilityLabel={label}
-    >
-      <Text style={[styles.chipText, on && styles.chipTextOn]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Surface.screen },
   scroll: screenScrollStyle,
@@ -289,10 +276,6 @@ const styles = StyleSheet.create({
   label: { fontSize: 13, lineHeight: 19, fontWeight: '700', color: TextColor.secondary, marginTop: Space.md },
   hint: { ...Type.desc },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
-  chip: { ...ChipStyles.chip, maxWidth: '100%' },
-  chipOn: ChipStyles.chipOn,
-  chipText: ChipStyles.text,
-  chipTextOn: ChipStyles.textOn,
   // 카드 없이 회색 바탕(Surface.screen)에 바로 놓인 칸 — 흰 면 + 진한 선(lineStrong · 2026-11-02 결정).
   input: {
     ...Type.body,

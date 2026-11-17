@@ -198,8 +198,9 @@ const styles = StyleSheet.create({
   doneHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   doneTitle: { ...Type.title },
   body: { ...Type.desc },
-  ghost: { ...ButtonStyles.primary, marginTop: Space.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
-  ghostText: { fontSize: Type.body.fontSize, fontWeight: '700', color: TextColor.secondary },
+  // 보낸 뒤 돌아가기 = 보조 버튼 모양(화면조립표 2026-11-17 추천대로).
+  ghost: { ...ButtonStyles.secondary, alignSelf: 'stretch', marginTop: Space.md },
+  ghostText: ButtonTextStyles.secondary,
 
   mailRow: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
   mailText: ButtonTextStyles.secondary,

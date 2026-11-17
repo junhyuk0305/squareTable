@@ -78,6 +78,7 @@ export function InviteBlock({
   style,
   place = 'store',
   hideLink = false,
+  yellowLink = false,
 }: {
   /** 매장 초대코드 6자리. */
   code: string;
@@ -91,8 +92,11 @@ export function InviteBlock({
   place?: 'store' | 'space';
   /** 링크 복사 버튼을 그리지 않는다 — 사장 매장 홈(링크 복사는 시작 카드 단계 줄에 있다). */
   hideLink?: boolean;
+  /** 링크 복사 버튼을 노랑으로 — 그 화면의 노란 버튼일 때(직원 목록·매장 설정 · 화면조립표 2026-11-17 11절 1번). 공간은 늘 노랑. */
+  yellowLink?: boolean;
 }) {
   const isSpace = place === 'space';
+  const yellow = isSpace || yellowLink;
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const [rotating, setRotating] = useState(false);
   // Q21: 만료일은 세션 코드의 것이다. 온보딩은 params 코드를 보여 줄 수 있어 같은 코드일 때만 쓴다.
@@ -174,10 +178,10 @@ export function InviteBlock({
           scaleTo={0.97}
           accessibilityRole="button"
           accessibilityLabel={isSpace ? SPACE_MEMBERS.inviteMessageCopy : '초대 링크 복사'}
-          style={[s.primary, isSpace && s.primaryYellow, (expired || !code) && s.dim]}
+          style={[s.primary, yellow && s.primaryYellow, (expired || !code) && s.dim]}
         >
-          <Ionicons name={isSpace ? 'chatbubble-outline' : 'link-outline'} size={16} color={isSpace ? InkColors.ink : InkColors.bubbleText} />
-          <Text style={isSpace ? ButtonTextStyles.primaryOnYellow : s.primaryText}>{copied === 'link' ? '복사됨' : isSpace ? SPACE_MEMBERS.inviteMessageCopy : '초대 링크 복사'}</Text>
+          <Ionicons name={isSpace ? 'chatbubble-outline' : 'link-outline'} size={16} color={yellow ? InkColors.ink : InkColors.bubbleText} />
+          <Text style={yellow ? ButtonTextStyles.primaryOnYellow : s.primaryText}>{copied === 'link' ? '복사됨' : isSpace ? SPACE_MEMBERS.inviteMessageCopy : '초대 링크 복사'}</Text>
         </PressableScale>
         )}
 
@@ -226,7 +230,7 @@ const s = StyleSheet.create({
   // 주 버튼(52 · 모서리 16 · 가로 꽉).
   primary: { ...ButtonStyles.primary, flexDirection: 'row', gap: 6, backgroundColor: BrandColors.brand },
   primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
-  // 공간 설정 탭의 [초대 문구 복사] = 그 화면의 노란 버튼(화면조립표 2026-11-17 11절 1번). 매장 쪽 색은 매장 묶음이 정한다.
+  // 공간 설정 탭의 [초대 문구 복사] · 직원 목록·매장 설정의 [초대 링크 복사] = 그 화면의 노란 버튼(화면조립표 2026-11-17 11절 1번).
   primaryYellow: {
     backgroundColor: ButtonStyles.primaryYellow.backgroundColor,
     borderWidth: ButtonStyles.primaryYellow.borderWidth,
