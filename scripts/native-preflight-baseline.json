@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-12",
+  "updated": "2026-11-17",
   "entries": [
     "src/app/billing.tsx::void navigator.clipboard.writeText(value);",
     "src/app/index.tsx::isLostOAuthReturn(window.location.search, window.location.hash);",
@@ -14,6 +14,10 @@
     "src/lib/db.ts::const c = document.createElement('canvas');",
     "src/lib/db.ts::const canvas = document.createElement('canvas');",
     "src/lib/db.ts::return typeof URL !== 'undefined' && URL.createObjectURL ? URL.createObjectURL(file) : null;",
+    "src/lib/hooks/useWebLeaveGuard.ts::const h = window.history;",
+    "src/lib/hooks/useWebLeaveGuard.ts::window.addEventListener('beforeunload', onUnload);",
+    "src/lib/hooks/useWebLeaveGuard.ts::window.addEventListener('popstate', (e) => {",
+    "src/lib/hooks/useWebLeaveGuard.ts::window.removeEventListener('beforeunload', onUnload);",
     "src/lib/payments/cardBilling.ts::const origin = window.location.origin;",
     "src/lib/payments/cardBilling.ts::const s = document.createElement('script');",
     "src/lib/payments/cardBilling.ts::document.head.appendChild(s);",
