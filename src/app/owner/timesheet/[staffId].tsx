@@ -35,12 +35,13 @@ export default function OwnerTimesheetScreen() {
   const staff = useStaffStore((s) => s.staff.find((m) => m.id === staffId));
   const staffLoadError = useStaffStore((s) => s.loadError);
 
-  // 게이트 화면 3개의 바탕·헤더·탭바 = Screen. 기록 화면 본체는 TimesheetView 가 자기 틀을 든다.
+  // 게이트 화면 3개의 바탕·헤더 = Screen. 기록 화면 본체는 TimesheetView 가 자기 틀을 든다.
+  // 탭바는 그리지 않는다 — 직원 한 명의 출근 기록은 상세라서 뺀다(화면조립표 2026-11-17 11절 5번).
   const header = <ScreenTitleHeader title="출근 기록" backFallback />;
 
   if (!ready) {
     return (
-      <Screen header={header} tabBar="owner" scroll={false}>
+      <Screen header={header} scroll={false}>
         <Stack.Screen options={{ title: '출근 기록' }} />
         <ScreenLoading label="출근 기록을 불러오고 있어요…" />
       </Screen>
@@ -50,7 +51,7 @@ export default function OwnerTimesheetScreen() {
   // 명부를 못 읽었으면(활성 매장 어긋남 포함) 빈 명부다 — "없는 직원"이 아니라 "못 불러왔다"로 말한다.
   if (!staff && staffLoadError) {
     return (
-      <Screen header={header} tabBar="owner" scroll={false}>
+      <Screen header={header} scroll={false}>
         <Stack.Screen options={{ title: '출근 기록' }} />
         <LoadErrorState screen title="직원 정보를 불러오지 못했어요" onRetry={() => void useStaffStore.getState().hydrate()} />
       </Screen>
@@ -59,7 +60,7 @@ export default function OwnerTimesheetScreen() {
 
   if (!staff) {
     return (
-      <Screen header={header} tabBar="owner">
+      <Screen header={header}>
         <Stack.Screen options={{ title: '출근 기록' }} />
         {/* 막다른 길 금지 — 빈/오류 상태에도 다음 행동 하나를 준다(복잡도 원칙 P6). */}
         <View style={EmptyStyles.box}>
@@ -82,8 +83,8 @@ export default function OwnerTimesheetScreen() {
   return (
     <>
       <Stack.Screen options={{ title: `${staff.name} 출근 기록` }} />
-      <ScreenTitleHeader title={`${staff.name} 출근 기록`} backFallback />
       <TimesheetView
+        header={<ScreenTitleHeader title={`${staff.name} 출근 기록`} backFallback />}
         staffId={staffId!}
         editedBy="owner"
         badgeLabel="직원 수정"

@@ -602,8 +602,9 @@ const styles = StyleSheet.create({
   offText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary, paddingTop: Space.sm },
   excRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingTop: Space.sm },
   excText: { ...Type.tag, flex: 1, fontWeight: '700', color: TextColor.secondary, lineHeight: 17 },
-  addRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, minHeight: 48, marginTop: Space.sm, borderRadius: Radius.sm, borderWidth: 1, borderStyle: 'dashed', borderColor: InkColors.line },
-  addText: { ...Type.body, lineHeight: 21, fontWeight: '800' },
+  // 근무 추가 = 이 화면의 노란 버튼 하나(11절 1번 · 가장 자주 하는 일에 고정). 하루 근무 카드 안 맨 아래.
+  addRow: { ...ButtonStyles.primaryYellow, flexDirection: 'row', gap: Space.xs, marginTop: Space.md },
+  addText: ButtonTextStyles.primaryOnYellow,
 
   // 컨펌 카드 — 목록 카드 모양 + 노랑 테두리(승인 대기 표시).
   card: { ...CardStyles.list, borderColor: BrandColors.yellowDeep, gap: Space.sm },
@@ -623,10 +624,11 @@ const styles = StyleSheet.create({
   cardNote: { ...Type.body, color: TextColor.secondary, fontStyle: 'italic', backgroundColor: InkColors.cream, borderRadius: Radius.sm, paddingHorizontal: Space.sm, paddingVertical: Space.sm },
 
   actions: { flexDirection: 'row', gap: Space.sm },
-  // 승인·반려 = 주 버튼 모양(52 · 모서리 16) 두 개를 나란히.
+  // 승인·반려 = 주 버튼 모양(52 · 모서리 16) 두 개를 같은 너비로 나란히.
+  //   반려만 연한 빨강(ButtonStyles.danger 의 색 · 화면조립표 2026-11-17 11절 6번). 승인 색은 그대로다.
   actBtn: { ...ButtonStyles.primary, flex: 1, flexDirection: 'row', gap: Space.xs },
-  rejectBtn: { backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
-  rejectText: { ...ButtonTextStyles.primary, color: TextColor.secondary },
+  rejectBtn: { backgroundColor: ButtonStyles.danger.backgroundColor },
+  rejectText: { ...ButtonTextStyles.primary, color: ButtonTextStyles.danger.color },
   approveBtn: { backgroundColor: InkColors.ink },
   approveText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 

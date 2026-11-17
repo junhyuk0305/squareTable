@@ -12,8 +12,8 @@ export default function JuniorTimesheetScreen() {
   return (
     <>
       <Stack.Screen options={{ title: '내 출퇴근 내역' }} />
-      <ScreenTitleHeader title="내 출퇴근 내역" backFallback />
       <TimesheetView
+        header={<ScreenTitleHeader title="내 출퇴근 내역" backFallback />}
         staffId={userId}
         editedBy="staff"
         badgeLabel="수정됨"

@@ -286,12 +286,13 @@ function SuggestionCard({
       <Text style={styles.body}>{s.text}</Text>
 
       <View style={styles.actions}>
-        <Pressable onPress={onReject} style={({ pressed }) => [styles.btn, styles.btnGhost, pressed && { opacity: 0.7 }]}>
-          <Text style={styles.btnGhostText}>반려</Text>
+        <Pressable onPress={onReject} accessibilityRole="button" accessibilityLabel="반려" style={({ pressed }) => [styles.btn, styles.btnReject, pressed && { opacity: 0.7 }]}>
+          <Text style={styles.btnRejectText}>반려</Text>
         </Pressable>
-        <Pressable onPress={onApprove} style={({ pressed }) => [styles.btn, styles.btnPrimary, pressed && { opacity: 0.85 }]}>
-          <Ionicons name="checkmark" size={15} color="#FFFFFF" />
-          <Text style={styles.btnPrimaryText}>{isImprove ? '승인 · 수정하기' : '승인 · 노하우로'}</Text>
+        {/* 개선·신규 둘 다 "승인"(11절 6번). 둘 다 고치는 단계(노하우 수정 화면 · AI 제안 검토 창)를 거쳐 저장해야 승인된다. */}
+        <Pressable onPress={onApprove} accessibilityRole="button" accessibilityLabel="승인" style={({ pressed }) => [styles.btn, styles.btnPrimary, pressed && { opacity: 0.85 }]}>
+          <Ionicons name="checkmark" size={15} color={InkColors.bubbleText} />
+          <Text style={styles.btnPrimaryText}>승인</Text>
         </Pressable>
       </View>
     </View>
@@ -349,9 +350,9 @@ function SpaceProposalCard({
           disabled={busy}
           accessibilityRole="button"
           accessibilityLabel={CONNECT.reject}
-          style={({ pressed }) => [styles.btn, styles.btnGhost, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [styles.btn, styles.btnReject, pressed && { opacity: 0.7 }]}
         >
-          <Text style={styles.btnGhostText}>{CONNECT.reject}</Text>
+          <Text style={styles.btnRejectText}>{CONNECT.reject}</Text>
         </Pressable>
         <Pressable
           onPress={onApprove}
@@ -393,9 +394,13 @@ const styles = StyleSheet.create({
 
   body: { ...Type.body, lineHeight: 22 },
 
-  // 버튼 = 주 버튼 모양(52 · 모서리 16 · 16/800 · 2026-11-02). 둘이 한 줄에 서서 반려는 내용 폭, 승인은 나머지 폭.
+  // 버튼 = 주 버튼 모양(52 · 모서리 16 · 16/800 · 2026-11-02).
+  //   카드 안 [반려] [승인]은 같은 너비(화면조립표 2026-11-17 11절 6번). 반려만 연한 빨강(ButtonStyles.danger 의 색), 승인 색은 그대로.
   actions: { flexDirection: 'row', gap: 8, marginTop: 2 },
   btn: { ...ButtonStyles.primary, flexDirection: 'row', gap: 5 },
+  btnReject: { flex: 1, backgroundColor: ButtonStyles.danger.backgroundColor },
+  btnRejectText: { ...ButtonTextStyles.primary, color: ButtonTextStyles.danger.color },
+  // 반려 사유 시트의 [건너뛰고 반려](카드 버튼 규칙 밖 · 그대로).
   btnGhost: { borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
   btnGhostText: { ...ButtonTextStyles.primary, color: InkColors.ink2 },
   btnPrimary: { flex: 1, backgroundColor: InkColors.ink },

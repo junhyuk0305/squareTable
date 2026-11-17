@@ -4,11 +4,11 @@ import { View, Text, Pressable, StyleSheet, ScrollView, type LayoutChangeEvent }
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Screen, SectionStack } from '@/components/Screen';
+import { Screen, Section, SectionStack } from '@/components/Screen';
+import { EmptyState } from '@/components/EmptyState';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
-import { SectionLabel } from '@/components/SectionLabel';
 import { SegmentTabs } from '@/components/SegmentTabs';
 import { ScheduleWeek } from '@/components/schedule/ScheduleWeek';
 import { SwapRequestModal } from '@/components/schedule/SwapRequestModal';
@@ -30,12 +30,11 @@ import { todayStr } from '@/lib/utils/attendance';
 import { mondayOf, fmtDateKo, closedDaysLabel, addDays, shiftAppliesOn } from '@/lib/utils/schedule';
 import { formatAsked } from '@/lib/utils/time';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
+import { Radius } from '@/lib/theme/elevation';
 import { Gap, Layout, Space, screenScrollStyle } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
-import { EmptyStyles } from '@/lib/theme/empty';
 import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
 
 const STATUS_META: Record<
@@ -233,7 +232,7 @@ export default function JuniorScheduleScreen() {
                   accessibilityLabel="교대 요청하기"
                   style={({ pressed }) => [styles.heroCta, pressed && { opacity: 0.85 }]}
                 >
-                  <Ionicons name="swap-horizontal-outline" size={16} color={InkColors.bubbleText} />
+                  <Ionicons name="swap-horizontal-outline" size={16} color={InkColors.ink} />
                   <Text style={styles.heroCtaText}>교대 요청하기</Text>
                 </Pressable>
               </View>
@@ -269,31 +268,13 @@ export default function JuniorScheduleScreen() {
         ) : (
           <View onLayout={(e) => { focusY.current.stack = e.nativeEvent.layout.y; }}>
           <SectionStack>
-            {/* 교대 요청 올리기 — 이 탭의 유일한 Primary(카드 안 수락 버튼은 보조 형태로 내렸다) */}
-            <Appear delay={stagger(0)}>
-            <View style={styles.reqCard}>
-              <Pressable
-                onPress={() => setPicking(true)}
-                accessibilityRole="button"
-                accessibilityLabel="교대 요청하기"
-                style={({ pressed }) => [styles.reqBtn, pressed && { opacity: 0.85 }]}
-              >
-                <Ionicons name="add-circle-outline" size={18} color={InkColors.bubbleText} />
-                <Text style={styles.reqText}>교대 요청하기</Text>
-              </Pressable>
-            </View>
-            </Appear>
-
             {/* 내가 대응할 수 있는 요청 — 읽고 판단해서 수락까지 하는 유일한 목록이라 카드로 남긴다(배치⑤) */}
             <View onLayout={(e) => { focusY.current.incoming = e.nativeEvent.layout.y; }}>
             <Appear delay={stagger(1)}>
-            <Section
-              icon="people-outline"
-              title="동료가 올린 요청"
-              onListLayout={(e) => { focusY.current.incomingList = e.nativeEvent.layout.y; }}
-            >
+            <Section icon="people-outline" title="동료가 올린 요청">
+              <View style={styles.sectionCards} onLayout={(e) => { focusY.current.incomingList = e.nativeEvent.layout.y; }}>
               {incoming.length === 0 ? (
-                <Empty text="지금 대응할 교대 요청이 없어요." />
+                <EmptyState title="지금 대응할 교대 요청이 없어요" body="동료가 대타·맞교환을 올리면 여기로 와요." />
               ) : (
                 incomingSorted.map((r, i) => {
                   const conflict = conflictOf(r);
@@ -328,6 +309,7 @@ export default function JuniorScheduleScreen() {
                   );
                 })
               )}
+              </View>
             </Section>
             </Appear>
             </View>
@@ -335,16 +317,26 @@ export default function JuniorScheduleScreen() {
             {/* 내가 올린 요청 — 상태만 확인하고 넘기는 목록이라 카드가 아니라 구분선 행으로 내린다(배치①) */}
             <View onLayout={(e) => { focusY.current.mine = e.nativeEvent.layout.y; }}>
             <Appear delay={stagger(2)}>
-            <Section
-              icon="paper-plane-outline"
-              title="내가 올린 요청"
-              onListLayout={(e) => { focusY.current.mineList = e.nativeEvent.layout.y; }}
-            >
+            <Section icon="paper-plane-outline" title="내가 올린 요청">
+              <View style={styles.sectionCards} onLayout={(e) => { focusY.current.mineList = e.nativeEvent.layout.y; }}>
+              {/* 교대 요청 올리기 = 이 탭의 노란 버튼 하나(11절 1번). 요청이 없으면 빈 상태의 노란 버튼,
+                  있으면 이 목록 카드 맨 위. 버튼이 다루는 목록과 같은 카드 안에 둔다(11절 4번). */}
               {myOpen.length === 0 ? (
-                <Empty text="진행 중인 요청이 없어요. 위 ‘교대 요청하기’로 올려보세요." />
+                <EmptyState title="진행 중인 요청이 없어요" cta={{ label: '교대 요청하기', onPress: () => setPicking(true) }} ctaTone="yellow" />
               ) : (
                 <View style={styles.rowsCard}>
-                  {myOpen.map((r, i) => (
+                  <View style={styles.reqTop}>
+                    <Pressable
+                      onPress={() => setPicking(true)}
+                      accessibilityRole="button"
+                      accessibilityLabel="교대 요청하기"
+                      style={({ pressed }) => [styles.reqBtn, pressed && { opacity: 0.85 }]}
+                    >
+                      <Ionicons name="add-circle-outline" size={18} color={InkColors.ink} />
+                      <Text style={styles.reqText}>교대 요청하기</Text>
+                    </Pressable>
+                  </View>
+                  {myOpen.map((r) => (
                     <View
                       key={r.id}
                       style={r.id === focusSwapId ? styles.focusCard : undefined}
@@ -354,7 +346,7 @@ export default function JuniorScheduleScreen() {
                       r={r}
                       nameOf={nameOf}
                       tplById={tplById}
-                      divider={i > 0}
+                      divider
                       action={
                         <Pressable
                           onPress={() => cancelSwap(r.id)}
@@ -370,6 +362,7 @@ export default function JuniorScheduleScreen() {
                   ))}
                 </View>
               )}
+              </View>
             </Section>
             </Appear>
             </View>
@@ -478,35 +471,6 @@ export default function JuniorScheduleScreen() {
         />
       )}
     </>
-  );
-}
-
-function Section({
-  icon,
-  title,
-  onListLayout,
-  children,
-}: {
-  icon?: React.ComponentProps<typeof Ionicons>['name'];
-  title: string;
-  /** 알림 착지 스크롤용 — 카드 목록의 y(섹션 기준). */
-  onListLayout?: (e: LayoutChangeEvent) => void;
-  children: React.ReactNode;
-}) {
-  return (
-    // 제목 ↔ 카드 10(SectionLabel 아래 2 + 8) · 카드끼리 Gap.item. 섹션 사이는 SectionStack 이 정한다.
-    <View style={styles.section}>
-      <SectionLabel icon={icon} title={title} />
-      <View style={styles.sectionCards} onLayout={onListLayout}>{children}</View>
-    </View>
-  );
-}
-
-function Empty({ text }: { text: string }) {
-  return (
-    <View style={EmptyStyles.box}>
-      <Text style={EmptyStyles.text}>{text}</Text>
-    </View>
   );
 }
 
@@ -685,18 +649,17 @@ function SwapRow({
 const styles = StyleSheet.create({
   // 세그먼트 = 스크롤 위 고정. 좌우는 화면 거터, 위는 첫 여백(사장 퀴즈·노하우 탭과 같은 값).
   topTabs: { marginHorizontal: Space.gutter, marginTop: Layout.screenTop, marginBottom: 0 },
-  section: { gap: Space.sm },
+  // 섹션 안 카드끼리 Gap.item. 제목 ↔ 카드는 공용 Section 이 정한다.
   sectionCards: { gap: Gap.item },
 
-  // 내 다음 근무 히어로(노랑) — 격자 위 단일 강조. 모서리·안쪽·그림자 = 카드 값(16 · 16 · e1).
-  //   노랑 면 위 글자색 두 개(#7a6712·#6f5f2a)는 맞는 토큰이 없어 그대로 둔다.
-  hero: { backgroundColor: BrandColors.yellow, borderRadius: Radius.md, padding: Layout.cardPad, ...Elevation.e1 },
-  heroTitle: { ...Type.tag, fontWeight: '800', color: '#7a6712' },
+  // 내 다음 근무 — 격자 위 흰 카드. 노랑은 카드 안 [교대 요청하기] 하나에 둔다(화면조립표 2026-11-17 11절 1번).
+  //   전엔 노랑 면 카드 안에 검정 버튼이었다. 노랑 면 위에 노란 버튼은 안 보이므로 면을 흰 카드로 바꿨다.
+  hero: { ...CardStyles.list },
+  heroTitle: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
   heroBig: { fontSize: 17, fontWeight: '900', color: InkColors.ink, marginTop: 6, letterSpacing: -0.2 },
-  heroSub: { ...Type.tag, fontWeight: '600', color: '#6f5f2a', marginTop: 3 },
-  // 노랑 면 위 주 버튼 = 검정.
-  heroCta: { ...ButtonStyles.primary, flexDirection: 'row', gap: 6, backgroundColor: InkColors.ink, marginTop: Space.md },
-  heroCtaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  heroSub: { ...Type.tag, fontWeight: '600', color: TextColor.secondary, marginTop: 3 },
+  heroCta: { ...ButtonStyles.primaryYellow, flexDirection: 'row', gap: 6, marginTop: Space.md },
+  heroCtaText: ButtonTextStyles.primaryOnYellow,
   heroEmpty: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: 8 },
   heroEmptyText: { ...Type.body, flex: 1, lineHeight: 21, fontWeight: '700', color: TextColor.secondary },
 
@@ -708,10 +671,10 @@ const styles = StyleSheet.create({
   // 목록 바로 아래 왼쪽 정렬(시안). 좌우 4 = SectionLabel 과 같은 들여쓰기.
   tip: { ...Type.desc, paddingHorizontal: Space.xs },
 
-  // 주 버튼 — 그림자 없음(결정표).
-  reqBtn: { ...ButtonStyles.primary, flexDirection: 'row', gap: 7, backgroundColor: InkColors.ink },
-  reqText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
-  reqCard: { ...CardStyles.list },
+  // 주 버튼 = 노랑(11절 1번) · 내가 올린 요청 카드 맨 위. 버튼만 든 카드는 두지 않는다(11절 4번).
+  reqBtn: { ...ButtonStyles.primaryYellow, flexDirection: 'row', gap: 7 },
+  reqText: ButtonTextStyles.primaryOnYellow,
+  reqTop: { paddingVertical: Space.md },
   rowsCard: { ...CardStyles.rows },
   historyCard: { ...CardStyles.rows, marginTop: Space.sm },
 

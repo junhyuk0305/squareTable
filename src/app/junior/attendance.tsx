@@ -10,6 +10,7 @@ import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { InfoDot } from '@/components/InfoDot';
+import { EmptyState } from '@/components/EmptyState';
 import { ActionRow } from '@/components/blocks/ActionRow';
 import { Sparkline } from '@/components/blocks/Sparkline';
 import { StatCard } from '@/components/blocks/StatCardGrid';
@@ -17,10 +18,8 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { EmptyStyles } from '@/lib/theme/empty';
 import { CardStyles } from '@/lib/theme/card';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
-import { Gap, Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import { fmtDuration, hhmm, todayStr, liveMinutes, findOpenRecord, isForgotCheckout, openSinceText } from '@/lib/utils/attendance';
 import { ForgotCheckoutCard } from '@/components/junior/ForgotCheckoutCard';
@@ -123,7 +122,7 @@ export function AttendancePanel() {
         ) : working ? (
           <Pressable
             onPress={() => checkOut(userId)}
-            style={({ pressed }) => [styles.btn, styles.btnOut, pressed && { opacity: 0.85 }]}
+            style={({ pressed }) => [styles.btn, pressed && { opacity: 0.85 }]}
           >
             <Text style={styles.btnText}>퇴근하기</Text>
           </Pressable>
@@ -133,7 +132,7 @@ export function AttendancePanel() {
           //   이제 위 ready 게이트가 그 사이를 통째로 막으므로 버튼에 별도 disabled 를 두지 않는다.
           <Pressable
             onPress={() => checkIn(userId)}
-            style={({ pressed }) => [styles.btn, styles.btnIn, pressed && { opacity: 0.85 }]}
+            style={({ pressed }) => [styles.btn, pressed && { opacity: 0.85 }]}
           >
             <Text style={styles.btnText}>{todayRecs.length > 0 ? '다시 출근하기' : '출근하기'}</Text>
           </Pressable>
@@ -202,14 +201,19 @@ export function AttendancePanel() {
           />
         }
       >
+      {recentRecs.length === 0 ? (
+        // 빈 상태 카드에 다음 행동 버튼(화면조립표 2026-11-17 추천대로). 출근하기는 위 노란 버튼이 맡아서
+        //   여기는 새 직원이 다음에 볼 곳(내 근무표)을 보조 알약으로 준다. 노랑은 화면에 하나다.
+        <Appear delay={stagger(5)}>
+          <EmptyState
+            title="아직 출근 기록이 없어요"
+            body="위 출근하기 버튼을 누르면 첫 기록이 남아요."
+            cta={{ label: '근무표 보기', onPress: () => router.push('/junior/schedule') }}
+            ctaTone="secondary"
+          />
+        </Appear>
+      ) : (
       <Appear delay={stagger(5)} style={styles.list}>
-        {recentRecs.length === 0 && (
-          // 본문 15 두 줄 연속 금지(2026-11-02) — 첫 문장은 본문, 둘째 문장은 설명 13/19. 문구는 그대로.
-          <View style={styles.emptyWrap}>
-            <Text style={EmptyStyles.text}>아직 출근 기록이 없어요.</Text>
-            <Text style={styles.emptyDesc}>위 출근하기 버튼을 누르면 첫 기록이 남아요.</Text>
-          </View>
-        )}
         {recentRecs.slice(0, 5).map((r) => (
           <Pressable key={r.id} onPress={() => router.push('/junior/timesheet')} style={({ pressed }) => [styles.recRow, pressed && { opacity: 0.6 }]}>
             <Text style={styles.recDate}>{r.date.slice(5).replace('-', '/')}</Text>
@@ -221,6 +225,7 @@ export function AttendancePanel() {
           </Pressable>
         ))}
       </Appear>
+      )}
       </Section>
       </Appear>
         </>
@@ -256,18 +261,15 @@ const styles = StyleSheet.create({
   // 대표 숫자 = Type.numHero(32 · 2026-11-02 사용자. 옛 40).
   bigTime: { ...Type.numHero, color: InkColors.ink },
   bigSub: { fontSize: 14, color: TextColor.secondary, fontWeight: '600', marginBottom: 14 },
-  // 주 버튼 = ButtonStyles.primary(높이 52·모서리 16·가로 꽉) — 출근 카드 자체의 모서리 20 과 별개다.
-  btn: ButtonStyles.primary,
-  btnIn: { backgroundColor: BrandColors.brand },
-  btnOut: { backgroundColor: BrandColors.accentSolid },
-  btnText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  // 주 버튼 = 노랑(화면조립표 2026-11-17 11절 1번). 이 화면에서 가장 자주 하는 일(출근·퇴근 찍기) 하나에 고정한다.
+  //   출근 전·근무 중이 바뀌어도 노란 자리는 그대로다. 글자만 출근하기 ↔ 퇴근하기로 바뀐다.
+  btn: ButtonStyles.primaryYellow,
+  btnText: ButtonTextStyles.primaryOnYellow,
 
   // 이번 달 합계는 공용 <MiniStats>(I3)로 대체됨 — 로컬 statCard·wageNote 폐기(2026-08-06).
 
   // 최근 기록 — 행 목록 카드(CardStyles.rows: 흰 면·선 1px·모서리 16·그림자 e1·좌우 16).
   list: CardStyles.rows,
-  emptyWrap: { paddingVertical: Space.gutter, gap: Gap.inline },
-  emptyDesc: { ...Type.desc, textAlign: 'center' },
   recRow: {
     flexDirection: 'row',
     alignItems: 'center',

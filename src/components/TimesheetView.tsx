@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -11,7 +11,11 @@ import { Screen } from '@/components/Screen';
 import { Appear, stagger } from '@/components/Appear';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { ScreenLoading } from '@/components/ScreenLoading';
-import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
+import { SegmentTabs } from '@/components/SegmentTabs';
+import { EmptyState } from '@/components/EmptyState';
+import { KnowhowFab, KNOWHOW_FAB_SPACE } from '@/components/knowhow/KnowhowListParts';
+import { timesheetPlan, type TimesheetTab } from '@/lib/utils/attendanceScreenPlans';
+import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space, screenScrollStyle } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
@@ -25,10 +29,9 @@ import { confirmAction } from '@/lib/utils/confirm';
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 
-/** 대조 결과를 몇 줄까지 펼쳐 보여줄지. 넘치면 "외 N건"으로 접는다(화면 복잡도 예산). */
-const MISMATCH_SHOWN = 3;
-
 type Props = {
+  /** 머리(73). Screen 안에 둔다. */
+  header: ReactNode;
   /** 대상 직원 id(점주는 [staffId], 직원은 본인 userId) */
   staffId: string;
   /** 이 화면에서 보정 시 기록될 주체 */
@@ -43,7 +46,7 @@ type Props = {
   role: 'owner' | 'junior';
 };
 
-export function TimesheetView({ staffId, editedBy, badgeLabel, badgeTone = 'ink', addLabel, topHeader, footerNote, role }: Props) {
+export function TimesheetView({ header, staffId, editedBy, badgeLabel, badgeTone = 'ink', addLabel, topHeader, footerNote, role }: Props) {
   const records = useAttendanceStore((s) => s.records);
   const upsertManual = useAttendanceStore((s) => s.upsertManual);
   const removeRecord = useAttendanceStore((s) => s.removeRecord);
@@ -63,6 +66,9 @@ export function TimesheetView({ staffId, editedBy, badgeLabel, badgeTone = 'ink'
   const [cout, setCout] = useState('');
   const [newDay, setNewDay] = useState('');
   const [err, setErr] = useState<string | null>(null);
+  // 맨 위 칸 고르기(11절 4번) — [날짜별 기록 | 근무표와 다른 날 n].
+  const [tab, setTab] = useState<TimesheetTab>('records');
+  const scrollRef = useRef<ScrollView>(null);
 
   // 지난달은 그 달 기록을 기간 조건으로 따로 읽는다(A8) — 기본 조회는 매장 전체 최근 1,000건이라 예전 달이 잘린다.
   //   다 읽기 전·실패면 "출퇴근을 안 찍었어요" 대조를 띄우지 않는다(잘린 기록을 안 찍은 것으로 말하게 된다).
@@ -138,6 +144,8 @@ export function TimesheetView({ staffId, editedBy, badgeLabel, badgeTone = 'ink'
     setCout(r.check_out ? hhmm(r.check_out) : '');
   }
   function openNew() {
+    // 추가 칸은 날짜별 기록 칸 맨 위에 열린다 — 떠 있는 버튼은 아래로 내려 둔 채 누르므로 위로 올린다.
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
     setEditing('new');
     setErr(null);
     setCin('');
@@ -194,20 +202,24 @@ export function TimesheetView({ staffId, editedBy, badgeLabel, badgeTone = 'ink'
   const badgeStyle = badgeTone === 'accent' ? styles.badgeAccent : styles.badgeInk;
   const badgeTextStyle = badgeTone === 'accent' ? styles.badgeAccentText : styles.badgeInkText;
 
-  // 화면 골격(바탕·탭바)은 즉시 서고 본문만 로딩 — 훅을 전부 부른 뒤의 early return.
-  // 바탕·탭바 = Screen(2026-11-02). 헤더는 호출부가 이 부품 위에 그린다. 키보드 밀어올림 때문에 스크롤은 직접 둔다.
+  const plan = timesheetPlan({ tab, monthReady, records: monthRecs.length, mismatches: mismatches.length, adding: editing === 'new' });
+  // 탭바: 직원 내 출근 기록은 둔다 · 사장이 보는 직원 한 명 출근 기록은 뺀다(11절 5번).
+  const tabBar = role === 'junior' ? 'junior' : undefined;
+
+  // 화면 골격(바탕·머리·탭바)은 즉시 서고 본문만 로딩 — 훅을 전부 부른 뒤의 early return.
+  // 바탕·머리·탭바 = Screen(2026-11-02). 키보드 밀어올림 때문에 스크롤은 직접 둔다.
   if (!ready) {
     return (
-      <Screen tabBar={role} scroll={false}>
+      <Screen header={header} tabBar={tabBar} scroll={false}>
         <ScreenLoading label="출퇴근 기록을 불러오고 있어요…" />
       </Screen>
     );
   }
 
   return (
-    <Screen tabBar={role} scroll={false}>
+    <Screen header={header} tabBar={tabBar} scroll={false}>
       <KeyboardShift>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={screenScrollStyle} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" contentContainerStyle={[screenScrollStyle, plan.fab && styles.fabSpace]} showsVerticalScrollIndicator={false}>
         {topHeader && <Appear delay={stagger(0)}>{topHeader}</Appear>}
 
         {/* 월 네비 */}
@@ -227,19 +239,42 @@ export function TimesheetView({ staffId, editedBy, badgeLabel, badgeTone = 'ink'
         </View>
         </Appear>
 
-        {/* 요약 */}
+        {/* 맨 위 칸 고르기(11절 4번). 칸 안에서는 처리할 것이 맨 위다. */}
         <Appear delay={stagger(2)}>
-        <View style={styles.summary}>
-          <View style={styles.sumCol}>
-            <Text style={styles.sumLabel}>근무일</Text>
-            <Text style={styles.sumValue}>{monthReady ? `${monthRecs.length}일` : '—'}</Text>
-          </View>
-          <View style={styles.sumDivider} />
-          <View style={styles.sumCol}>
-            <Text style={styles.sumLabel}>근무시간</Text>
-            <Text style={styles.sumValue}>{monthReady ? fmtDuration(totalMin) : '—'}</Text>
-          </View>
-        </View>
+          <SegmentTabs
+            items={[
+              { key: 'records', label: '날짜별 기록', count: plan.counts.records },
+              { key: 'mismatch', label: '근무표와 다른 날', count: plan.counts.mismatch },
+            ]}
+            value={tab}
+            onChange={(k) => setTab(k as TimesheetTab)}
+          />
+        </Appear>
+
+        {tab === 'mismatch' ? (
+          /* 대조 — 근무표와 출퇴근이 어긋난 날. 여기서 말해야 근무표를 고칠 수 있다. 칸이 따로라 접지 않고 다 보인다. */
+          <Appear delay={stagger(3)}>
+            {!monthReady ? (
+              <View style={styles.list}>
+                <Text style={styles.empty}>{monthLoadText(monthStates)}</Text>
+              </View>
+            ) : mismatches.length === 0 ? (
+              <EmptyState title="근무표와 다른 날이 없어요" body="출퇴근이 근무표와 30분 넘게 어긋나면 여기에 보여요." />
+            ) : (
+              <View style={styles.mismatch}>
+                <View style={styles.mismatchHead}>
+                  <Ionicons name="alert-circle-outline" size={15} color={BrandColors.warn} />
+                  <Text style={styles.mismatchTitle}>근무표와 다른 날 {mismatches.length}건</Text>
+                </View>
+                {mismatches.map((m, i) => (
+                  <Text key={`${m.date}_${i}`} style={styles.mismatchLine}>{m.message}</Text>
+                ))}
+              </View>
+            )}
+          </Appear>
+        ) : (
+        <>
+        {/* 처리할 것 — 사장 승인을 기다리는 근무 시간 수정 요청 */}
         {waitingTimes > 0 && (
           <View style={styles.waitRow}>
             <Ionicons name="time-outline" size={14} color={BrandColors.warnText} />
@@ -248,29 +283,10 @@ export function TimesheetView({ staffId, editedBy, badgeLabel, badgeTone = 'ink'
             </Text>
           </View>
         )}
-        </Appear>
 
-        {/* 대조 — 근무표와 출퇴근이 어긋난 날. 여기서 말해야 근무표를 고칠 수 있다. */}
-        {mismatches.length > 0 && (
-          <Appear delay={stagger(3)}>
-            <View style={styles.mismatch}>
-              <View style={styles.mismatchHead}>
-                <Ionicons name="alert-circle-outline" size={15} color={BrandColors.warn} />
-                <Text style={styles.mismatchTitle}>근무표와 다른 날 {mismatches.length}건</Text>
-              </View>
-              {mismatches.slice(0, MISMATCH_SHOWN).map((m, i) => (
-                <Text key={`${m.date}_${i}`} style={styles.mismatchLine}>{m.message}</Text>
-              ))}
-              {mismatches.length > MISMATCH_SHOWN && (
-                <Text style={styles.mismatchMore}>외 {mismatches.length - MISMATCH_SHOWN}건 · 아래 기록에서 확인해 주세요</Text>
-              )}
-            </View>
-          </Appear>
-        )}
-
-        {/* 기록 추가 */}
-        <Appear delay={stagger(4)}>
+        {/* 기록 추가 칸 — 떠 있는 버튼이나 빈 상태 버튼을 누르면 맨 위에 열린다 */}
         {editing === 'new' ? (
+          <Appear delay={stagger(3)}>
           <View style={styles.editCard}>
             <Text style={styles.editTitle}>출근 기록 추가</Text>
             <View style={styles.editRow}>
@@ -296,34 +312,34 @@ export function TimesheetView({ staffId, editedBy, badgeLabel, badgeTone = 'ink'
               </Pressable>
             </View>
           </View>
-        ) : (
-          <View style={styles.addCard}>
-            <Pressable onPress={openNew} style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.85 }]}>
-              <Ionicons name="add" size={18} color={InkColors.ink} />
-              <Text style={styles.addText}>{addLabel}</Text>
-            </Pressable>
+          </Appear>
+        ) : null}
+
+        {/* 요약 */}
+        <Appear delay={stagger(4)}>
+        <View style={styles.summary}>
+          <View style={styles.sumCol}>
+            <Text style={styles.sumLabel}>근무일</Text>
+            <Text style={styles.sumValue}>{monthReady ? `${monthRecs.length}일` : '—'}</Text>
           </View>
-        )}
+          <View style={styles.sumDivider} />
+          <View style={styles.sumCol}>
+            <Text style={styles.sumLabel}>근무시간</Text>
+            <Text style={styles.sumValue}>{monthReady ? fmtDuration(totalMin) : '—'}</Text>
+          </View>
+        </View>
         </Appear>
 
-        {/* 날짜별 기록 — 제목 ↔ 카드는 한 묶음(10). 섹션 사이(20)는 스크롤 틀이 정한다. */}
-        <View style={styles.group}>
+        {/* 기록이 0개면 떠 있는 버튼 대신 빈 상태의 노란 버튼(11절 2번 보충) */}
+        {plan.emptyAdd ? (
+          <EmptyState title="이 달 출퇴근 기록이 없어요" cta={{ label: addLabel, onPress: openNew }} ctaTone="yellow" />
+        ) : null}
+
+        {/* 날짜별 기록 — 기록을 누르면 그 자리에서 고친다 */}
+        {!monthReady || monthRecs.length > 0 || staffDeleted.length > 0 ? (
         <Appear delay={stagger(5)}>
-        <Text style={styles.sectionTitle}>
-          날짜별 기록 <Text style={styles.sectionHint}>· 탭하면 수정</Text>
-        </Text>
-        </Appear>
-        <Appear delay={stagger(6)}>
         <View style={styles.list}>
-          {!monthReady ? (
-            <Text style={styles.empty}>
-              {monthStates.split(',').includes('error')
-                ? '이 달 기록을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 들어와 주세요.'
-                : '이 달 기록을 불러오고 있어요…'}
-            </Text>
-          ) : (
-            monthRecs.length === 0 && <Text style={styles.empty}>이 달 출퇴근 기록이 없어요.</Text>
-          )}
+          {!monthReady ? <Text style={styles.empty}>{monthLoadText(monthStates)}</Text> : null}
           {monthRecs.map((r, i) => {
             const d = new Date(`${r.date}T00:00:00`);
             const open = !r.check_out;
@@ -397,15 +413,26 @@ export function TimesheetView({ staffId, editedBy, badgeLabel, badgeTone = 'ink'
           ))}
         </View>
         </Appear>
-        </View>
+        ) : null}
+        </>
+        )}
 
         <Appear delay={stagger(7)}>
         <Text style={styles.demoNote}>{footerNote}</Text>
         </Appear>
       </ScrollView>
       </KeyboardShift>
+      {/* 만들기 입구 = 오른쪽 아래 떠 있는 노란 알약(11절 2번). 스크롤 밖 형제라 같이 움직이지 않는다. */}
+      {plan.fab ? <KnowhowFab onPress={openNew} label={addLabel} showLabel /> : null}
     </Screen>
   );
+}
+
+/** 지난달 기록을 읽는 동안·실패 문구. 날짜별 기록 칸과 다른 날 칸이 같이 쓴다. */
+function monthLoadText(monthStates: string): string {
+  return monthStates.split(',').includes('error')
+    ? '이 달 기록을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 들어와 주세요.'
+    : '이 달 기록을 불러오고 있어요…';
 }
 
 function spanText(cin: string | null, cout: string | null): string {
@@ -448,26 +475,9 @@ const styles = StyleSheet.create({
   mismatchHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   mismatchTitle: { fontSize: 13, fontWeight: '800', color: BrandColors.warnText },
   mismatchLine: { ...Type.desc, fontWeight: '600' },
-  mismatchMore: { ...Type.tag, color: TextColor.secondary, fontWeight: '700' },
 
-  // 기록 추가 버튼 = 흰 카드 안(R-14).
-  addCard: { ...CardStyles.list },
-  // 주 버튼 모양(52 · 모서리 16 · 가로 꽉). 점선 테두리·흰 면은 그대로.
-  addBtn: {
-    ...ButtonStyles.primary,
-    flexDirection: 'row',
-    gap: 6,
-    backgroundColor: Surface.card,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderStyle: 'dashed',
-  },
-  addText: { ...Type.body, fontWeight: '700' },
-
-  // 섹션 제목 = 16/800 검정(결정표). 제목 ↔ 카드 10 = group 간격 8 + 아래 2(SectionLabel 과 같은 값).
-  group: { gap: Space.sm },
-  sectionTitle: { ...Type.section, marginBottom: 2 },
-  sectionHint: { ...Type.tag, fontWeight: '600', color: TextColor.secondary },
+  // 떠 있는 [출근 기록 추가]가 마지막 줄을 가리지 않게 스크롤 아래 여백을 둔다.
+  fabSpace: { paddingBottom: KNOWHOW_FAB_SPACE },
   list: { ...CardStyles.rows },
   empty: { ...Type.body, color: TextColor.secondary, paddingVertical: 16, textAlign: 'center' },
 
