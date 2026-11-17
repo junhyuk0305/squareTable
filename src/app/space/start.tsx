@@ -108,7 +108,7 @@ export default function SpaceStart() {
           style={({ pressed }) => [styles.primary, pressed && styles.pressed, (busy || !valid) && styles.disabled]}
         >
           {busy ? (
-            <ActivityIndicator color={InkColors.bubbleText} accessibilityLabel={SPACE_SCREEN.startBusy} />
+            <ActivityIndicator color={InkColors.ink} accessibilityLabel={SPACE_SCREEN.startBusy} />
           ) : (
             <Text style={styles.primaryText}>{SPACE_SCREEN.startSubmit}</Text>
           )}
@@ -133,8 +133,9 @@ const styles = StyleSheet.create({
     backgroundColor: Surface.input,
   },
   err: { ...Type.desc, color: BrandColors.accentText },
-  primary: { ...ButtonStyles.primary, backgroundColor: InkColors.ink, marginTop: Gap.inline },
-  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  // 주 버튼 = 노랑(다른 공간 화면과 같게 · 2026-11-17).
+  primary: { ...ButtonStyles.primaryYellow, marginTop: Gap.inline },
+  primaryText: ButtonTextStyles.primaryOnYellow,
   pressed: { opacity: 0.88 },
   disabled: { opacity: 0.5 },
 });
