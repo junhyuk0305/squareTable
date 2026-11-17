@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -42,9 +43,12 @@ export type PickRowItem = {
 export function PickRow({
   rows,
   more,
+  footer,
 }: {
   rows: PickRowItem[];
   more?: { label: string; onPress: () => void };
+  /** 카드 안 맨 아래 칸(예: 고른 것을 보내는 주 버튼). 안 주면 지금 모양 그대로다. */
+  footer?: ReactNode;
 }) {
   if (rows.length === 0) return null;
 
@@ -92,6 +96,7 @@ export function PickRow({
           <Text style={styles.moreText}>{more.label} ›</Text>
         </Pressable>
       ) : null}
+      {footer ? <View style={styles.footer}>{footer}</View> : null}
     </View>
   );
 }
@@ -143,4 +148,6 @@ const styles = StyleSheet.create({
   // 더 보기 줄 = 카드 안 맨 아래 가로 꽉 보조 알약(R-11 · 2026-11-16). 카드 안쪽 여백이 없어 둘레 여백을 준다.
   more: { ...ButtonStyles.secondary, alignSelf: 'stretch', margin: Space.md, marginTop: Space.xs },
   moreText: ButtonTextStyles.secondary,
+  // 아래 칸 = 더 보기 줄과 같은 둘레 여백(카드 안쪽 여백이 없어서).
+  footer: { padding: Space.md },
 });

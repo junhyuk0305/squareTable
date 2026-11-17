@@ -161,32 +161,27 @@ export default function SpaceConnect() {
               chips: already.has(e.id) ? [{ text: CONNECT.alreadyChip, tone: 'warn' as const }] : undefined,
               onToggle: () => toggle(e.id),
             }))}
+            footer={
+              <Pressable
+                onPress={() => void send()}
+                disabled={!canSend}
+                accessibilityRole="button"
+                accessibilityLabel={CONNECT.send}
+                accessibilityState={{ disabled: !canSend, busy }}
+                style={({ pressed }) => [styles.primary, !canSend && styles.off, pressed && styles.pressed]}
+              >
+                <Text style={styles.primaryText}>{busy ? CONNECT.sending : CONNECT.send}</Text>
+              </Pressable>
+            }
           />
         )}
       </Section>
-
-      {entries && entries.length > 0 ? (
-        <View style={styles.sendCard}>
-          <Pressable
-            onPress={() => void send()}
-            disabled={!canSend}
-            accessibilityRole="button"
-            accessibilityLabel={CONNECT.send}
-            accessibilityState={{ disabled: !canSend, busy }}
-            style={({ pressed }) => [styles.primary, !canSend && styles.off, pressed && styles.pressed]}
-          >
-            <Text style={styles.primaryText}>{busy ? CONNECT.sending : CONNECT.send}</Text>
-          </Pressable>
-        </View>
-      ) : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   card: { ...CardStyles.rows },
-  // 보내기 = 흰 카드 안(R-14). 위 PickRow 는 자기 카드라 그 안에 넣지 못한다.
-  sendCard: { ...CardStyles.list },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: TouchSize.inline, paddingVertical: Space.md },
   rowLine: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: InkColors.line },
   rowTitle: { ...Type.body, fontWeight: '700', flex: 1 },
