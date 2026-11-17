@@ -487,7 +487,6 @@ export const CONNECT = {
   sentBy: (name: string) => (name.trim() ? `${name.trim()}님이 보냈어요` : '공간에서 보냈어요'),
   approve: '승인',
   reject: '반려',
-  approved: '매장 노하우로 남겼어요.',
   photosSkipped: (n: number) => `사진 ${n}장은 원본이 없어 빼고 남겼어요.`,
   handledKind: '공간',
   // 직원 "내 제안"
