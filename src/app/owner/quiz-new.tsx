@@ -47,6 +47,9 @@ import { ProgressRing } from '@/components/blocks/ProgressRing';
 import { MiniCalendar } from '@/components/blocks/MiniCalendar';
 import { EmptyState } from '@/components/EmptyState';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { StepDock } from '@/components/StepDock';
+import { useBackIntercept } from '@/lib/hooks/useBackIntercept';
+import { quizNewBack, quizNewDock, type QuizNewStep } from '@/lib/utils/quizScreenPlans';
 import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
@@ -129,7 +132,7 @@ export default function QuizNewScreen() {
     void hydrateStaff();
   }, [hydrateStaff]);
 
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState<QuizNewStep>(1);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [quota, setQuota] = useState(false);
@@ -582,6 +585,31 @@ export default function QuizNewScreen() {
     router.replace('/owner/training' as never);
   };
 
+  /** 링크를 만든 뒤 주 버튼 = 링크 복사(1차 추천대로 · 교육 링크 만들기와 같다). */
+  const copyMadeLink = () => {
+    if (!madeToken) return;
+    void copyQuizLink(madeToken).then((r) => {
+      const t = copyLinkToast(r);
+      if (t) showToast(t.text, t.tone);
+    });
+  };
+
+  // 머리·안드 뒤로 = 앞 단계(화면조립표 2026-11-17 11절 3번). 첫 단계·만드는 중·링크를 만든 뒤에만 화면을 나간다(quizNewBack).
+  const prevStep = quizNewBack(step);
+  const toPrev = prevStep !== null ? () => setStep(prevStep) : undefined;
+  useBackIntercept(prevStep !== null, () => toPrev?.());
+  /** 맨 아래 고정 노란 버튼 하나. 이름 = 다음 단계 이름(quizNewDock). */
+  const dock = step === 6 && !madeToken
+    ? null
+    : quizNewDock({ step, audience, picked: picked.length, okItems: okItems.length, to: to.length, sendNow, busy, ready: step1Ready });
+  const onDock = () => {
+    if (!dock) return;
+    if (dock.kind === 'go') setStep(dock.to);
+    else if (dock.kind === 'make') void start();
+    else if (dock.kind === 'publish') void publish();
+    else copyMadeLink();
+  };
+
   // 이어서 만들기 — 실어 오기 전에는 1단계를 그리지 않는다. 안 그러면 "누가 풀 건가요"가
   // 스쳤다가 4단계로 튄다(게이트 없이 화면을 먼저 마운트하는 것이 금지된 바로 그것이다).
   if (boardError || resumeError) {
@@ -603,11 +631,12 @@ export default function QuizNewScreen() {
   }
 
   return (
-    <SafeAreaView style={st.safe} edges={['bottom']}>
+    // 아래 안전 영역은 맨 아래 StepDock 이 든다 — 여기서 또 들면 두 겹이 된다.
+    <SafeAreaView style={st.safe} edges={[]}>
       {/* ★단계 표시 n/m 은 본문 맨 위 StepProgress 가 그린다(2026-11-05). headerRight 에 따로 두던 배지는
           사장 스택이 `headerShown:false` 라 한 번도 그려지지 않았다. 헤더에 또 두면 n/m 이 두 번 보인다. */}
       <Stack.Screen options={{ title: '퀴즈 만들기' }} />
-      <ScreenTitleHeader title="퀴즈 만들기" backFallback />
+      <ScreenTitleHeader title="퀴즈 만들기" backFallback onBack={toPrev} />
       <KeyboardShift>
       <ScrollView
         contentContainerStyle={st.scroll}
@@ -926,6 +955,18 @@ export default function QuizNewScreen() {
                     />
                   </View>
                 ))}
+                {/* 문항이 0개면 남은 것이 없다(2026-09-11: 코스 행을 문항과 같이 만들게 바꿨다) —
+                    "초안으로 저장"이라고 말하면 목록에서 찾을 수 없는 것을 저장했다고 말하는 셈이다.
+                    맨 아래 노란 버튼은 하나라 이 보조 버튼은 이 카드 안에 둔다(2026-11-17 11절 3번). */}
+                {okItems.length === 0 ? (
+                  <Pressable
+                    onPress={saveDraftAndLeave}
+                    style={({ pressed }) => [st.textAction, pressed && { opacity: 0.7 }]}
+                    accessibilityRole="button"
+                  >
+                    <Text style={st.textActionText}>{courseId ? '나중에 하기 · 초안으로 저장' : '그만두기'}</Text>
+                  </Pressable>
+                ) : null}
               </View>
             )}
           </>
@@ -1074,6 +1115,14 @@ export default function QuizNewScreen() {
               </View>
               <View style={st.linkBox}>
                 <Text style={st.linkText} selectable numberOfLines={2}>{quizLinkUrl(madeToken)}</Text>
+                {/* 주 버튼(링크 복사)은 맨 아래 노란 버튼이다. 퀴즈 상세로 가는 길은 이 카드 안 보조 버튼. */}
+                <Pressable
+                  onPress={() => router.replace(`/owner/quiz/${courseId}` as never)}
+                  style={({ pressed }) => [st.textAction, pressed && { opacity: 0.7 }]}
+                  accessibilityRole="button"
+                >
+                  <Text style={st.textActionText}>퀴즈 보기</Text>
+                </Pressable>
               </View>
               <Text style={st.hint}>이 주소를 보내면 상대가 이름과 전화번호만 적고 바로 풀어요.</Text>
             </View>
@@ -1083,66 +1132,14 @@ export default function QuizNewScreen() {
       </ScrollView>
       </KeyboardShift>
 
-      {/* ── 바닥 액션 — 화면당 Primary 1개 ── */}
-      <View style={st.foot}>
-        {step === 1 && (
-          /* 이름은 비워 둬도 넘어간다 — 고른 노하우로 지어 준다(빈 칸 때문에 막지 않는다).
-             라벨은 다음 단계가 **무엇을 하는 자리인지**로 쓴다(워딩 §3: "다음"은 버튼명 금지). */
-          <Primary label="노하우 고르기" disabled={!step1Ready} onPress={() => setStep(2)} />
-        )}
-        {step === 2 && (
-          <Primary
-            label={picked.length > 0 ? `${picked.length}개로 문제 만들기` : '노하우를 골라 주세요'}
-            disabled={busy || picked.length === 0}
-            onPress={() => void start()}
-          />
-        )}
-        {step === 4 && (
-          <>
-            {/* 문항이 0개면 남은 것이 없다(2026-09-11: 코스 행을 문항과 같이 만들게 바꿨다) —
-                "초안으로 저장"이라고 말하면 목록에서 찾을 수 없는 것을 저장했다고 말하는 셈이다. */}
-            {okItems.length === 0 ? (
-              <Ghost label={courseId ? '나중에 하기 · 초안으로 저장' : '그만두기'} onPress={saveDraftAndLeave} />
-            ) : null}
-            {/* 문항 0개 퀴즈는 보낼 수 없다(Q3 · 서버 0327 quiz_no_items). 하나도 못 만들었으면 노하우 고르기로 돌려보낸다. */}
-            {okItems.length === 0 ? (
-              <Primary label="노하우 다시 고르기" onPress={() => setStep(2)} />
-            ) : (
-              <Primary
-                label={audience === 'guest' ? '링크 기간 정하기' : '받는 사람 고르기'}
-                onPress={() => setStep(5)}
-              />
-            )}
-          </>
-        )}
-        {step === 5 && (
-          <Primary
-            label={
-              busy
-                ? audience === 'guest' ? '링크 만드는 중…' : '보내는 중…'
-                : audience === 'guest'
-                  ? '링크 만들기'
-                  : sendNow ? `${to.length}명에게 보내기` : `${to.length}명에게 예약하기`
-            }
-            disabled={busy || (audience === 'staff' && to.length === 0)}
-            onPress={() => void publish()}
-          />
-        )}
-        {step === 6 && madeToken && (
-          <>
-            <Ghost
-              label={COPY_LINK_LABEL}
-              onPress={() => {
-                void copyQuizLink(madeToken).then((r) => {
-                  const t = copyLinkToast(r);
-                  if (t) showToast(t.text, t.tone);
-                });
-              }}
-            />
-            <Primary label="끝내기" onPress={() => router.replace(`/owner/quiz/${courseId}` as never)} />
-          </>
-        )}
-      </View>
+      {/* ── 맨 아래 고정 노란 버튼 하나(2026-11-17 11절 3번 · 판정 = quizNewDock). 3단계(만드는 중)는 없다 ── */}
+      {dock ? (
+        <StepDock
+          label={dock.kind === 'copy' ? COPY_LINK_LABEL : dock.label}
+          disabled={dock.kind === 'copy' ? false : dock.disabled}
+          onPress={onDock}
+        />
+      ) : null}
 
       {/* D6 · D9 — 문항 고치기 / 직접 쓰기. 형태 11종마다 입력이 달라 **재구현 금지** 대상이다. */}
       {editing && courseId && (
@@ -1235,36 +1232,9 @@ function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () 
   );
 }
 
-function Primary({ label, disabled, onPress }: { label: string; disabled?: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => [st.primary, disabled && st.primaryOff, pressed && !disabled && { opacity: 0.85 }]}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: !!disabled }}
-      accessibilityLabel={label}
-    >
-      <Text style={[st.primaryText, disabled && st.primaryTextOff]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function Ghost({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [st.ghost, pressed && { opacity: 0.7 }]}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      <Text style={st.ghostText}>{label}</Text>
-    </Pressable>
-  );
-}
 
 const st = StyleSheet.create({
-  // 바탕 = Surface.screen(2026-11-02). 바닥 버튼 줄이 아래 안전 영역을 써야 해 SafeAreaView(bottom)는 그대로.
+  // 바탕 = Surface.screen(2026-11-02). 아래 안전 영역은 본 화면에서는 StepDock 이, 불러오기·오류 화면에서는 SafeAreaView(bottom)가 든다.
   safe: { flex: 1, backgroundColor: Surface.screen },
   // 첫 여백 16 · 좌우 20 = 화면 틀 값. 간격은 12 그대로 — 4단계 문항 카드가 스크롤 바로 아래 줄줄이 서서(같은 종류 사이).
   scroll: { ...screenScrollStyle, gap: Space.md },
@@ -1373,22 +1343,7 @@ const st = StyleSheet.create({
   doneHead: { alignItems: 'center', gap: Space.xs, paddingVertical: Space.lg },
   doneTitle: { fontSize: 17, fontWeight: '900', color: InkColors.ink },
   doneSub: { ...Type.desc, fontWeight: '600' },
-  linkBox: CardStyles.list,
+  linkBox: { ...CardStyles.list, gap: Space.md },
   linkText: { ...Type.body, fontWeight: '700', lineHeight: 22 },
-
-  foot: {
-    flexDirection: 'row', gap: Space.sm,
-    paddingHorizontal: Space.gutter, paddingVertical: Space.md,
-    borderTopWidth: 1, borderTopColor: InkColors.line, backgroundColor: InkColors.bg,
-  },
-  // 주 버튼 = 52 · 모서리 16 · 16/800 · 그림자 없음(2026-11-02 결정표). 보조(ghost)도 같은 틀에 흰 면.
-  primary: { ...ButtonStyles.primary, flex: 1, backgroundColor: InkColors.ink },
-  primaryOff: { backgroundColor: InkColors.bgSoft },
-  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
-  primaryTextOff: { color: InkColors.ink3 },
-  ghost: {
-    ...ButtonStyles.primary, flex: 1,
-    borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
-  },
-  ghostText: { ...ButtonTextStyles.primary, color: InkColors.ink2 },
+  // 바닥 주 버튼은 StepDock(노랑 · 2026-11-17 11절 3번)이 든다. 보조 버튼은 textAction(ButtonStyles.secondary).
 });
