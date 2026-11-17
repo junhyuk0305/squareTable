@@ -7,6 +7,7 @@ import { usePreventRemove } from 'expo-router/react-navigation';
 import { Ionicons } from '@expo/vector-icons';
 import { StepDock } from '@/components/StepDock';
 import { askBeforeLeave, changedFields } from '@/lib/utils/formDirty';
+import { useWebLeaveGuard } from '@/lib/hooks/useWebLeaveGuard';
 
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
@@ -112,12 +113,33 @@ function StoreConfigForm() {
     setTimeout(() => router.back(), 450);
   };
 
-  // 저장 안 한 값이 있으면 나가기 전에 묻는다(결함 · 2026-11-17). 머리 뒤로·안드 뒤로·웹 뒤로가 모두 화면을 빼는 동작이라 여기서 한 번에 받는다.
+  // 저장 안 한 값이 있으면 나가기 전에 묻는다(결함 · 2026-11-17). 머리 뒤로·안드 뒤로는 화면을 빼는 동작이라 여기서 받는다.
   //   저장이 끝나 스스로 나가거나 매장을 지워 나갈 때는 묻지 않는다(leaving).
+  const confirmLeave = () =>
+    confirmAction('저장하지 않고 나갈까요?', '고친 값은 저장되지 않아요.', '나가기', { destructive: true, icon: 'alert-circle-outline' });
+  // 웹 브라우저 뒤로는 라우터가 beforeRemove 없이 처리해 위가 못 받는다. 그래서 웹만 따로 건다(useWebLeaveGuard).
+  //   저장했으면(saved) 걸지 않는다. 묻는 창이 떠 있는 동안 또 누르면 창을 하나 더 띄우지 않는다(asking).
+  const asking = useRef(false);
+  const webGuard = useWebLeaveGuard(askBeforeLeave(changed, saving) && !saved, (leave) => {
+    if (asking.current) return;
+    asking.current = true;
+    void confirmLeave().then((ok) => {
+      asking.current = false;
+      if (!ok) return;
+      leaving.current = true;
+      leave();
+    });
+  });
   usePreventRemove(askBeforeLeave(changed, saving), ({ data }) => {
-    if (leaving.current) return navigation.dispatch(data.action);
-    void confirmAction('저장하지 않고 나갈까요?', '고친 값은 저장되지 않아요.', '나가기', { destructive: true, icon: 'alert-circle-outline' }).then((ok) => {
-      if (ok) navigation.dispatch(data.action);
+    // 라우터가 브라우저 기록을 옮기기 전에 웹 걸이를 푼다. 안 풀면 그 popstate 를 걸이가 가로챈다.
+    if (leaving.current) {
+      webGuard.release();
+      return navigation.dispatch(data.action);
+    }
+    void confirmLeave().then((ok) => {
+      if (!ok) return;
+      webGuard.release();
+      navigation.dispatch(data.action);
     });
   });
 

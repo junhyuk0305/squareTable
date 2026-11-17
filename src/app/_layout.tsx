@@ -29,6 +29,7 @@ import { useNotifSeenSync } from '@/lib/app/useNotifSeenSync';
 import { initAnalytics, installGlobalErrorHandlers, track } from '@/lib/analytics/track';
 import { useScreenTracking } from '@/lib/analytics/useScreenTracking';
 import { guardMarketingRoutes } from '@/lib/web/marketingGuard';
+import { installWebLeaveGuard } from '@/lib/hooks/useWebLeaveGuard';
 
 // 마케팅 경로(/features·/pricing·/cafe…)로 앱이 뜨는 것을 렌더 전에 차단하고 정적 웹으로 돌려보낸다.
 // 개발 서버엔 vercel rewrite 가 없어 여기서만 막힌다. 반드시 렌더 전(모듈 평가 시)에 호출할 것.
@@ -39,6 +40,9 @@ patchTextScaling();
 
 // 계정·매장이 바뀌면 데이터 스토어를 비운다(다른 계정·매장 행 노출 차단). 세션이 처음 바뀌기 전에 걸어야 한다.
 installTenantReset();
+
+// 웹 브라우저 뒤로를 라우터보다 먼저 듣는다(저장 안 한 값 묻기 · useWebLeaveGuard). 라우터가 듣기 전인 모듈 평가 때 걸어야 한다.
+installWebLeaveGuard();
 
 /**
  * 세션이 확정되기를 기다리는 상한(ms). 스플래시 모션이 끝나도 세션이 안 오면 이만큼 더 붙잡는다.

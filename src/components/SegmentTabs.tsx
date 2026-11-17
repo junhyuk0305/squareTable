@@ -115,7 +115,7 @@ export function SegmentTabs({
               style={styles.seg}
             >
               <View style={styles.labelRow}>
-                <Animated.Text numberOfLines={1} style={[styles.segText, { color }]}>
+                <Animated.Text numberOfLines={2} style={[styles.segText, { color }]}>
                   {it.label}
                 </Animated.Text>
                 {it.count ? (
@@ -158,8 +158,10 @@ const styles = StyleSheet.create({
     borderRadius: PILL_RADIUS,
     backgroundColor: InkColors.ink,
   },
-  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  segText: { fontSize: Type.body.fontSize, fontWeight: '700' },
+  // 좁은 폭·큰 글자(320 · ×1.18)에서 라벨+숫자가 칸보다 길면 라벨이 두 줄로 간다(2026-11-17 결함 · 출근 기록 "근무표와 다른 날 n").
+  //   labelRow 를 칸 폭 안에 묶고 라벨만 줄어들게 한다. 한 줄에 들어가는 넓은 폭에서는 모양이 그대로다.
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%' },
+  segText: { flexShrink: 1, textAlign: 'center', fontSize: Type.body.fontSize, fontWeight: '700' },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: BrandColors.yellowDeep },
   count: {
     minWidth: 16,
