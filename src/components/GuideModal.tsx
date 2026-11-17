@@ -1,4 +1,4 @@
-// 사용 안내 팝업 — 카드 2~3장을 '다음'으로 넘기며 읽는다.
+// 사용 안내 팝업 — 카드 2~3장을 '이어서 보기'로 넘기며 읽는다.
 // ConfirmModal 과 같은 방식으로 그린다(Modal + frameCapStyle) — 모바일 프레임(460px) 밖으로 새지 않게.
 // ★딤을 눌러도 닫히지 않는다. 안내 도중 실수로 닫히는 것을 막는다(CoachmarkTour 와 같은 규칙).
 import { useState } from 'react';
@@ -72,7 +72,7 @@ export function GuideModal({
                   accessibilityRole="button"
                   style={({ pressed }) => [styles.nextBtn, pressed && { opacity: 0.85 }]}
                 >
-                  <Text style={styles.nextText}>{isLast ? (guide.ctaLabel ?? '시작하기') : '다음'}</Text>
+                  <Text style={styles.nextText}>{isLast ? (guide.ctaLabel ?? '시작하기') : '이어서 보기'}</Text>
                 </Pressable>
               </View>
             </View>

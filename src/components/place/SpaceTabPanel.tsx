@@ -75,7 +75,7 @@ export function SpaceTabPanel() {
       ) : null}
       {/* 사장 계정은 직원 허브에 못 간다(junior _layout 이 돌려보낸다) → 코드 줄은 사장 계정이 아닐 때만. 정본 가정 = 사장은 [매장]만. */}
       {!isOwnerAccount ? (
-        <Section title={SPACE_WORDS.enterCode}>
+        <Section title={SPACE_MEMBERS.codeSectionTitle}>
           <Row icon="enter-outline" title={SPACE_WORDS.enterCode} hint={SPACE_MEMBERS.codeHint} onPress={() => router.push('/junior/hub')} />
           {!mine && joined.length === 0 ? <Text style={styles.note}>{SPACE_MEMBERS.emptySpaceBody}</Text> : null}
         </Section>

@@ -287,6 +287,7 @@ export const SPACE_MEMBERS = {
   joinedTitle: '참여 중인 공간',
   joinedRowHint: '눌러서 노하우 읽기',
   codeHint: '공간이나 매장에서 받은 6자리 코드',
+  codeSectionTitle: '받은 초대코드',
   requestBadge: (n: number) => `합류 신청 ${n}`,
   emptySpaceBody: '받은 초대코드를 넣으면 그 공간의 노하우를 읽을 수 있어요.',
   // S19 초대코드 결과
