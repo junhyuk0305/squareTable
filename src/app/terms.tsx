@@ -5,17 +5,13 @@ import { Stack } from 'expo-router';
 import { InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
-import { RoleTabBar } from '@/components/RoleTabBar';
-import { useSessionStore } from '@/lib/store/useSessionStore';
-import { canManage } from '@/lib/utils/roles';
 import { TERMS_VERSION } from '@/lib/config/business';
 import { CANCEL_PATH_TEXT } from '@/lib/config/store-policy';
 
 // 이용약관 요약. 전문의 SSOT 는 웹 정적 페이지(scripts/legal-content.mjs → /terms)이고
 // 이 화면은 요약 + 전문 링크만 둔다 — 전문을 앱과 웹에 이중 유지하면 반드시 어긋난다.
 export default function TermsScreen() {
-  // 설정에서 진입하는 공용 화면 — 사장/알바 어느 쪽에서 왔는지에 맞춰 하단 탭바를 그대로 유지한다.
-  const role = useSessionStore((s) => s.role);
+  // 문서 화면이라 하단 탭바를 그리지 않는다(화면조립표 2026-11-17 11절 5번). 나가는 길 = 머리 뒤로.
   return (
     <SafeAreaView style={styles.safe} edges={[]}>
       <Stack.Screen options={{ headerShown: false, title: '이용약관', headerStyle: { backgroundColor: Surface.header }, headerTintColor: InkColors.ink }} />
@@ -70,7 +66,6 @@ export default function TermsScreen() {
         </View>
         <View style={{ height: 24 }} />
       </ScrollView>
-      <RoleTabBar role={canManage(role) ? 'owner' : 'junior'} />
     </SafeAreaView>
   );
 }

@@ -11,6 +11,7 @@ import { useOwnerTodoCount } from '@/lib/hooks/useOwnerTodoCount';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useShell } from '@/components/shell/shellContext';
 import { SPACE_SCREEN } from '@/lib/place/words';
+import { matchesTab, pickActiveTab, type TabPath } from '@/lib/utils/tabPick';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 export type Tab = { label: string; path: Href; icon: IconName; iconActive: IconName; alsoActiveFor?: Href[] };
@@ -77,12 +78,16 @@ export function storeTabsFor(role: 'junior' | 'owner', sessionRole: string): Tab
  * 정확 일치만 보면 경로가 바뀔 때 하이라이트가 깨진다. 탭바와 사이드바가 같은 함수를 쓴다.
  */
 export function isTabActive(t: Tab, pathname: string): boolean {
-  const match = (path: Href) => {
-    const base = String(path);
-    return pathname === base || pathname.startsWith(`${base}/`);
-  };
-  return match(t.path) || (t.alsoActiveFor?.some(match) ?? false);
+  return matchesTab(tabPath(t), pathname);
 }
+
+const tabPath = (t: Tab): TabPath => ({ path: String(t.path), also: t.alsoActiveFor?.map(String) });
+
+/**
+ * 역할마다 마지막으로 켜진 칸의 경로 — 하위 화면이 "들어온 탭의 칸"을 켜는 데 쓴다(11절 5번).
+ * 하위 화면의 탭바는 들어갈 때 새로 그려지므로 그때 읽은 값이 들어온 탭이다.
+ */
+const lastTab: Partial<Record<'junior' | 'owner' | 'space', string>> = {};
 
 /**
  * 탭 루트로 이동 — 탭은 '전환'이지 스택 히스토리가 아니다.
@@ -105,20 +110,27 @@ export function RoleTabBar({ role }: { role: 'junior' | 'owner' | 'space' }) {
   //  판정 SSOT = useOwnerTodoCount. 훅은 조건부 호출이 안 되므로 junior 에서도 부르되 배지는 안 붙인다.
   const todo = useOwnerTodoCount();
   const shell = useShell();
+  // 켤 칸 = 자기 칸, 아니면 들어온 탭의 칸(하위 화면). 판정 = pickActiveTab.
+  const lit = pickActiveTab(tabs.map(tabPath), pathname, lastTab[role] ?? null);
+  useEffect(() => {
+    const own = tabs.find((t) => isTabActive(t, pathname));
+    if (own) lastTab[role] = String(own.path);
+  }, [tabs, pathname, role]);
 
   // 넓은 웹 셸(사장·본사)에서는 왼쪽 사이드바가 이동을 맡는다 — 하단 탭바까지 그리면
   // 같은 이동 수단이 둘이 된다. 폰 셸(네이티브·직원 웹)은 지금 그대로다.
   if (shell !== 'phone') return null;
 
+  // 누르면 이동하는지는 자기 칸인지로만 본다. 하위 화면에서 켜진 들어온 탭을 누르면 그 탭으로 돌아간다.
   const isActive = (t: Tab) => isTabActive(t, pathname);
 
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-      {tabs.map((t) => (
+      {tabs.map((t, i) => (
         <TabButton
           key={String(t.path)}
           tab={t}
-          active={isActive(t)}
+          active={i === lit}
           badge={role === 'owner' && String(t.path) === OWNER_KNOWHOW_TAB ? todo.total : undefined}
           onPress={() => {
             if (!isActive(t)) goToTab(t.path);
