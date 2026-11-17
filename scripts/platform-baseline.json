@@ -39,6 +39,7 @@
     "src/lib/app/useForegroundRefresh.ts": 1,
     "src/lib/config/site.ts": 1,
     "src/lib/config/store-policy.ts": 8,
+    "src/lib/hooks/useWebLeaveGuard.ts": 2,
     "src/lib/iap/errors.ts": 1,
     "src/lib/iap/notes.ts": 1,
     "src/lib/iap/purchases.ts": 3,
