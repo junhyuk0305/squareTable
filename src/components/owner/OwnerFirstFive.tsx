@@ -11,7 +11,10 @@ import { KeyboardShift } from '@/components/KeyboardShift';
 import { InviteBlock } from '@/components/owner/InviteBlock';
 import { PackDraftCard, confirmedPackEntry } from '@/components/owner/PackDraftCard';
 import { PressableScale } from '@/components/PressableScale';
+import { StepDock } from '@/components/StepDock';
 import { Appear, stagger } from '@/components/Appear';
+import { useBackIntercept } from '@/lib/hooks/useBackIntercept';
+import { ownerFivePlan } from '@/lib/utils/stepScreenPlans';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { showToast } from '@/lib/store/useToastStore';
@@ -76,23 +79,26 @@ export function OwnerFirstFive({
 
   const openCoach = (seed: string) => router.push({ pathname: '/owner/coach', params: { seed } } as never);
 
+  // 맨 아래 노란 버튼 이름 + 안드 뒤로 = 앞 단계(화면조립표 2026-11-17 11절 3번). 머리가 없는 화면이라 안드 뒤로만 받는다.
+  const plan = ownerFivePlan(step, { startAtAsk });
+  const back = plan.back;
+  useBackIntercept(back !== null, () => { if (back !== null) setStep(back); });
+
   if (step === 'invite') {
     return (
-      <ScrollView contentContainerStyle={[screenScrollStyle, frameCapStyle]} showsVerticalScrollIndicator={false}>
-        <Appear delay={stagger(0)} style={s.intro}>
-          <Text style={s.title}>{OWNER_FIRST.inviteTitle}</Text>
-          <Text style={s.desc}>{OWNER_FIRST.inviteBody}</Text>
-        </Appear>
-        <Appear delay={stagger(1)}>
-          <InviteBlock code={inviteCode} from="onboarding" />
-        </Appear>
-        {/* 다음 = 흰 카드 안(R-14 · 2026-11-16). InviteBlock 은 안에 버튼 자리가 없어 따로 카드에 담는다. */}
-        <Appear delay={stagger(2)} style={s.btnCard}>
-          <PressableScale onPress={() => setStep('ask')} scaleTo={0.97} style={s.ghost} accessibilityRole="button" accessibilityLabel={OWNER_FIRST.next}>
-            <Text style={s.ghostText}>{OWNER_FIRST.next}</Text>
-          </PressableScale>
-        </Appear>
-      </ScrollView>
+      <View style={s.fill}>
+        <ScrollView style={s.fill} contentContainerStyle={[screenScrollStyle, frameCapStyle]} showsVerticalScrollIndicator={false}>
+          <Appear delay={stagger(0)} style={s.intro}>
+            <Text style={s.title}>{OWNER_FIRST.inviteTitle}</Text>
+            <Text style={s.desc}>{OWNER_FIRST.inviteBody}</Text>
+          </Appear>
+          <Appear delay={stagger(1)}>
+            <InviteBlock code={inviteCode} from="onboarding" />
+          </Appear>
+        </ScrollView>
+        {/* 맨 아래 고정 노란 버튼 하나 · 이름 = 다음 단계 이름(11절 3번). 버튼만 든 흰 카드를 없앴다(11절 4번). */}
+        <StepDock label={OWNER_FIRST[plan.dock.label]} onPress={() => setStep('ask')} />
+      </View>
     );
   }
 
@@ -146,20 +152,9 @@ export function OwnerFirstFive({
           </View>
         )}
 
-        {/* 끝내기 — 초안 카드가 떠 있으면 Primary 는 [맞아요] 하나다. 카드가 없을 때만 끝내기가 Primary 다.
-            흰 카드 안(R-14 · 2026-11-16) — 초안 카드 아래 자리를 지키려고 따로 카드에 담는다. */}
-        <View style={s.btnCard}>
-        <PressableScale
-          onPress={onFinish}
-          scaleTo={0.97}
-          style={asked && hit ? s.ghost : s.primary}
-          accessibilityRole="button"
-          accessibilityLabel={startAtAsk ? OWNER_FIRST.backToHub : OWNER_FIRST.finish}
-        >
-          <Text style={asked && hit ? s.ghostText : s.primaryText}>{startAtAsk ? OWNER_FIRST.backToHub : OWNER_FIRST.finish}</Text>
-        </PressableScale>
-        </View>
       </ScrollView>
+      {/* 끝내기 = 맨 아래 고정 노란 버튼 하나(11절 3번). 버튼만 든 흰 카드를 없앴다(11절 4번). */}
+      <StepDock label={OWNER_FIRST[plan.dock.label]} onPress={onFinish} />
     </KeyboardShift>
   );
 }
@@ -168,8 +163,8 @@ const s = StyleSheet.create({
   intro: { gap: Gap.inline },
   title: { ...Type.title },
   desc: { ...Type.desc },
+  fill: { flex: 1 },
   askCard: { ...CardStyles.list, gap: Gap.item },
-  btnCard: CardStyles.list,
   askRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   input: {
     ...Type.body,
@@ -189,7 +184,5 @@ const s = StyleSheet.create({
   noDraftTitle: { ...Type.section },
   ghost: { ...ButtonStyles.primary, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
   ghostText: { ...ButtonTextStyles.primary, color: InkColors.ink },
-  primary: { ...ButtonStyles.primary, backgroundColor: BrandColors.brand },
-  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   dim: { opacity: 0.5 },
 });

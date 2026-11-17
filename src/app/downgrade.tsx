@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +22,9 @@ import { StepProgress } from '@/components/blocks/StepProgress';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
+import { StepDock } from '@/components/StepDock';
+import { useBackIntercept } from '@/lib/hooks/useBackIntercept';
+import { downgradePlan } from '@/lib/utils/stepScreenPlans';
 import { InkColors, BrandColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, screenScrollStyle } from '@/lib/theme/layout';
@@ -190,6 +193,10 @@ function DowngradeBody() {
     });
   };
 
+  // 맨 아래 노란 버튼 + 안드 뒤로 = 세 갈래(화면조립표 2026-11-17 11절 3번). 머리가 없는 게이트 화면이라 안드 뒤로만 받는다.
+  const { dock, back } = downgradePlan(step, { pickedStore: !!pickedStore, seats: pickedSeats.length, busy });
+  useBackIntercept(!loading && back !== null && !busy, () => { if (back !== null) setStep(back); });
+
   if (loading) {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -229,7 +236,8 @@ function DowngradeBody() {
   const storeStepTotal = firstNeed?.need_seats || need.need_seats ? 2 : 1;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    // 매장·직원 단계의 아래 안전 영역은 StepDock 이 든다.
+    <SafeAreaView style={styles.safe} edges={dock ? ['top'] : ['top', 'bottom']}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView contentContainerStyle={styles.scroll}>
         {step === 'fork' ? (
@@ -270,14 +278,7 @@ function DowngradeBody() {
                 ))}
               </View>
             </Appear>
-            <FooterActions
-              label="이 매장 남기기"
-              disabled={!pickedStore || busy}
-              busy={busy}
-              onPress={submitStore}
-              onPlan={() => setStep('fork')}
-              canPlan={canBuy}
-            />
+            <KeepAllCard what="store" onPlan={() => setStep('fork')} canPlan={canBuy} />
           </>
         ) : (
           <>
@@ -307,18 +308,15 @@ function DowngradeBody() {
                 ))}
               </View>
             </Appear>
-            <FooterActions
-              // 아직 아무도 안 골랐을 때 "0명 남기기"는 할 수 없는 일을 적은 버튼이 된다.
-              label={pickedSeats.length > 0 ? `${pickedSeats.length}명 남기기` : '남길 직원 고르기'}
-              disabled={pickedSeats.length === 0 || busy}
-              busy={busy}
-              onPress={submitSeats}
-              onPlan={() => setStep('fork')}
-              canPlan={canBuy}
-            />
+            <KeepAllCard what="seats" onPlan={() => setStep('fork')} canPlan={canBuy} />
           </>
         )}
       </ScrollView>
+      {/* 매장·직원 단계 = 맨 아래 고정 노란 버튼 하나. 이름·뒤로 = downgradePlan.
+          아직 아무도 안 골랐을 때 "0명 남기기"는 할 수 없는 일을 적은 버튼이 된다(판정 안에서 "남길 직원 고르기"). */}
+      {dock && (
+        <StepDock label={dock.label} disabled={dock.disabled} busy={busy} onPress={step === 'store' ? submitStore : submitSeats} />
+      )}
     </SafeAreaView>
   );
 }
@@ -448,26 +446,21 @@ function PickRow({
   );
 }
 
-function FooterActions({
-  label, disabled, busy, onPress, onPlan, canPlan,
-}: { label: string; disabled: boolean; busy: boolean; onPress: () => void; onPlan: () => void; canPlan: boolean }) {
+/**
+ * 고르다가 "이럴 바엔 요금제"가 실제 전환 지점이다 — 두 단계 모두에서 되돌아갈 수 있어야 한다.
+ * 살 길이 없으면(판매 중단 등) 갈림길에 유료 선택지가 없어 같은 자리로 되돌아올 뿐이다 — 카드를 두지 않는다.
+ * 주 버튼은 맨 아래 고정 노란 버튼(StepDock · 화면조립표 2026-11-17 11절 3번)으로 옮겼다.
+ * 버튼만 든 흰 카드는 금지라(11절 4번) 무엇을 지키는지 한 줄을 같이 둔다.
+ */
+function KeepAllCard({ what, onPlan, canPlan }: { what: 'store' | 'seats'; onPlan: () => void; canPlan: boolean }) {
+  if (!canPlan) return null;
   return (
     <Appear delay={stagger(3)}>
       <View style={styles.footer}>
-        <Pressable
-          onPress={onPress}
-          disabled={disabled}
-          style={({ pressed }) => [styles.primary, disabled && styles.primaryOff, pressed && !disabled && { opacity: 0.88 }]}
-        >
-          {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>{label}</Text>}
+        <Text style={styles.sub}>{what === 'store' ? '매장을 모두 지킬 수도 있어요.' : '직원을 모두 지킬 수도 있어요.'}</Text>
+        <Pressable onPress={onPlan} hitSlop={8} style={styles.link}>
+          <Text style={styles.linkText}>{SHOW_BILLING ? '요금제로 전부 지키기' : '이용권으로 전부 지키기'}</Text>
         </Pressable>
-        {/* 고르다가 "이럴 바엔 요금제"가 실제 전환 지점이다 — 두 단계 모두에서 되돌아갈 수 있어야 한다.
-            살 길이 없으면(판매 중단 등) 갈림길에 유료 선택지가 없어 같은 자리로 되돌아올 뿐이다 — 링크를 두지 않는다. */}
-        {canPlan && (
-          <Pressable onPress={onPlan} hitSlop={8} style={styles.link}>
-            <Text style={styles.linkText}>{SHOW_BILLING ? '요금제로 전부 지키기' : '이용권으로 전부 지키기'}</Text>
-          </Pressable>
-        )}
       </View>
     </Appear>
   );
@@ -530,9 +523,6 @@ const styles = StyleSheet.create({
   // 주 버튼·되돌아가는 링크 = 흰 카드 한 장(2026-11-16 R-14 · 하단 고정 바는 만들지 않는다).
   footer: { ...CardStyles.list, gap: Space.md },
   // 주 버튼(52 · 모서리 16 · 가로 꽉 · 16/800).
-  primary: { ...ButtonStyles.primary, backgroundColor: BrandColors.brand },
-  primaryOff: { opacity: 0.35 },
-  primaryText: { ...ButtonTextStyles.primary, lineHeight: 22, color: InkColors.bubbleText },
   link: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
   linkText: ButtonTextStyles.secondary,
 });

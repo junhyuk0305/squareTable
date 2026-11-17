@@ -39,11 +39,11 @@ export default function OwnerHandoverScreen() {
   // 킬스위치(ai/config.ts BULK_IMPORT_PIPELINE):
   //  true  = 대량 파이프(청킹 → draft 증분저장 → 섹션 검수 → 발행) — HandoverImport
   //  false = 아래 레거시(단일 AI 호출·최대 MAX_SPLIT_PUBLISH개 즉시 발행)로 즉시 롤백
+  // 머리는 HandoverImport 가 든다. 머리 뒤로가 단계 안에서 앞 단계로 가야 한다(화면조립표 2026-11-17 11절 3번).
   if (BULK_IMPORT_PIPELINE) {
     return (
       <>
         <Stack.Screen options={{ title: '문서로 노하우 추가' }} />
-        <ScreenTitleHeader title="문서로 노하우 추가" backFallback />
         <HandoverImport />
       </>
     );

@@ -14,6 +14,9 @@ import { OwnerFirstFive } from '@/components/owner/OwnerFirstFive';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { useStoreAskFirst } from '@/lib/hooks/useStoreAskFirst';
 import { OWNER_FIRST } from '@/lib/place/words';
+import { StepDock } from '@/components/StepDock';
+import { useBackIntercept } from '@/lib/hooks/useBackIntercept';
+import { ownerFirstPlan } from '@/lib/utils/stepScreenPlans';
 import { templatesForIndustry, forkTemplate, type PlaybookTemplate } from '@/data/knowhowPacks';
 import { standardSections, UNSECTIONED } from '@/lib/config/sections';
 import { Appear, stagger } from '@/components/Appear';
@@ -143,6 +146,12 @@ export default function OwnerOnboardingScreen() {
   };
   const goDashboard = () => router.replace('/owner/dashboard');
 
+  // 맨 아래 노란 버튼 이름 + 안드 뒤로 = 앞 단계(화면조립표 2026-11-17 11절 3번). 머리가 없는 화면이라 안드 뒤로만 받는다.
+  // 새 순서(askFirst)는 OwnerFirstFive 가 자기 단계를 든다.
+  const plan = ownerFirstPlan(step, { selected: selectedCount, registering, registered: registeredCount });
+  const back = plan.back;
+  useBackIntercept(askFirst === false && back !== null, () => { if (back !== null) setStep(back); });
+
   // ── 스위치 읽는 동안 = 로딩(옛 화면이 먼저 보였다가 바뀌지 않게) · 켜짐 = 새 순서(초대 → 질문 던져보기) ──
   if (askFirst === null) {
     return (
@@ -154,7 +163,8 @@ export default function OwnerOnboardingScreen() {
   }
   if (askFirst) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      // 아래 안전 영역은 OwnerFirstFive 의 StepDock 이 든다.
+      <SafeAreaView style={styles.safe} edges={['top']}>
         <Stack.Screen options={{ headerShown: false }} />
         <OwnerFirstFive
           inviteCode={inviteCode}
@@ -185,7 +195,8 @@ export default function OwnerOnboardingScreen() {
   // ── 완료 화면 ──
   if (step === 'done') {
     return (
-      <SafeAreaView style={styles.safe}>
+      // 아래 안전 영역은 StepDock 이 든다.
+      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={[styles.doneWrap, frameCapStyle]}>
           {/* ★Appear 래퍼는 doneWrap(alignItems:center)의 flex 자식이 된다 — 안쪽이 기대하던
@@ -255,12 +266,9 @@ export default function OwnerOnboardingScreen() {
             </Appear>
           )}
 
-          <Appear delay={stagger(4)} style={styles.doneCtaCard}>
-            <PressableScale onPress={goDashboard} scaleTo={0.97} style={styles.primary}>
-              <Text style={styles.primaryText}>홈으로 들어가기</Text>
-            </PressableScale>
-          </Appear>
         </View>
+        {/* 맨 아래 고정 노란 버튼 하나(11절 3번). 버튼만 든 흰 카드를 없앴다(11절 4번). */}
+        <StepDock label={plan.dock!.label} onPress={goDashboard} />
       </SafeAreaView>
     );
   }
@@ -376,7 +384,7 @@ export default function OwnerOnboardingScreen() {
         <View style={{ height: barH }} />
       </ScrollView>
 
-      {/* 하단 고정 액션 바 — 풀폭 1차 CTA + 그 아래 중앙 '건너뛰기' 고스트(계층 분리) */}
+      {/* 하단 고정 액션 바 — 노란 주 버튼 하나(11절 3번 · 이름 = ownerFirstPlan) + 그 아래 '건너뛰기' 보조 */}
       <View style={styles.barWrap}>
         <View style={[styles.bar, frameCapStyle]} onLayout={(e) => setBarH(Math.max(168, Math.ceil(e.nativeEvent.layout.height) + Space.lg))}>
           {selectedCount < MIN_RECOMMENDED && (
@@ -385,14 +393,12 @@ export default function OwnerOnboardingScreen() {
           <PressableScale
             onPress={onRegister}
             scaleTo={0.98}
-            disabled={selectedCount === 0 || registering}
-            style={[styles.cta, (selectedCount === 0 || registering) && styles.ctaOff]}
+            disabled={plan.dock!.disabled}
+            style={[styles.cta, plan.dock!.disabled && styles.ctaOff]}
             accessibilityRole="button"
-            accessibilityLabel={selectedCount > 0 ? `${selectedCount}개 우리 매장에 담기` : '노하우를 골라주세요'}
+            accessibilityLabel={plan.dock!.label}
           >
-            <Text style={[styles.ctaText, (selectedCount === 0 || registering) && styles.ctaTextOff]}>
-              {registering ? '담는 중…' : selectedCount > 0 ? `우리 매장에 담기 · ${selectedCount}개` : '노하우를 골라주세요'}
-            </Text>
+            <Text style={ButtonTextStyles.primaryOnYellow}>{plan.dock!.label}</Text>
           </PressableScale>
           <Pressable onPress={onSkip} style={styles.skip}>
             <Text style={styles.skipText}>건너뛰기</Text>
@@ -537,11 +543,9 @@ const styles = StyleSheet.create({
     ...Elevation.e2,
   },
   barNudge: { ...Type.tag, color: BrandColors.warnText, fontWeight: '700', textAlign: 'center' },
-  // 주 버튼(52 · 모서리 16 · 가로 꽉 · 그림자 없음).
-  cta: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
-  ctaOff: { backgroundColor: InkColors.line },
-  ctaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
-  ctaTextOff: { color: TextColor.disabled },
+  // 노란 주 버튼(52 · 모서리 16 · 가로 꽉 · 화면조립표 2026-11-17 11절 3번).
+  cta: ButtonStyles.primaryYellow,
+  ctaOff: { opacity: 0.45 },
   // 건너뛰기 = 글자 그대로 · 누르는 높이 44(2026-11-02). 옛 자리(위아래 8 + 글자 약 20 = 36)를 지키려고 위아래 -4.
   skip: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
   skipText: ButtonTextStyles.secondary,
@@ -567,8 +571,4 @@ const styles = StyleSheet.create({
   },
   planTitle: { ...Type.body, fontWeight: '900' },
   planSub: { ...Type.desc, fontWeight: '600', marginTop: 1 },
-  // 홈으로 들어가기 — 흰 카드 안(R-14 · 2026-11-16 · 버튼만 회색 위에 두지 않는다).
-  doneCtaCard: { ...CardStyles.list, alignSelf: 'stretch' },
-  primary: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
-  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

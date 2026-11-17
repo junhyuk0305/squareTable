@@ -8,6 +8,8 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { fetchUnitKnowhow, copyKnowhowBetween, copyKnowhowPhotos, type UnitKnowhowRow } from '@/lib/db';
 import { SectionLabel } from '@/components/SectionLabel';
 import { StepProgress } from '@/components/blocks/StepProgress';
+import { StepDock } from '@/components/StepDock';
+import { importKnowhowPlan, type ImportStep } from '@/lib/utils/stepScreenPlans';
 import { InfoDot } from '@/components/InfoDot';
 import { Appear } from '@/components/Appear';
 import { EmptyState } from '@/components/EmptyState';
@@ -62,9 +64,10 @@ type CopiedRow = { title: string; photos: number; photosTotal: number };
  *  ③ 이름은 '복사'다 — 원본은 보내는 매장에 그대로 남는다(이동이 아니다).
  * '점검 필요'는 그대로 유지한다(받는 매장 기준으로 주소·연락처를 다시 봐야 한다).
  *
- * (SafeArea/헤더/탭바는 상위 owner/import-knowhow 가 소유.)
+ * (SafeArea/헤더와 단계는 상위 owner/import-knowhow 가 소유. 머리 뒤로가 앞 단계로 가야 해서 단계를 위로 올렸다.)
+ * 맨 아래 고정 노란 버튼 하나(StepDock · 화면조립표 2026-11-17 11절 3번). 이름·뒤로 = importKnowhowPlan.
  */
-export function OwnerKnowhowImport() {
+export function OwnerKnowhowImport({ step, onStep: setStep }: { step: ImportStep; onStep: (s: ImportStep) => void }) {
   const router = useRouter();
   const stores = useSessionStore((s) => s.stores);
   const activeUnit = useSessionStore((s) => s.unitId);
@@ -74,7 +77,6 @@ export function OwnerKnowhowImport() {
   const owned = useMemo(() => stores.filter((s) => s.role === 'owner'), [stores]);
   const nameOf = (uid: string | null) => owned.find((s) => s.unit_id === uid)?.store_name ?? '매장';
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
   // 기본값은 **2곳뿐일 때만** 채운다(그때는 고를 것이 없다). 3곳 이상이면 사장이 직접 고른다 —
   // 방향을 잘못 짚으면 남의 매장에 엉뚱한 노하우가 쌓이고, 되돌리는 화면이 없다.
   const [fromId, setFromId] = useState<string | null>(owned.length === 2 ? activeUnit : null);
@@ -193,6 +195,7 @@ export function OwnerKnowhowImport() {
     );
   }
 
+  const dock = importKnowhowPlan(step, { picked: !!fromId && !!toId, selected: selected.size }).dock!;
   const photoTotal = result.reduce((a, r) => a + r.photos, 0);
   // 못 간 사진 — 있으면 그대로 말한다(사장이 받는 매장에서 빈 자리를 나중에 발견하지 않게).
   const photoMissed = result.reduce((a, r) => a + (r.photosTotal - r.photos), 0);
@@ -425,62 +428,13 @@ export function OwnerKnowhowImport() {
         <View style={{ height: 96 }} />
       </ScrollView>
 
-      {/* 하단 도크 — 단계마다 주 액션 1개. 프레임 안 정상 흐름(모달 아님)이라 폭은 프레임에 귀속. */}
-      <View style={styles.dock}>
-        {step === 1 ? (
-          <Pressable
-            onPress={goPick}
-            disabled={!fromId || !toId}
-            style={({ pressed }) => [styles.importBtn, (!fromId || !toId) && { opacity: 0.4 }, pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-            accessibilityLabel="노하우 고르기"
-          >
-            <Text style={styles.importBtnText}>노하우 고르기</Text>
-          </Pressable>
-        ) : step === 2 ? (
-          <View style={styles.dockRow}>
-            <Pressable
-              onPress={() => setStep(1)}
-              disabled={copying}
-              style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.7 }]}
-              accessibilityRole="button"
-              accessibilityLabel="매장 다시 고르기"
-            >
-              <Text style={styles.backBtnText}>매장</Text>
-            </Pressable>
-            <Pressable
-              onPress={doCopy}
-              disabled={copying || selected.size === 0}
-              style={({ pressed }) => [
-                styles.importBtn,
-                styles.importBtnFill,
-                (copying || selected.size === 0) && { opacity: 0.4 },
-                pressed && { opacity: 0.7 },
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={`${selected.size}개 복사하기`}
-            >
-              {copying ? (
-                <ActivityIndicator color={InkColors.bubbleText} size="small" />
-              ) : (
-                <Ionicons name="copy-outline" size={17} color={InkColors.bubbleText} />
-              )}
-              <Text style={styles.importBtnText}>
-                {copying ? '복사하는 중…' : selected.size === 0 ? '노하우를 골라 주세요' : `${selected.size}개 복사하기`}
-              </Text>
-            </Pressable>
-          </View>
-        ) : (
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [styles.importBtn, pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-            accessibilityLabel="끝내기"
-          >
-            <Text style={styles.importBtnText}>끝내기</Text>
-          </Pressable>
-        )}
-      </View>
+      {/* 하단 도크 = 노란 버튼 하나. 1 노하우 고르기 · 2 n개 복사하기 · 3 끝내기. 앞 단계는 머리 뒤로가 맡는다. */}
+      <StepDock
+        label={dock.label}
+        disabled={dock.disabled}
+        busy={step === 2 && copying}
+        onPress={step === 1 ? goPick : step === 2 ? doCopy : () => router.back()}
+      />
     </View>
   );
 }
@@ -549,25 +503,6 @@ const styles = StyleSheet.create({
   doneSub: { ...Type.desc, fontWeight: '600' },
   // 유실 안내 — 성공 화면 안의 경고라 색이 아니라 말로 먼저 말하고, 색은 보조다(워딩 P9).
   doneWarn: { ...Type.desc, color: BrandColors.warnText, fontWeight: '700' },
-
-  // 하단 도크
-  dock: {
-    paddingHorizontal: Space.gutter, paddingTop: Space.sm, paddingBottom: Space.md,
-    borderTopWidth: 1, borderTopColor: InkColors.line, backgroundColor: InkColors.cream,
-  },
-  dockRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  // 주 버튼(52 · 모서리 16 · 16/800 · 그림자 없음 · 2026-11-02). 되돌아가기도 같은 틀에 흰 면.
-  importBtn: {
-    ...ButtonStyles.primary,
-    flexDirection: 'row', gap: 7, backgroundColor: InkColors.ink,
-  },
-  importBtnFill: { flex: 1, minWidth: 0 },
-  importBtnText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
-  backBtn: {
-    ...ButtonStyles.primary,
-    borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
-  },
-  backBtnText: { ...ButtonTextStyles.primary, color: InkColors.ink },
 
   emptyBody: { fontSize: 15, color: InkColors.ink2, fontWeight: '600', textAlign: 'center', lineHeight: 22 },
 });
