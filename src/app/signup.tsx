@@ -11,6 +11,7 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import { PasswordInput } from '@/components/PasswordInput';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { Appear } from '@/components/Appear';
+import { RolePicker } from '@/components/RolePicker';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
 import { isValidEmail, isValidPhone, normalizePhone, formatPhone, passwordError, formatBirthDate8, birthDateISO, isUnder14, normalizeInviteCode } from '@/lib/utils/validation';
 import { usePhoneOtp } from '@/lib/otp';
@@ -19,7 +20,7 @@ import { allConsented, consentPayload, UNDER_14_TEXT, type ConsentChecked } from
 import { EMAIL_TAKEN_TEXT, ROLE_SPLIT_TEXT } from '@/lib/account/copy';
 import { BrandColors, InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Space, screenScrollStyle } from '@/lib/theme/layout';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Radius } from '@/lib/theme/elevation';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Type } from '@/lib/theme/type';
 import { ChipStyles } from '@/lib/theme/chip';
@@ -214,25 +215,7 @@ export default function SignupScreen() {
         <Text style={styles.roleQ}>어떤 분이세요?</Text>
         </Appear>
         <Appear delay={0}>
-        <View style={styles.roleRow}>
-          {(
-            [
-              { r: 'owner', icon: 'storefront', label: '사장님', desc: '매장을 운영하고\n노하우를 등록해요' },
-              { r: 'junior', icon: 'person', label: '직원', desc: '초대코드로\n매장에 합류해요' },
-            ] as const
-          ).map((o) => (
-            <Pressable key={o.r} onPress={() => setRole(o.r)} style={[styles.roleCard, role === o.r && styles.roleCardOn]}>
-              <Ionicons name={o.icon} size={28} color={role === o.r ? InkColors.ink : InkColors.ink3} style={styles.roleIcon} />
-              <Text style={[styles.roleLabel, role === o.r && styles.roleLabelOn]}>{o.label}</Text>
-              <Text style={styles.roleDesc}>{o.desc}</Text>
-              {role === o.r && (
-                <View style={styles.roleCheck}>
-                  <Text style={styles.roleCheckMark}>✓</Text>
-                </View>
-              )}
-            </Pressable>
-          ))}
-        </View>
+        <RolePicker value={role} onChange={setRole} />
         {/* J11: 직원 계정으로는 매장을 열 수 없다(0157). 전환 기능 대신 처음부터 알려 준다. */}
         <Text style={styles.roleSplit}>{ROLE_SPLIT_TEXT}</Text>
         </Appear>
@@ -517,36 +500,7 @@ const styles = StyleSheet.create({
   // 첫 여백·좌우·아래 = 화면 틀 값. 입력칸 사이 14 는 폼 리듬이라 섹션 간격(20) 대신 그대로 둔다.
   scroll: { ...screenScrollStyle, gap: 14 },
   roleQ: { ...Type.section, marginBottom: 2 },
-  roleRow: { flexDirection: 'row', gap: 12, marginBottom: 4 },
-  roleCard: {
-    flex: 1,
-    backgroundColor: Surface.card,
-    borderWidth: 2,
-    borderColor: InkColors.line,
-    borderRadius: Radius.md,
-    padding: Space.lg,
-    gap: 4,
-  },
-  // 선택 = 잉크 테두리 + 소프트 섀도로 '선택된 border'를 굵게(bold) 강조(입력칸 선택 효과와 통일).
-  roleCardOn: { borderColor: BrandColors.brand, backgroundColor: Surface.selected, ...Elevation.e1 },
-  // 그림 이모지 금지(워딩 §2.3) — Ionicons로 교체. 아이콘도 Text 기반이라 글자 크기 설정에 함께 반응한다.
-  roleIcon: { marginBottom: 4 },
-  roleLabel: { fontSize: 16, fontWeight: '800', color: InkColors.ink2, marginTop: 4 },
-  roleLabelOn: { color: BrandColors.brand },
-  roleDesc: { ...Type.desc },
   roleSplit: { ...Type.desc, marginBottom: 4 },
-  roleCheck: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: BrandColors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  roleCheckMark: { ...Type.tag, color: InkColors.bubbleText, fontWeight: '900' },
   formCard: { ...CardStyles.list, gap: Space.md },
   actionCard: { ...CardStyles.list, gap: Space.sm },
   field: { gap: 6 },

@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
@@ -14,6 +15,7 @@ import { useToday } from '@/lib/hooks/useToday';
 import { gradableTasks, staffBehind, type StaffBehind } from '@/lib/utils/taskProgress';
 import { sortByUrgency } from '@/lib/utils/unknownQuery';
 import { isTodoQuestion, isTodoSuggestion } from '@/lib/hooks/useOwnerTodoCount';
+import { fetchOwnerOverview, type OwnerOverviewRow } from '@/lib/db';
 import type { UnknownQuery } from '@/types';
 
 export type OwnerDashboardData = {
@@ -84,6 +86,11 @@ export type OwnerDashboardData = {
    *   채우면 이 값이 false 가 되어 '다음 행동'에서 스스로 사라진다(상시 조르기가 아니다).
    */
   scheduleEmpty: boolean;
+  /**
+   * 시작 카드 재료 = 이 매장의 owner_overview 한 행(0840 · 판정은 starterProgress).
+   * 못 읽었으면 null — 카드를 그리지 않는다(없는 단계를 지어내지 않는다 · 표면화는 db.ts readFail).
+   */
+  starterRow: OwnerOverviewRow | null;
 };
 
 /** 사장 대시보드 화면의 뷰모델 — 스토어 셀렉터 읽기 + 파생값 계산을 한곳에 모은다. */
@@ -112,6 +119,23 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   const suggestionLoaded = useSuggestionStore((s) => s.loaded);
 
   const today = useToday();
+
+  // 시작 카드(2026-11-17 화면 조립표 2차 0번) — 단계 넷은 서버 칸이라 화면에 들어올 때마다 다시 읽는다.
+  //   다른 화면에서 노하우를 담거나 할일·퀴즈를 보내고 돌아오면 그 단계가 체크된다. 첫 읽기 전에는 게이트가 본문을 막는다.
+  const unitId = useSessionStore((s) => s.unitId);
+  const [starter, setStarter] = useState<{ unit: string; row: OwnerOverviewRow | null } | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      if (!unitId) return;
+      let alive = true;
+      void fetchOwnerOverview().then(({ data }) => {
+        if (!alive) return;
+        setStarter({ unit: unitId, row: data?.find((r) => r.unit_id === unitId) ?? null });
+      });
+      return () => { alive = false; };
+    }, [unitId]),
+  );
+  const starterLoaded = !unitId || starter?.unit === unitId;
 
   // 2026-08-06: 인건비(monthPay)는 홈 KPI가 MiniStats로 흡수되며 소비자가 사라져 제거했다.
   // 인건비 계산은 2026-11-02 급여 기능 제거로 앱에서 없어졌다.
@@ -270,7 +294,8 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     staffLoaded &&
     suggestionLoaded &&
     scheduleLoaded &&
-    boardLoaded;
+    boardLoaded &&
+    starterLoaded;
 
   return {
     loaded,
@@ -292,5 +317,6 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     // 판정은 '반복 근무 템플릿이 하나라도 있는가' — 한 번이라도 짰으면 결손이 아니다.
     // 직원이 0명이면 근무표를 말할 이유가 없다(초대가 먼저다).
     scheduleEmpty: staff.length > 0 && shiftTemplates.length === 0,
+    starterRow: starter?.unit === unitId ? starter.row : null,
   };
 }

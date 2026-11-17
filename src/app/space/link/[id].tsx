@@ -4,14 +4,22 @@
  * 들어오는 길 = 교육 탭의 링크 줄 · 만들기 뒤 바로(2026-11-16 R-4). 공간 번호는 `?unit=` 으로 받는다.
  * 본문은 매장 교육 링크(M06)와 같이 쓰는 부품 `components/edu/LinkForm` 에 있다(2026-11-12 g7 · 동작 같음).
  */
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { EduLinkDetailForm } from '@/components/edu/LinkForm';
 import { fetchEduLinkPickEntries } from '@/lib/db';
 
 export default function EduLinkDetailScreen() {
+  const router = useRouter();
   const { id, unit } = useLocalSearchParams<{ id: string; unit?: string }>();
   const linkId = typeof id === 'string' ? id : '';
   const unitId = typeof unit === 'string' ? unit : '';
-  return <EduLinkDetailForm unitId={unitId} linkId={linkId} loadPick={fetchEduLinkPickEntries} />;
+  return (
+    <EduLinkDetailForm
+      unitId={unitId}
+      linkId={linkId}
+      loadPick={fetchEduLinkPickEntries}
+      onNewLink={() => router.replace({ pathname: '/space/link/new', params: { unit: unitId } })}
+    />
+  );
 }

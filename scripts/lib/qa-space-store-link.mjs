@@ -182,6 +182,35 @@ ${val('취소한 공간 제안의 출처 칸 셋이 보관 표에 남음(0582)',
 ${call('제안(노하우 8)', 'A', prop([e(8)]), 'ok|' + '*')}
 ${call('옛 사장 앱 승인(status·resulting_entry_id 만 update)', 'D', `with u as (update public.playbook_suggestions set status = 'approved', resulting_entry_id = ${q(e(7))} where id = ${sugOf(8)} returning 1) select count(*) from u`, 'ok|1')}
 ${val('옛 앱 승인 = 승인됨 · 검토한 사람 사장(0319 도장)', `select status || '/' || reviewed_by from public.playbook_suggestions where id = ${sugOf(8)}`, `approved/${U.D}`)}
+-- ★0841(조립표 2차 6): 공간 카드도 AI 제안 검토 창에서 저장할 때만 승인된다. 창이 저장한 노하우에 카드를 연결만 한다(review_suggestion).
+insert into public.playbook_entries(id, unit_id, category, title, status, creator_role, square, photos) values
+  (${q(e(10))}, ${q(SP)}, '서비스', '연결 노하우 10', 'published', 'space_owner', '{}'::jsonb, array[${q(SP + '/p10.jpg')}]),
+  (${q(e(13))}, ${q(Y)}, '서비스', '다른 매장 노하우', 'published', 'owner', '{}'::jsonb, '{}');
+${call('제안(노하우 10 · 사진 1장)', 'A', prop([e(10)]), 'ok|' + '*')}
+${call('사장이 검토 창에서 노하우 저장(앱 insert 길)', 'D', `with i as (insert into public.playbook_entries(id, unit_id, category, title, status, creator_role) values ('qa_sllk1_${rnd}', ${q(X)}, '서비스', '검토 창 노하우 10', 'published', 'owner') returning id) select id from i`, `ok|qa_sllk1_${rnd}`)}
+${call('직원이 연결 = not_manager', 'J', `select public.review_suggestion(${sugOf(10)}, 'approved', 'qa_sllk1_${rnd}', null) ->> 'status'`, 'err:not_manager')}
+${call('다른 매장 사장이 연결 = suggestion_not_found', 'E', `select public.review_suggestion(${sugOf(10)}, 'approved', ${q(e(13))}, null) ->> 'status'`, 'err:suggestion_not_found')}
+${call('노하우 번호 없이 승인 = invalid_argument', 'D', `select public.review_suggestion(${sugOf(10)}, 'approved', null, null) ->> 'status'`, 'err:invalid_argument')}
+${call('다른 매장 노하우 번호로 연결 = invalid_argument', 'D', `select public.review_suggestion(${sugOf(10)}, 'approved', ${q(e(13))}, null) ->> 'status'`, 'err:invalid_argument')}
+${call('내가 방금 저장하지 않은 매장 노하우로 연결 = invalid_argument', 'D', `select public.review_suggestion(${sugOf(10)}, 'approved', ${q(e(7))}, null) ->> 'status'`, 'err:invalid_argument')}
+-- 카드가 3시간 전에 왔고 · 사장이 2시간 전에 넣은 노하우(카드 뒤지만 1시간 밖) = 방금 저장한 노하우가 아니다
+${call('사장이 예전에 넣은 노하우(앱 insert 길)', 'D', `with i as (insert into public.playbook_entries(id, unit_id, category, title, status, creator_role) values ('qa_sllk0_${rnd}', ${q(X)}, '서비스', '예전 노하우', 'published', 'owner') returning id) select id from i`, `ok|qa_sllk0_${rnd}`)}
+select set_config('request.jwt.claims', '', true), set_config('request.jwt.claim.sub', '', true);
+update public.playbook_suggestions set created_at = now() - interval '3 hours' where source_entry_id = ${q(e(10))} and unit_id = ${q(X)};
+update public.playbook_entries set inserted_at = now() - interval '2 hours' where id = 'qa_sllk0_${rnd}';
+${call('1시간 넘은 내 노하우로 연결 = invalid_argument', 'D', `select public.review_suggestion(${sugOf(10)}, 'approved', 'qa_sllk0_${rnd}', null) ->> 'status'`, 'err:invalid_argument')}
+${val('거절된 연결 뒤에도 카드는 대기', `select status from public.playbook_suggestions where id = ${sugOf(10)}`, 'pending')}
+${call('사장이 검토 창 노하우로 연결 = ok', 'D', `select public.review_suggestion(${sugOf(10)}, 'approved', 'qa_sllk1_${rnd}', null) ->> 'status'`, 'ok|ok')}
+${val('연결 뒤 = 승인됨 · 결과 노하우 = 저장한 것 · 검토한 사람 사장', `select status || '/' || resulting_entry_id || '/' || reviewed_by from public.playbook_suggestions where id = ${sugOf(10)}`, `approved/qa_sllk1_${rnd}/${U.D}`)}
+${val('노하우는 하나(스냅샷 사본 0 · 저장한 노하우 1)', `select (select count(*) from public.playbook_entries where unit_id = ${q(X)} and title = '연결 노하우 10') || '/' || (select count(*) from public.playbook_entries where unit_id = ${q(X)} and id = 'qa_sllk1_${rnd}' and archived_at is null)`, '0/1')}
+${val('사진 판정 = 저장한 노하우로 스냅샷 사진을 옮긴다', `select (j ->> 'status') || '/' || (j -> 'paths')::text || '/' || (j -> 'existing')::text from public._proposal_photo_source(${sugOf(10)}, ${q(U.D)}) j`, `ok/["${SP}/p10.jpg"]/[]`)}
+${call('두 번 연결 = already(상태 그대로)', 'D', `select (j ->> 'status') || '/' || (j ->> 'current') from public.review_suggestion(${sugOf(10)}, 'approved', 'qa_sllk1_${rnd}', null) j`, 'ok|already/approved')}
+${call('연결한 카드를 옛 즉시 승인으로 = suggestion_not_pending', 'D', `select count(*) from public.approve_space_proposal(${sugOf(10)})`, 'err:suggestion_not_pending')}
+${call('매니저가 늦게 검토 창에서 저장', 'G', `with i as (insert into public.playbook_entries(id, unit_id, category, title, status, creator_role) values ('qa_sllk2_${rnd}', ${q(X)}, '서비스', '검토 창 노하우 10 늦음', 'published', 'manager') returning id) select id from i`, `ok|qa_sllk2_${rnd}`)}
+${call('매니저가 늦게 연결 = already · 진 쪽 사본 보관(0722)', 'G', `select (j ->> 'status') || '/' || (j ->> 'copyArchived') from public.review_suggestion(${sugOf(10)}, 'approved', 'qa_sllk2_${rnd}', null) j`, 'ok|already/true')}
+${val('살아 있는 노하우 = 하나', `select count(*) from public.playbook_entries where id in ('qa_sllk1_${rnd}', 'qa_sllk2_${rnd}') and archived_at is null`, '1')}
+${val('서명 그대로 · 오버로드 없음(approve_space_proposal 1인자 · review_suggestion 4인자)', `select string_agg(proname || '(' || pg_get_function_identity_arguments(oid) || ')', ';' order by proname) from pg_proc where pronamespace = 'public'::regnamespace and proname in ('approve_space_proposal', 'review_suggestion')`, 'approve_space_proposal(p_id text);review_suggestion(p_id text, p_status text, p_resulting_entry_id text, p_owner_note text)')}
+
 ${call('51개 고르면 거절', 'A', `select count(*) from public.propose_to_store(${q(SP)}, ${q(X)}, (select array_agg('x' || g) from generate_series(1, 51) g))`, 'err:too_many_entries')}
 
 -- 받는 매장 대기 공간 제안 상한 50(사용자 결정 11-11). 대기 수를 가짜 행으로 49 까지 채우고 2개 → 거절 · 1개 → 됨. 끝나면 지운다.

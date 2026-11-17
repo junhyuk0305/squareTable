@@ -3,20 +3,23 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Screen, Section } from '@/components/Screen';
+import { Screen } from '@/components/Screen';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
+import { KnowhowRows, type KnowhowRow } from '@/components/blocks/KnowhowRows';
+import { formatRelative } from '@/components/coach/coachUtils';
+import { getSectionMeta } from '@/lib/utils/category';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { confirmAction } from '@/lib/utils/confirm';
 import { archiveEntry, connectStoreOpen, fetchEntries } from '@/lib/db';
 import { CONNECT, SPACE_KNOWHOW } from '@/lib/place/words';
-import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { BrandColors } from '@/lib/theme/colors';
 import { CardStyles } from '@/lib/theme/card';
 import { ButtonStyles, ButtonTextStyles, TouchSize } from '@/lib/theme/button';
-import { Space } from '@/lib/theme/layout';
+import { Gap, Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import type { PlaybookEntry } from '@/types';
 
@@ -94,9 +97,15 @@ export default function SpaceKnowhowDetail() {
     </Pressable>
   ) : undefined;
 
+  // 본문 = 한 카드(10절 3번 · KnowhowRows · 교육 링크·멤버 화면과 같은 부품). 할 일에 번호를 붙이지 않는다(부품 규칙).
   const steps = entry?.square?.action?.steps ?? [];
   const situation = entry?.square?.situation?.trim() ?? '';
   const dont = entry?.square?.extract?.dont?.trim() ?? '';
+  const rows: KnowhowRow[] = [
+    ...(situation ? [{ kind: 'situation' as const, text: situation }] : []),
+    ...(steps.length > 0 ? [{ kind: 'todo' as const, items: steps }] : []),
+    ...(dont ? [{ kind: 'dont' as const, text: dont }] : []),
+  ];
 
   return (
     <Screen header={<ScreenTitleHeader title={SPACE_KNOWHOW.detailTitle} backFallback={LIST} right={trash} />}>
@@ -113,32 +122,15 @@ export default function SpaceKnowhowDetail() {
         />
       ) : (
         <>
-          <Text style={styles.title}>{entry.title}</Text>
-          {situation ? (
-            <Section title={SPACE_KNOWHOW.situation}>
-              <View style={styles.card}>
-                <Text style={styles.body}>{situation}</Text>
-              </View>
-            </Section>
-          ) : null}
-          {steps.length > 0 ? (
-            <Section title={SPACE_KNOWHOW.steps}>
-              <View style={[styles.card, styles.steps]}>
-                {steps.map((s, i) => (
-                  <View key={`${i}-${s}`} style={styles.step}>
-                    <Text style={styles.stepNo}>{i + 1}</Text>
-                    <Text style={[styles.body, styles.stepText]}>{s}</Text>
-                  </View>
-                ))}
-              </View>
-            </Section>
-          ) : null}
-          {dont ? (
-            <Section title={SPACE_KNOWHOW.dont}>
-              <View style={styles.card}>
-                <Text style={styles.body}>{dont}</Text>
-              </View>
-            </Section>
+          {/* 제목 아래 한 줄 = 카테고리 · 고친 때(1차 추천대로 · 목록 줄이 읽는 값). */}
+          <View style={styles.head}>
+            <Text style={styles.title}>{entry.title}</Text>
+            <Text style={styles.meta}>{[getSectionMeta(entry.section).label, formatRelative(entry.updated_at)].filter(Boolean).join(' · ')}</Text>
+          </View>
+          {rows.length > 0 ? (
+            <View style={styles.rowsCard}>
+              <KnowhowRows rows={rows} />
+            </View>
           ) : null}
           <View style={styles.actions}>
             <Pressable
@@ -169,17 +161,15 @@ export default function SpaceKnowhowDetail() {
 const styles = StyleSheet.create({
   trashHit: { minWidth: TouchSize.inline, minHeight: TouchSize.inline, alignItems: 'flex-end', justifyContent: 'center' },
   pressed: { opacity: 0.7 },
+  head: { gap: Gap.inline },
   title: { ...Type.title },
-  card: { ...CardStyles.list },
-  // 고치기·매장으로 보내기 = 흰 카드 하나(R-14). 위 섹션은 있을 때만 그려져 그 안에 넣지 않는다.
+  meta: { ...Type.desc },
+  rowsCard: { ...CardStyles.rows },
+  // 고치기·매장으로 보내기 = 흰 카드 하나(R-14). 본문 카드는 있을 때만 그려져 그 안에 넣지 않는다.
   actions: { ...CardStyles.list, gap: Space.sm },
-  body: { ...Type.body },
-  steps: { gap: Space.sm },
-  step: { flexDirection: 'row', gap: Space.sm },
-  stepNo: { ...Type.body, fontWeight: '800', color: InkColors.ink2 },
-  stepText: { flex: 1 },
-  primary: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
-  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
-  secondary: { ...ButtonStyles.primary, borderWidth: 1, borderColor: InkColors.lineStrong, backgroundColor: InkColors.bg },
-  secondaryText: { ...ButtonTextStyles.primary, color: InkColors.ink },
+  // 주 버튼 = 노랑(10절 7번) · 보조 = 알약(1차 추천대로 · 주 버튼이 둘로 보이지 않게).
+  primary: ButtonStyles.primaryYellow,
+  primaryText: ButtonTextStyles.primaryOnYellow,
+  secondary: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  secondaryText: ButtonTextStyles.secondary,
 });

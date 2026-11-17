@@ -17,6 +17,7 @@ import { SettingsRow, SettingsSection } from '@/components/settings/SettingsKit'
 import { formatRelative } from '@/components/coach/coachUtils';
 import { SpaceStarterCard } from '@/components/place/SpaceStarterCard';
 import { SpaceQuestionRows } from '@/components/place/SpaceQuestionRows';
+import { CountBadge } from '@/components/place/CountBadge';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import {
   aiQuotaStatusAt,
@@ -33,7 +34,6 @@ import { SPACE_KNOWHOW, SPACE_SCREEN, SPACE_WORDS } from '@/lib/place/words';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { CardStyles } from '@/lib/theme/card';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
-import { Radius } from '@/lib/theme/elevation';
 import { FRAME_MAX_WIDTH, Layout, Space } from '@/lib/theme/layout';
 import { getTextScaleFactor } from '@/lib/theme/textScale';
 import { Type } from '@/lib/theme/type';
@@ -192,11 +192,7 @@ export default function SpaceHome() {
       {stage === 'answer' ? (
         <Section
           title={SPACE_KNOWHOW.queueTitle}
-          titleAccessory={
-            <View style={styles.badge} accessibilityLabel={`${SPACE_KNOWHOW.queueTitle} ${questions.length}`}>
-              <Text style={styles.badgeText}>{questions.length > 99 ? '99+' : questions.length}</Text>
-            </View>
-          }
+          titleAccessory={<CountBadge count={questions.length} label={SPACE_KNOWHOW.queueTitle} />}
           trailing={seeAll(() => goToTab('/space/teach'), SPACE_KNOWHOW.queueTitle)}
         >
           <SpaceQuestionRows
@@ -266,15 +262,9 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
   cap: { ...CardStyles.list, flexDirection: 'row', alignItems: 'center', gap: Space.sm, borderColor: BrandColors.accentSoft },
   capText: { ...Type.body, flex: 1, color: InkColors.ink },
-  // 배지 = 탭바·ActionRow 배지와 같은 규격(accentSolid 면 · 흰 숫자).
-  badge: {
-    minWidth: 18, minHeight: 18, paddingHorizontal: Space.xs, borderRadius: Radius.pill,
-    backgroundColor: BrandColors.accentSolid, alignItems: 'center', justifyContent: 'center',
-  },
-  badgeText: { ...Type.micro, fontWeight: '900', color: InkColors.bubbleText },
-  // 주 버튼 = 공간 화면의 검정 주 버튼(시작 카드와 같다 · 카드 안 맨 아래).
-  primary: { ...ButtonStyles.primary, backgroundColor: InkColors.ink, marginBottom: Space.lg },
-  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  // 주 버튼 = 노랑(화면조립표 10절 7번 · 시작 카드와 같다 · 카드 안 맨 아래).
+  primary: { ...ButtonStyles.primaryYellow, marginBottom: Space.lg },
+  primaryText: ButtonTextStyles.primaryOnYellow,
   // 숫자 칸 = StatCard 한 줄(NumberRow 의 작은 칸 줄과 같은 배치 · NumberRow 는 허브가 쓰므로 홈에서 뺐다).
   statRow: { flexDirection: 'row', gap: Space.sm },
   statCell: { flex: 1, minWidth: 0, paddingHorizontal: Space.sm },

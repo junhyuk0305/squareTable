@@ -6,6 +6,7 @@
 //  ③ 사장 세션의 chat_queries insert 허용(aha 스텝 전제 — RLS 매장단위 for-all)
 //  ④ 각 행위 후 플래그·카운트 전이(knowhow→1, asked_ever→true, done_ever→true, staff→1)
 //  ⑤ 크로스테넌트: 타 매장 사장에게 플래그·설정이 새지 않음
+//  ⑤-2 0840 시작 카드 칸: 할일 등록 → task_added_ever · 퀴즈 만들기만 = false · 퀴즈 링크 → quiz_sent_ever
 // 사용: node scripts/qa-coldstart.mjs
 import './lib/require-local-target-files.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
 import { createClient } from '@supabase/supabase-js';
@@ -69,6 +70,7 @@ async function main() {
   check('① overview에 asked_ever·done_ever 존재', ov && 'asked_ever' in ov && 'done_ever' in ov);
   check('① 초기: knowhow=0 · staff=0 · asked_ever=false · done_ever=false',
     ov && Number(ov.knowhow) === 0 && Number(ov.staff) === 0 && ov.asked_ever === false && ov.done_ever === false);
+  check('① 0840 칸: task_added_ever=false · quiz_sent_ever=false', ov?.task_added_ever === false && ov?.quiz_sent_ever === false);
 
   // ── ② 루틴 선주입 경로: dayparts upsert → 재조회 (RLS 통과) ─────────────
   const dayparts = [
@@ -104,6 +106,26 @@ async function main() {
     check('⑤ work_feed task_done insert', !error, error?.message ?? ''); }
   ov = await overviewOf(owner, UNIT);
   check('⑤ done_ever false→true 전이', ov?.done_ever === true);
+  check('⑤ 완료 기록만으로는 task_added_ever 가 켜지지 않는다(등록 기준 · 0840)', ov?.task_added_ever === false);
+
+  // ── ⑤-2 시작 카드 칸(0840): 첫 할일 등록 · 첫 퀴즈 보내기 ─────────────────
+  { const { error } = await owner.from('work_templates').insert({ id: `t_cs_${s}`, unit_id: UNIT, section: 'open', text: '오픈 준비', scope: 'shared' });
+    check('⑤-2 사장 할일 insert', !error, error?.message ?? ''); }
+  ov = await overviewOf(owner, UNIT);
+  check('⑤-2 task_added_ever false→true 전이', ov?.task_added_ever === true);
+  { const { error } = await owner.from('training_courses').insert({ id: `tc_cs_${s}`, unit_id: UNIT, key: `k_cs_${s}`, name: '콜드 퀴즈' });
+    check('⑤-2 퀴즈(코스) insert', !error, error?.message ?? ''); }
+  ov = await overviewOf(owner, UNIT);
+  check('⑤-2 퀴즈를 만들기만 하면 quiz_sent_ever=false', ov?.quiz_sent_ever === false);
+  // 링크 행은 service role 로 심는다 — 사장 세션은 문항·노하우 연결까지 갖춘 퀴즈만 링크를 만든다(quiz_no_items 트리거).
+  //   여기서 재는 것은 "링크 행이 생기면 켜진다"는 overview 칸의 뜻이다.
+  { const svc = SRV ? createClient(URL_, SRV, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+    const { error } = svc
+      ? await svc.from('quiz_links').insert({ id: `ql_cs_${s}`, unit_id: UNIT, course_id: `tc_cs_${s}`, token: `tok_cs_${s}_${'x'.repeat(20)}`, expires_at: new Date(Date.now() + 86400e3).toISOString() })
+      : { error: { message: 'SUPABASE_SERVICE_ROLE_KEY 없음' } };
+    check('⑤-2 퀴즈 링크 insert(service role)', !error, error?.message ?? ''); }
+  ov = await overviewOf(owner, UNIT);
+  check('⑤-2 퀴즈 링크 → quiz_sent_ever false→true 전이', ov?.quiz_sent_ever === true);
 
   // ── ⑥ 직원 합류 → staff 전이(체크리스트 졸업 데이터 완성) ────────────────
   const j = mk();
@@ -119,6 +141,7 @@ async function main() {
   const { data: bSeesA } = await ownerB.rpc('owner_overview');
   check('⑦ B overview에 A 매장 없음', !(bSeesA ?? []).some((r) => r.unit_id === UNIT));
   check('⑦ B 플래그는 자기 것(asked_ever=false)', ovB?.asked_ever === false && ovB?.done_ever === false);
+  check('⑦ B 시작 칸도 자기 것(task_added_ever·quiz_sent_ever=false)', ovB?.task_added_ever === false && ovB?.quiz_sent_ever === false);
   { const { data } = await ownerB.from('schedule_config').select('unit_id').eq('unit_id', UNIT);
     check('⑦ B가 A schedule_config 조회 0행', (data ?? []).length === 0); }
   { const { error } = await ownerB.from('chat_queries').insert({ id: `cq_csx_${s}`, unit_id: UNIT, junior_id: 'x', junior_name: 'x', query_text: 'x', asked_at: now, matched_entry_ids: [], match_confidence: 0, was_deflected: true, response_block: null, satisfaction: null, resolved_at: null });

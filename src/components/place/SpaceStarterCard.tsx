@@ -16,7 +16,7 @@ type Step = { key: 'write' | 'link' | 'answer'; title: string; hint: string; don
  * 공간 홈의 시작 카드(화면조립표 2026-11-17 5절) — 노하우 쓰기 → 교육 링크 만들기 → 질문에 답하기.
  * 2026-11-17 교육 탭(`space/teach.tsx`)의 처음 순서 안내를 옮겼다. 시작 안내는 홈 한 곳에만 둔다.
  *   진행 막대(매장 `hub/StarterChecklist` 의 barTrack·barFill 모양)와 제목 옆 n/단계 수를 더했다.
- * 지금 할 단계 하나만 주 버튼(검정)이다. 교육 링크 스위치가 꺼져 있으면 2단계 줄을 뺀다.
+ * 지금 할 단계 하나만 주 버튼(노랑 · 화면조립표 10절 7번)이다. 교육 링크 스위치가 꺼져 있으면 2단계 줄을 뺀다.
  * 노하우와 링크가 둘 다 있으면 홈이 이 카드를 그리지 않는다(spaceHomeStage).
  */
 export function SpaceStarterCard({
@@ -103,6 +103,6 @@ const styles = StyleSheet.create({
   stepNoTextNow: { color: InkColors.ink },
   doneTitle: { color: TextColor.secondary },
   doneTag: { ...Type.tag, fontWeight: '800', color: TextColor.secondary },
-  primary: { ...ButtonStyles.primary, backgroundColor: InkColors.ink, marginBottom: Space.lg },
-  primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  primary: { ...ButtonStyles.primaryYellow, marginBottom: Space.lg },
+  primaryText: ButtonTextStyles.primaryOnYellow,
 });

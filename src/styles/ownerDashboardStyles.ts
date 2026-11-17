@@ -3,7 +3,7 @@ import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Layout, Space, screenScrollStyle } from '@/lib/theme/layout';
 import { CardStyles } from '@/lib/theme/card';
-import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
+import { ButtonStyles } from '@/lib/theme/button';
 
 export const styles = StyleSheet.create({
   // 스크롤 컨테이너는 패딩만 — 섹션 간격(gap)은 단일 자식인 콘텐츠 래퍼(scrollInner)가 갖는다.
@@ -18,39 +18,7 @@ export const styles = StyleSheet.create({
 
   // 상단바 스타일은 공용 AppTopBar 가 갖는다(직원 홈과 같은 것을 쓴다 — 2026-08-08 통일).
 
-  onboard: {
-    backgroundColor: BrandColors.accentSoft,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: '#E8C9C2',
-    padding: 20,
-    gap: 8,
-    alignItems: 'flex-start',
-  },
-  onboardTitle: { fontSize: 18, fontWeight: '900', color: InkColors.ink },
-  onboardBody: { fontSize: 14, color: InkColors.ink2, lineHeight: 21 },
-  onboardCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
-    backgroundColor: BrandColors.brand,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: Radius.pill,
-  },
-  onboardCtaText: { color: InkColors.bubbleText, fontSize: 14, fontWeight: '800' },
-  seedLabel: { fontSize: 12, color: InkColors.ink2, fontWeight: '700', marginTop: 12 },
-  seedChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  seedChip: {
-    backgroundColor: InkColors.bg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: Radius.pill,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-  },
-  seedChipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink },
+  // 옛 분홍 온보딩 카드·예시 칩 스타일은 시작 카드(hub/StarterChecklist)로 바뀌며 뺐다(2026-11-17).
 
   // 2026-08-07: 히어로가 <HeroSubNav>(블록 N2 · 검은 색면)로 바뀌면서
   // InboxHeroCard(H4)·MiniStats(I3)·ActionRow(A1)와 '질문 0건 조용한 카드'가 홈에서 빠졌다.
@@ -69,15 +37,13 @@ export const styles = StyleSheet.create({
   // 할일 0건 — 첫 할일 등록으로 안내(새 매장은 기본 할일이 없다). 위아래 = 카드 안쪽 16(행이 없으니 사방 16이 된다).
   taskEmpty: { alignItems: 'center', gap: Space.sm, paddingVertical: Layout.cardPad },
   taskEmptyText: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: InkColors.ink2, textAlign: 'center' },
-  // 작은 버튼(44 · 알약 · 내용 폭). 가운데 정렬 칸 안이라 alignSelf 만 가운데로 둔다.
+  // 보조 알약(44 · 내용 폭). 노랑은 시작 카드의 지금 할 단계 버튼이 든다(2026-11-17 2차 0번 그림). 가운데 정렬 칸 안이라 alignSelf 만 가운데로 둔다.
   taskEmptyCta: {
-    ...ButtonStyles.small,
+    ...ButtonStyles.secondary,
     alignSelf: 'center',
     flexDirection: 'row',
     gap: 6,
-    backgroundColor: BrandColors.brand,
   },
-  taskEmptyCtaText: { ...ButtonTextStyles.small, color: InkColors.bubbleText },
   taskRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingVertical: Space.sm },
   taskRowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   // 제목 한 줄 + 그 아래 담당자 알약. 알약은 문장 시작에 맞춰 왼쪽으로 붙는다.

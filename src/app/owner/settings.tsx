@@ -155,8 +155,8 @@ export default function OwnerSettings() {
           />
         </SettingsSection>
 
-        {/* 가게 초대코드 — 직원 합류용. 상시 확인·전달. */}
-        <InviteBlock code={inviteCode} from="settings" />
+        {/* 가게 초대코드 — 직원 합류용. 상시 확인·전달. [초대 링크 복사] = 이 화면의 노란 버튼(화면조립표 2026-11-17 11절 1번). */}
+        <InviteBlock code={inviteCode} from="settings" yellowLink />
         {/* 2026-08-19: 코드 카드 아래 '직원 관리 · 합류 승인' 줄을 뺐다 — 바로 아래 '직원·초대코드 관리'와
             같은 화면(/owner/staff)으로 가는 중복 진입점이었다. 진입점은 매장 관리 섹션 한 곳으로 둔다. */}
         <SettingsSection icon="storefront-outline" title="매장 관리">

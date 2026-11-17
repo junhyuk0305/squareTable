@@ -71,8 +71,9 @@ import { CardStyles } from '@/lib/theme/card';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Type } from '@/lib/theme/type';
 import type { QuizItem, QuizKind } from '@/lib/quiz/types';
+import { quizDetailSeg, quizResultTop, type QuizDetailSeg } from '@/lib/utils/quizScreenPlans';
 
-type Seg = 'people' | 'items' | 'settings';
+type Seg = QuizDetailSeg;
 
 /**
  * 퀴즈 상세 — 결과(C1) · 문항(C2) · 설정 + 더보기(C3) + 예외 D4·D8.
@@ -80,7 +81,9 @@ type Seg = 'people' | 'items' | 'settings';
  * ★2026-09-13 개편: 세 번째 탭이 '배포' → **'설정'** 이 됐다. 이름·주기를 고치는 자리가 더보기 속
  *   시트였고(D11), 받는 사람을 고치는 자리는 아무 데도 없었다 — 고치는 일은 전부 설정 탭으로 모으고
  *   배포는 그 안의 한 섹션이 된다(내부면 사람, 외부면 링크 — `course.audience`·0200 이 가른다).
- *   그래서 **결과 탭은 결과만** 본다(다시 알리기도 설정으로 옮겼다).
+ * ★2026-11-17(화면조립표 11절 4번): 칸 고르기가 맨 위다. 결과 칸은 처리할 것이 맨 위다 —
+ *   "아직 안 푼 n명에게 다시 알리기"(노랑)를 설정 칸에서 결과 칸 요약 카드 안으로 되돌렸다.
+ *   오답 많은 문항 안내(노하우 고치러 가기)는 뺐다(사용자 결정 · 지금 필요한 기능이 아니다).
  * ★문항은 이제 낸 뒤에도 제자리에서 고치고 뺄 수 있다(줄 탭 → 작은 시트). 이미 푼 사람의 결과는
  *   안 바뀐다 — quiz_attempt_items 가 응시 시점 payload 를 스냅샷으로 들고 있다(0160 §2).
  *
@@ -108,7 +111,7 @@ export default function QuizDetailScreen() {
     void hydrateStaff();
   }, [hydrateStaff]);
 
-  const [seg, setSeg] = useState<Seg>(tab === 'settings' ? 'settings' : tab === 'items' ? 'items' : 'people');
+  const [seg, setSeg] = useState<Seg>(quizDetailSeg(tab));
   const [staffItems, setStaffItems] = useState<CourseAttemptItemRow[]>([]);
   const [moreOpen, setMoreOpen] = useState(false);
   const [preview, setPreview] = useState<QuizItem | null>(null);
@@ -214,6 +217,7 @@ export default function QuizDetailScreen() {
   const progress = useMemo(() => staffProgress(latestSends, quizAnswers, memberIds), [latestSends, quizAnswers, memberIds]);
   // 다시 알리기 대상 = 지금 직원 · 이 퀴즈를 한 번도 다 풀지 않음(doneBefore · 서버 quiz_course_done_by 짝) · 최신 발송이 미완료.
   const notDone = people.filter((p) => isCurrentStaff(p.id, memberIds) && !doneBefore(sends, p.id) && (p.state === 'in_progress' || p.state === 'not_started'));
+  const resultTop = quizResultTop(notDone.length);
   /** 결과 탭 빈 상태(N10) — 받은 직원도 답도(손님 포함) 없을 때만. */
   const noResults = resultsEmpty(sends, quizAnswers);
   const guestCount = guestSubmissions(quizAnswers);
@@ -426,6 +430,9 @@ export default function QuizDetailScreen() {
       />
       <KeyboardShift>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
+        {/* 칸 고르기 = 맨 위(2026-11-17 11절 4번 · 사용자 말 "내용이 많아서 상단 전환 탭은 꼭 써야 한다"). */}
+        <SegmentTabs style={{ margin: 0 }} items={segItems} value={seg} onChange={(k) => setSeg(k as Seg)} />
+
         {/* 본사 사본이면 배지·새 버전(교체/유지)·숨기기 줄(P5 · 노하우 수정 화면과 같은 부품). 사본이 아니면 아무것도 안 그린다. */}
         <BrandCopyPanel kind="course" copy={course} onChanged={reloadCourses} />
         {/* D4 — 낡은 문항. 옛 정답이 그대로 나가는 상태라 결과보다 먼저 말한다. */}
@@ -442,8 +449,6 @@ export default function QuizDetailScreen() {
           </Pressable>
         )}
 
-        <SegmentTabs style={{ margin: 0 }} items={segItems} value={seg} onChange={(k) => setSeg(k as Seg)} />
-
         {/* 세그먼트를 바꾸면 내용이 통째로 갈린다 — key={seg} 로 그때마다 한 번 올라오게 한다. */}
         <Appear key={seg} style={st.segBody}>
         {seg === 'people' ? (
@@ -456,6 +461,19 @@ export default function QuizDetailScreen() {
           ) : (
             <>
               <View style={st.ringCard}>
+                {/* 처리할 것이 맨 위(11절 4번). 요약 숫자와 같은 카드 안에 둔다(버튼만 든 카드 금지).
+                    대상 = notDone(지금 직원 · 한 번도 다 풀지 않음 · 최신 발송 미완료). 쿨다운·상한은 서버가 본다(0348). */}
+                {resultTop ? (
+                  <Pressable
+                    onPress={() => void remind()}
+                    style={({ pressed }) => [st.remindBtn, pressed && { opacity: 0.85 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={resultTop.resendLabel}
+                  >
+                    <Ionicons name="notifications-outline" size={16} color={InkColors.ink} />
+                    <Text style={ButtonTextStyles.primaryOnYellow}>{resultTop.resendLabel}</Text>
+                  </Pressable>
+                ) : null}
                 {progress.recipients > 0 ? (
                   <ProgressRing value={progress.done} total={progress.recipients} label={PERSON_STATE_LABEL.done} />
                 ) : null}
@@ -521,8 +539,6 @@ export default function QuizDetailScreen() {
                 })}
               </View>
               ) : null}
-              {/* '다시 알리기'는 설정 탭(배포 섹션)으로 옮겼다 — 결과 탭은 결과만 본다(2026-09-13).
-                  판정(누가 안 풀었나)은 여기 `notDone` 그대로이고, 버튼만 그쪽에서 그린다. */}
             </>
           )
         ) : seg === 'settings' ? (
@@ -534,7 +550,6 @@ export default function QuizDetailScreen() {
             staff={staff.map((x) => ({ id: x.id, name: x.name }))}
             sends={sends}
             currentDue={currentDue}
-            remind={notDone.length > 0 ? { count: notDone.length, onPress: () => void remind() } : undefined}
             onSaved={() => { reloadCourses(); bumpSends(); }}
             onOpenResult={(sub) => router.push(`/owner/quiz/guest/${sub}` as never)}
           />
@@ -600,34 +615,6 @@ export default function QuizDetailScreen() {
               })}
             </View>
             </Section>
-
-            {/* C2 되먹임 — 우리만의 차별점. 오답률을 직원 평가가 아니라 **노하우 결함 신호**로 뒤집는다. */}
-            {items
-              .filter((q) => itemAnswers(quizAnswers, q.id).warn)
-              .slice(0, 1)
-              .map((q) => {
-                const eid = (q.entry_ids ?? [])[0];
-                const e = eid ? entryById.get(eid) : null;
-                return (
-                  <View key={q.id} style={st.feedback}>
-                    <Text style={st.feedbackLabel}>높은 오답률 문항</Text>
-                    <Text style={st.feedbackBody}>
-                      직원이 못 외운 게 아니라 <Text style={st.bold}>노하우 글이 헷갈릴 수 있어요.</Text>
-                      {e ? ` "${e.title}"을 다시 보세요.` : ''}
-                    </Text>
-                    {e && (
-                      <Pressable
-                        onPress={() => router.push(`/owner/edit/${e.id}` as never)}
-                        style={({ pressed }) => [st.feedbackCta, pressed && { opacity: 0.85 }]}
-                        accessibilityRole="button"
-                        accessibilityLabel="노하우 고치러 가기"
-                      >
-                        <Text style={st.feedbackCtaText}>노하우 고치러 가기</Text>
-                      </Pressable>
-                    )}
-                  </View>
-                );
-              })}
 
             {/* D4 — 낡은 문항을 새로 만들기. 자동 재생성하지 않는다(검수 없이 나가면 안 된다). */}
             {staleItems.length > 0 && (
@@ -817,8 +804,6 @@ const st = StyleSheet.create({
     minWidth: 48, minHeight: 48, alignItems: 'flex-end', justifyContent: 'center',
     paddingLeft: Space.sm, marginRight: -4,
   },
-  // 사람 줄 아래 펼쳐지는 문항별 답(0190) — 목록 카드 안이라 따로 테두리를 두지 않는다.
-  bold: { fontWeight: '800', color: InkColors.ink },
 
   staleBar: {
     flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 52,
@@ -850,15 +835,8 @@ const st = StyleSheet.create({
   formatChipText: { ...Type.tag, lineHeight: 20, fontWeight: '800' },
 
 
-  feedback: {
-    backgroundColor: BrandColors.badSoft, borderRadius: Radius.md, borderWidth: 1, borderColor: '#F3C9C9',
-    padding: Space.lg, gap: Space.xs, ...Elevation.e1,
-  },
-  feedbackLabel: { fontSize: 13, fontWeight: '800', color: BrandColors.badText },
-  feedbackBody: { ...Type.body, fontWeight: '600', lineHeight: 22 },
-  // 주 버튼(52 · 모서리 16 · 16/800 · 그림자 없음 · 2026-11-02).
-  feedbackCta: { ...ButtonStyles.primary, marginTop: Space.sm, backgroundColor: InkColors.ink },
-  feedbackCtaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  // 결과 칸 맨 위 다시 알리기 = 노란 주 버튼(11절 4번). ringCard 가 가운데 정렬이라 스스로 폭을 편다.
+  remindBtn: { ...ButtonStyles.primaryYellow, flexDirection: 'row', gap: Space.xs, marginBottom: Space.sm },
 
   thinBox: { ...CardStyles.list, gap: Space.sm },
   thinTitle: { ...Type.body, fontWeight: '800', lineHeight: 22 },

@@ -26,6 +26,8 @@ import { Section } from '@/components/Screen';
 import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { StepDock } from '@/components/StepDock';
+import { changedFields } from '@/lib/utils/formDirty';
 
 // 프로필 편집 + 비밀번호 변경 (오너·주니어 공용).
 export default function AccountEdit() {
@@ -91,10 +93,10 @@ function AccountEditForm() {
   const bizLabel = industryLabel(biz);
   const chips: readonly string[] = !savedLabel || (INDUSTRIES as readonly string[]).includes(savedLabel) ? INDUSTRIES : [savedLabel, ...INDUSTRIES];
 
-  const saveStoreInfo = async () => {
-    if (!store.trim()) return showToast('매장 이름을 입력해주세요.', 'warn');
-    if (!biz) return showToast('업종을 선택해주세요.', 'warn');
-    setBusy(true);
+  /** 저장했으면 true. 이름이나 업종 중 하나라도 거절되면 false(토스트로 무엇이 됐는지 말한다). */
+  const saveStoreInfo = async (): Promise<boolean> => {
+    if (!store.trim()) { showToast('매장 이름을 입력해주세요.', 'warn'); return false; }
+    if (!biz) { showToast('업종을 선택해주세요.', 'warn'); return false; }
     // 바뀐 쪽만 호출한다 — 이름이 그대로인데 renameStore를 부르면 '기존과 같은 이름' 에러가 떠서
     // 업종만 고친 저장이 실패로 보인다. 이름 변경 제한(14일 2회)의 판정은 renameStore·서버가 SSOT.
     // ★한쪽만 실패하는 경우를 따로 말한다(2026-08-06 검증에서 잡힘).
@@ -112,7 +114,6 @@ function AccountEditForm() {
       const { error } = await updateIndustry(biz);
       bizErr = error;
     }
-    setBusy(false);
 
     const bizSaved = bizChanged && !bizErr;
     if (nameErr && bizSaved) {
@@ -122,41 +123,56 @@ function AccountEditForm() {
       const err = nameErr ?? bizErr;
       showToast(err ?? '매장 정보를 저장했어요.', err ? 'warn' : 'good');
     }
+    return !nameErr && !bizErr;
   };
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const emailValid = EMAIL_RE.test(emailInput.trim());
-  const canSaveProfile = !!name.trim() && emailValid;
 
-  const saveProfile = async () => {
-    if (!name.trim()) return showToast('이름을 입력해주세요.', 'warn');
-    if (!emailValid) return showToast('이메일을 올바르게 입력해주세요.', 'warn');
-    setBusy(true);
+  const saveProfile = async (): Promise<boolean> => {
+    if (!name.trim()) { showToast('이름을 입력해주세요.', 'warn'); return false; }
+    if (!emailValid) { showToast('이메일을 올바르게 입력해주세요.', 'warn'); return false; }
     const { error, emailPending } = await updateProfile({
       name: name.trim(),
       email: emailInput.trim(),
       bio: intro.trim(),
     });
-    setBusy(false);
     // (Q15) 확인 메일을 기다리면 저장했다고 하지 않는다. 칸은 지금 이메일로 되돌린다.
     if (!error && emailPending) {
       setEmailInput(email);
-      return showToast(EMAIL_CHANGE_PENDING_TEXT, 'good');
+      showToast(EMAIL_CHANGE_PENDING_TEXT, 'good');
+      return true;
     }
     showToast(error ?? '프로필을 저장했어요.', error ? 'warn' : 'good');
+    return !error;
   };
 
-  const savePw = async () => {
+  const savePw = async (): Promise<boolean> => {
     const pwErr = passwordChangeError({ current: curPw, next: pw, confirm: pw2 });
-    if (pwErr) return showToast(pwErr, 'warn');
-    setBusy(true);
+    if (pwErr) { showToast(pwErr, 'warn'); return false; }
     const { error } = await changePassword(curPw, pw);
-    setBusy(false);
-    if (error) return showToast(error, 'warn');
+    if (error) { showToast(error, 'warn'); return false; }
     setCurPw('');
     setPw('');
     setPw2('');
     showToast('비밀번호를 변경했어요.', 'good');
+    return true;
+  };
+
+  // 저장 버튼은 맨 아래 하나(화면조립표 2026-11-17 추천대로). 바뀐 묶음만 차례로 저장한다.
+  //   바뀐 칸 판정 = formDirty(매장 기본 정보와 같은 함수). 한 묶음이 실패하면 거기서 멈춰 그 안내가 남게 한다.
+  const profileChanged = changedFields({ name: userName, email, bio }, { name, email: emailInput, bio: intro }).length > 0;
+  const storeChanged = role === 'owner' && (nameChanged || bizChanged);
+  const pwTyped = changedFields({ curPw: '', pw: '', pw2: '' }, { curPw, pw, pw2 }).length > 0;
+  const anyChanged = profileChanged || storeChanged || pwTyped;
+  const saveAll = async () => {
+    if (busy || !anyChanged) return;
+    setBusy(true);
+    const ok = (!profileChanged || (await saveProfile()))
+      && (!storeChanged || (await saveStoreInfo()))
+      && (!pwTyped || (await savePw()));
+    setBusy(false);
+    return ok;
   };
 
   // 펼치면 곧바로 입력 대기 상태로 — 펼치고 다시 탭하게 만들지 않는다(허브의 코드 입력 줄과 같은 규칙).
@@ -167,11 +183,12 @@ function AccountEditForm() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    // 아래 안전 영역은 맨 아래 저장 띠(StepDock)가 든다.
+    <SafeAreaView style={styles.safe} edges={[]}>
       <Stack.Screen options={{ headerShown: false, title: '프로필 편집' }} />
       <ScreenTitleHeader title="프로필 편집" backFallback />
       <KeyboardShift>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.fill} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Appear delay={stagger(0)}>
         <Section title="기본 정보">
         <View style={styles.card}>
@@ -212,9 +229,6 @@ function AccountEditForm() {
               <Text style={styles.phoneBtnText}>번호 바꾸기</Text>
             </Pressable>
           </View>
-          <Pressable disabled={busy || !canSaveProfile} onPress={saveProfile} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, (busy || !canSaveProfile) && { opacity: 0.5 }]}>
-            {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>프로필 저장</Text>}
-          </Pressable>
         </View>
         </Section>
         </Appear>
@@ -244,15 +258,8 @@ function AccountEditForm() {
                   </Pressable>
                 ))}
               </View>
-              {/* 이름 변경 횟수가 0이어도 버튼을 막지 않는다 — 막으면 업종까지 못 고치게 된다.
+              {/* 이름 변경 횟수가 0이어도 맨 아래 저장을 막지 않는다 — 막으면 업종까지 못 고치게 된다.
                   이름만 서버가 거절하고 업종은 저장된다. */}
-              <Pressable
-                disabled={busy || !(nameChanged || bizChanged)}
-                onPress={saveStoreInfo}
-                style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.88 }, (busy || !(nameChanged || bizChanged)) && { opacity: 0.5 }]}
-              >
-                {busy ? <ActivityIndicator color={InkColors.ink} /> : <Text style={styles.secondaryText}>매장 정보 저장</Text>}
-              </Pressable>
             </View>
             </Section>
             </Appear>
@@ -324,15 +331,12 @@ function AccountEditForm() {
               autoCorrect={false}
               style={styles.input}
             />
-            {/* 여는 줄과 같은 말을 쓰지 않는다 — 위아래로 겹치면 어느 쪽을 눌러야 하는지 흐려진다. */}
-            <Pressable disabled={busy || !curPw || !pw || !pw2} onPress={savePw} style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.88 }, (busy || !curPw || !pw || !pw2) && { opacity: 0.5 }]}>
-              <Text style={styles.secondaryText}>새 비밀번호 저장</Text>
-            </Pressable>
           </View>
           </Collapse>
         )}
         </View>
       </ScrollView>
+      <StepDock label="저장" onPress={() => { void saveAll(); }} disabled={!anyChanged} busy={busy} />
       </KeyboardShift>
       <BottomSheet visible={phoneOpen} onClose={() => setPhoneOpen(false)}>
         {/* 열 때마다 새로 마운트한다 — 닫았다 다시 열면 처음부터 시작한다. */}
@@ -440,7 +444,7 @@ function PhoneChangeBody({ savedPhone, onDone }: { savedPhone: string; onDone: (
 }
 
 const styles = StyleSheet.create({
-  // 탭바 없는 하위 화면 — 아래 안전 영역은 SafeAreaView(bottom)가 든다. 바탕·스크롤 여백만 화면 틀 값을 쓴다.
+  // 탭바 없는 하위 화면 — 아래 안전 영역은 로딩 중엔 SafeAreaView(bottom), 폼에선 저장 띠가 든다. 바탕·스크롤 여백만 화면 틀 값을 쓴다.
   safe: { flex: 1, backgroundColor: Surface.screen },
   scroll: screenScrollStyle,
   card: { ...CardStyles.list, gap: 8 },
@@ -490,10 +494,8 @@ const styles = StyleSheet.create({
   },
   pwToggleText: { ...Type.body, flex: 1, fontWeight: '800' },
   pwPanel: { gap: Space.sm, paddingBottom: Layout.cardPad },
+  fill: { flex: 1 },
+  // [번호 바꾸기] 시트의 주 버튼.
   primary: { ...ButtonStyles.primary, marginTop: 12, backgroundColor: BrandColors.brand },
   primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
-  // 보조 버튼 — 주 버튼과 같은 모양(52 · 모서리 16 · 16/800), 흰 면 + 선.
-  //   비밀번호 칸은 카드 밖(회색 바탕 Surface.screen)이라 옛 bgSoft 면은 바탕에 묻혔다.
-  secondary: { ...ButtonStyles.primary, marginTop: 12, backgroundColor: Surface.card, borderWidth: 1, borderColor: InkColors.line },
-  secondaryText: { ...ButtonTextStyles.primary, color: InkColors.ink },
 });

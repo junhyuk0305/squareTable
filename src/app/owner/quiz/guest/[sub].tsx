@@ -78,7 +78,7 @@ export default function GuestQuizResultScreen() {
       );
       setBusy(false);
       if (!ok) return;
-      showToast(action === 'reviewed' ? '확인했어요' : '정리했어요', 'good');
+      showToast(action === 'reviewed' ? '열람으로 표시했어요' : '정리했어요', 'good');
       router.back();
     },
     [busy, router, submissionId],
@@ -116,6 +116,14 @@ export default function GuestQuizResultScreen() {
                       : ''}
                 </Text>
                 {card ? <Text style={st.headMeta}>{takenDayLabel(card.takenAt)} 응시</Text> : null}
+                {/* 처리할 것이 맨 위(화면조립표 2026-11-17 11절 4번). 요약 숫자와 같은 카드 안에 둔다. */}
+                {card ? (
+                  <View style={st.actions}>
+                    <PrimaryButton label="열람 표시" onPress={() => void mark('reviewed')} disabled={busy} />
+                    <GhostButton icon="archive-outline" label="정리하기" onPress={() => void mark('cleared')} disabled={busy} />
+                    <Text style={st.footNote}>정리하면 목록에서 빠져요. 기록은 그대로 남아요.</Text>
+                  </View>
+                ) : null}
               </View>
             </Appear>
 
@@ -138,14 +146,6 @@ export default function GuestQuizResultScreen() {
           </>
         )}
       </ScrollView>
-
-      {loaded && !failed && card ? (
-        <View style={st.foot}>
-          <PrimaryButton label="확인했어요" onPress={() => void mark('reviewed')} disabled={busy} />
-          <GhostButton icon="archive-outline" label="정리하기" onPress={() => void mark('cleared')} disabled={busy} />
-          <Text style={st.footNote}>정리하면 목록에서 빠져요. 기록은 그대로 남아요.</Text>
-        </View>
-      ) : null}
     </SafeAreaView>
   );
 }
@@ -168,14 +168,6 @@ const st = StyleSheet.create({
   // 문항 목록 상자·문항 블록 스타일은 공용(AttemptItemBlock)으로 옮겼다 — 두 화면이 같은 상자를 쓴다.
   list: attemptListStyle,
 
-  foot: {
-    paddingHorizontal: Space.gutter,
-    paddingTop: Space.md,
-    paddingBottom: Space.lg,
-    borderTopWidth: 1,
-    borderTopColor: InkColors.line,
-    backgroundColor: InkColors.bg,
-    gap: Space.sm,
-  },
+  actions: { gap: Space.sm, marginTop: Space.sm },
   footNote: { ...Type.desc, fontWeight: '600', textAlign: 'center' },
 });

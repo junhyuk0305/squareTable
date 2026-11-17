@@ -27,7 +27,7 @@ import { OwnerTodoSegment } from '@/components/owner/OwnerTodoSegment';
 import { useOwnerTodoCount } from '@/lib/hooks/useOwnerTodoCount';
 import {
   KnowhowCountRow, KnowhowEmptyResult, KnowhowEntryRow, KnowhowFab, KnowhowFindBar, KNOWHOW_FAB_SPACE, PagedRows,
-  filterKnowhow, knowhowChipCategories, type KnowhowManageRow,
+  filterKnowhow, knowhowChipCategories, knowhowChipCounts, type KnowhowManageRow,
 } from '@/components/knowhow/KnowhowListParts';
 import { getSectionMeta } from '@/lib/utils/category';
 import { track } from '@/lib/analytics/track';
@@ -255,6 +255,8 @@ export function OwnerKnowhowBrowse({
   // 순서: 표준 → 매장 고유 → 기타.
   const customCats = usePlaybookStore((s) => s.customCategories);
   const allCats = useMemo(() => knowhowChipCategories(visible, industry, customCats), [visible, industry, customCats]);
+  // 칩 옆 건수(1차 추천대로 · 공간 노하우 탭과 같은 셈).
+  const chipCounts = useMemo(() => ({ total: visible.length, by: knowhowChipCounts(visible) }), [visible]);
 
   // 노하우가 지워져 카테고리가 사라졌는데 활성 필터로 남았으면 전체 취급(상태 리셋 effect 대신 파생).
   const effectiveCat = activeCat && allCats.includes(activeCat) ? activeCat : null;
@@ -495,22 +497,9 @@ export function OwnerKnowhowBrowse({
           </Appear>
         )}
 
-        {/* 개수 줄 + 톱니(목록 관리 = 카테고리 편집·내보내기 · 공용 KnowhowCountRow).
-            ★노하우 0건이면 아래 본문이 빈 화면(EmptyState)이라 톱니도 같이 안 뜬다(옛 '카테고리 편집' 버튼과 같은 조건). */}
-        <KnowhowCountRow
-          label={countLabel}
-          info={
-            <InfoDot
-              title="노하우가 뭐예요?"
-              body={'여기 적어두면 직원이 물을 때 AI가 사장님 대신 답해줘요.\n많이 쌓일수록 같은 질문에 일일이 답할 일이 줄어요.'}
-            />
-          }
-          manage={hasEntries ? manageRows : undefined}
-        />
-
         </Pane>
 
-        {/* 찾기 바 — 검색·카테고리. 톱니 줄 바로 아래 고정이다(2026-08-19 · 넓은 웹에서는 오른쪽 레일). */}
+        {/* 찾기 바 — 검색·카테고리. 개수 줄 위다(1차 추천대로 · 공간 노하우 탭과 같은 순서 · 넓은 웹에서는 오른쪽 레일). 칩에 건수. */}
         <Pane side="rail">
         {hasEntries && (
           <KnowhowFindBar
@@ -521,6 +510,7 @@ export function OwnerKnowhowBrowse({
             onSelect={selectCat}
             onAll={() => setActiveCat(null)}
             customs={customCats}
+            counts={chipCounts}
           />
         )}
 
@@ -544,6 +534,19 @@ export function OwnerKnowhowBrowse({
 
         <Pane side="main">
 
+        {/* 개수 줄 + 톱니(목록 관리 = 카테고리 편집·내보내기 · 공용 KnowhowCountRow). 찾기 바 아래 · 목록 바로 위.
+            ★노하우 0건이면 아래 본문이 빈 화면(EmptyState)이라 톱니도 같이 안 뜬다(옛 '카테고리 편집' 버튼과 같은 조건). */}
+        <KnowhowCountRow
+          label={countLabel}
+          info={
+            <InfoDot
+              title="노하우가 뭐예요?"
+              body={'여기 적어두면 직원이 물을 때 AI가 사장님 대신 답해줘요.\n많이 쌓일수록 같은 질문에 일일이 답할 일이 줄어요.'}
+            />
+          }
+          manage={hasEntries ? manageRows : undefined}
+        />
+
         {!hasEntries ? (
           loadError ? (
             // 로드 실패를 "노하우 없음"으로 위장하지 않고 재시도를 띄운다(무음 실패 방지).
@@ -557,6 +560,7 @@ export function OwnerKnowhowBrowse({
               title="아직 등록된 노하우가 없어요"
               body="직원 질문에 답하거나, 직접 추가하면 여기에 쌓여요."
               cta={{ label: '첫 노하우 추가하기', onPress: goAdd }}
+              ctaTone="yellow"
             />
           )
         ) : (
@@ -645,8 +649,9 @@ export function OwnerKnowhowBrowse({
         {seg === 'todo' ? todoSegment() : knowhowSegment()}
       </ScrollView>
 
-      {/* FAB — ★ScrollView '밖'(형제)이라 스크롤과 같이 움직이지 않는다(공용 KnowhowFab · 공간 노하우 탭도 같은 것). */}
-      <KnowhowFab onPress={goAdd} />
+      {/* FAB — ★ScrollView '밖'(형제)이라 스크롤과 같이 움직이지 않는다(공용 KnowhowFab · 공간 노하우 탭도 같은 것).
+          글자 붙은 노란 알약(11절 2번). 노하우 0개면 그리지 않는다(빈 상태의 노란 버튼이 같은 일). */}
+      {hasEntries ? <KnowhowFab onPress={goAdd} showLabel /> : null}
 
       {catSheet && <CategoryEditSheet onClose={() => setCatSheet(false)} />}
     </View>

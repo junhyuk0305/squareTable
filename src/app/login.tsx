@@ -218,11 +218,7 @@ const styles = StyleSheet.create({
   googleHint: { ...Type.desc, textAlign: 'center' },
   signupBlock: { alignItems: 'center', gap: Space.md },
   signupLead: { ...Type.desc },
-  signupBtn: {
-    ...ButtonStyles.primary,
-    borderWidth: 1.5,
-    borderColor: InkColors.ink,
-    backgroundColor: Surface.card,
-  },
-  signupBtnText: { ...ButtonTextStyles.primary, color: InkColors.ink },
+  // 가입 = 다른 길이라 보조 버튼 모양(화면조립표 2026-11-17 추천대로 · 들어오는 화면은 주 버튼 하나).
+  signupBtn: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
+  signupBtnText: ButtonTextStyles.secondary,
 });

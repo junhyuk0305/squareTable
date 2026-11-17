@@ -17,7 +17,8 @@ import { Avatar } from '@/components/Avatar';
 import { SectionLabel } from '@/components/SectionLabel';
 import { Screen, Section } from '@/components/Screen';
 import { TwoPane, Pane } from '@/components/shell/TwoPane';
-import { InviteBlock } from '@/components/owner/InviteBlock';
+import { InviteBlock, useStoreInviteLink } from '@/components/owner/InviteBlock';
+import { EmptyState } from '@/components/EmptyState';
 import { ActionRow } from '@/components/blocks/ActionRow';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -81,6 +82,7 @@ export default function OwnerStaffScreen() {
   // 0201(2026-09-14): 이 화면은 **사장 전용**이다 — 승인·시급·급여를 서버가 사장으로 좁혔고,
   // roles.ts 허용목록에도 없어 매니저는 여기에 도착하지 못한다. 0093 의 '매니저도 쓴다'는 낡았다.
   const isOwner = useSessionStore((s) => s.role) === 'owner';
+  const inviteLink = useStoreInviteLink('staff');
 
   // 내보낼 직원 — 확인 모달용. 실수 방지 위해 빨강 모달로 한 번 더 확인한다.
   const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
@@ -176,6 +178,7 @@ export default function OwnerStaffScreen() {
         <InviteBlock
           code={INVITE_CODE}
           from="staff"
+          yellowLink
           action={
             // 코드 변경 = 사장 전용(rotate_invite_code RPC 가 소유자만 통과) — 매니저에겐 비노출.
             isOwner ? (
@@ -262,9 +265,13 @@ export default function OwnerStaffScreen() {
               </Pressable>
             </View>
           ) : (
-            <View style={styles.emptyBox}>
-              <Text style={styles.emptyText}>아직 합류한 직원이 없어요.{'\n'}위 초대코드를 직원에게 알려주세요.</Text>
-            </View>
+            // 빈 상태에도 다음 행동 버튼(화면조립표 2026-11-17 추천대로). 화면의 노랑은 위 초대 카드라 여기는 보조 알약.
+            <EmptyState
+              title="아직 합류한 직원이 없어요"
+              body="초대 링크를 직원에게 보내 주세요."
+              cta={inviteLink.disabled ? undefined : { label: '초대 링크 복사', onPress: inviteLink.copy }}
+              ctaTone="secondary"
+            />
           )
         ) : (
         <View style={styles.list}>
@@ -315,7 +322,7 @@ export default function OwnerStaffScreen() {
                 ★지정은 **권한이 늘어나는 방향**이라 안내 모달을 먼저 띄운다(2026-09-13 사장 요청):
                   같은 버튼으로 되돌릴 수 있다는 것(P7)은 "무엇이 달라지는지 모른 채 눌렀다"를 못 막는다.
                 해제는 권한이 줄어드는 쪽이라 그대로 즉시 실행한다 — 확인을 두 방향에 다 걸면 되돌리기가 무거워진다.
-                지정 버튼은 노랑(권장 액션·검정 글자), 해제는 보조 알약(연한 면·회색 선 · 2026-11-16 R-11). */}
+                지정·해제 둘 다 보조 알약(연한 면·회색 선). 이 화면의 노랑은 [초대 링크 복사] 하나다(화면조립표 2026-11-17 11절 1번). */}
             {isOwner && (
               <Pressable
                 onPress={() => (isManager ? setRole(s.id, 'junior') : setManagerTarget({ id: s.id, name: s.name }))}
@@ -323,7 +330,7 @@ export default function OwnerStaffScreen() {
                 accessibilityLabel={isManager ? `${s.name} 매니저 해제` : `${s.name} 매니저로 지정`}
                 style={({ pressed }) => [styles.roleHit, pressed && { opacity: 0.6 }]}
               >
-                <View style={isManager ? styles.roleBtn : styles.roleBtnOn}>
+                <View style={styles.roleBtn}>
                   <Ionicons
                     name={isManager ? 'remove-circle-outline' : 'ribbon-outline'}
                     size={14}
@@ -428,10 +435,11 @@ const styles = StyleSheet.create({
   // 줄 안 작은 버튼(2026-11-02 사용자 결정) — 보이는 높이 32 · 누르는 상자 44.
   //   상자는 위아래 음수 여백(hitTrim)으로 자리를 32 만큼만 차지한다 → 줄 높이(아바타 40 + 위아래 14)는 그대로.
   rowHit: { ...ButtonStyles.inlineHit, marginVertical: hitTrim(TouchSize.inlineFace) },
-  rejectBtn: { minHeight: TouchSize.inlineFace, justifyContent: 'center', paddingHorizontal: 12, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line },
-  rejectText: { fontSize: 13, fontWeight: '700', color: TextColor.secondary },
-  approveBtn: { minHeight: TouchSize.inlineFace, justifyContent: 'center', paddingHorizontal: 14, borderRadius: Radius.sm, backgroundColor: BrandColors.brand },
-  approveText: { fontSize: 13, fontWeight: '800', color: InkColors.bubbleText },
+  // 승인 = 작은 검정 알약 · 거절 = 연한 빨강 알약(화면조립표 2026-11-17 10절 2번 · 공간 설정 탭과 같은 모양).
+  rejectBtn: { minHeight: TouchSize.inlineFace, justifyContent: 'center', paddingHorizontal: Space.md, borderRadius: Radius.pill, backgroundColor: BrandColors.badSoft },
+  rejectText: { ...Type.desc, fontWeight: '800', color: BrandColors.badText },
+  approveBtn: { minHeight: TouchSize.inlineFace, justifyContent: 'center', paddingHorizontal: Space.md, borderRadius: Radius.pill, backgroundColor: BrandColors.brand },
+  approveText: { ...Type.desc, fontWeight: '800', color: InkColors.bubbleText },
 
   list: CardStyles.rows,
   staffRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
@@ -443,14 +451,8 @@ const styles = StyleSheet.create({
     ...ButtonStyles.inlineHit, alignSelf: 'flex-end',
     marginTop: hitTrim(TouchSize.inlineFace), marginBottom: Space.md + hitTrim(TouchSize.inlineFace),
   },
-  // 해제 = 보조 알약 모양을 지정과 같은 보이는 높이 32 로(누르는 상자 44 는 roleHit).
+  // 지정·해제 = 보조 알약 · 보이는 높이 32(누르는 상자 44 는 roleHit).
   roleBtn: { ...ButtonStyles.secondary, flexDirection: 'row', gap: Space.xs, minHeight: TouchSize.inlineFace, paddingHorizontal: Space.md },
-  // 지정(권장 액션) — 노랑 알약 + 검정 글자. 해제(roleBtn)와 무게를 일부러 다르게 둔다.
-  roleBtnOn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    minHeight: TouchSize.inlineFace, paddingHorizontal: 12,
-    borderRadius: Radius.pill, backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep,
-  },
   roleBtnOnText: { ...Type.tag, fontWeight: '800', color: InkColors.ink },
   // 출근 기록 진입 — 보이는 높이는 아바타(40)지만 누르는 상자는 44. 위아래 음수 여백으로 줄 높이는 그대로 둔다.
   staffTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 0, minHeight: TouchSize.inline, marginVertical: hitTrim(STAFF_AVATAR) },

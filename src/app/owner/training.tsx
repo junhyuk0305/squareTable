@@ -39,6 +39,8 @@ import { RollupRows } from '@/components/blocks/RollupRows';
 
 import { ProgressPill, type ProgressTone } from '@/components/blocks/ProgressPill';
 import { SheetHead, PrimaryButton, GhostButton } from '@/components/owner/quiz/kit';
+import { KnowhowFab } from '@/components/knowhow/KnowhowListParts';
+import { trainingMakeEntry } from '@/lib/utils/quizScreenPlans';
 import { useGuideOnce } from '@/lib/store/useGuideStore';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -299,13 +301,14 @@ export default function OwnerTrainingScreen() {
             </View>
           </View>
         ) : quizzes.length === 0 ? (
-          usable === 0 ? (
+          trainingMakeEntry({ quizzes: 0, usable }) === 'knowhow' ? (
             /* A3 — 재료가 없다. 막다른 길을 만들지 않고 노하우 추가로 보낸다.
                ★"업무 채팅 열기"로 보내지 않는다 — 업무는 노하우를 만들어 주지 않는다. */
             <EmptyState
               title="먼저 노하우가 필요해요"
               body={'퀴즈 문제는 사장님이 적어 둔 노하우에서 나와요.\n노하우가 하나도 없으면 낼 문제가 없어요.'}
               cta={{ label: '노하우 추가하기', onPress: () => router.push('/owner/coach' as never) }}
+              ctaTone="yellow"
             />
           ) : (
             /* A1 — 재료는 있는데 아직 안 만들었다(§10-10). 지표·경고는 전부 "문항이 생긴 뒤"의 것이라 감춘다.
@@ -341,11 +344,18 @@ export default function OwnerTrainingScreen() {
               </Appear>
               <Appear delay={stagger(2)}>
                 <View style={st.actionsCard}>
-                  <PrimaryButton
-                    label={picked.length > 0 ? `고른 ${picked.length}개로 퀴즈 만들기` : '노하우를 골라 주세요'}
-                    disabled={picked.length === 0}
+                  {/* 퀴즈 0개 = 떠 있는 버튼 없음. 이 카드의 노란 버튼이 새 퀴즈 만들기다(11절 1·2번 · trainingMakeEntry). */}
+                  <Pressable
                     onPress={goMakePicked}
-                  />
+                    disabled={picked.length === 0}
+                    style={({ pressed }) => [st.makeBtn, picked.length === 0 && st.makeBtnOff, pressed && { opacity: 0.85 }]}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: picked.length === 0 }}
+                  >
+                    <Text style={ButtonTextStyles.primaryOnYellow}>
+                      {picked.length > 0 ? `고른 ${picked.length}개로 퀴즈 만들기` : '노하우를 골라 주세요'}
+                    </Text>
+                  </Pressable>
                   {/* 글자만 있던 링크 → 흰 버튼(GhostButton). 2026-09-03: 글씨만 있는 버튼 금지. */}
                   <GhostButton icon="list-outline" label="직접 고르기" onPress={goMake} />
                 </View>
@@ -547,15 +557,9 @@ export default function OwnerTrainingScreen() {
       {/* 만들기 + 버튼 — 노하우 탭(OwnerKnowhowBrowse)과 **같은 자리·같은 모양**이다(2026-09-11).
           ★ScrollView '밖'(형제)이라 스크롤과 같이 움직이지 않는다. 부모가 프레임 안이라 460px 을 안 넘는다.
           재료(노하우)가 0이면 안 그린다 — 눌러도 만들 것이 없고, 그 자리는 '노하우 추가하기'가 맡는다. */}
-      {ready && stats.publishedEntries > 0 ? (
-        <Pressable
-          onPress={goMake}
-          accessibilityRole="button"
-          accessibilityLabel="퀴즈 만들기"
-          style={({ pressed }) => [st.fab, pressed && { opacity: 0.85 }]}
-        >
-          <Ionicons name="add" size={28} color={InkColors.ink} />
-        </Pressable>
+      {/* 2026-11-17 11절 2번: 글자 붙은 노란 알약. 퀴즈가 0개면 그리지 않는다(빈 상태 카드의 노란 버튼이 같은 일). */}
+      {ready && !loadError && trainingMakeEntry({ quizzes: quizzes.length, usable: stats.publishedEntries }) === 'fab' ? (
+        <KnowhowFab onPress={goMake} label="퀴즈 만들기" showLabel />
       ) : null}
       </View>
 
@@ -984,14 +988,9 @@ const st = StyleSheet.create({
   // 맨 위 탭 — 공용 SegmentTabs 의 margin(16)을 화면 거터(20)에 맞춘다(노하우 탭과 같은 처리).
   // 위 = 헤더 아래 첫 여백(Layout.screenTop 16 · 2026-11-02).
   topTabs: { marginHorizontal: Space.gutter, marginTop: Layout.screenTop, marginBottom: 0 },
-  // 노하우 탭의 + 버튼과 같은 값이다(OwnerKnowhowBrowse.fab) — 자리가 같으면 모양도 같아야 한다.
-  fab: {
-    position: 'absolute', right: Space.gutter, bottom: Space.gutter,
-    width: 56, height: 56, borderRadius: Radius.pill,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep,
-    ...Elevation.ey,
-  },
+  // 퀴즈 0개일 때 카드 안 새 퀴즈 만들기 = 노란 주 버튼(2026-11-17 11절 1번). 떠 있는 버튼은 KnowhowFab(글자 붙은 알약).
+  makeBtn: ButtonStyles.primaryYellow,
+  makeBtnOff: { opacity: 0.45 },
   // 시트 안내 = 설명 단계(Type.desc 13/19) — 문장 둘을 본문 15 로 두 줄 쌓지 않는다(2026-11-02).
   missIntro: { ...Type.desc, marginBottom: Space.md },
 

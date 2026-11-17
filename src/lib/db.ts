@@ -353,6 +353,9 @@ export type OwnerOverviewRow = {
   asked_ever: boolean; // AI 질문 1건 이상(ever, 0086) — 시작 체크리스트. 월 리셋되는 ai_used로 판정 금지
   done_ever: boolean; // 업무 완료 기록 1건 이상(ever, 0086) — 시작 체크리스트
   stale: number; // 90일 넘게 수정 없는 발행 노하우 수(0091) — 허브 노하우 탭
+  // 시작 카드 네 단계(0840). 옛 서버에는 칸이 없다 → 읽는 곳은 !! 로 false 처리한다.
+  task_added_ever?: boolean; // 할일 1건 이상(직원 "나만 보기" 제외)
+  quiz_sent_ever?: boolean; // 퀴즈 배정이나 퀴즈 링크 1건 이상(만들기만 한 퀴즈 제외)
 };
 /** 내가 소유한 모든 매장의 미답질문·노하우·직원 수를 한 번에. RLS는 활성만 보이므로 definer RPC. */
 export async function fetchOwnerOverview(): Promise<DbResult<OwnerOverviewRow[]>> {
@@ -5152,22 +5155,6 @@ export async function proposeToStore(
   return { data: (data ?? []) as { entry_id: string; suggestion_id: string }[], error: null, alreadyIds: [] };
 }
 
-/** 현재 매장 사장·매니저가 공간에서 온 대기 제안을 승인한다 → 매장 사본(발행·색인 대기). 반려는 지금처럼 reviewSuggestion.
- *  source_photos = 공간 원본 사진 경로(사본에는 아직 안 옮겨짐 · 0490 머리말 "남긴 것"). */
-export async function approveSpaceProposal(
-  suggestionId: string,
-): Promise<{ data: { entry_id: string; source_photos: string[] } | null; error: DbErr }> {
-  if (!HAS_SUPABASE) return { data: null, error: null };
-  const { data, error } = await supabase.rpc('approve_space_proposal', { p_id: suggestionId }).limit(1); // 승인 1건 = 1행
-  if (error) {
-    console.warn('[db] approveSpaceProposal:', error.message);
-    reportError('db.write:approveSpaceProposal', error);
-    return { data: null, error };
-  }
-  const row = Array.isArray(data) ? data[0] : null;
-  return { data: (row ?? null) as { entry_id: string; source_photos: string[] } | null, error: null };
-}
-
 // ── 교육 링크 묻기·보내기·답 받기·신고(0401 · 3번 덩이 나머지) ─────────────────────
 // 손님 함수는 토큰 + 손님 열쇠로만 판정한다(로그인이 남아 있어도 서버가 손님으로 돈다). 실패 문구 = src/lib/place/errors.ts.
 // ★토큰·열쇠는 계측·로그에 싣지 않는다. reportError 에는 오류 객체만 넘긴다.
@@ -5488,7 +5475,7 @@ const PHOTO_COPY_ENDPOINT = process.env.EXPO_PUBLIC_SUPABASE_URL
   : '';
 
 /**
- * 공간 제안을 승인한 뒤 부른다(approveSpaceProposal 성공 뒤). 서버가 승인자 권한·제안 경로를 검증하고
+ * 공간 제안을 승인한 뒤 부른다(검토 창 저장 → reviewSuggestionRpc ok 뒤 · 0841). 서버가 승인자 권한·제안 경로를 검증하고
  * 원본 사진을 매장 폴더로 복사해 사본 노하우에 적는다. 원본이 없어진 장은 skipped 로 센다. 두 번 불러도 한 번만 적힌다.
  * 실패 = error.message 'photo_copy_failed'(화면 = placeErrorMessage · "사진은 옮기지 못했어요. 노하우는 남겼어요.").
  * ★raw fetch 로 부른다(supabase.functions.invoke 의 x-client-info 헤더가 CORS 프리플라이트를 깬다 · lib/push/notify.ts).

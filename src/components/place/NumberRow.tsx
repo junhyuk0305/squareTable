@@ -7,6 +7,7 @@ import { InkColors, TextColor } from '@/lib/theme/colors';
 import { CardStyles } from '@/lib/theme/card';
 import { Space, Gap } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
+import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 
 /** 숫자 줄 라벨. 자리 종류(공간·매장)마다 단어 사전에서 꺼내 넘긴다. */
 export type NumberRowWords = {
@@ -27,11 +28,15 @@ export function NumberRow({
   counts,
   words,
   onPressPending,
+  ctaLabel,
 }: {
   counts: QuestionCounts;
   words: NumberRowWords;
   onPressPending?: () => void;
+  /** 미응답 칸 안 노란 주 버튼 글(사장 허브 · 2026-11-17). 주면 칸 전체를 누르는 대신 이 버튼이 onPressPending 을 부른다(버튼 안 버튼 금지). */
+  ctaLabel?: string;
 }) {
+  const cta = ctaLabel && onPressPending ? ctaLabel : null;
   const small: StatCardItem[] = [
     { key: 'q', label: words.questions, value: counts.questions },
     { key: 'ai', label: words.ai, value: counts.aiAnswered },
@@ -47,7 +52,7 @@ export function NumberRow({
           {words.period}
         </Text>
         <View style={styles.spacer} />
-        {onPressPending ? <Ionicons name="chevron-forward" size={Type.body.fontSize} color={InkColors.ink3} /> : null}
+        {onPressPending && !cta ? <Ionicons name="chevron-forward" size={Type.body.fontSize} color={InkColors.ink3} /> : null}
       </View>
       <Text style={styles.heroValue} numberOfLines={1}>
         {counts.unanswered}
@@ -56,7 +61,19 @@ export function NumberRow({
   );
   return (
     <View style={styles.wrap}>
-      {onPressPending ? (
+      {cta ? (
+        <View style={styles.hero}>
+          {hero}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={cta}
+            onPress={onPressPending}
+            style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
+          >
+            <Text style={ButtonTextStyles.primaryOnYellow}>{cta}</Text>
+          </Pressable>
+        </View>
+      ) : onPressPending ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${words.pending} ${counts.unanswered}`}
@@ -88,4 +105,5 @@ const styles = StyleSheet.create({
   heroValue: { ...Type.numHero, color: InkColors.ink },
   row: { flexDirection: 'row', gap: Space.sm },
   cell: { flex: 1, minWidth: 0 },
+  cta: { ...ButtonStyles.primaryYellow, marginTop: Space.sm },
 });

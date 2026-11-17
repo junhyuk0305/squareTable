@@ -166,10 +166,11 @@ console.log('\n[D12] 노하우 개선 제안은 실제로 고쳐 저장해야 �
   const store = strip(read('src/lib/store/useSuggestionStore.ts'));
   // ★0631 H4: approve·reject 는 review() 하나가 review_suggestion RPC 를 부른다. 알림은 서버가 이번에 바꿨을 때(decision 'ok')만.
   //   already(다른 관리자가 먼저 처리)면 알림을 보내지 않는다. 반려 본문은 resultBody(before)(069f146 · 공간 노하우는 제목).
+  //   ★0841: 공간 카드 승인도 이 길을 타서 승인 본문도 resultBody(before)다(직원 제안은 그대로 본문 · 공간 노하우는 제목).
   const rv = (store.match(/const review = async \([\s\S]*?\n  \};/) || [''])[0];
   const okBranch = (rv.match(/else if \(result\.decision === 'ok'\) \{[\s\S]*?\n    \}/) || [''])[0];
   check('★반영되면 제안한 사람에게 알린다(서버가 이번에 바꿨을 때만)', /approve: \(id, resultingEntryId\) => review\(id, 'approved'/.test(store)
-    && /notifyUserSuggestionResult\(before\.proposer_id, status === 'approved', status === 'approved' \? before\.text : resultBody\(before\), id\)/.test(okBranch), okBranch.slice(0, 300));
+    && /notifyUserSuggestionResult\(before\.proposer_id, status === 'approved', resultBody\(before\), id\)/.test(okBranch), okBranch.slice(0, 300));
   check('★반려되면 제안한 사람에게 알린다(같은 갈래 · 본문 resultBody)', /reject: \(id, note\) => review\(id, 'rejected'/.test(store)
     && /const resultBody = \(s: PlaybookSuggestion\): string =>[^;]*: s\.text;/.test(store)
     && (rv.match(/notifyUserSuggestionResult\(/g) || []).length === 1, rv.slice(0, 300));

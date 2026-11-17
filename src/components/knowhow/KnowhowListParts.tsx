@@ -40,6 +40,13 @@ export function knowhowChipCategories(visible: PlaybookEntry[], industry: string
   return ordered;
 }
 
+/** 칩 건수 = 카테고리별 노하우 수(visible = 초안을 뺀 목록 · 2026-11-17 1차 추천대로 "칩에 건수"). */
+export function knowhowChipCounts(visible: PlaybookEntry[]): Record<string, number> {
+  const by: Record<string, number> = {};
+  for (const e of visible) by[sectionOf(e)] = (by[sectionOf(e)] ?? 0) + 1;
+  return by;
+}
+
 /** 검색어 + 카테고리 하나로 거른다(cat = null 이면 전체). 매장은 목록 탭으로 먼저 거른 뒤 이걸 부른다. */
 export function filterKnowhow(list: PlaybookEntry[], query: string, cat: string | null): PlaybookEntry[] {
   const q = query.trim().toLowerCase();
@@ -110,9 +117,12 @@ export function KnowhowCountRow({ label, info, manage }: { label: string; info?:
   );
 }
 
-/** 찾기 바 — [검색] / [카테고리 가로 스크롤]. 단일 선택 — '전체' + 한 카테고리. 같은 칩을 다시 누르면 전체로(selectCat 은 부르는 쪽). */
+/**
+ * 찾기 바 — [검색] / [카테고리 가로 스크롤]. 단일 선택 — '전체' + 한 카테고리. 같은 칩을 다시 누르면 전체로(selectCat 은 부르는 쪽).
+ * counts = 칩 옆 건수(전체 = total · 카테고리 = knowhowChipCounts). 주지 않으면 지금처럼 이름만.
+ */
 export function KnowhowFindBar({
-  query, onQuery, cats, active, onSelect, onAll, customs,
+  query, onQuery, cats, active, onSelect, onAll, customs, counts,
 }: {
   query: string;
   onQuery: (q: string) => void;
@@ -121,7 +131,9 @@ export function KnowhowFindBar({
   onSelect: (c: string) => void;
   onAll: () => void;
   customs: CustomCategory[];
+  counts?: { total: number; by: Record<string, number> };
 }) {
+  const withCount = (label: string, n: number | undefined) => (counts ? `${label} ${n ?? 0}` : label);
   return (
     <View style={styles.findBar}>
       <View style={SearchStyles.box}>
@@ -143,14 +155,14 @@ export function KnowhowFindBar({
       <View style={styles.findRow}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.findScroll} contentContainerStyle={styles.chipRow}>
           <Pressable onPress={onAll} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }} style={[styles.chip, active === null && styles.chipOn]}>
-            <Text style={[styles.chipText, active === null && styles.chipTextOn]}>전체</Text>
+            <Text style={[styles.chipText, active === null && styles.chipTextOn]}>{withCount('전체', counts?.total)}</Text>
           </Pressable>
           {cats.map((c) => {
             const on = active === c;
             return (
               <Pressable key={c} onPress={() => onSelect(c)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }} style={[styles.chip, on && styles.chipOn]}>
                 <View style={[styles.chipDot, { backgroundColor: sectionColor(c, customs) }]} />
-                <Text style={[styles.chipText, on && styles.chipTextOn]}>{getSectionMeta(c).label}</Text>
+                <Text style={[styles.chipText, on && styles.chipTextOn]}>{withCount(getSectionMeta(c).label, counts?.by[c])}</Text>
               </Pressable>
             );
           })}
@@ -246,16 +258,18 @@ export function KnowhowEmptyResult({ onReset }: { onReset: () => void }) {
  * 노하우 추가 + — 우하단 떠 있는 노란 버튼(2026-08-07 · 상단 버튼을 대체한 이 화면의 Primary).
  * ★스크롤 '밖'(형제)에 둔다. 그래야 스크롤과 같이 움직이지 않는다. 부모가 460 프레임 안이라 프레임을 안 넘는다.
  * 목록 스크롤 아래 여백은 KNOWHOW_FAB_SPACE 만큼 둔다(마지막 행이 버튼 밑에 깔리지 않게).
+ * showLabel = 글자 붙은 알약(화면조립표 2026-11-17 11절 2번 · 공간 노하우 탭). 매장 노하우 탭은 매장 묶음에서 켠다.
  */
-export function KnowhowFab({ onPress, label = '노하우 추가' }: { onPress: () => void; label?: string }) {
+export function KnowhowFab({ onPress, label = '노하우 추가', showLabel }: { onPress: () => void; label?: string; showLabel?: boolean }) {
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={({ pressed }) => [styles.fab, pressed && { opacity: 0.85 }]}
+      style={({ pressed }) => [styles.fab, showLabel ? styles.fabPill : styles.fabRound, pressed && { opacity: 0.85 }]}
     >
       <Ionicons name="add" size={FabSize.icon} color={InkColors.ink} />
+      {showLabel ? <Text style={styles.fabText}>{label}</Text> : null}
     </Pressable>
   );
 }
@@ -321,7 +335,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: Space.gutter,
     bottom: Space.gutter,
-    width: FabSize.face,
     height: FabSize.face,
     borderRadius: Radius.pill,
     alignItems: 'center',
@@ -331,4 +344,8 @@ const styles = StyleSheet.create({
     borderColor: BrandColors.yellowDeep,
     ...Elevation.ey,
   },
+  // 글자 붙은 알약 = 높이는 둥근 버튼과 같고(아래 여백 KNOWHOW_FAB_SPACE 그대로) 폭만 글자만큼.
+  fabRound: { width: FabSize.face },
+  fabPill: { flexDirection: 'row', gap: Space.xs, paddingLeft: Space.md, paddingRight: Space.lg },
+  fabText: ButtonTextStyles.primaryOnYellow,
 });

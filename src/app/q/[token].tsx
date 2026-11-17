@@ -42,6 +42,8 @@ import { CardStyles } from '@/lib/theme/card';
 import { EmptyStyles } from '@/lib/theme/empty';
 import type { QuizItem, QuizResponse } from '@/lib/quiz/types';
 import { LINK_SUBMIT_MESSAGE, type LinkSubmitResult } from '@/lib/quiz/errors';
+import { useBackIntercept } from '@/lib/hooks/useBackIntercept';
+import { linkQuizNav } from '@/lib/utils/quizScreenPlans';
 
 /** 화면에 점수를 띄우기 위한 채점을 **몇 개씩 끊어 보낼지**. 회선이 약한 휴대폰에서 한 번에
  *  수십 개를 쏘면 뒤쪽이 무더기로 실패한다. 기록 자체는 submitQuizLink 한 번에 전부 간다. */
@@ -428,6 +430,8 @@ function LinkQuizBody({
 
   const unanswered = answers.filter((a) => a === null).length;
   const last = at === items.length - 1;
+  /** 주 버튼 이름 = 다음 문항 이름 · 뒤로 = 앞 문항(2026-11-17 11절 3번 · 판정 = linkQuizNav). */
+  const nav = linkQuizNav(at, items.length, unanswered);
 
   /** 문항을 바꾸면 위에서부터 읽는다 — 앞 문항이 길었으면 새 문항이 화면 밖에서 시작한다. */
   const move = (to: number) => {
@@ -442,6 +446,8 @@ function LinkQuizBody({
     });
     void onFinish(given);
   };
+  // 안드 뒤로 = 앞 문항. 첫 문항에서는 걸지 않는다(그때 뒤로는 화면을 나간다).
+  useBackIntercept(nav.back !== null, () => { if (nav.back !== null) move(nav.back); });
 
   return (
     <>
@@ -503,17 +509,17 @@ function LinkQuizBody({
             <Text style={st.navBackText}>이전</Text>
           </Pressable>
           <Pressable
-            onPress={() => (last ? submit() : move(at + 1))}
-            disabled={last && unanswered === items.length}
+            onPress={() => (nav.primary.kind === 'submit' ? submit() : move(nav.primary.to))}
+            disabled={nav.primary.kind === 'submit' && nav.primary.disabled}
             style={({ pressed }) => [
               st.cta, st.navNext,
-              last && unanswered === items.length && { opacity: 0.4 },
+              nav.primary.kind === 'submit' && nav.primary.disabled && { opacity: 0.4 },
               pressed && { opacity: 0.85 },
             ]}
             accessibilityRole="button"
-            accessibilityLabel={last ? '답 제출하기' : '다음 문제'}
+            accessibilityLabel={nav.primary.kind === 'submit' ? '답 제출하기' : nav.primary.label}
           >
-            <Text style={st.ctaText}>{last ? '제출하기' : '다음 문제'}</Text>
+            <Text style={st.ctaText}>{nav.primary.label}</Text>
           </Pressable>
         </View>
       </View>
@@ -586,6 +592,7 @@ const st = StyleSheet.create({
   },
   navBackText: { ...ButtonTextStyles.primary, color: InkColors.ink2 },
   navNext: { flex: 1 },
-  cta: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
-  ctaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  // 주 버튼 = 노랑(2026-11-17 11절 3번 · 1차 7번 "가장 중요한 행동은 노랑"). 화면마다 하나다.
+  cta: ButtonStyles.primaryYellow,
+  ctaText: ButtonTextStyles.primaryOnYellow,
 });

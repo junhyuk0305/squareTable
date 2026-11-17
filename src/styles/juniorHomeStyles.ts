@@ -12,6 +12,5 @@ export const styles = StyleSheet.create({
   todoRowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   todoText: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 21, fontWeight: '600', color: InkColors.ink },
   todoTextDone: { color: InkColors.ink3, textDecorationLine: 'line-through' },
-  // 빈 상태는 한 줄로만 말한다 — 업무 탭이 하단 탭바에 있으므로 여기에 버튼을 또 두지 않는다.
-  todoEmpty: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: InkColors.ink2 },
+  // 할일 0건이면 "오늘 업무" 묶음 자체를 그리지 않는다(2026-11-17) — 빈 줄 스타일은 뺐다.
 });

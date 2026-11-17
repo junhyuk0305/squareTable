@@ -31,7 +31,7 @@ import { todayKst, addDaysKst, daysBetweenKst } from '@/lib/quiz/schedule';
 import { SectionLabel } from '@/components/SectionLabel';
 import { MiniCalendar } from '@/components/blocks/MiniCalendar';
 import { QuizDeployPanel } from '@/components/owner/quiz/QuizDeployPanel';
-import { PrimaryButton, GhostButton, qst } from '@/components/owner/quiz/kit';
+import { PrimaryButton, qst } from '@/components/owner/quiz/kit';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -60,7 +60,6 @@ export function QuizSettingsPanel({
   staff,
   sends,
   currentDue,
-  remind,
   onSaved,
   onOpenResult,
 }: {
@@ -70,11 +69,6 @@ export function QuizSettingsPanel({
   sends: QuizAssignment[];
   /** 지금 마감 날짜 "YYYY-MM-DD"(상세가 발송 원장에서 읽는다). null = 마감 없음. 달력의 처음 값이다. */
   currentDue: string | null;
-  /**
-   * '아직 안 푼 N명에게 다시 알리기' — 결과 탭에 있던 것을 여기로 옮겼다(결과 탭은 결과만 본다).
-   * 판정(누가 안 풀었나)은 상세 화면이 한다 — 이 패널이 다시 세지 않는다.
-   */
-  remind?: { count: number; onPress: () => void };
   /** 저장이 끝난 뒤 — 코스·발송 원장을 다시 읽는다. */
   onSaved: () => void;
   onOpenResult: (submissionId: string) => void;
@@ -322,16 +316,7 @@ export function QuizSettingsPanel({
           {removed.length > 0 ? (
             <Text style={s.warnText}>{removed.length}명의 아직 안 나간 배정을 취소해요.</Text>
           ) : null}
-          {/* 다시 알리기 — 지금 보낸다(0348 quiz_resend · 10분 쿨다운 · 7일 2회 상한은 서버가 본다). */}
-          {remind ? (
-            <View style={s.remind}>
-              <GhostButton
-                icon="notifications-outline"
-                label={`아직 안 푼 ${remind.count}명에게 다시 알리기`}
-                onPress={remind.onPress}
-              />
-            </View>
-          ) : null}
+          {/* 다시 알리기는 결과 칸 맨 위로 옮겼다(화면조립표 2026-11-17 11절 4번 · 처리할 것이 맨 위). */}
         </View>
       ) : (
         // 외부 사람 — 링크만. 패널이 링크 목록·복사·기간·회수와 '이 링크로 푼 사람'을 그대로 맡는다.
@@ -379,7 +364,6 @@ const s = StyleSheet.create({
   lockText: { ...Type.tag, fontWeight: '700', color: TextColor.secondary },
   emptyText: { ...Type.desc, fontWeight: '600', paddingVertical: Space.sm },
   warnText: { ...Type.desc, fontWeight: '700', color: BrandColors.warnText, marginTop: Space.xs },
-  remind: { marginTop: Space.sm },
   // 저장 = 흰 카드 안(R-14 · 2026-11-16 · 버튼만 회색 위에 두지 않는다).
   foot: CardStyles.list,
   // 만들기 5단계의 textAction 과 같은 모양(달력 아래 한 줄 글자 버튼 · 48dp 하한).

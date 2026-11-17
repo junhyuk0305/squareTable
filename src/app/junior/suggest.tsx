@@ -160,7 +160,8 @@ export default function JuniorSuggestScreen() {
   );
 
   return (
-    <Screen scroll={false} tabBar="junior" header={<ScreenTitleHeader title="노하우 제안" backFallback />}>
+    // 고치기 화면이라 하단 탭바를 그리지 않는다(화면조립표 2026-11-17 11절 5번).
+    <Screen scroll={false} header={<ScreenTitleHeader title="노하우 제안" backFallback />}>
       <Stack.Screen options={{ title: '노하우 제안' }} />
       {/* 키보드가 입력칸을 가리지 않게 스크롤을 KeyboardShift 안에 직접 둔다 — 여백은 screenScrollStyle 그대로. */}
       <KeyboardShift>

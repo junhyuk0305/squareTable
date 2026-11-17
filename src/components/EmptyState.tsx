@@ -17,11 +17,16 @@ export type EmptyStateProps = {
   emoji?: string;
   /** 하단 1차 액션 버튼. 없으면 미노출. */
   cta?: { label: string; onPress: () => void };
+  /**
+   * 버튼 모양. 없으면 지금 그대로(검정 주 버튼).
+   * yellow = 그 화면의 주 버튼(화면조립표 2026-11-17 10절 7번) · secondary = 화면에 다른 노란 버튼이 있을 때의 보조 알약.
+   */
+  ctaTone?: 'yellow' | 'secondary';
   /** 화면에 혼자 놓일 때(부모에 화면 여백이 없을 때) — 헤더 아래 첫 여백·좌우 여백을 이 부품이 든다. */
   screen?: boolean;
 };
 
-export function EmptyState({ title, body, emoji, cta, screen }: EmptyStateProps) {
+export function EmptyState({ title, body, emoji, cta, ctaTone, screen }: EmptyStateProps) {
   // 본문 15 가 두 줄 연속으로 나오지 않게(2026-11-02 결정): 줄바꿈으로 나눈 둘째 문장부터는 설명(13/19)으로 그린다.
   const [lead, ...rest] = body ? body.split('\n') : [];
   const desc = rest.join('\n');
@@ -37,9 +42,9 @@ export function EmptyState({ title, body, emoji, cta, screen }: EmptyStateProps)
           accessibilityRole="button"
           accessibilityLabel={cta.label}
           accessibilityState={{ disabled: false }}
-          style={({ pressed }) => [styles.cta, pressed && { opacity: 0.85 }]}
+          style={({ pressed }) => [ctaTone ? TONE[ctaTone].box : styles.cta, pressed && { opacity: 0.85 }]}
         >
-          <Text style={styles.ctaText}>{cta.label}</Text>
+          <Text style={ctaTone ? TONE[ctaTone].text : styles.ctaText}>{cta.label}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -61,4 +66,11 @@ const styles = StyleSheet.create({
     backgroundColor: BrandColors.brand,
   },
   ctaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  ctaYellow: { ...ButtonStyles.primaryYellow, marginTop: Space.md },
+  ctaSecondary: { ...ButtonStyles.secondary, alignSelf: 'center', marginTop: Space.md },
 });
+
+const TONE = {
+  yellow: { box: styles.ctaYellow, text: ButtonTextStyles.primaryOnYellow },
+  secondary: { box: styles.ctaSecondary, text: ButtonTextStyles.secondary },
+} as const;

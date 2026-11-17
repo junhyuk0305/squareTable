@@ -332,7 +332,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       <BrandInviteCard />
       {starterRow && (
         <Appear delay={stagger(0)}>
-          <StarterChecklist row={starterRow} />
+          <StarterChecklist row={starterRow} place="hub" unitId={starterRow.unit_id} />
         </Appear>
       )}
 
@@ -344,6 +344,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       {askNumbers ? (
         <Appear delay={stagger(1)}>
           <View style={{ gap: Space.sm }}>
+            {/* 미응답이 있으면 카드 안에 노란 [답하러 가기](사장 매장 홈 버튼과 같은 글 · 11-16 "누르는 것은 버튼 모양"). 0건이면 버튼 없음. */}
             <NumberRow
               counts={askNumbers.total}
               words={NUMBER_WORDS}
@@ -351,6 +352,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
                 if (multi) setPicker({ title: STORE_WORDS.statPending, path: '/owner/inbox', units: askNumbers.unanswered });
                 else if (askNumbers.unanswered[0]) void goStore(askNumbers.unanswered[0].uid, '/owner/inbox');
               }}
+              ctaLabel={askNumbers.total.unanswered > 0 ? '답하러 가기 →' : undefined}
             />
             <StatCard
               item={{

@@ -39,7 +39,7 @@ import type { PlaybookEntry, SquareBlock } from '@/types';
 
 import { StepProgress } from '@/components/blocks/StepProgress';
 
-import { SheetHead, Chip, PrimaryButton, GhostButton, ErrorNote, AnswerReveal, qst } from './kit';
+import { SheetHead, Chip, GhostButton, ErrorNote, AnswerReveal, qst } from './kit';
 import { PayloadForm, emptyPayload, answerTextOf, isDontFormat, orderedStepsOf } from './PayloadForm';
 import { QuizPreviewSheet, type QuizPreviewTarget } from './QuizPreviewSheet';
 
@@ -450,6 +450,15 @@ export function QuizEditorSheet({
             </View>
             {draftRestored ? <Text style={est.restored}>쓰다 만 내용을 불러왔어요</Text> : null}
             <PayloadForm format={format} payload={payload} onChange={setPayload} />
+            {/* 맨 아래는 노란 버튼 하나(2026-11-17 11절 3번). 풀어보기는 쓴 문항 바로 아래 보조 버튼. */}
+            <View style={est.tryRow}>
+              <GhostButton
+                icon="play-outline"
+                label="풀어보기"
+                disabled={busy}
+                onPress={() => openPreview({ id: editing?.id, format, payload })}
+              />
+            </View>
             {err ? <ErrorNote text={err} /> : null}
 
             {/* ★ 노하우 원클릭 추가 — 새 화면 없이 버튼 하나 + 확인 토스트 */}
@@ -509,9 +518,10 @@ export function QuizEditorSheet({
         )}
       </ScrollView>
 
+      {/* 맨 아래 고정 노란 버튼 하나(2026-11-17 11절 3번 · 퀴즈 문항 직접 쓰기 창). 고르기(직접 쓰기)는 칩을 누르면 넘어가 버튼이 없다. */}
       <View style={qst.foot}>
         {step === 'pick' && startMode === 'ai' && (
-          <PrimaryButton
+          <DockButton
             label={busy ? '만드는 중…' : aiFormats.size > 0 ? `고른 ${aiFormats.size}가지로 만들기` : replacing ? '바뀐 것만 다시 내기' : '알아서 만들어 줘'}
             disabled={busy || linkedEntries.length === 0}
             /* ★[다시 만들기]에서 형태를 안 고르면 **빈 배열**을 넘긴다 — generateQuizItems 의 델타
@@ -523,21 +533,13 @@ export function QuizEditorSheet({
           />
         )}
         {step === 'form' && (
-          <>
-            <GhostButton
-              icon="play-outline"
-              label="풀어보기"
-              disabled={busy}
-              onPress={() => openPreview({ id: editing?.id, format, payload })}
-            />
-            <PrimaryButton
-              label={busy ? '저장하는 중…' : editing ? '저장' : '문제 추가'}
-              disabled={busy}
-              onPress={() => void saveForm()}
-            />
-          </>
+          <DockButton
+            label={busy ? '저장하는 중…' : editing ? '저장' : '문제 추가'}
+            disabled={busy}
+            onPress={() => void saveForm()}
+          />
         )}
-        {step === 'review' && drafts.length === 0 && <PrimaryButton label="닫기" onPress={onClose} />}
+        {step === 'review' && drafts.length === 0 && <DockButton label="닫기" onPress={onClose} />}
       </View>
     </BottomSheet>
 
@@ -548,7 +550,26 @@ export function QuizEditorSheet({
   );
 }
 
+/** 시트 바닥 노란 주 버튼 — ButtonStyles.primaryYellow. 시트는 아래 안전 영역을 BottomSheet 가 들어 StepDock 대신 쓴다. */
+function DockButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [ButtonStyles.primaryYellow, disabled && est.off, pressed && est.pressed]}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
+      accessibilityLabel={label}
+    >
+      <Text style={ButtonTextStyles.primaryOnYellow}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const est = StyleSheet.create({
+  off: { opacity: 0.45 },
+  pressed: { opacity: 0.88 },
+  tryRow: { marginTop: Space.sm },
   lead: { ...Type.body, fontWeight: '700', marginTop: Space.xs, lineHeight: 21 },
   note: { ...Type.desc, fontWeight: '600', marginTop: Space.xs },
 

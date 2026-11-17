@@ -37,26 +37,66 @@ import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
  * ★공간 설정도 같은 카드를 쓴다(place="space" · 2026-11-16 R-12). 공간은 서버에 있는 것만 보인다:
  *   코드 · 코드 복사 · 초대 문구 복사. 공간엔 가입 링크·만료(my_spaces 가 안 내려줌)·코드 바꾸기 함수
  *   (rotate_invite_code 는 활성 매장만 받는다 · 0356)가 없어 그 줄은 그리지 않는다.
+ *
+ * ★사장 매장 홈은 [초대 링크 복사]를 시작 카드의 직원 초대 단계 줄에 둔다(2026-11-17 화면 조립표 2차 0번).
+ *   그래서 홈은 hideLink 로 이 카드의 링크 버튼을 감춘다. 단계 줄 버튼은 useStoreInviteLink 로 같은 일을 한다.
  */
+type InviteFrom = 'onboarding' | 'home' | 'staff' | 'settings' | 'space_settings';
+
+/** 매장 초대 문구 — 카톡에 그대로 붙는 한 덩어리. 링크만 보내면 받은 사람이 무엇을 해야 하는지 모른다. */
+function storeInviteMessage(code: string) {
+  const link = `${siteOrigin()}/signup?role=junior&code=${code}`;
+  return `매장의 정석에 초대할게요.\n1) 링크 열기 → 2) ‘직원’으로 가입 → 3) 초대코드 ${code} 입력\n${link}`;
+}
+
+/** 복사 결과 안내 — 카드 안 버튼과 홈 시작 카드의 단계 버튼이 같은 말을 쓴다. 'shared'·'dismissed' 는 그 자체가 피드백이라 조용히 둔다. */
+function toastInviteCopy(what: 'code' | 'link', r: ShareTextResult, isSpace: boolean) {
+  if (r === 'copied') {
+    showToast(what === 'code' ? '초대코드를 복사했어요' : isSpace ? SPACE_MEMBERS.inviteMessageCopied : '초대 링크를 복사했어요', 'good');
+  } else if (r === 'failed') {
+    showToast('복사가 안 됐어요. 화면의 코드를 길게 눌러 복사해 주세요');
+  }
+}
+
+/** 지금 매장의 초대 링크 복사 — 홈 시작 카드의 직원 초대 단계가 쓴다. 코드가 없거나 만료됐으면 막는다(카드 안 버튼과 같은 조건). */
+export function useStoreInviteLink(from: InviteFrom) {
+  const code = useSessionStore((st) => st.inviteCode);
+  const expiresAt = useSessionStore((st) => st.inviteExpiresAt);
+  const disabled = !code || inviteExpiryLabel(expiresAt, new Date())?.state === 'expired';
+  const copy = () => {
+    if (disabled) return;
+    track('invite_shared', { from, via: 'link' });
+    void shareText(storeInviteMessage(code)).then((r) => toastInviteCopy('link', r, false));
+  };
+  return { copy, disabled };
+}
+
 export function InviteBlock({
   code,
   from,
   action,
   style,
   place = 'store',
+  hideLink = false,
+  yellowLink = false,
 }: {
   /** 매장 초대코드 6자리. */
   code: string;
   /** 관측용 — 사장이 어느 자리에서 뿌렸는지. */
-  from: 'onboarding' | 'home' | 'staff' | 'settings' | 'space_settings';
+  from: InviteFrom;
   /** 코드 줄 오른쪽 추가 액션(직원 관리의 '코드 변경'). */
   action?: React.ReactNode;
   /** 바깥 여백만 — 부모 목록에 gap 이 없는 화면(설정)이 아래 간격을 준다. */
   style?: StyleProp<ViewStyle>;
   /** 어느 자리의 코드인가. 공간이면 링크·만료·코드 바꾸기가 없다. */
   place?: 'store' | 'space';
+  /** 링크 복사 버튼을 그리지 않는다 — 사장 매장 홈(링크 복사는 시작 카드 단계 줄에 있다). */
+  hideLink?: boolean;
+  /** 링크 복사 버튼을 노랑으로 — 그 화면의 노란 버튼일 때(직원 목록·매장 설정 · 화면조립표 2026-11-17 11절 1번). 공간은 늘 노랑. */
+  yellowLink?: boolean;
 }) {
   const isSpace = place === 'space';
+  const yellow = isSpace || yellowLink;
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const [rotating, setRotating] = useState(false);
   // Q21: 만료일은 세션 코드의 것이다. 온보딩은 params 코드를 보여 줄 수 있어 같은 코드일 때만 쓴다.
@@ -66,23 +106,14 @@ export function InviteBlock({
   const expiry = !isSpace && code === sessionCode ? inviteExpiryLabel(expiresAt, new Date()) : null;
   const expired = expiry?.state === 'expired';
 
-  const link = `${siteOrigin()}/signup?role=junior&code=${code}`;
-  // 카톡에 그대로 붙는 한 덩어리. 링크만 보내면 받은 사람이 무엇을 해야 하는지 모른다.
-  const message = isSpace
-    ? SPACE_MEMBERS.inviteMessage(code)
-    : `매장의 정석에 초대할게요.\n1) 링크 열기 → 2) ‘직원’으로 가입 → 3) 초대코드 ${code} 입력\n${link}`;
+  const message = isSpace ? SPACE_MEMBERS.inviteMessage(code) : storeInviteMessage(code);
 
   const done = (what: 'code' | 'link', r: ShareTextResult) => {
     if (r === 'copied') {
       setCopied(what);
       setTimeout(() => setCopied(null), 1500);
-      showToast(what === 'code' ? '초대코드를 복사했어요' : isSpace ? SPACE_MEMBERS.inviteMessageCopied : '초대 링크를 복사했어요', 'good');
-      return;
     }
-    // 'shared'·'dismissed'(옛 공유 시트 경로)는 그 자체가 피드백이라 조용히 둔다. 실패만 말한다.
-    if (r === 'failed') {
-      showToast('복사가 안 됐어요. 화면의 코드를 길게 눌러 복사해 주세요');
-    }
+    toastInviteCopy(what, r, isSpace);
   };
 
   // 복사 = "사장이 초대를 실제로 뿌렸다"의 유일한 관측점. 이게 없으면 직원 합류율이 낮을 때
@@ -140,17 +171,19 @@ export function InviteBlock({
         {/* 만료 안내는 코드 칸 밖에 둔다 — 코드 칸은 줄지 않으므로, 안에 두면 이 문구 너비만큼 칸이 넓어져 버튼이 밀린다. */}
         {expiry && <Text style={[s.expiry, expiry.state !== 'ok' && s.expiryWarn]}>{expiry.text}</Text>}
 
+        {!hideLink && (
         <PressableScale
           onPress={sendLink}
           disabled={expired || !code}
           scaleTo={0.97}
           accessibilityRole="button"
           accessibilityLabel={isSpace ? SPACE_MEMBERS.inviteMessageCopy : '초대 링크 복사'}
-          style={[s.primary, (expired || !code) && s.dim]}
+          style={[s.primary, yellow && s.primaryYellow, (expired || !code) && s.dim]}
         >
-          <Ionicons name={isSpace ? 'chatbubble-outline' : 'link-outline'} size={16} color={InkColors.bubbleText} />
-          <Text style={s.primaryText}>{copied === 'link' ? '복사됨' : isSpace ? SPACE_MEMBERS.inviteMessageCopy : '초대 링크 복사'}</Text>
+          <Ionicons name={isSpace ? 'chatbubble-outline' : 'link-outline'} size={16} color={yellow ? InkColors.ink : InkColors.bubbleText} />
+          <Text style={yellow ? ButtonTextStyles.primaryOnYellow : s.primaryText}>{copied === 'link' ? '복사됨' : isSpace ? SPACE_MEMBERS.inviteMessageCopy : '초대 링크 복사'}</Text>
         </PressableScale>
+        )}
 
         {expired &&
           (isOwner ? (
@@ -197,6 +230,12 @@ const s = StyleSheet.create({
   // 주 버튼(52 · 모서리 16 · 가로 꽉).
   primary: { ...ButtonStyles.primary, flexDirection: 'row', gap: 6, backgroundColor: BrandColors.brand },
   primaryText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  // 공간 설정 탭의 [초대 문구 복사] · 직원 목록·매장 설정의 [초대 링크 복사] = 그 화면의 노란 버튼(화면조립표 2026-11-17 11절 1번).
+  primaryYellow: {
+    backgroundColor: ButtonStyles.primaryYellow.backgroundColor,
+    borderWidth: ButtonStyles.primaryYellow.borderWidth,
+    borderColor: ButtonStyles.primaryYellow.borderColor,
+  },
 
   dim: { opacity: 0.4 },
   expiry: { ...Type.tag, marginTop: 2, lineHeight: 17, fontWeight: '700', color: TextColor.secondary },

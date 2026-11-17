@@ -271,9 +271,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sendBtnOff: { backgroundColor: InkColors.line },
-  // 주 버튼(52 · 모서리 16 · 가로 꽉 · 그림자 없음).
-  nextBtn: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
-  nextText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
+  // 맨 아래 고정 노란 버튼(52 · 모서리 16 · 가로 꽉 · 화면조립표 2026-11-17 11절 3번 · 이름 = 다음 단계 이름).
+  nextBtn: ButtonStyles.primaryYellow,
+  nextText: ButtonTextStyles.primaryOnYellow,
   skip: { ...ButtonStyles.secondary, alignSelf: 'stretch' },
   skipText: ButtonTextStyles.secondary,
 });

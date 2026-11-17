@@ -177,7 +177,7 @@ export function CoachmarkTour({
                 </Pressable>
               )}
               <PressableScale onPress={next} scaleTo={0.96} style={styles.cta}>
-                <Text style={styles.ctaText}>{isLast ? step.ctaLabel ?? '시작하기' : '다음'}</Text>
+                <Text style={styles.ctaText}>{isLast ? step.ctaLabel ?? '시작하기' : '이어서 보기'}</Text>
               </PressableScale>
             </View>
           </View>

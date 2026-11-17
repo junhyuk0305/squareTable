@@ -7,6 +7,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { PressableScale } from '@/components/PressableScale';
 import { Appear } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
+import { StepDock } from '@/components/StepDock';
+import { useBackIntercept } from '@/lib/hooks/useBackIntercept';
+import { handoverPlan } from '@/lib/utils/stepScreenPlans';
 import { structureDoc, extractDocText, type DocProgress } from '@/lib/ai';
 import type { StructuredSegment } from '@/lib/ai/types';
 import { chunkDocument, MAX_IMPORT_CHARS, type DocChunk } from '@/lib/import/chunk';
@@ -38,6 +42,7 @@ import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Type } from '@/lib/theme/type';
 
 const MIN_RAWTEXT = 12;
+const TITLE = '문서로 노하우 추가';
 // PDF 원본 크기 캡(클라 1차 방어 — 엣지 base64 하드캡 14MB 와 정렬). 넘으면 "나눠 올리기" 안내.
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
 
@@ -70,6 +75,7 @@ export function HandoverImport() {
   if (!loaded) {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
+        <ScreenTitleHeader title={TITLE} backFallback />
         <ScreenLoading label="검토 대기 노하우를 불러오고 있어요…" />
       </SafeAreaView>
     );
@@ -336,8 +342,16 @@ function HandoverImportBody() {
     return [...s];
   }, [entries, edits]);
 
+  // 맨 아래 고정 노란 버튼 하나 + 머리·안드 뒤로 = 앞 단계(화면조립표 2026-11-17 11절 3번). 판정 = handoverPlan.
+  const plan = handoverPlan(phase, { tooShort, extracting, chosen: chosenCount });
+  const back = plan.back;
+  const toPrev = back !== null ? () => setPhase(back) : undefined;
+  useBackIntercept(back !== null, () => toPrev?.());
+
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    // 위 = 머리, 아래 = 도크가 안전 영역을 든다.
+    <SafeAreaView style={styles.safe} edges={[]}>
+      <ScreenTitleHeader title={TITLE} backFallback onBack={toPrev} />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {phase === 'review' ? (
           <Appear delay={0}>
@@ -475,43 +489,21 @@ function HandoverImportBody() {
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             )}
-
-            <PressableScale
-              onPress={run}
-              scaleTo={0.98}
-              // 추출 중 파이프 시작 금지 — 파이프 종료의 setRawText('')가 뒤늦게 도착한
-              // 추출 텍스트를 지우는 레이스가 있다.
-              style={[styles.cta, (tooShort || extracting) && styles.ctaDisabled]}
-              disabled={tooShort || extracting}
-              accessibilityRole="button"
-              accessibilityLabel="AI로 노하우 정리하기"
-            >
-              <Ionicons name="document-text-outline" size={16} color={InkColors.bubbleText} />
-              <Text style={styles.ctaText}>AI로 노하우 정리하기</Text>
-            </PressableScale>
             </View>
             <Text style={styles.hint}>* 정리된 항목은 사장님이 확인한 뒤에만 직원에게 보여요.</Text>
           </Appear>
         )}
       </ScrollView>
 
-      {phase === 'review' && (
-        <View style={styles.saveBar}>
-          <PressableScale
-            onPress={save}
-            scaleTo={0.98}
-            style={[styles.saveBtn, (chosenCount === 0 || saving) && styles.ctaDisabled]}
-            disabled={chosenCount === 0 || saving}
-            accessibilityRole="button"
-            accessibilityLabel={`노하우 ${chosenCount}개 추가하기`}
-          >
-            {saving ? (
-              <ActivityIndicator size="small" color={InkColors.bubbleText} />
-            ) : (
-              <Text style={styles.saveText}>{chosenCount > 0 ? `노하우 ${chosenCount}개 추가하기` : '추가할 항목을 선택하세요'}</Text>
-            )}
-          </PressableScale>
-        </View>
+      {/* 붙여넣기 = AI로 노하우 정리하기 · 고르기 = 노하우 n개 추가하기. 정리 중에는 버튼이 없다.
+          추출 중 파이프 시작 금지(handoverPlan) — 파이프 종료의 setRawText('')가 뒤늦게 도착한 추출 텍스트를 지우는 레이스가 있다. */}
+      {plan.dock && (
+        <StepDock
+          label={plan.dock.label}
+          disabled={plan.dock.disabled}
+          busy={phase === 'review' && saving}
+          onPress={phase === 'review' ? save : run}
+        />
       )}
     </SafeAreaView>
   );
@@ -793,16 +785,7 @@ const styles = StyleSheet.create({
   errorText: { ...Type.desc, flex: 1, fontWeight: '700', color: BrandColors.badText },
 
   inputCard: { ...CardStyles.list, marginBottom: Space.sm },
-  // 주 버튼(52 · 모서리 16 · 16/800 · 2026-11-02).
-  cta: {
-    ...ButtonStyles.primary,
-    flexDirection: 'row',
-    gap: 8,
-    backgroundColor: InkColors.ink,
-    marginTop: 2,
-  },
   ctaDisabled: { opacity: 0.45 },
-  ctaText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
   hint: { ...Type.desc, fontWeight: '600', textAlign: 'center' },
 
   // ── 진행(파이프) ── 카드 = CardStyles.list(모서리 16 · 안쪽 16 · 그림자 e1).
@@ -934,18 +917,4 @@ const styles = StyleSheet.create({
   backCard: CardStyles.rows,
   backLink: { ...ButtonStyles.secondary, alignSelf: 'center', flexDirection: 'row', gap: Space.xs },
   backLinkText: ButtonTextStyles.secondary,
-
-  saveBar: {
-    padding: Space.gutter,
-    paddingTop: Space.md,
-    borderTopWidth: 1,
-    borderTopColor: InkColors.line,
-    backgroundColor: InkColors.bg,
-  },
-  saveBtn: {
-    ...ButtonStyles.primary,
-    flexDirection: 'row',
-    backgroundColor: InkColors.ink,
-  },
-  saveText: { ...ButtonTextStyles.primary, color: InkColors.bubbleText },
 });

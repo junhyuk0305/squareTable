@@ -143,13 +143,14 @@ export default function JuniorHomeScreen() {
         </Appear>
         {forgotCheckout && openRec && <ForgotCheckoutCard record={openRec} />}
 
-        {/* 2) 오늘 업무 — 목록 3건 + 전체보기 ›. 체크는 컨트롤이다 — 누르면 진짜 완료된다(업무 탭과 같은 toggleTask). */}
+        {/* 2) 오늘 업무 — 목록 3건 + 전체보기 ›. 체크는 컨트롤이다 — 누르면 진짜 완료된다(업무 탭과 같은 toggleTask).
+            할일이 0건이면 묶음을 그리지 않는다 — 위 검정 상자가 이미 "없어요"라고 말한다(2026-11-17 1차 추천대로). */}
+        {taskTotal > 0 && (
         <Appear delay={stagger(1)}>
           <Section
             icon="checkbox-outline"
             title="오늘 업무"
             trailing={
-              taskTotal > 0 ? (
                 <Pressable
                   onPress={() => goToTab('/junior/work?view=todo')}
                   accessibilityRole="button"
@@ -161,14 +162,10 @@ export default function JuniorHomeScreen() {
                     {taskTotal > HOME_LIST_LIMIT ? `전체보기 (${taskTotal - HOME_LIST_LIMIT}개 더) ›` : '전체보기 ›'}
                   </Text>
                 </Pressable>
-              ) : undefined
             }
           >
           <View style={styles.todoCard}>
-            {taskTotal === 0 ? (
-              <Text style={styles.todoEmpty}>오늘 할일이 없어요</Text>
-            ) : (
-              todayTasks.slice(0, HOME_LIST_LIMIT).map((t, i) => (
+            {todayTasks.slice(0, HOME_LIST_LIMIT).map((t, i) => (
                 <Pressable
                   key={t.id}
                   onPress={() => onToggleTask(t)}
@@ -186,11 +183,11 @@ export default function JuniorHomeScreen() {
                     {t.text}
                   </Text>
                 </Pressable>
-              ))
-            )}
+              ))}
           </View>
           </Section>
         </Appear>
+        )}
 
         {/* 3) 안 푼 퀴즈 — 0건이면 AlertRow가 스스로 null을 돌려준다(상시 노출 금지).
             Appear로 감싸지 않는다 — 0건일 때 빈 래퍼가 남아 목록 간격만 벌어진다. */}

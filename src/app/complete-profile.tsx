@@ -16,10 +16,11 @@ import { usePhoneOtp } from '@/lib/otp';
 import { ConsentChecklist } from '@/components/ConsentChecklist';
 import { allConsented, consentPayload, UNDER_14_TEXT, type ConsentChecked } from '@/lib/config/consent';
 import { Appear, stagger } from '@/components/Appear';
+import { RolePicker } from '@/components/RolePicker';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { BrandColors, InkColors, Surface, TextColor } from '@/lib/theme/colors';
 import { Space, screenScrollStyle } from '@/lib/theme/layout';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Radius } from '@/lib/theme/elevation';
 import { Type } from '@/lib/theme/type';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { ChipStyles } from '@/lib/theme/chip';
@@ -179,25 +180,7 @@ function CompleteProfileForm() {
         <Text style={styles.roleQ}>어떤 분이세요?</Text>
         </Appear>
         <Appear delay={stagger(2)}>
-        <View style={styles.roleRow}>
-          {(
-            [
-              { r: 'owner', icon: 'storefront', label: '사장님', desc: '매장을 운영하고\n노하우를 등록해요' },
-              { r: 'junior', icon: 'person', label: '직원', desc: '초대코드로\n매장에 합류해요' },
-            ] as const
-          ).map((o) => (
-            <Pressable key={o.r} onPress={() => setRole(o.r)} style={[styles.roleCard, role === o.r && styles.roleCardOn]}>
-              <Ionicons name={o.icon} size={28} color={role === o.r ? InkColors.ink : InkColors.ink3} style={styles.roleIcon} />
-              <Text style={[styles.roleLabel, role === o.r && styles.roleLabelOn]}>{o.label}</Text>
-              <Text style={styles.roleDesc}>{o.desc}</Text>
-              {role === o.r && (
-                <View style={styles.roleCheck}>
-                  <Text style={styles.roleCheckMark}>✓</Text>
-                </View>
-              )}
-            </Pressable>
-          ))}
-        </View>
+        <RolePicker value={role} onChange={setRole} />
         </Appear>
 
         <Appear delay={stagger(3)}>
@@ -408,16 +391,6 @@ const styles = StyleSheet.create({
   introTitle: { ...Type.title },
   introSub: { ...Type.desc },
   roleQ: { ...Type.section, marginBottom: 2 },
-  roleRow: { flexDirection: 'row', gap: 12, marginBottom: 4 },
-  roleCard: { flex: 1, backgroundColor: Surface.card, borderWidth: 2, borderColor: InkColors.line, borderRadius: Radius.md, padding: 16, gap: 4 },
-  roleCardOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB', ...Elevation.e1 },
-  // 그림 이모지 금지(워딩 §2.3) — Ionicons로 교체. 아이콘도 Text 기반이라 글자 크기 설정에 함께 반응한다.
-  roleIcon: { marginBottom: 4 },
-  roleLabel: { fontSize: 16, fontWeight: '800', color: TextColor.secondary, marginTop: 4 },
-  roleLabelOn: { color: BrandColors.brand },
-  roleDesc: { ...Type.desc },
-  roleCheck: { position: 'absolute', top: 10, right: 10, width: 20, height: 20, borderRadius: 10, backgroundColor: BrandColors.brand, alignItems: 'center', justifyContent: 'center' },
-  roleCheckMark: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
   field: { gap: 6 },
   label: { fontSize: 13, fontWeight: '700', color: TextColor.secondary },
   req: { color: BrandColors.accentText, fontWeight: '900' },

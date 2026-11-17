@@ -150,7 +150,7 @@ export type PlaybookEntry = {
 export type PlaybookSuggestion = {
   id: string;
   unit_id: string;
-  /** from_space = 공간에서 보낸 노하우 사본 제안(0490 · 승인은 approve_space_proposal). */
+  /** from_space = 공간에서 보낸 노하우 사본 제안(0490 · 승인 = 검토 창이 저장한 노하우에 연결 · 0841 review_suggestion). */
   kind: 'improve' | 'new' | 'from_space';
   /** improve: 대상 노하우 id. */
   target_entry_id?: string;

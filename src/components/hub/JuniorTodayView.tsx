@@ -135,6 +135,11 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
   }, [myCross]);
   const fmtHours = (min: number) => (min >= 60 ? `${Math.floor(min / 60)}시간` : `${min}분`);
 
+  // ── 첫날(2026-11-17 1차 6번) — 7일 안 근무 0 · 할 일 0 · 이번달 근무시간 0. 빈 문장 카드 둘 대신 물어보기 카드 하나.
+  //    지금 있는 조회로만 읽는다. 하나라도 생기면 지금 화면으로 돌아간다.
+  const askUnit = myCross[0]?.unit_id;
+  const firstDay = !!askUnit && todayShifts.length === 0 && !nextShift && todoItems.length === 0 && month.minutes === 0;
+
   // 전부 도착 전엔 무조건 로딩 — 근무 카드만 먼저 그리고 할일이 나중에 튀어나오는 부분 렌더 금지.
   // ★prefs(매장 별명·색)도 게이트에 넣는다(2026-08-25) — 빠져 있던 동안 근무 행·할일 행·매장별 행의
   //   이름과 점 색이 화면이 뜬 뒤에 갈아끼워졌다.
@@ -167,7 +172,20 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
         </Appear>
       )}
 
-      {/* ── 1) 오늘 근무 ── */}
+      {firstDay && askUnit && (
+        <Appear delay={stagger(0)}>
+          <FocusCard
+            kicker={heroKicker}
+            quote="모르면 물어보세요"
+            quoteMarks={false}
+            meta={`${labelOf(askUnit)} 노하우로 바로 답해줘요`}
+            cta={{ label: '노하우 물어보기', onPress: () => { if (!switching) goStore(askUnit, '/junior/chat'); } }}
+          />
+        </Appear>
+      )}
+
+      {/* ── 1) 오늘 근무 ── 첫날에는 위 카드가 "오늘은 근무가 없어요"를 말한다. */}
+      {!firstDay && (
       <Appear delay={stagger(1)}>
         <Section title="오늘 근무">
         <View style={styles.card}>
@@ -205,11 +223,12 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
         </View>
         </Section>
       </Appear>
+      )}
 
       {/* ── 2) 남은 할 일 — 히어로로 올라간 1건은 여기서 뺀다(같은 것을 두 번 그리지 않는다).
              ★히어로가 있고 나머지가 0건이면 이 섹션 자체를 그리지 않는다 — "오늘 처리할 일이 없어요"가
-               바로 위 히어로와 정면으로 모순된다. ── */}
-      {(!hero || restTodos.length > 0) && (
+               바로 위 히어로와 정면으로 모순된다. 첫날에도 그리지 않는다(위 물어보기 카드가 대신한다). ── */}
+      {!firstDay && (!hero || restTodos.length > 0) && (
       <Appear delay={stagger(2)}>
         <Section
           title={hero ? '남은 할 일' : '오늘 할 일'}

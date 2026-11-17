@@ -21,6 +21,7 @@ export function FocusCard({
   quote,
   meta,
   cta,
+  quoteMarks = true,
 }: {
   /** 맥락 한 줄 — "가장 급한 것 — 직원 질문 12건 중 제일 오래됨". */
   kicker: string;
@@ -29,11 +30,13 @@ export function FocusCard({
   /** 누가·얼마나 — "박지영 · 6일째 기다리는 중". */
   meta?: string;
   cta: { label: string; onPress: () => void };
+  /** false = 사람 말이 아닌 안내 제목(직원 허브 첫날 "모르면 물어보세요" · 2026-11-17). 따옴표를 붙이지 않는다. */
+  quoteMarks?: boolean;
 }) {
   return (
     <View style={styles.card}>
       <Text style={styles.kicker} numberOfLines={2}>{kicker}</Text>
-      <Text style={styles.quote} numberOfLines={4}>“{quote}”</Text>
+      <Text style={styles.quote} numberOfLines={4}>{quoteMarks ? `“${quote}”` : quote}</Text>
       {meta ? <Text style={styles.meta} numberOfLines={1}>{meta}</Text> : null}
       <Pressable
         accessibilityRole="button"
