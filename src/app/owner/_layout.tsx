@@ -83,7 +83,12 @@ export default function OwnerLayout() {
     const offSt = useStaffStore.getState().subscribe(); // 신규 직원 합류가 즉시 직원 목록에 반영
     const offSg = useSuggestionStore.getState().subscribe(); // 새 노하우 제안이 알림벨에 즉시 반영
     const offR = useRoomStore.getState().subscribe(); // 업무방 — 예전엔 WorkBoard 가 구독했다
+    // ★0900 벨 원천 — 사장 알림(좌석 잠김·AI 사용량)과 입금 결과가 켠 채로 벨에 뜬다. 직원 소식(member_notices)은 근무표 구독(offS)이 받는다.
+    const offOa = useOwnerAlertStore.getState().subscribe();
+    const offPc = usePaymentClaimStore.getState().subscribe();
     return () => {
+      offOa();
+      offPc();
       offQ();
       offP();
       offW();

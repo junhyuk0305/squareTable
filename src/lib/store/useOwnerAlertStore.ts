@@ -1,21 +1,22 @@
 // 사장 알림(owner_alerts, 0191) — 좌석 잠김 · AI 사용량 80%·100%.
 // 벨 배지·알림 목록의 한 축(판정 SSOT = utils/notifications.ts). 사장 전용 축이라 매니저·직원은 빈 배열이 정상이다.
-// realtime 미구독: 입금 신고(usePaymentClaimStore)와 같은 이유 — 푸시가 먼저 알리고, 알림함은 진입 시 재조회로 충분.
+// 실시간(★0900 · 2026-11-19 "바로 와야 해"): 새 회차가 앱을 켠 채로 벨에 뜬다. 구독은 owner/_layout 한 곳에서 건다.
 import { create } from 'zustand';
-import { coalesce } from '@/lib/store/realtimeSync';
+import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import type { OwnerAlert } from '@/types';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchOwnerAlerts } from '@/lib/db';
+import { fetchOwnerAlerts, subscribeOwnerAlerts } from '@/lib/db';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
 type State = {
   alerts: OwnerAlert[];
   loaded: boolean;
   hydrate: () => Promise<void>;
+  subscribe: () => () => void;
 };
 
-export const useOwnerAlertStore = create<State>((set) => ({
+export const useOwnerAlertStore = create<State>((set, get) => ({
   alerts: [],
   loaded: !HAS_SUPABASE,
 
@@ -32,4 +33,6 @@ export const useOwnerAlertStore = create<State>((set) => ({
     // 실패는 db 계층이 표면화한다 — loaded 는 "기다리기가 끝났나"라 실패해도 세운다.
     set({ alerts: data, loaded: true });
   }),
+
+  subscribe: () => subscribeDebounced(subscribeOwnerAlerts, () => void get().hydrate(), 300, 'owner-alerts'),
 }));

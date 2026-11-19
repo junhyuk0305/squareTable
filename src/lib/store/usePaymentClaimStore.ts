@@ -4,13 +4,14 @@
 // 이 스토어가 두 곳을 동시에 먹인다:
 //   ① /billing 화면의 신고 상태 표시(확인 중 / 반려 사유)
 //   ② 사장 알림 벨·목록의 '입금 확인됨 / 반려됨'(판정 SSOT = utils/notifications.ts)
-// realtime 미구독: /billing 이 이미 30초 폴링으로 활성화를 감지하고, 알림 축은 화면 진입 시 재조회로 충분.
+// 실시간(★0900 · 2026-11-19 "바로 와야 해"): 입금 결과(상태 UPDATE)가 앱을 켠 채로 벨에 뜬다. 구독은 owner/_layout 한 곳에서 건다.
+//   SHOW_BILLING=false(앱)면 hydrate 가 읽지 않으므로 구독도 걸지 않는다. /billing 의 30초 폴링(활성화 감지)은 그대로다.
 import { create } from 'zustand';
-import { coalesce } from '@/lib/store/realtimeSync';
+import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import type { PaymentClaim } from '@/types';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchPaymentClaims, submitPaymentClaim } from '@/lib/db';
+import { fetchPaymentClaims, submitPaymentClaim, subscribePaymentClaims } from '@/lib/db';
 import { SHOW_BILLING } from '@/lib/config/store-policy';
 
 /** 신고 실패 사유 — RPC 의 named 에러를 화면 문구로 옮기는 판정은 여기 한 곳(§② SSOT). */
@@ -62,6 +63,7 @@ type State = {
   claims: PaymentClaim[];
   loaded: boolean;
   hydrate: () => Promise<void>;
+  subscribe: () => () => void;
   submit: (args: {
     plan: 'single' | 'multi';
     amountKrw: number;
@@ -94,6 +96,8 @@ export const usePaymentClaimStore = create<State>((set, get) => ({
     // 읽기 실패는 db 계층이 SyncBanner 로 표면화한다 — 여기선 빈 목록으로 위장하지 않게 loaded 만 세운다.
     set({ claims: data, loaded: true });
   }),
+
+  subscribe: () => (SHOW_BILLING ? subscribeDebounced(subscribePaymentClaims, () => void get().hydrate(), 300, 'payment-claims') : () => {}),
 
   submit: async (args) => {
     const epoch = currentTenantEpoch();

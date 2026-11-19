@@ -4583,6 +4583,35 @@ export function subscribeSchedule(onChange: () => void): () => void {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_exceptions' }, onChange)
     // 0243 신설(publication 멤버). 직원 요청이 사장 화면 승인 칸에, 승인 결과가 직원 화면에 바로 뜬다.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_change_requests' }, onChange)
+    // ★0900 내 근무 알림(member_notices · fetchScheduleNotices) — 합류함·나감·인원 초과·매니저 지정·근무 변경이 켠 채로 벨에 뜬다.
+    //   RLS mn_self_read 가 본인 행만 흘린다. 근무를 바꾼 뒤 따로 넣는 shift_changed 도 이 INSERT 로 다시 읽어 순서 문제가 없다.
+    //   DELETE 는 RLS 를 안 거쳐 모든 구독자에게 가므로 듣지 않는다(보관 정리 0360). UPDATE 는 푸시 발송 기록뿐이라 듣지 않는다.
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'member_notices' }, onChange)
+    .subscribe();
+  return () => {
+    supabase.removeChannel(ch);
+  };
+}
+
+/** 사장 알림(owner_alerts · 0191) 실시간(★0900). RLS = 그 매장 사장만. 새 회차만 벨을 바꾼다 — UPDATE 는 푸시 발송 기록이라 듣지 않는다. */
+export function subscribeOwnerAlerts(onChange: () => void): () => void {
+  if (!HAS_SUPABASE) return () => {};
+  const ch = supabase
+    .channel(uniqueChannel('owner-alerts'))
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'owner_alerts' }, onChange)
+    .subscribe();
+  return () => {
+    supabase.removeChannel(ch);
+  };
+}
+
+/** 입금 신고(payment_claims · 0083) 실시간(★0900). RLS = 그 매장 사장 · 신고한 본인. 입금 결과는 상태 UPDATE 다. DELETE 는 듣지 않는다. */
+export function subscribePaymentClaims(onChange: () => void): () => void {
+  if (!HAS_SUPABASE) return () => {};
+  const ch = supabase
+    .channel(uniqueChannel('payment-claims'))
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'payment_claims' }, onChange)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'payment_claims' }, onChange)
     .subscribe();
   return () => {
     supabase.removeChannel(ch);
