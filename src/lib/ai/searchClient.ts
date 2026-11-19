@@ -18,7 +18,7 @@ import {
 } from './config';
 import { supabase } from '@/lib/supabase';
 import { reportError } from '@/lib/analytics/track';
-import type { AiTarget } from './client';
+import { AiRateLimitError, type AiTarget } from './client';
 
 const RRF_K = 60; // RRF 상수(표준값). 순위만 쓰므로 점수 스케일 불일치에 견고.
 const TOPK = 8;
@@ -59,6 +59,8 @@ async function edgePost<T>(task: 'search' | 'embed', payload: unknown, unitId?: 
       body: JSON.stringify(unitId ? { task, payload, unitId } : { task, payload }),
       signal: ctrl.signal,
     });
+    // 분당 한도(429)는 소프트 실패와 가른다 — embedEntry 가 그 자리에서 재시도하지 않게(hybridSearch 는 catch 에서 렉시컬로 간다).
+    if (res.status === 429) throw new AiRateLimitError(task);
     if (!res.ok) {
       // 본문에 엣지의 사유(forbidden·embed_read·embed_write·모델 404)가 담겨 온다 — 그걸 남긴다.
       const body = await res.text().catch(() => '');
@@ -210,6 +212,12 @@ export async function embedEntry(e: PlaybookEntry, markPending = true): Promise<
         return false;
       }
     } catch (err) {
+      // ★한도(429)면 바로 그만둔다. 몇 초 뒤 다시 쏘면 한도를 더 채울 뿐이다. 대기 표시가 남아 있어
+      //   다음 진입 때 embedBacklog.retryPendingEmbeddings 가 다시 만든다(0181).
+      if (err instanceof AiRateLimitError) {
+        reportError('search.embed.rateLimited', err, { entryId: e.id });
+        return false;
+      }
       if (attempt === 3) {
         console.warn('[search] embed failed after 3 tries (대기로 남김):', err);
         reportError('search.embed.failed', err, { entryId: e.id });

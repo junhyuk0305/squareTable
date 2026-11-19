@@ -17,6 +17,7 @@ import { Appear } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { ChatComposerBar, PlusToggleIcon } from '@/components/ChatComposerBar';
 import { structureSquare, patchSquare, type StructuredSegment, type AiFollowup, type AiTarget } from '@/lib/ai';
+import { AiRateLimitError, AI_RATE_LIMIT_MESSAGE } from '@/lib/ai/client';
 import { EXTRACTION_MASTER } from '@/data/extraction-master';
 import { buildPlaybookEntryFromSquare, isSquarePublishable } from '@/lib/utils/buildEntry';
 import { isJunkInput, looksLikePromptLeak, knowhowGuidanceMessage } from '@/lib/utils/knowhowInput';
@@ -44,6 +45,9 @@ import { formatRelative, pickImageWeb } from './coach/coachUtils';
 
 import type { PlaybookEntry, SquareBlock, UnknownQuery } from '@/types';
 import { useBottomPin } from '@/lib/hooks/useBottomPin';
+
+// AI 서버 실패로 기본(mock) 정리로 떨어졌을 때 고지. 첫 정리와 재정리가 같은 문구를 쓴다.
+const DEGRADED_NOTICE = '지금은 AI 정리가 어려워 기본 형태로 정리했어요. 내용을 확인하고 고쳐서 저장해 주세요.';
 
 /* ───────────────────────────────────────────────────────────
  * 대화형 노하우 입력 (chat-first). 두 진입점이 같은 컴포넌트를 공유:
@@ -316,7 +320,7 @@ export function OwnerCoachChat({
         if (out.degraded) {
           setMessages((prev) => [
             ...prev,
-            { id: nextId(), kind: 'ai', text: '지금은 AI 정리가 어려워 기본 형태로 정리했어요. 내용을 확인하고 고쳐서 저장해 주세요.' },
+            { id: nextId(), kind: 'ai', text: DEGRADED_NOTICE },
           ]);
         }
 
@@ -380,6 +384,12 @@ export function OwnerCoachChat({
         presentSingle(followups, { square: out.square, title: out.title || rawText.slice(0, 30), category: aiCat });
       } catch (e) {
         console.warn('[coach] structure failed', e);
+        // 분당 한도(429) — 정리본을 만들지 않는다(저장 안 함). 쓴 글은 입력칸에 되돌려 그대로 다시 보내게 한다.
+        if (e instanceof AiRateLimitError) {
+          setInput((prev) => prev || rawText);
+          setError(AI_RATE_LIMIT_MESSAGE);
+          return;
+        }
         setError('정리 중 문제가 생겼어요 — 다시 한 번 보내주세요.');
       } finally {
         setBusy(false);
@@ -416,7 +426,7 @@ export function OwnerCoachChat({
       // 첫 정리(위 268행)와 같은 고지 — 재정리도 mock 으로 떨어질 수 있는데 여기만 조용하면
       // 사장은 같은 화면에서 어떤 답이 진짜인지 구별할 수 없다.
       if (out.degraded) {
-        pushMsg({ kind: 'ai', text: '지금은 AI 정리가 어려워 기본 형태로 정리했어요. 내용을 확인하고 고쳐서 저장해 주세요.' });
+        pushMsg({ kind: 'ai', text: DEGRADED_NOTICE });
       }
       const sq0 = out.square;
       const ok = out.title || sq0?.situation || sq0?.action?.steps?.length;
@@ -431,6 +441,17 @@ export function OwnerCoachChat({
       if (nextSq) presentConfirm({ square: nextSq, title: nextTitle, category });
     } catch (e) {
       console.warn('[coach] refine failed', e);
+      // 분당 한도(429) — 확인 단계로 넘기지 않는다. 마지막 답을 입력칸에 되돌리고 그 질문을 다시 기다린다.
+      //   다시 보내면 handleSend 의 꼬리질문 갈래를 그대로 타서 재정리를 다시 부른다.
+      if (e instanceof AiRateLimitError) {
+        const last = followupQA.current.pop();
+        if (last) {
+          setPending([{ ask: last.q }]);
+          setInput((prev) => prev || last.a);
+        }
+        setError(AI_RATE_LIMIT_MESSAGE);
+        return;
+      }
       // 재정리 실패 → 사장이 답한 내용을 잃지 않도록 기존 square의 할 일에 덧붙여 보존(데드엔드 방지).
       const extra = meaningful.map((x) => x.a.trim());
       const preserved = square

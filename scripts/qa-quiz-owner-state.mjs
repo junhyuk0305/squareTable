@@ -163,7 +163,7 @@ console.log('PASS quiz metrics: state, progress, Q1/Q2 rate, guest submissions, 
 // 대상 = src/app/owner/quiz* · training.tsx · TrainingCard.tsx. 주석은 뺀다.
 // 예외는 아래 표에만 둔다. 줄 조각(파일 안에서 유일해야 한다) + 이유. 쓰이지 않는 예외도 실패다(표가 썩지 않게).
 const RATCHET_ALLOW = [
-  { file: 'src/app/owner/quiz-new.tsx', snippet: '`${to.length}명에게 보내요`', why: '만들기 화면에서 고른 받는 사람 수. 발송 전 선택 인원이라 metrics 정의 밖이다' },
+  // 2026-11-19: quiz-new 토스트의 `${to.length}명에게 보내요` 는 metrics.sendToastLabel 로 옮겨 예외가 필요 없다.
 ];
 {
   const root = new URL('../', import.meta.url);

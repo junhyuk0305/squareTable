@@ -14,8 +14,18 @@
 
 // ── 입력 모양 ────────────────────────────────────────────────────────────
 
-/** 발송 원장 한 줄(QuizAssignment 와 같은 모양). 사람별 최신 발송은 latestQuizAssignments 로 먼저 고른다. */
-export type MetricAssignment = { userId: string; sentAt: string | null; completedAt: string | null; countFrom?: string | null };
+/**
+ * 발송 원장 한 줄(QuizAssignment 와 같은 모양). 사람별 최신 발송은 latestQuizAssignments 로 먼저 고른다.
+ * sendNow = "지금 바로"로 보낸 행(0870 send_now · 옛 서버·옛 앱 행은 없음 = false). scheduledOn = 예약일(KST YYYY-MM-DD).
+ */
+export type MetricAssignment = {
+  userId: string;
+  sentAt: string | null;
+  completedAt: string | null;
+  countFrom?: string | null;
+  sendNow?: boolean;
+  scheduledOn?: string;
+};
 
 /**
  * 이 발송의 진행을 세기 시작하는 시각(0348 · 서버 짝 = quiz_assignment_count_from).
@@ -49,21 +59,70 @@ export type MetricLink = { expiresAt: string; revokedAt: string | null };
 
 // ── 퀴즈 상태 ────────────────────────────────────────────────────────────
 
-export type QuizState = 'draft' | 'scheduled' | 'sending' | 'link_open' | 'archived';
+export type QuizState = 'draft' | 'scheduled' | 'queued' | 'sending' | 'link_open' | 'archived';
 
 /** 상태어. 배지 자리라 명사형이다. */
 export const QUIZ_STATE_LABEL: Record<QuizState, string> = {
   draft: '초안',
   scheduled: '예약',
+  queued: '곧 발송',
   sending: '발송 중',
   link_open: '링크 열림',
   archived: '보관',
 };
 
+// ── 보냈나(B1 · 2026-11-19) ──────────────────────────────────────────────
+
+/**
+ * 퀴즈 한 건을 보냈나. 보내기 직후 토스트 · 상세 결과 칸 · 목록 줄이 이 판정 하나로 말한다.
+ *  · sent    = 한 명이라도 sent_at 이 있다.
+ *  · soon    = 아직 아무도 안 받았고 "지금 바로" 행(send_now)이 오늘 것이다. 서버가 근무·하루·주 규칙 없이 5분 안에 보낸다(0870).
+ *  · waiting = 행은 있는데 아직 안 나갔다(예약 · 옛 앱 행 · 바로 보내기 실패 뒤 평소 규칙).
+ *  · none    = 발송 행이 없다.
+ * 어제 이전의 send_now 행이 아직 안 나갔으면 막힌 것(좌석 잠김·나간 직원 등)이라 soon 이라 말하지 않는다.
+ * 사람별 막힌 이유는 상세의 fetchQuizSendStatus 가 말한다.
+ */
+export type SendPhase = 'none' | 'waiting' | 'soon' | 'sent';
+
+/** now(ms) → 한국 날짜 YYYY-MM-DD. 이 파일은 import 를 못 해 schedule.todayKst 와 같은 계산을 둔다. */
+function kstDay(now: number): string {
+  return new Date(now + 9 * 3600_000).toISOString().slice(0, 10);
+}
+
+export function sendPhase(sends: readonly MetricAssignment[], now: number): SendPhase {
+  if (sends.some((a) => !!a.sentAt)) return 'sent';
+  const today = kstDay(now);
+  if (sends.some((a) => a.sendNow && (!a.scheduledOn || a.scheduledOn >= today))) return 'soon';
+  return sends.length > 0 ? 'waiting' : 'none';
+}
+
+/**
+ * 보냈나 문구. waiting 은 예약일을 말한다(ymd = 예약일 YYYY-MM-DD · 지금까지의 "M월 D일에 보내요" 그대로).
+ * none 은 빈 문자열이다(각 화면이 "아직 안 보냄"을 따로 말한다).
+ */
+export function sendPhaseLabel(phase: SendPhase, ymd?: string | null): string {
+  if (phase === 'sent') return '보냈어요';
+  if (phase === 'soon') return '5분 안에 가요';
+  if (phase === 'waiting') {
+    const m = ymd ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd) : null;
+    return m ? `${Number(m[2])}월 ${Number(m[3])}일에 보내요` : '아직 안 나갔어요';
+  }
+  return '';
+}
+
+/**
+ * 보내기 직후 토스트 머리. count = 만들기 화면에서 고른 받는 사람 수(발송 전 선택 인원).
+ * soon·sent = "3명에게 5분 안에 가요" · waiting = 예약일 문구 그대로("11월 20일에 보내요").
+ */
+export function sendToastLabel(phase: SendPhase, count: number, ymd?: string | null): string {
+  const label = sendPhaseLabel(phase, ymd);
+  return phase === 'soon' || phase === 'sent' ? `${count}명에게 ${label}` : label;
+}
+
 /**
  * 퀴즈 한 건의 지금 상태(N09).
  * 무엇을: 코스 1건. 언제: 지금(now).
- * 순서: 보관(active=false) → 발송 중(한 명이라도 sent_at) → 링크 열림(회수 안 됐고 만료 전 링크 1개 이상)
+ * 순서: 보관(active=false) → 발송 중(sendPhase=sent) → 곧 발송(sendPhase=soon) → 링크 열림(회수 안 됐고 만료 전 링크 1개 이상)
  *       → 예약(start_at 있음) → 초안.
  * 발송도 했고 링크도 열려 있으면 "발송 중"이다. 링크 열림은 링크 칸(meta)이 따로 말한다.
  */
@@ -74,7 +133,9 @@ export function quizState(
   now: number,
 ): QuizState {
   if (!course.active) return 'archived';
-  if (sends.some((a) => !!a.sentAt)) return 'sending';
+  const phase = sendPhase(sends, now);
+  if (phase === 'sent') return 'sending';
+  if (phase === 'soon') return 'queued';
   if (links.some((l) => !l.revokedAt && Date.parse(l.expiresAt) > now)) return 'link_open';
   if (course.start_at) return 'scheduled';
   return 'draft';

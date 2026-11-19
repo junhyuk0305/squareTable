@@ -155,4 +155,6 @@ export type QuizAssignment = {
   origin?: string;
   /** 진행을 세기 시작하는 시각(0348). null = sentAt. 읽을 때는 metrics.countFromOf 만 쓴다. */
   countFrom?: string | null;
+  /** "지금 바로"로 보낸 행(0870 send_now). 서버가 근무·하루·주 규칙 없이 보낸다. 읽을 때는 metrics.sendPhase 만 쓴다. */
+  sendNow?: boolean;
 };

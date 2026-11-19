@@ -44,15 +44,16 @@ export function handoverPlan(
 }
 
 /**
- * 사장 첫 노하우 담기(/owner/onboarding) 옛 순서 · 고르기 → 첫 질문 → 초대코드.
- * 첫 질문의 버튼 이름은 OwnerFirstAsk 가 이미 다음 단계 이름("초대코드 보기")으로 받는다.
- * 첫 질문은 담기를 끝낸 뒤라 고르기로 돌아가지 않는다. 초대코드 단계는 지나온 단계로 간다.
+ * 사장 첫 노하우 담기(/owner/onboarding) 옛 순서 · 고르기 → 우리 매장 방식 쓰기 → 첫 질문 → 초대코드(2026-11-19 B5).
+ * 쓰기 단계의 버튼은 OwnerWriteOwnStep 이 든다(ownerWritePlan). 첫 질문의 버튼 이름은 OwnerFirstAsk 가 이미
+ * 다음 단계 이름("초대코드 보기")으로 받는다. 담은 뒤에는 고르기로 돌아가지 않는다. 초대코드 단계는 지나온 단계로 간다.
+ * registered = 고르기에서 담은 수 · wrote = 쓰기에서 담은 수.
  */
-export type OwnerFirstStep = 'pick' | 'ask' | 'done';
+export type OwnerFirstStep = 'pick' | 'write' | 'ask' | 'done';
 
 export function ownerFirstPlan(
   step: OwnerFirstStep,
-  v: { selected: number; registering: boolean; registered: number },
+  v: { selected: number; registering: boolean; registered: number; wrote: number },
 ): { dock: StepDockPlan; back: OwnerFirstStep | null } {
   if (step === 'pick') {
     return {
@@ -63,19 +64,35 @@ export function ownerFirstPlan(
       back: null,
     };
   }
+  if (step === 'write') return { dock: null, back: v.registered > 0 ? null : 'pick' };
   if (step === 'ask') return { dock: null, back: null };
-  return { dock: { label: '홈으로 들어가기', disabled: false }, back: v.registered > 0 ? 'ask' : 'pick' };
+  return { dock: { label: '홈으로 들어가기', disabled: false }, back: v.registered + v.wrote > 0 ? 'ask' : 'write' };
 }
 
-/** 사장 첫 5분 새 순서(스위치 ask_first) · 직원 초대 → 질문 던져 보기. 허브 재진입이면 질문이 첫 단계다. */
-export type OwnerFiveStep = 'invite' | 'ask';
+/** 쓰기 단계에서 건너뛰면 갈 곳. 담긴 노하우가 0개면 첫 질문도 건너뛴다(빈 검색 대상에 질문 = 보장된 실패). */
+export function ownerFirstAfterWrite(v: { registered: number; wrote: number }): OwnerFirstStep {
+  return v.registered + v.wrote > 0 ? 'ask' : 'done';
+}
+
+/**
+ * 우리 매장 방식 한 줄 쓰기(OwnerWriteOwnStep) 도크. 담기 전 = 그 일 이름 · 담은 뒤 = 다음 단계 이름.
+ */
+export function ownerWritePlan(v: { saved: boolean; busy: boolean; hasText: boolean; nextLabel: string }): { label: string; disabled: boolean } {
+  if (v.saved) return { label: v.nextLabel, disabled: false };
+  return { label: '정리해서 담기', disabled: !v.hasText || v.busy };
+}
+
+/** 사장 첫 5분 새 순서(스위치 ask_first) · 직원 초대 → 우리 매장 방식 쓰기 → 질문 던져 보기. 허브 재진입이면 질문이 첫 단계다. */
+export type OwnerFiveStep = 'invite' | 'write' | 'ask';
 
 export function ownerFivePlan(
   step: OwnerFiveStep,
   v: { startAtAsk: boolean },
-): { dock: { label: 'next' | 'finish' | 'backToHub' }; back: OwnerFiveStep | null } {
-  if (step === 'invite') return { dock: { label: 'next' }, back: null };
-  return { dock: { label: v.startAtAsk ? 'backToHub' : 'finish' }, back: v.startAtAsk ? null : 'invite' };
+): { dock: { label: 'write' | 'next' | 'finish' | 'backToHub' } | null; back: OwnerFiveStep | null } {
+  if (step === 'invite') return { dock: { label: 'write' }, back: null };
+  // 쓰기 단계의 버튼은 OwnerWriteOwnStep 이 든다(ownerWritePlan · 담은 뒤 이름 = 'next').
+  if (step === 'write') return { dock: null, back: 'invite' };
+  return { dock: { label: v.startAtAsk ? 'backToHub' : 'finish' }, back: v.startAtAsk ? null : 'write' };
 }
 
 /**

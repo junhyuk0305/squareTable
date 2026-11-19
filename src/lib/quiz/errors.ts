@@ -46,3 +46,16 @@ export function quizErrorMessage(err: QuizErr, fallback = '잠시 뒤 다시 시
   const code = (err?.message ?? '').split(/[\s:]/)[0];
   return MESSAGES[code] ?? fallback;
 }
+
+/**
+ * "지금 바로" 보내기(0870 quiz_send_now) 실패 문구. 발송 행은 이미 있어 평소 규칙으로 나간다 → 그 사실을 말한다.
+ * forbidden 은 위 표가 다시 알리기 문맥이라 여기서 보내기 문맥으로 바꾼다.
+ */
+const SEND_NOW_MESSAGES: Record<string, string> = {
+  forbidden: '사장님이나 매니저만 바로 보낼 수 있어요. 근무 시간에 맞춰 보내요.',
+};
+
+export function quizSendNowErrorMessage(err: QuizErr): string {
+  const code = (err?.message ?? '').split(/[\s:]/)[0];
+  return SEND_NOW_MESSAGES[code] ?? quizErrorMessage(err, '바로 보내지 못했어요. 근무 시간에 맞춰 보내요.');
+}

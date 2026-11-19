@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-nativ
 import { Ionicons } from '@expo/vector-icons';
 
 import { getSectionMeta } from '@/lib/utils/category';
+import { RESTAURANT_INDUSTRIES, industryLabel } from '@/lib/config/industry';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 import { InkColors, TextColor } from '@/lib/theme/colors';
 import { Type } from '@/lib/theme/type';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -26,17 +28,33 @@ import type { PlaybookEntry } from '@/types';
 
 // 흐르는 예시 — 4개 내부 카테고리를 자연스럽게 커버한다. 배너라 짧게 끊기지 않도록 넉넉히 둔다
 // (한 바퀴가 짧으면 같은 문장이 금방 다시 와서 "몇 개 없다"는 인상이 남는다).
-const EXAMPLES = [
+// 업종 두 벌 + 공통(2026-11-19 B7-1). 업종 판정은 RESTAURANT_INDUSTRIES 한 곳(노하우팩·섹션과 같은 판정).
+// 사장 온보딩의 "우리 가게 것 한 줄 쓰기" 단계도 이 목록을 쓴다(coachExamples · 복제 금지).
+const CAFE_EXAMPLES = [
   '여분 시럽은 창고 맨 위 칸에 있어',
-  '포스 마감은 카드부터 정산하고 현금 세기',
-  '진상 손님 오면 매니저부터 불러',
   '우유 거품은 곱게 올려야 라떼아트가 잘 나와',
   '마감 후 그라인더는 분해해서 털어',
   '아이스컵 얼음은 8부까지만',
-  '재고 떨어지면 바로 채팅에 올려',
+];
+const RESTAURANT_EXAMPLES = [
+  '김치찌개 육수는 1인분에 2국자',
   '단체 예약은 전날 확인 전화 돌리기',
+  '마감 때 가스 밸브부터 잠가',
+  '튀김기 기름은 마감 때 걸러 둬',
+];
+const COMMON_EXAMPLES = [
+  '포스 마감은 카드부터 정산하고 현금 세기',
+  '진상 손님 오면 매니저부터 불러',
+  '재고 떨어지면 바로 채팅에 올려',
   '배달이 밀리면 홀 먼저 빼고 포장은 뒤로',
 ];
+
+/** 매장 업종에 맞는 예시. 음식점 계열이 아니면(카페·모름) 카페 벌이다. 업종 벌과 공통을 번갈아 놓는다. */
+export function coachExamples(industry: string | null | undefined): string[] {
+  // 옛 영문 코드(fnb)도 industryLabel 로 화면 이름으로 바꿔 같은 판정을 탄다.
+  const own = RESTAURANT_INDUSTRIES.includes(industryLabel(industry) ?? '') ? RESTAURANT_EXAMPLES : CAFE_EXAMPLES;
+  return own.flatMap((ex, i) => [ex, COMMON_EXAMPLES[i]]).filter(Boolean);
+}
 
 // 배너 속도(초당 px). 읽을 수 있을 만큼 느리게 — 빠르면 글자가 아니라 움직임만 남는다.
 const MARQUEE_PPS = 34;
@@ -93,6 +111,9 @@ export function CoachStarter({
  * 폭을 실제로 재기 전(w=0)에는 애니메이션을 걸지 않는다(0으로 나누거나 순간이동하는 걸 막는다).
  */
 function ExampleMarquee({ onPick }: { onPick: (text: string) => void }) {
+  // 업종 = 지금 매장의 세션 값(부르는 쪽 OwnerCoachChat 은 그대로 둔다).
+  const industry = useSessionStore((s) => s.industry);
+  const examples = useMemo(() => coachExamples(industry), [industry]);
   const [w, setW] = useState(0);
   // Animated.Value 는 ref 가 아니라 useMemo 안정 객체로 — render 중 ref.current 접근(react-hooks/refs) 회피.
   const x = useMemo(() => new Animated.Value(0), []);
@@ -120,7 +141,7 @@ function ExampleMarquee({ onPick }: { onPick: (text: string) => void }) {
       accessibilityElementsHidden={!measure}
       importantForAccessibility={measure ? 'auto' : 'no-hide-descendants'}
     >
-      {EXAMPLES.map((ex) => (
+      {examples.map((ex) => (
         <Pressable
           key={ex}
           onPress={() => onPick(ex)}

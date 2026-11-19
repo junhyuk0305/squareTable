@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
+import { useQuizBoard, useQuizAssignmentsLive } from '@/lib/quiz/useQuizBoard';
 import {
   PERSON_STATE_LABEL,
   countFromOf,
@@ -20,6 +20,8 @@ import {
   resendResultLabel,
   resultsEmpty,
   roundLabel,
+  sendPhase,
+  sendPhaseLabel,
   staffProgress,
 } from '@/lib/quiz/metrics';
 import { useStaffStore } from '@/lib/store/useStaffStore';
@@ -99,7 +101,7 @@ export default function QuizDetailScreen() {
   const { id, tab } = useLocalSearchParams<{ id: string; tab?: string }>();
   const unitId = useSessionStore((s) => s.unitId);
 
-  const { courses, boardLoaded, boardError, sendsByCourse, bumpSends, reloadCourses, bumpQuiz } = useQuizBoard();
+  const { now, courses, boardLoaded, boardError, sendsByCourse, bumpSends, reloadCourses, bumpQuiz } = useQuizBoard();
   const courseEntries = useWorkStore((s) => s.courseEntries);
   const addCourseEntry = useWorkStore((s) => s.addCourseEntry);
   const entries = usePlaybookStore((s) => s.entries);
@@ -138,6 +140,11 @@ export default function QuizDetailScreen() {
   useFocusEffect(useCallback(() => {
     reloadCourses(); bumpSends(); bumpQuiz(); setItemsReload((n) => n + 1);
   }, [reloadCourses, bumpSends, bumpQuiz]));
+  // 띄운 채로도 맞게 둔다(2026-11-19 B2) — 발송이 나가거나 직원이 다 풀면 발송 원장과 답 행을 다시 읽는다.
+  //   막힌 이유(fetchQuizSendStatus)는 sends 가 바뀌면 아래 이펙트가 따라 읽는다.
+  useQuizAssignmentsLive(useCallback(() => {
+    bumpSends(); setItemsReload((n) => n + 1);
+  }, [bumpSends]));
   useEffect(() => {
     let alive = true;
     const p = entryIds.length === 0 ? Promise.resolve({ data: [] as QuizItem[], error: null }) : fetchQuizItems(entryIds);
@@ -220,6 +227,8 @@ export default function QuizDetailScreen() {
   const resultTop = quizResultTop(notDone.length);
   /** 결과 탭 빈 상태(N10) — 받은 직원도 답도(손님 포함) 없을 때만. */
   const noResults = resultsEmpty(sends, quizAnswers);
+  /** 보냈나(B1) — 보내기 직후 토스트·목록 줄과 같은 판정. 결과가 비었을 때 "아직 안 보냄"과 "곧 가요"를 가른다. */
+  const phase = sendPhase(sends, now);
   const guestCount = guestSubmissions(quizAnswers);
 
   /** 근거가 바뀐 뒤 다시 안 만든 문항(0114). 판정은 이미 DB 트리거가 해 뒀고 보여줄 자리가 없었다. */
@@ -453,11 +462,20 @@ export default function QuizDetailScreen() {
         <Appear key={seg} style={st.segBody}>
         {seg === 'people' ? (
           noResults ? (
-            <EmptyState
-              title="아직 아무에게도 안 보냈어요"
-              body="문항을 검토하고 받는 사람을 고르면 보낼 수 있어요."
-              cta={{ label: '문항 보기', onPress: () => setSeg('items') }}
-            />
+            /* 보낸 행이 있는데 아직 안 나갔으면 "안 보냈어요"라고 하지 않는다(B1 · 판정 = metrics.sendPhase).
+               지금 바로 = 5분 안에 가요 · 예약 = 목록과 같은 "M월 D일에 보내요". 나가면 구독이 다시 읽어 결과로 바뀐다. */
+            phase === 'none' ? (
+              <EmptyState
+                title="아직 아무에게도 안 보냈어요"
+                body="문항을 검토하고 받는 사람을 고르면 보낼 수 있어요."
+                cta={{ label: '문항 보기', onPress: () => setSeg('items') }}
+              />
+            ) : (
+              <EmptyState
+                title={sendPhaseLabel(phase, course.start_at)}
+                body="직원이 받으면 여기에 결과가 보여요."
+              />
+            )
           ) : (
             <>
               <View style={st.ringCard}>

@@ -2106,6 +2106,23 @@ export function subscribePlaybook(onChange: () => void, unitId: string | null = 
   };
 }
 
+// 퀴즈 발송 원장(0139): 보냄(sent_at)·다 풂(completed_at)·새 발송이 생기면 사장 퀴즈 목록·상세가 바로 다시 읽는다(2026-11-19 B2).
+// publication 멤버 = 0139:189-191. 읽기 정책 qz_select 를 그대로 탄다(관리 권한 = 매장 전체 · 직원 = 본인 것).
+// INSERT·UPDATE 만 자리 번호로 거른다. DELETE 는 PK 만 와서 매장으로 못 거르고 "보냄·다 풂"과 무관해 받지 않는다.
+// 자리 번호가 없으면 구독하지 않는다(subscribeUnknownQueue 와 같은 모양).
+export function subscribeQuizAssignments(onChange: () => void, unitId: string | null = _unitId): () => void {
+  if (!HAS_SUPABASE || !unitId) return () => {};
+  const filter = `unit_id=eq.${unitId}`;
+  const ch = supabase
+    .channel(uniqueChannel('quiz_assignments'))
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'quiz_assignments', filter }, onChange)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'quiz_assignments', filter }, onChange)
+    .subscribe();
+  return () => {
+    supabase.removeChannel(ch);
+  };
+}
+
 // ── 업무 채팅방 ────────────────────────────────────────────
 // ★ReadResult 로 올린 이유: 실패를 빈배열로 돌려주면 "방 없음"이 되고, 그 상태에서 사장 계정은
 //   기본방 자가치유 insert 를 시도해 duplicate key 를 낸다(useRoomStore.hydrate). 실패와 0건은 달라야 한다.
@@ -3395,7 +3412,8 @@ export async function fetchMyGuestQuizHistory(): Promise<MyGuestQuizRow[]> {
 // ★sent_at·due_on 은 **크론만** 채운다(claim_quiz_send). 앱은 절대 쓰지 않는다 —
 //   앱이 쓰면 빈도 상한 판정의 근거가 화면에서 흔들린다.
 // ★count_from(0348)은 서버가 정한다(발송 트리거 · quiz_assignment_restart). 이 열을 읽으려면 0348 이 먼저 라이브에 있어야 한다.
-const QUIZ_ASSIGNMENT_COLS = 'id, course_id, user_id, scheduled_on, sent_at, due_on, due_date, opened_at, completed_at, origin, count_from';
+// ★send_now(0870)도 서버가 정한다(quiz_send_now). 이 열을 읽으려면 0870 이 먼저 라이브에 있어야 한다.
+const QUIZ_ASSIGNMENT_COLS = 'id, course_id, user_id, scheduled_on, sent_at, due_on, due_date, opened_at, completed_at, origin, count_from, send_now';
 
 const toAssignment = (r: any): QuizAssignment => ({
   id: r.id,
@@ -3409,6 +3427,7 @@ const toAssignment = (r: any): QuizAssignment => ({
   completedAt: r.completed_at ?? null,
   origin: r.origin ?? 'manual',
   countFrom: r.count_from ?? null,
+  sendNow: r.send_now === true,
 });
 
 /** 활성 매장의 발송 원장 — 관리 권한은 전체, 직원은 본인 것만(RLS qz_select). */
@@ -3580,6 +3599,22 @@ export async function resendQuiz(courseId: string, userIds: string[]): Promise<D
     return { data: null, error: error as DbErr };
   }
   return { data: ((data ?? []) as any[]).map((r) => ({ userId: r.user_id, result: String(r.result ?? '') })), error: null };
+}
+
+/**
+ * 지금 바로 보내기(0870 quiz_send_now). 이 퀴즈의 오늘 이하 미발송 행에 표시를 세우고 스윕을 한 번 앞당긴다.
+ * 표시가 있는 행은 근무 시간·하루 1회·7일 2회를 건너뛴다. 다 푼 사람·나간 직원·좌석 잠김·자동 정지는 서버가 그대로 거른다.
+ * 반환 = 표시가 있고 아직 안 나간 행 수. 두 번 불러도 한 번만 간다(서버).
+ * 오류 코드 = invalid_argument · forbidden · quiz_not_found · quiz_no_items. 원문은 화면에 내지 않는다(quizErrorMessage).
+ */
+export async function sendQuizNow(courseId: string): Promise<DbResult<number>> {
+  if (!HAS_SUPABASE) return { data: 0, error: null };
+  const { data, error } = await supabase.rpc('quiz_send_now', { p_course_id: courseId });
+  if (error) {
+    reportError('db.write:sendQuizNow', error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: Number(data ?? 0), error: null };
 }
 
 // ── 외부 공유 링크(0113) — 단기 직원용. 로그인 없이 도는 유일한 경로 ────────────

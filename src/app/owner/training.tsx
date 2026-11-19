@@ -5,7 +5,7 @@ import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { useQuizBoard, type QuizListRow } from '@/lib/quiz/useQuizBoard';
+import { useQuizBoard, useQuizAssignmentsLive, type QuizListRow } from '@/lib/quiz/useQuizBoard';
 import { BrandCopyBadges } from '@/components/owner/BrandCopyBadges';
 import { useQuizCourseStats, type QuizCourseStat } from '@/lib/quiz/courseStats';
 import {
@@ -100,6 +100,15 @@ export default function OwnerTrainingScreen() {
       reloadStats();
     }, [bumpQuiz, reloadCourses, bumpSends, reloadStats]),
   );
+  /**
+   * 화면을 띄운 채로도 맞게 둔다(2026-11-19 B2). 직원이 다 풀거나 발송이 나가면 발송 원장이 바뀐다 →
+   * 진행("완료 n/m명")·응시 중/완료 칸·정답률·히트맵을 다시 읽는다. 탭을 다시 열지 않아도 바뀐다.
+   */
+  useQuizAssignmentsLive(useCallback(() => {
+    reloadCourses();
+    bumpSends();
+    reloadStats();
+  }, [reloadCourses, bumpSends, reloadStats]));
   const [fixOpen, setFixOpen] = useState(false);
   const [guestOpen, setGuestOpen] = useState(false);
   const [boxOpen, setBoxOpen] = useState(false);

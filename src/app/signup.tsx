@@ -405,7 +405,7 @@ export default function SignupScreen() {
           <View style={styles.joinNote}>
             <Ionicons name="information-circle-outline" size={18} color={InkColors.ink2} />
             <Text style={styles.joinNoteText}>
-              가입하면 개인 홈으로 이동해요. 거기서 사장님께 받은 <Text style={styles.joinNoteStrong}>6자리 초대코드</Text>를 넣으면 매장에 합류 신청이 돼요.
+              가입하면 개인 홈으로 이동해요. 거기서 사장님께 받은 <Text style={styles.joinNoteStrong}>6자리 초대코드</Text>를 넣으면 바로 그 매장 직원이 돼요.
             </Text>
           </View>
           </Appear>

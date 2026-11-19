@@ -54,19 +54,30 @@ export function mockGenerateAnswer(input: GenerateAnswerInput): GenerateAnswerOu
   };
 }
 
+// 제목 자르기 — 단어 중간에서 끊지 않는다(공백 경계). 공백이 없으면 글자 수로 자른다.
+function clipAtWord(s: string, max: number): string {
+  const t = s.trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max + 1).lastIndexOf(' ');
+  return cut > 0 ? t.slice(0, cut) : t.slice(0, max);
+}
+
 // 텍스트 1조각 → SQUARE 1개(휴리스틱). 다중 분리 시 조각마다 호출.
 function structureOne(raw: string, category?: string): StructuredSegment {
   const sentences = raw
     .split(/[.!?\n。]/)
     .map((s) => s.trim())
     .filter((s) => s.length > 1);
-  const steps = sentences.length ? sentences.slice(0, MAX_ACTIONS) : [raw.trim()];
-  const title = (sentences[0] ?? raw).slice(0, 30);
   const first = sentences[0] ?? raw.trim();
+  // ★같은 문장을 상황 칸과 할 일 칸에 두 번 넣지 않는다(2026-11-19 첫 사용 측정).
+  //   두 문장 이상 = 첫 문장이 상황 · 나머지가 할 일. 한 문장 = 할 일 하나(상황은 빈 칸).
+  const multi = sentences.length >= 2;
+  let steps = multi ? sentences.slice(1, 1 + MAX_ACTIONS) : [first];
+  const title = clipAtWord(first, 30);
   const joined = sentences.length ? sentences.join(' ') : raw.trim();
 
   // ⚠️ 날조 금지: 원문에서 뽑히는 것만 채우고 나머지는 빈 칸.
-  let situation = first;
+  let situation = multi ? first : '';
   let uncover = '';
   let dont = '';
 
@@ -78,7 +89,9 @@ function structureOne(raw: string, category?: string): StructuredSegment {
     const judged = sentences.find((s) => judgeCues.some((c) => s.includes(c)));
     if (judged) uncover = judged;
   } else if (category === 'Context') {
+    // 사실·위치형은 상황 칸에 전부 둔다 → 할 일 칸은 비운다(같은 문장 두 번 금지).
     situation = joined;
+    steps = [];
   }
 
   // 단답 보강용 꼬리질문(휴리스틱) — 입력이 매우 짧고 단계가 빈약하면 한 개만.

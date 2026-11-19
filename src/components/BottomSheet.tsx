@@ -18,6 +18,7 @@ import { modalFrameStyle } from '@/lib/theme/layout';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { useDialogStore } from '@/lib/store/useDialogStore';
+import { pushWebSheetLayer } from '@/lib/hooks/useWebLeaveGuard';
 
 /**
  * 공용 바텀시트 스캐폴드 — 5개 모달(노하우상세·교대요청·할일추가·시프트선택·근무표편집)에 byte-단위로
@@ -89,6 +90,15 @@ export function BottomSheet({
   );
   // 다시 열릴 때 지난 드래그 위치가 남지 않게.
   useEffect(() => { if (visible) dragY.setValue(0); }, [visible, dragY]);
+
+  // 웹 브라우저 뒤로 = 시트만 닫는다(2026-11-19 B7-5). 앱의 하드웨어 뒤로는 아래 onRequestClose 가 맡는다.
+  // 열릴 때 기록을 한 칸 쌓고, 닫힐 때 그 칸을 걷는다. 판정·순서는 useWebLeaveGuard 한 곳에 있다.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  useEffect(() => {
+    if (!visible) return;
+    return pushWebSheetLayer(() => onCloseRef.current());
+  }, [visible]);
 
   // iOS: 닫히는 동안 확인창(DialogHost)을 붙잡아 둔다. 시트를 닫으며 바로 confirmAction 을 부르는 흐름에서
   // 확인창이 사라지던 것(2026-10-02). onDismiss 가 안 오는 경우에 대비해 타이머로도 놓아 준다.
