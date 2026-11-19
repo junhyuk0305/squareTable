@@ -27,7 +27,7 @@ import { STORE_WORDS } from '@/lib/place/words';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
-import { todayStr } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import { confirmAction } from '@/lib/utils/confirm';
 import { formatAsked } from '@/lib/utils/time';
 import { styles } from '@/styles/ownerDashboardStyles';
@@ -115,7 +115,7 @@ export default function OwnerDashboardScreen() {
   const userId = useSessionStore((s) => s.userId);
   const userName = useSessionStore((s) => s.userName);
   const toggleTask = useWorkStore((s) => s.toggleTask);
-  const today = todayStr();
+  const today = useToday();
   const doneCount = useMemo(() => todayTasks.filter((t) => t.done).length, [todayTasks]);
   const donePct = todayTasks.length > 0 ? Math.round((doneCount / todayTasks.length) * 100) : 0;
   const onToggleTask = (t: (typeof todayTasks)[number]) => {

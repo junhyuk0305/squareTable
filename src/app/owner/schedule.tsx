@@ -25,7 +25,7 @@ import {
   type SwapRequest,
   type ShiftTimeRequest,
 } from '@/lib/store/useScheduleStore';
-import { todayStr } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import { confirmAction, confirmPastChange } from '@/lib/utils/confirm';
 import {
   addDays,
@@ -89,7 +89,7 @@ export default function OwnerScheduleScreen() {
   const retrySchedule = useScheduleStore((s) => s.retry);
   const ready = staffLoaded && scheduleLoaded;
 
-  const today = todayStr();
+  const today = useToday();
   // 날짜 선택 UI는 주간 스트립 **하나뿐**이다. 보이는 주는 선택일에서 파생(월요일 시작 — 기존 규칙 유지).
   //   ★2026-08-11: 스트립 + 7칼럼 주간 그리드가 같이 떠서 "달력이 두 개"로 읽혔다(실측 피드백).
   //     누가 언제 나오는지는 아래 하루 타임라인이 바로 보여주므로 그리드는 뺐다.

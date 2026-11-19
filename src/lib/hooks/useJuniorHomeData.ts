@@ -6,7 +6,8 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import { useWorkStore, useDayparts, daypartRoutineTemplates, occursOn, taskVisibleTo } from '@/lib/store/useWorkStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
-import { todayStr, findOpenRecord, isForgotCheckout } from '@/lib/utils/attendance';
+import { findOpenRecord, isForgotCheckout } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 
 export type JuniorHomeData = {
   /**
@@ -59,7 +60,7 @@ export function useJuniorHomeData(): JuniorHomeData {
   const scheduleLoaded = useScheduleStore((s) => s.loaded);
   const loaded = workLoaded && attendanceLoaded && scheduleLoaded;
 
-  const today = todayStr();
+  const today = useToday();
 
   const todayRecs = useMemo(
     () => records.filter((r) => r.staff_id === userId && r.date === today),

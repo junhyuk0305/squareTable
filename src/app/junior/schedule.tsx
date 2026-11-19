@@ -26,8 +26,8 @@ import {
   type SwapRequest,
 } from '@/lib/store/useScheduleStore';
 import type { Junior } from '@/types';
-import { todayStr } from '@/lib/utils/attendance';
-import { mondayOf, fmtDateKo, closedDaysLabel, addDays, shiftAppliesOn } from '@/lib/utils/schedule';
+import { useToday } from '@/lib/hooks/useToday';
+import { mondayOf, fmtDateKo, closedDaysLabel, addDays, overlapsStaffShift, nextShiftFor, shiftTimesOverlap } from '@/lib/utils/schedule';
 import { formatAsked } from '@/lib/utils/time';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -69,7 +69,7 @@ export default function JuniorScheduleScreen() {
   const acceptSwap = useScheduleStore((s) => s.acceptSwap);
   const cancelSwap = useScheduleStore((s) => s.cancelSwap);
 
-  const today = todayStr();
+  const today = useToday();
   const [tab, setTab] = useState<'week' | 'swap'>(focusSwapId ? 'swap' : 'week');
   // 알림을 또 눌러 값이 바뀌면 교대 탭을 다시 연다(렌더 중 조정 · 같은 값으로는 한 번만).
   const [tabFocus, tabFocusDone] = useOpenFromParam(focusSwapId);
@@ -104,17 +104,15 @@ export default function JuniorScheduleScreen() {
   );
 
   // 수락 시 내 기존 근무와 시간이 겹치는지(더블부킹) — 막지는 않고 경고만, 최종은 사장 컨펌.
+  //   판정은 overlapsStaffShift(사장 승인 카드 swapOverlap 과 같은 것) — 밤 근무는 끝을 다음 날로 본다(C5).
+  //   맞교환으로 내가 내주는 시프트는 뺀다. 일부 구간만 넘기는 요청은 그 구간만 본다.
   const conflictOf = (r: SwapRequest): boolean => {
     const tpl = tplById(r.template_id);
     if (!tpl) return false;
-    return templates.some(
-      (t) =>
-        t.staff_id === me &&
-        // 0138: 날짜 지정 근무는 그 날짜에만 · 0242: 반복 근무는 그날 적용 중인 행만 겹친다.
-        shiftAppliesOn(t, r.date) &&
-        t.id !== r.target_template_id && // 맞교환으로 내가 내주는 시프트는 제외
-        t.start < tpl.end &&
-        tpl.start < t.end,
+    return overlapsStaffShift(
+      templates, swaps, exceptions, me, r.date,
+      r.part_start ?? tpl.start, r.part_end ?? tpl.end,
+      r.target_template_id ? [r.target_template_id] : [],
     );
   };
   // 내가 올린 진행 중 요청. 날짜가 지났어도 열려 있으면 보여준다 — 취소 수단이 여기밖에 없어서
@@ -176,11 +174,14 @@ export default function JuniorScheduleScreen() {
         }
       : undefined;
 
-  // 현재 시각 "HH:MM"(오늘 이미 끝난 근무 제외용). 순수 헬퍼로 분리 — useMemo 안에서 new Date()를
-  // 부르면 비순수라 React Compiler가 메모이즈를 못 한다(컴파일러가 헬퍼 호출 결과를 자동 메모이즈).
-  const now = new Date();
-  const nowHM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  const myNext = nextShiftOf(templates, swaps, exceptions, me, today, staff, nowHM);
+  // 지금 순간(ms). 비교는 nextShiftFor 가 KST 로 한다 — 기기 현지 시각("HH:MM")을 쓰지 않는다(C5).
+  //   렌더 중에 시각을 읽으면 React Compiler 가 첫 값에 묶는다. 그래서 상태로 들고 1분마다 다시 잰다.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const myNext = nextShiftOf(templates, swaps, exceptions, me, today, staff, nowMs);
 
   // ★근무표(config·templates·swaps)와 직원 명부가 **둘 다** 와야 그린다.
   //   근무표가 없으면 config가 DEFAULT_CONFIG라 운영시간·휴무일이 **실제 설정인 것처럼** 보였다가 바뀌고,
@@ -475,7 +476,8 @@ export default function JuniorScheduleScreen() {
 }
 
 /**
- * 오늘부터 2주 내 '나'의 가장 가까운(또는 진행 중) 근무. 없으면 null.
+ * 어제(아직 안 끝난 밤 근무)부터 2주 내 '나'의 가장 가까운(또는 진행 중) 근무. 없으면 null.
+ * 고르는 판정은 nextShiftFor(schedule.ts) 하나다 — KST 순간 · 밤 근무는 끝을 다음 날로 본다(C5).
  * 순수 함수 — render에서 호출하면 React Compiler가 자동 메모이즈한다.
  */
 function nextShiftOf(
@@ -485,32 +487,18 @@ function nextShiftOf(
   me: string,
   today: string,
   staff: Junior[],
-  nowHM: string,
+  nowMs: number,
 ) {
-  for (let i = 0; i < 14; i++) {
-    const date = addDays(today, i);
-    const all = shiftsOn(templates, swaps, date, exceptions);
-    const mineShifts = all
-      .filter((sh) => sh.workerStaffId === me)
-      .sort((a, b) => a.template.start.localeCompare(b.template.start));
-    for (const sh of mineShifts) {
-      if (i === 0 && sh.template.end <= nowHM) continue; // 오늘 이미 끝난 근무는 건너뜀
-      const coworkers = all
-        .filter(
-          (o) =>
-            o.workerStaffId !== me &&
-            o.template.start < sh.template.end &&
-            sh.template.start < o.template.end,
-        )
-        .map((o) => staff.find((x) => x.id === o.workerStaffId)?.name ?? '동료');
-      const ongoing = i === 0 && sh.template.start <= nowHM && nowHM < sh.template.end;
-      const dayWord = i === 0 ? '오늘' : i === 1 ? '내일' : fmtDateKo(date);
-      const subParts = [coworkers.length ? `${coworkers.join('·')}님과 함께` : '혼자 근무'];
-      if (ongoing) subParts.push('근무 중');
-      return { date, sh, ongoing, dayWord, sub: subParts.join(' · ') };
-    }
-  }
-  return null;
+  const next = nextShiftFor(templates, swaps, exceptions, me, today, nowMs);
+  if (!next) return null;
+  const { date, dayOffset, sh, ongoing } = next;
+  const coworkers = shiftsOn(templates, swaps, date, exceptions)
+    .filter((o) => o.workerStaffId !== me && shiftTimesOverlap(o.template, sh.template))
+    .map((o) => staff.find((x) => x.id === o.workerStaffId)?.name ?? '동료');
+  const dayWord = dayOffset === -1 ? '어제' : dayOffset === 0 ? '오늘' : dayOffset === 1 ? '내일' : fmtDateKo(date);
+  const subParts = [coworkers.length ? `${coworkers.join('·')}님과 함께` : '혼자 근무'];
+  if (ongoing) subParts.push('근무 중');
+  return { date, sh, ongoing, dayWord, sub: subParts.join(' · ') };
 }
 
 /** "13:00"~"18:00" → "5시간" / "4시간 30분". 음수(자정 넘김)면 빈 문자열. */

@@ -14,7 +14,7 @@ import { buildStoreNotifs, buildClosureNotifs, buildJoinCrossNotifs, mergeCrossN
 import { ackOfUnit, notifRowKey } from '@/lib/utils/notifications';
 import { buildSpaceNotifRows } from '@/lib/utils/spaceNotifications';
 import { storeColor } from '@/lib/utils/storeColor';
-import { todayStr } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import type { NotifRow } from '@/components/NotificationList';
 
 /** 공간 자리의 줄(공간 합류 요청·수락) — '전체 매장' 탭은 매장 줄만 보인다. 공간 줄은 허브가 보인다. */
@@ -32,7 +32,7 @@ export function useCrossNotifModel() {
   const closures = useCrossNotifStore((s) => s.closures);
   const joinNotices = useCrossNotifStore((s) => s.joinNotices);
   const spaceRaw = useCrossNotifStore((s) => s.spaceRows);
-  const today = todayStr();
+  const today = useToday();
 
   const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
   const ackOf = useMemo(() => ackOfUnit(ackByUnit), [ackByUnit]);

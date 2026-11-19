@@ -142,6 +142,23 @@ export function isForgotCheckout(r: { check_in: string | null; check_out: string
 }
 
 /**
+ * 출근 기록 한 줄의 상태 — 근무 기록·출퇴근 목록·직원 목록·홈이 모두 이것 하나를 쓴다(2026-11-19 세션 C · C5).
+ *   closed = 퇴근 찍음 · working = 열린 지 16시간 이하 · forgot = 16시간 넘게 열림.
+ *   24시간이 넘으면 크론(0757)이 출근 + 24시간에 닫아 closed 가 된다. 서버 허브 working_now(0306)도 16시간 기준이다.
+ */
+export type RecordStatus = 'closed' | 'working' | 'forgot';
+export function recordStatus(r: { check_in: string | null; check_out: string | null }, now: Date = new Date()): RecordStatus {
+  if (r.check_out) return 'closed';
+  return isForgotCheckout(r, now) ? 'forgot' : 'working';
+}
+
+/** 열린 기록의 이름 — 16시간 넘게 열린 기록은 모든 화면에서 "퇴근 안 찍음"이다(2026-11-19 사용자 결정). */
+export const OPEN_RECORD_LABEL: Record<Exclude<RecordStatus, 'closed'>, string> = {
+  working: '근무 중',
+  forgot: '퇴근 안 찍음',
+};
+
+/**
  * 사장 직원 목록의 근무 상태(라이브 QA 결함 8 · 2026-10-07).
  * 열린 기록이 16시간을 넘으면 '근무 중'이 아니라 '퇴근 안 찍음'이다(isForgotCheckout 과 같은 기준).
  * 예전엔 두 달 전 열린 기록 하나로 '근무 중'이라고 했다. 허브(owner_today · 0306)도 16시간 안 출근만 근무 중으로 센다.
@@ -153,7 +170,7 @@ export function staffWorkStatus(
   now: Date = new Date(),
 ): 'out' | 'working' | 'done' | 'forgot' {
   const open = findOpenRecord(records, staffId);
-  if (open) return isForgotCheckout(open, now) ? 'forgot' : 'working';
+  if (open) return recordStatus(open, now) === 'forgot' ? 'forgot' : 'working';
   return records.some((r) => r.staff_id === staffId && r.date === today) ? 'done' : 'out';
 }
 

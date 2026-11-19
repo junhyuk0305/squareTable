@@ -13,7 +13,7 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useWorkStore, useDayparts, useDaypartLabels, daypartRoutineTemplates, assigneesOf, isRoutineTaskId, ROUTINE_ID_PREFIX, findDuplicateTask, occursOn, knowhowIdsForTask, quizCountForTask, isCaptureEligible, courseEntriesOf, trainingCourseViews, staffWhoUnderstandTask, understandsTask, taskVisibleTo, isRegularDue, isRequestDue, lastQuizAttemptOf, REGULAR_DUE_DAYS_DEFAULT, type FeedItem, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
 import { staffCanSeeCourse, recheckEntryDue } from '@/lib/quiz/schedule';
 import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
-import { useDayNow } from '@/lib/hooks/useToday';
+import { useDayNow, useToday } from '@/lib/hooks/useToday';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
@@ -48,7 +48,7 @@ import { WorkSettingsPanel } from '@/components/work/WorkSettingsPanel';
 import { TaskComposerModal } from '@/components/work/TaskComposerModal';
 import { INVITE_FIRST, type Member } from '@/components/work/MentionInput';
 import { Surface } from '@/lib/theme/colors';
-import { todayStr, tsMs } from '@/lib/utils/attendance';
+import { tsMs } from '@/lib/utils/attendance';
 import { sortNotices, isNoticeUnreadFor } from '@/lib/utils/notice';
 import { asMemberRole, canManage } from '@/lib/utils/roles';
 import { answerGoesLive } from '@/lib/utils/answerPolicy';
@@ -244,7 +244,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     viewParam === 'todo' || viewParam === 'notice' ? viewParam : viewParam === 'assign' ? 'todo' : null;
   const initialView: ViewKey = paramView ?? 'chat';
 
-  const today = todayStr();
+  const today = useToday();
   const [view, setView] = useState<ViewKey>(initialView);
   // 패널(공지/할일)이 홈 등 다른 화면의 딥링크(?view=)로 열렸는지 추적.
   // true면 뒤로가기는 진입 화면(홈)으로 복귀(router.back), false(업무 내부 진입)면 채팅으로 복귀.

@@ -21,7 +21,8 @@ import { Radius } from '@/lib/theme/elevation';
 import { CardStyles } from '@/lib/theme/card';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Type } from '@/lib/theme/type';
-import { fmtDuration, hhmm, todayStr, liveMinutes, findOpenRecord, isForgotCheckout, openSinceText } from '@/lib/utils/attendance';
+import { fmtDuration, hhmm, liveMinutes, findOpenRecord, isForgotCheckout, openSinceText, recordStatus, OPEN_RECORD_LABEL } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import { ForgotCheckoutCard } from '@/components/junior/ForgotCheckoutCard';
 import { mondayOf, weekDates as weekDatesOf } from '@/lib/utils/schedule';
 
@@ -43,7 +44,7 @@ export function AttendancePanel() {
 
   const [, setTick] = useState(0);
 
-  const today = todayStr();
+  const today = useToday();
   const ym = today.slice(0, 7);
 
   const mine = useMemo(() => records.filter((r) => r.staff_id === userId), [records, userId]);
@@ -218,7 +219,7 @@ export function AttendancePanel() {
           <Pressable key={r.id} onPress={() => router.push('/junior/timesheet')} style={({ pressed }) => [styles.recRow, pressed && { opacity: 0.6 }]}>
             <Text style={styles.recDate}>{r.date.slice(5).replace('-', '/')}</Text>
             <Text style={styles.recTime}>
-              {r.check_in ? hhmm(r.check_in) : '—'} ~ {r.check_out ? hhmm(r.check_out) : '근무 중'}
+              {r.check_in ? hhmm(r.check_in) : '—'} ~ {r.check_out ? hhmm(r.check_out) : OPEN_RECORD_LABEL[recordStatus(r) === 'forgot' ? 'forgot' : 'working']}
             </Text>
             <Text style={styles.recMin}>{fmtDuration(liveMinutes(r))}</Text>
             <Ionicons name="create-outline" size={15} color={InkColors.ink3} style={{ marginLeft: 6 }} />

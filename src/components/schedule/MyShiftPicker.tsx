@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
 import { shiftsOn, type ShiftTemplate, type SwapRequest, type ShiftException } from '@/lib/store/useScheduleStore';
-import { todayStr } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import { addDays, fmtDateKo } from '@/lib/utils/schedule';
 import { InkColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -29,9 +29,9 @@ export function MyShiftPicker({
   onPick: (date: string, template: ShiftTemplate) => void;
   onClose: () => void;
 }) {
+  const today = useToday();
   // 앞으로 약 2달(60일) 중 내 근무. 이미 교대가 걸린 건 제외.
   const myShifts = useMemo(() => {
-    const today = todayStr();
     const out: { date: string; template: ShiftTemplate }[] = [];
     for (let i = 0; i < 60; i++) {
       const d = addDays(today, i);
@@ -40,7 +40,7 @@ export function MyShiftPicker({
         .forEach((sh) => out.push({ date: d, template: sh.template }));
     }
     return out;
-  }, [me, templates, swaps, exceptions]);
+  }, [me, templates, swaps, exceptions, today]);
 
   return (
     <BottomSheet visible={true} onClose={onClose} sheetStyle={{ maxHeight: '75%', paddingBottom: 8 }}>

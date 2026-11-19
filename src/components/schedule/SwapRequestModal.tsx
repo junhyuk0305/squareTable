@@ -7,7 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '@/components/BottomSheet';
 import { useScheduleStore, shiftsOn, type ShiftTemplate, type SwapKind } from '@/lib/store/useScheduleStore';
 import type { Junior } from '@/types';
-import { todayStr, maskHHMM } from '@/lib/utils/attendance';
+import { maskHHMM } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import { addDays, fmtDateKo, splitShift } from '@/lib/utils/schedule';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -56,9 +57,9 @@ export function SwapRequestModal({
 
   // 선택한 상대가 앞으로 약 2달(60일) 동안 실제로 일하는 시프트들(맞교환 대상 후보).
   // 이미 교대가 걸렸거나(진행 중) 다른 사람으로 바뀐 근무는 shiftsOn 기준으로 제외한다.
+  const today = useToday();
   const candidates = useMemo<Candidate[]>(() => {
     if (!targetStaff) return [];
-    const today = todayStr();
     const out: Candidate[] = [];
     for (let i = 0; i < 60; i++) {
       const d = addDays(today, i);
@@ -68,7 +69,7 @@ export function SwapRequestModal({
         .forEach((sh) => out.push({ date: d, template: sh.template }));
     }
     return out;
-  }, [targetStaff, templates, allSwaps, exceptions, date]);
+  }, [targetStaff, templates, allSwaps, exceptions, date, today]);
 
   const canSubmit =
     (kind === 'cover' ? true : Boolean(targetStaff && targetKey)) && partOk;

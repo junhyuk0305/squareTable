@@ -15,7 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '@/components/BottomSheet';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import type { Junior } from '@/types';
-import { maskHHMM, todayStr } from '@/lib/utils/attendance';
+import { maskHHMM } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import { PAST_CHANGE_TITLE, PAST_CHANGE_BODY } from '@/lib/utils/confirm';
 import {
   WEEKDAY_LABELS,
@@ -100,7 +101,7 @@ export function ShiftQuickSheet({
 
   // 지난 날짜를 건드리는가 — 그 기간 근무 기록이 바뀐다(§8 Q4).
   //   반복 추가는 고른 요일마다 이 날 이후 첫 날부터 들어간다. 그중 가장 이른 날로 본다.
-  const today = todayStr();
+  const today = useToday();
   const firstDay = !isEdit && repeat && days.length > 0
     ? days.map((wd) => nextDateForWeekday(date, wd)).sort()[0]
     : (editing?.date ?? date);

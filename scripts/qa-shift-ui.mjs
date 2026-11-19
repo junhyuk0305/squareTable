@@ -251,7 +251,12 @@ check('옛 직접 수정·삭제(updateShiftTemplate · deleteShiftTemplate)가 
   !/function\s+updateShiftTemplate|function\s+deleteShiftTemplate/.test(db));
 check('직원 직접 수정 RPC(update_my_shift_time)를 앱이 부르지 않는다', !/'update_my_shift_time'/.test(db) && !/editMyShiftTime/.test(store));
 check('근무표 실시간이 shift_change_requests 도 듣는다', /table:\s*'shift_change_requests'/.test(fnBody(db, 'subscribeSchedule')));
-check('직원 junior/schedule 의 겹침 판정(conflictOf)이 적용 기간을 본다', /shiftAppliesOn\(/.test(juniorSched));
+// 2026-11-19 세션 C(C5): conflictOf 가 공용 overlapsStaffShift(사장 승인 카드와 같은 판정 · 밤 근무 인식)를 부른다.
+//   그 함수는 shiftsOn → shiftAppliesOn 으로 적용 기간을 본다. 그래서 두 길 중 하나면 통과다.
+const schedUtil = read('src/lib/utils/schedule.ts');
+check('직원 junior/schedule 의 겹침 판정(conflictOf)이 적용 기간을 본다',
+  /shiftAppliesOn\(/.test(juniorSched) ||
+  (/overlapsStaffShift\(/.test(juniorSched) && /shiftsOn\(/.test(fnBody(schedUtil, 'overlapsStaffShift')) && /shiftAppliesOn\(/.test(fnBody(schedUtil, 'shiftsOn'))));
 
 check('ShiftQuickSheet: "이 날부터 계속"(기본) · "이 날만" 범위 선택이 있다', /이 날부터 계속/.test(quick) && /이 날만/.test(quick));
 check('ShiftQuickSheet: 지울 때도 "이 날부터 그만" · "이 날만 빼기"를 고른다', /이 날부터 그만/.test(quick) && /이 날만 빼기/.test(quick));

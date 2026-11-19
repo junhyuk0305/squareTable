@@ -22,7 +22,7 @@ import { CardStyles } from '@/lib/theme/card';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
 import { Type } from '@/lib/theme/type';
 import { BadgeStyles } from '@/lib/theme/badge';
-import { fmtDuration, hhmm, todayStr, normalizeTime, shiftMonth, daysInMonth, maskHHMM } from '@/lib/utils/attendance';
+import { fmtDuration, hhmm, todayStr, normalizeTime, shiftMonth, daysInMonth, maskHHMM, recordStatus, OPEN_RECORD_LABEL } from '@/lib/utils/attendance';
 import { useToday } from '@/lib/hooks/useToday';
 import { checkShiftTime, isOvernight, monthDates } from '@/lib/utils/schedule';
 import { confirmAction } from '@/lib/utils/confirm';
@@ -60,6 +60,7 @@ export function TimesheetView({ header, staffId, editedBy, badgeLabel, badgeTone
   const timeRequests = useScheduleStore((s) => s.timeRequests);
   const ready = attendanceLoaded && scheduleLoaded;
 
+  // today-ok: 처음 열 때 보여 줄 달만 정한다. 그 뒤로는 사장이 고른 달이다.
   const [ym, setYm] = useState(() => todayStr().slice(0, 7));
   const [editing, setEditing] = useState<string | null>(null); // record id 또는 'new'
   const [cin, setCin] = useState('');
@@ -342,7 +343,8 @@ export function TimesheetView({ header, staffId, editedBy, badgeLabel, badgeTone
           {!monthReady ? <Text style={styles.empty}>{monthLoadText(monthStates)}</Text> : null}
           {monthRecs.map((r, i) => {
             const d = new Date(`${r.date}T00:00:00`);
-            const open = !r.check_out;
+            // 열린 기록은 한 판정(recordStatus)으로 "근무 중" / "퇴근 안 찍음" 중 하나만 보인다. 둘이 한 줄에 같이 뜨지 않는다(C5).
+            const status = recordStatus(r);
             // 자정을 넘긴 기록은 퇴근 시각만 보면 "02:00 퇴근"이 그날 새벽으로 읽힌다 — 다음날임을 말한다.
             const crossesMidnight = !!r.check_in && !!r.check_out && isOvernight(hhmm(r.check_in), hhmm(r.check_out));
             return (
@@ -356,7 +358,7 @@ export function TimesheetView({ header, staffId, editedBy, badgeLabel, badgeTone
                     <View style={styles.recTimeRow}>
                       <Text style={styles.recTime}>
                         {r.check_in ? hhmm(r.check_in) : '—'} ~{' '}
-                        {r.check_out ? `${crossesMidnight ? '다음날 ' : ''}${hhmm(r.check_out)}` : '근무 중'}
+                        {r.check_out ? `${crossesMidnight ? '다음날 ' : ''}${hhmm(r.check_out)}` : OPEN_RECORD_LABEL[status === 'forgot' ? 'forgot' : 'working']}
                       </Text>
                       {r.edited_by === 'staff' && (
                         <View style={badgeStyle}>
@@ -364,7 +366,7 @@ export function TimesheetView({ header, staffId, editedBy, badgeLabel, badgeTone
                         </View>
                       )}
                     </View>
-                    <Text style={styles.recDur}>{open ? '퇴근 미기록' : fmtDuration(r.work_minutes)}</Text>
+                    {status === 'closed' ? <Text style={styles.recDur}>{fmtDuration(r.work_minutes)}</Text> : null}
                     {staffOrigin.has(r.id) && <Text style={styles.recOrigin}>{originText(staffOrigin.get(r.id)!)}</Text>}
                   </View>
                   <Ionicons name="create-outline" size={18} color={InkColors.ink3} />

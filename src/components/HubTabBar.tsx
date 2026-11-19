@@ -12,7 +12,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { assignedTodayCount, storeUnreadCount } from '@/lib/utils/crossStoreNotifs';
-import { todayStr } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import { InkColors } from '@/lib/theme/colors';
 
 /** 허브 층 탭 — 넓은 웹 셸의 사이드바도 이 목록을 그대로 쓴다(복제 금지). */
@@ -39,7 +39,7 @@ function useFirstTabBadge(role: 'junior' | 'owner'): number {
   const sessionStores = useSessionStore((s) => s.stores);
   const crossData = useCrossNotifStore((s) => s.data);
   const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
-  const today = todayStr();
+  const today = useToday();
   if (role === 'owner') {
     const ownerUnits = new Set(sessionStores.filter((u) => u.role === 'owner').map((u) => u.unit_id));
     // ★'전체 읽음'(0078 ackByUnit)을 반영한다(2026-08-25 감사 #11). 예전엔 원본 길이를 그냥

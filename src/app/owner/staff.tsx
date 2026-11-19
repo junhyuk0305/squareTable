@@ -27,7 +27,7 @@ import { Type } from '@/lib/theme/type';
 import { CardStyles } from '@/lib/theme/card';
 import { ButtonStyles, ButtonTextStyles, TouchSize, hitTrim } from '@/lib/theme/button';
 import { EmptyStyles } from '@/lib/theme/empty';
-import { fmtDuration, liveMinutes, staffWorkStatus } from '@/lib/utils/attendance';
+import { fmtDuration, liveMinutes, staffWorkStatus, OPEN_RECORD_LABEL } from '@/lib/utils/attendance';
 import { useToday } from '@/lib/hooks/useToday';
 import { showToast } from '@/lib/store/useToastStore';
 import { rotateInviteCode } from '@/lib/db';
@@ -410,10 +410,10 @@ export default function OwnerStaffScreen() {
 function StatusChip({ status }: { status: 'out' | 'working' | 'done' | 'forgot' }) {
   const map = {
     // '근무 중'은 정상 상태다 — accent(=bad 레드) 틴트라 정상이 경고로 읽혔다(2026-08-06). 색은 good, 판별은 라벨이 한다.
-    working: { label: '근무 중', color: BrandColors.goodText, bg: BrandColors.goodSoft },
+    working: { label: OPEN_RECORD_LABEL.working, color: BrandColors.goodText, bg: BrandColors.goodSoft },
     done: { label: '퇴근', color: TextColor.secondary, bg: InkColors.bgSoft },
     out: { label: '미출근', color: TextColor.secondary, bg: InkColors.bgSoft },
-    forgot: { label: '퇴근 미기록', color: BrandColors.warnText, bg: BrandColors.warnSoft },
+    forgot: { label: OPEN_RECORD_LABEL.forgot, color: BrandColors.warnText, bg: BrandColors.warnSoft },
   } as const;
   const m = map[status];
   return (

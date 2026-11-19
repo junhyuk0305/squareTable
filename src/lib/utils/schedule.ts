@@ -1,5 +1,5 @@
 /** 근무표(스케줄) 공용 날짜·요일 헬퍼. 주는 월요일 시작(한국 근무표 관행). */
-import { todayStr } from '@/lib/utils/attendance';
+import { todayStr, nowISO } from '@/lib/utils/attendance';
 import type { ShiftTemplate, ShiftException, SwapRequest } from '@/lib/store/useScheduleStore';
 
 /** 0=일 … 6=토 (Date.getDay() 인덱스). */
@@ -520,6 +520,42 @@ export const PAST_MONTH_LOCKED_TEXT = '반복 근무는 지난달부터 바꿀 �
 /** date 가 이번 달 1일(today 기준)보다 이르면 true. 반복 근무는 지난달 날짜부터 바꾸지 못한다(소급 금지). 날짜는 YYYY-MM-DD. */
 export function pastMonthLocked(date: string, today: string = todayStr()): boolean {
   return date < `${today.slice(0, 7)}-01`;
+}
+
+/**
+ * 그 사람의 다음 근무(지금 하는 근무 포함) — 직원 근무표 "내 다음 근무 · 지금 근무 중"(2026-11-19 세션 C · C5).
+ * 시각은 KST 순간(nowISO)으로 비교한다. 기기 현지 시각을 쓰지 않는다.
+ * 밤 근무(22:00~02:00)는 끝을 다음 날로 본다(isOvernight · reconcile 과 같다). 그래서 저녁 9시엔 "다음 근무",
+ * 밤 11시·새벽 1시엔 "지금 근무 중", 새벽 3시엔 끝난 근무다. 어제 시작해 아직 안 끝난 밤 근무도 본다(dayOffset -1).
+ * "지금 근무 중"은 근무표와 시계로 정한다. 출근 기록은 보지 않는다(2026-11-19 · 근무표 화면이 보여 주는 대상은 근무표).
+ */
+export function nextShiftFor(
+  templates: ShiftTemplate[],
+  swaps: SwapRequest[],
+  exceptions: ShiftException[],
+  staffId: string,
+  today: string,
+  nowMs: number,
+): { date: string; dayOffset: number; sh: ResolvedShift; ongoing: boolean } | null {
+  for (let i = -1; i < 14; i++) {
+    const date = addDays(today, i);
+    for (const sh of shiftsOn(templates, swaps, date, exceptions)) {
+      if (sh.workerStaffId !== staffId) continue;
+      const { start, end } = sh.template;
+      const startMs = new Date(nowISO(date, start)).getTime();
+      const endMs = new Date(nowISO(isOvernight(start, end) ? addDays(date, 1) : date, end)).getTime();
+      if (endMs <= nowMs) continue;
+      return { date, dayOffset: i, sh, ongoing: startMs <= nowMs };
+    }
+  }
+  return null;
+}
+
+/** 두 근무 시각이 같은 날 안에서 겹치나. 자정을 넘기는 근무는 끝을 다음 날로 늘려 본다. */
+export function shiftTimesOverlap(a: { start: string; end: string }, b: { start: string; end: string }): boolean {
+  const [as, ae] = spanOf(a.start, a.end);
+  const [bs, be] = spanOf(b.start, b.end);
+  return as < be && bs < ae;
 }
 
 /** 근무 시각을 그날 0시부터의 분 구간으로. 자정을 넘기면 끝을 다음 날로 늘린다. */

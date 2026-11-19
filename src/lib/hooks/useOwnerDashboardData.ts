@@ -10,7 +10,7 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useScheduleStore, shiftsOn, pendingApprovals, pendingTimeRequests } from '@/lib/store/useScheduleStore';
 import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
-import { hhmm } from '@/lib/utils/attendance';
+import { hhmm, recordStatus } from '@/lib/utils/attendance';
 import { useToday } from '@/lib/hooks/useToday';
 import { gradableTasks, staffBehind, type StaffBehind } from '@/lib/utils/taskProgress';
 import { sortByUrgency } from '@/lib/utils/unknownQuery';
@@ -205,20 +205,26 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     [shiftTemplates, swaps, today, shiftExceptions],
   );
 
-  // 출근 = check_in 이 찍힌 오늘 기록. 퇴근한 사람도 포함한다("오늘 나온 사람"이 홈이 말하는 것).
+  // 지금 근무 중인 사람 = 열린 기록의 상태가 '근무 중'(recordStatus · 직원 목록·근무 기록과 같은 판정).
+  //   어제 밤 출근해 아직 일하는 사람도 들어간다. 퇴근한 사람과 16시간 넘게 열린 기록('퇴근 안 찍음')은 세지 않는다
+  //   (2026-11-19 사용자 결정 · 세션 C C5). 한 사람은 한 번만 센다.
   const duty = useMemo(() => {
     const nameOf = (id: string) => staff.find((x) => x.id === id)?.name ?? '직원';
+    const seen = new Set<string>();
     return records
-      .filter((r) => r.date === today && r.check_in)
+      .filter((r) => r.check_in && recordStatus(r) === 'working')
       .sort((a, b) => a.check_in!.localeCompare(b.check_in!))
+      .filter((r) => !seen.has(r.staff_id) && !!seen.add(r.staff_id))
       .map((r) => ({ staffId: r.staff_id, name: nameOf(r.staff_id), at: hhmm(r.check_in!) }));
-  }, [records, today, staff]);
+  }, [records, staff]);
 
-  // 근무 예정인데 아직 안 찍은 인원 수. 한 사람이 하루 두 타임이어도 1명으로 센다(Set).
+  // 근무 예정인데 아직 안 나온 인원 수. 지금 근무 중이거나 오늘 이미 출근을 찍은 사람(퇴근했어도)은 뺀다.
+  //   한 사람이 하루 두 타임이어도 1명으로 센다(Set).
   const dutyPlanned = useMemo(() => {
     const arrived = new Set(duty.map((d) => d.staffId));
+    for (const r of records) if (r.date === today && r.check_in) arrived.add(r.staff_id);
     return new Set(todayShifts.map((s) => s.workerStaffId).filter((id) => !arrived.has(id))).size;
-  }, [todayShifts, duty]);
+  }, [todayShifts, duty, records, today]);
 
   // 사장 승인만 남은 교대 — 근무표 화면과 같은 판정(pendingApprovals).
   const pendingSwaps = useMemo(() => pendingApprovals(swaps, today).length, [swaps, today]);

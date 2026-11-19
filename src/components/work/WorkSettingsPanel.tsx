@@ -8,7 +8,7 @@ import { Vanish } from '@/components/Vanish';
 import { resolveDayparts, sanitizeDayparts, newDaypart, newRoutine, type Daypart } from '@/lib/store/daypartLabels';
 import { TaskComposerModal } from '@/components/work/TaskComposerModal';
 import type { Member } from '@/components/work/MentionInput';
-import { todayStr } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
@@ -59,6 +59,7 @@ function WorkSettingsForm({ members, me, onSaved }: WorkSettingsPanelProps) {
   const dayparts = useScheduleStore((s) => s.config.dayparts);
   const setConfig = useScheduleStore((s) => s.setConfig);
   const templates = useWorkStore((s) => s.templates);
+  const today = useToday();
 
   const [items, setItems] = useState<Daypart[]>(() => resolveDayparts(dayparts));
   const [openId, setOpenId] = useState<string | null>(null); // null = 1단(카테고리 목록)
@@ -281,7 +282,7 @@ function WorkSettingsForm({ members, me, onSaved }: WorkSettingsPanelProps) {
           onSubmit={() => {}}
           isOwner
           me={me}
-          today={todayStr()}
+          today={today}
           members={members}
         />
       )}

@@ -12,7 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '@/components/BottomSheet';
 import { useScheduleStore, type ShiftTemplate } from '@/lib/store/useScheduleStore';
 import { checkShiftTime, isOvernight, fmtDateKo, fmtRange } from '@/lib/utils/schedule';
-import { maskHHMM, todayStr } from '@/lib/utils/attendance';
+import { maskHHMM } from '@/lib/utils/attendance';
+import { useToday } from '@/lib/hooks/useToday';
 import { InkColors, BrandColors, TextColor } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -40,11 +41,12 @@ export function MyShiftSheet({
   const [start, setStart] = useState(pendingReq?.new_start ?? template.start);
   const [end, setEnd] = useState(pendingReq?.new_end ?? template.end);
   const [busy, setBusy] = useState(false);
+  const today = useToday();
 
   const timeErr = checkShiftTime(start, end);
   const changed = start !== template.start || end !== template.end;
   // 지난 근무는 교대할 수 없다. 시간 수정 요청만 된다.
-  const canSwap = date >= todayStr();
+  const canSwap = date >= today;
 
   async function save() {
     if (timeErr || !changed || busy) return;
