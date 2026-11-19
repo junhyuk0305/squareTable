@@ -759,6 +759,42 @@ def('L23', 'add_shift_series 같은 반복 근무 동시 두 번 · apply_shift_
   check('L23', '묶음 정상 = ok', ok2.status === 0 && /ok\s*$/.test(ok2.stdout), (ok2.stdout || ok2.stderr).trim().slice(-80));
 });
 
+// ─────────────────────────────── C3 받은 질문 여러 답(0910) ───────────────────────────────
+// 두 직원이 같은 질문에 동시에 답한다. 다시 세기 전에 질문 행을 잠그지 않으면 둘 다 자기 제안만 보고 1 을 쓴다.
+// 취소와 새 답이 겹쳐도 숫자가 맞아야 한다(취소 = 보관 표로 옮기고 지움 · 0753).
+def('MA', '받은 질문에 두 직원이 동시에 답 · 취소와 새 답이 겹침(답 수 proposal_count)', async (W) => {
+  const w = await W({ staffN: 3 });
+  const [A, B, C] = w.staff;
+  const uq = `uq_rcma_${w.s}`;
+  R.val(`insert into public.unknown_queries(id, unit_id, junior_id, junior_name, query_text, status)
+    values (${q(uq)}, ${q(w.unit)}, ${q(C.id)}, 'RC', 'RC 여러 답', 'pending_owner_answer'); select 1;`);
+  const ins = (who, sug) => `insert into public.playbook_suggestions(id, unit_id, kind, source_uq_id, proposer_id, proposer_name, text, status)
+    values (${q(sug)}, ${q(w.unit)}, 'new', ${q(uq)}, ${q(who.id)}, 'RC', 'RC 답 ${sug}', 'pending') returning id`;
+  const cnt = () => R.val(`select proposal_count::text from public.unknown_queries where id = ${q(uq)}`);
+  const real = () => n(`select count(*) from public.playbook_suggestions where source_uq_id = ${q(uq)} and status = 'pending'`);
+  const sA = `sug_rcma_a_${w.s}`, sB = `sug_rcma_b_${w.s}`, sC = `sug_rcma_c_${w.s}`;
+  const [a, b] = R.twoAtOnce(S(w, A.id, ins(A, sA), true), S(w, B.id, ins(B, sB), false));
+  check('MA', '동시 두 답 저장', a.ok && b.ok, `${show(a)} · ${show(b)}`);
+  check('MA', '동시 두 답 뒤 답 수 = 2', cnt() === '2' && real() === 2, `칸 ${cnt()} · 실제 ${real()}`);
+  // A 취소(앞 세션이 쥠)와 C 새 답이 겹친다.
+  const [c, d] = R.twoAtOnce(S(w, A.id, `public.suggestion_withdraw(${q(sA)})::text`, true), S(w, C.id, ins(C, sC), false));
+  check('MA', '취소·새 답 둘 다 처리', c.ok && d.ok, `${show(c)} · ${show(d)}`);
+  check('MA', '취소·새 답 겹친 뒤 답 수 = 2', cnt() === '2' && real() === 2, `칸 ${cnt()} · 실제 ${real()}`);
+  // 취소 ↔ 사장 반려 겹침(verify 11-19): 취소는 질문 → 제안 순으로 잠근다. 앞 세션이 취소의 첫 잠금(질문 행)을 쥔 채 기다리고,
+  //   그 사이 사장이 같은 제안을 반려한다. 반려가 제안 → 질문 순이면 교착(40P01)이 난다. 둘 다 질문 먼저면 줄을 선다.
+  const front = `\\set VERBOSITY verbose
+${R.as(B.id)}
+begin;
+select 1 from public.unknown_queries where id = ${q(uq)} for update;
+select pg_sleep(1.5);
+select 'R|' || coalesce(public.suggestion_withdraw(${q(sB)})::text, 'void');
+commit;`;
+  const [e, f] = R.twoAtOnce(front, S(w, w.owner.id, `(public.review_suggestion(${q(sB)}, 'rejected', null, 'RC') ->> 'status')`, false));
+  check('MA', '취소·반려 겹침: 교착 없음(취소 ok · 반려 already)', e.ok && f.ok && f.v === 'already', `${show(e)} · ${show(f)}`);
+  check('MA', '취소·반려 겹친 뒤 답 수 = 1', cnt() === '1' && real() === 1, `칸 ${cnt()} · 실제 ${real()}`);
+  R.val(`delete from public.playbook_suggestions_withdrawn where unit_id = ${q(w.unit)}; select 1;`);
+});
+
 // ─────────────────────────────── 엣지 · OTP 문자(H5) ───────────────────────────────
 // 로컬 엣지가 떠 있어야 한다: `npx -y supabase@2.122.1 functions serve otp --no-verify-jwt --env-file <파일>`.
 //   env 파일 = 가짜 SOLAPI_API_KEY·SECRET·FROM + HTTPS_PROXY=http://127.0.0.1:9 (밖으로 나가는 요청이 연결 거부로 끝난다 · 문자 0통).

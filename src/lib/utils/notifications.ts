@@ -8,8 +8,9 @@ import type { SwapRequest, ShiftTemplate, ScheduleNotice, ShiftTimeRequest } fro
 import { canAcceptSwap } from '@/lib/store/useScheduleStore';
 import type { PendingMember, JoinNotice, JoinDone } from '@/lib/store/useStaffStore';
 import type { UnknownQuery, PlaybookSuggestion, PaymentClaim, OwnerAlert } from '@/types';
-// D4 '도와줄 수 있는 질문' 판정 SSOT — 벨 배지·알림 목록이 '내 공간' 리스트와 같은 축을 보게 재사용한다.
-import { answerableQuestions } from '@/lib/store/useUnknownQueueStore';
+// D4 '도와줄 수 있는 질문' 판정 SSOT — 벨 배지·알림 목록은 '내 공간' 배지와 같은 축(아직 답 없는 질문 · C3 0910)을 본다.
+import { questionsToAnswer } from '@/lib/store/useUnknownQueueStore';
+import { isOtherAnswerApproved, OTHER_ANSWER_APPROVED } from '@/lib/suggestion/labels';
 import { fmtDateKo, fmtRange, swapApprovable } from '@/lib/utils/schedule';
 // 시각 비교 SSOT — 문자열 비교 금지(클라 "…Z" ↔ 서버 "…+00:00" 이 같은 순간인데 사전순이 뒤집힌다 · room.ts 와 같은 함수).
 import { tsMs } from '@/lib/utils/attendance';
@@ -188,7 +189,7 @@ export function juniorUnreadCount(
     // 합류 결과 — 같은 표(member_notices)의 승인·반려 행. 줄 자리의 읽은 시각. 목록(buildJoinNotifRows)과 같은 판정.
     buildJoinNotifRows(joinNotices, joinAckOf).filter((r) => r.unread).length +
     // 동료가 물었는데 아직 답이 없는 질문(D4) — 푸시를 놓치면 '내 공간'에 들어가야만 알 수 있었다.
-    answerableQuestions(queue, me, suggestions).filter((u) => isAfterAck(u.asked_at, ackAt)).length +
+    questionsToAnswer(queue, me, suggestions).filter((u) => isAfterAck(u.asked_at, ackAt)).length +
     feed.filter((f) => isUnreadMention(f, me) && isAfterAck(f.createdAt, ackAt)).length +
     // 배정 시각 폴백은 목록(buildJuniorNotifications)과 동일하게 — 카운트·목록 강조가 어긋나지 않게.
     taskTemplates.filter((t) => isPendingAssignment(t, me, today, done) && isAfterAck(assignedAtOf(t, me, today), ackAt)).length +
@@ -334,7 +335,7 @@ export function juniorNotifRows(args: {
 
   // 도와줄 수 있는 질문(D4) — 동료가 물었는데 아직 답이 없는 것. 탭하면 물어보기 탭('내 공간'에 답하기 시트).
   // 답을 아는 사람이 사장만은 아니다 — 이 알림이 없으면 직원은 푸시를 놓치는 순간 질문의 존재를 모른다.
-  for (const u of answerableQuestions(queue, me, suggestions)) {
+  for (const u of questionsToAnswer(queue, me, suggestions)) {
     out.push({
       id: `q_${u.id}`,
       kind: 'question',
@@ -353,8 +354,9 @@ export function juniorNotifRows(args: {
     out.push({
       id: `sugres_${sg.id}`,
       kind: ok ? 'suggestion_approved' : 'suggestion_rejected',
-      title: ok ? '내 노하우 제안이 승인됐어요' : '내 노하우 제안이 반려됐어요',
-      body: !ok && sg.owner_note ? `${sg.text}\n사유: ${sg.owner_note}` : sg.text,
+      // ★C3: 같은 질문의 다른 답이 승인돼 자동 반려된 제안(0582)은 "다른 답이 승인됐어요"로 알린다.
+      title: ok ? '내 노하우 제안이 승인됐어요' : isOtherAnswerApproved(sg) ? OTHER_ANSWER_APPROVED : '내 노하우 제안이 반려됐어요',
+      body: !ok && sg.owner_note && !isOtherAnswerApproved(sg) ? `${sg.text}\n사유: ${sg.owner_note}` : sg.text,
       at: sg.reviewed_at as string,
       unread: isAfterAck(sg.reviewed_at, ackAt),
       route: NOTIF.suggestion_result.route('junior', sg.id),
@@ -920,8 +922,9 @@ function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
     out.push({
       id: `sugres_${sg.id}`,
       kind: ok ? 'suggestion_approved' : 'suggestion_rejected',
-      title: ok ? '내 노하우 제안이 승인됐어요' : '내 노하우 제안이 반려됐어요',
-      body: !ok && sg.owner_note ? `${sg.text}\n사유: ${sg.owner_note}` : sg.text,
+      // ★C3: 같은 질문의 다른 답이 승인돼 자동 반려된 제안(0582)은 "다른 답이 승인됐어요"로 알린다.
+      title: ok ? '내 노하우 제안이 승인됐어요' : isOtherAnswerApproved(sg) ? OTHER_ANSWER_APPROVED : '내 노하우 제안이 반려됐어요',
+      body: !ok && sg.owner_note && !isOtherAnswerApproved(sg) ? `${sg.text}\n사유: ${sg.owner_note}` : sg.text,
       at: sg.reviewed_at as string,
       unread: isAfterAck(sg.reviewed_at, ackAt),
       // 물어보기 탭 '내 공간'에 내가 보낸 제안 목록이 있다(직원과 같은 곳 · F-2). /owner/categories 는 허용 목록 밖이다.
@@ -933,14 +936,14 @@ function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
 }
 
 /** ① 사장 축 중 매니저가 행동할 수 있는 것만(F-2) — 멘션(/owner/work) · 교대 승인 대기(/owner/schedule) ·
- *  근무 시간 수정 요청(0316 · 내 요청 제외 — 내가 결정할 수 없다) · 질문(/junior/chat). 질문은 물어보기 탭이 보여 주는 것(answerableQuestions)만 남긴다. 내가 물은 질문은
+ *  근무 시간 수정 요청(0316 · 내 요청 제외 — 내가 결정할 수 없다) · 질문(/junior/chat). 질문은 물어보기 탭 배지가 세는 것(questionsToAnswer)만 남긴다. 내가 물은 질문은
  *  거기서 답할 수 없어서 뺀다.
  *  직원 제안 검토는 사장 전용(F-2 · 푸시 ownerOnly)이라 직원 제안은 넣지 않는다. 예외 = 공간에서 온 노하우(from_space · 결정 193).
  *  내가 보낸 것이든 동료 매니저가 보낸 것이든 매니저가 승인·반려한다(서버 approve_space_proposal · review_suggestion 이 auth_can_manage ·
  *  노하우 탭 할 일 isTodoSuggestion 에도 세어진다). 그래서 벨에도 보인다(1112 fix 10 · ★11-16 결정 U-5 동료 제안까지). 푸시는 그대로 사장에게만. */
 function managerOwnerRows(ownerArgs: Parameters<typeof ownerRows>[0], today: string): ManagerNotif[] {
   const answerable = new Set(
-    answerableQuestions(ownerArgs.queue, ownerArgs.userId ?? '', ownerArgs.suggestions).map((u) => `q_${u.id}`),
+    questionsToAnswer(ownerArgs.queue, ownerArgs.userId ?? '', ownerArgs.suggestions).map((u) => `q_${u.id}`),
   );
   const spaceProposals = new Set(ownerArgs.suggestions.filter((x) => x.kind === 'from_space').map((x) => `s_${x.id}`));
   const mine = new Set((ownerArgs.timeRequests ?? []).filter((t) => t.staff_id === ownerArgs.userId).map((t) => `shift_time_${t.id}`));

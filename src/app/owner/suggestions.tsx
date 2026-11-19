@@ -12,6 +12,7 @@ import { LoadErrorState } from '@/components/LoadErrorState';
 import { BottomSheet } from '@/components/BottomSheet';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
+import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
 import { isPendingSuggestionToReview } from '@/lib/utils/notifications';
 import { SUGGESTION_STATUS_CHIP, SUGGESTION_STATUS_LABEL } from '@/lib/suggestion/labels';
@@ -22,7 +23,7 @@ import { Radius } from '@/lib/theme/elevation';
 import { CardStyles } from '@/lib/theme/card';
 import { EmptyStyles } from '@/lib/theme/empty';
 import { ButtonStyles, ButtonTextStyles } from '@/lib/theme/button';
-import { screenScrollStyle } from '@/lib/theme/layout';
+import { screenScrollStyle, Space } from '@/lib/theme/layout';
 import { Type } from '@/lib/theme/type';
 import type { PlaybookSuggestion } from '@/types';
 
@@ -58,7 +59,21 @@ export default function OwnerSuggestionsScreen() {
   // 검토 대기 = 내가 올린 게 아닌 것만(isPendingSuggestionToReview SSOT — 알림·탭 배지와 같은 술어).
   // 직원이 매니저로 승격되면 승격 전 제안이 자기 결재함으로 넘어와, 자기 제안을 자기가 승인할 수 있었다.
   const me = useSessionStore((s) => s.userId);
-  const pending = useMemo(() => suggestions.filter((s) => isPendingSuggestionToReview(s, me)), [suggestions, me]);
+  // ★C3(0910): 같은 질문(source_uq_id)에 들어온 답은 붙여서 한 묶음으로 보인다. 묶음 순서 = 그 질문의 첫 답이 나온 자리.
+  //   하나를 승인하면 나머지는 서버가 반려한다(0582). 직원 화면은 "다른 답이 승인됐어요"로 읽는다.
+  const pending = useMemo(() => {
+    const list = suggestions.filter((s) => isPendingSuggestionToReview(s, me));
+    const key = (s: PlaybookSuggestion) => s.source_uq_id ?? `one_${s.id}`;
+    const order = new Map<string, number>();
+    list.forEach((s, i) => { if (!order.has(key(s))) order.set(key(s), i); });
+    return list.map((s, i) => ({ s, i })).sort((a, b) => order.get(key(a.s))! - order.get(key(b.s))! || a.i - b.i).map((x) => x.s);
+  }, [suggestions, me]);
+  const groupSize = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of pending) if (s.source_uq_id) m.set(s.source_uq_id, (m.get(s.source_uq_id) ?? 0) + 1);
+    return m;
+  }, [pending]);
+  const queue = useUnknownQueueStore((s) => s.queue);
   const handled = useMemo(
     () => suggestions.filter((s) => s.status !== 'pending').slice(0, 20),
     [suggestions],
@@ -150,9 +165,19 @@ export default function OwnerSuggestionsScreen() {
             {pending.map((s, i) => (
               <View
                 key={s.id}
-                style={s.id === focusSuggestionId ? styles.focusCard : undefined}
+                style={styles.groupItem}
                 onLayout={s.id === focusSuggestionId ? (e) => { focusY.current.card = e.nativeEvent.layout.y; } : undefined}
               >
+              {/* 묶음 머리 — 같은 질문에 답이 둘 넘게 들어왔을 때 첫 카드 위(바탕 위 제목·설명). */}
+              {s.source_uq_id && (groupSize.get(s.source_uq_id) ?? 0) > 1 && pending[i - 1]?.source_uq_id !== s.source_uq_id && (
+                <View style={styles.groupHead}>
+                  <Text style={styles.groupTitle} numberOfLines={2}>
+                    {queue.find((u) => u.id === s.source_uq_id)?.query_text ?? '같은 질문'} · 답 {groupSize.get(s.source_uq_id)}개
+                  </Text>
+                  <Text style={styles.subline}>하나를 승인하면 나머지는 반려돼요</Text>
+                </View>
+              )}
+              <View style={s.id === focusSuggestionId ? styles.focusCard : undefined}>
               <Appear delay={stagger(i + 1)}>
                 {s.kind === 'from_space' ? (
                   <SpaceProposalCard s={s} onApprove={() => reflect(s)} onReject={() => setDeclineFor(s)} />
@@ -160,6 +185,7 @@ export default function OwnerSuggestionsScreen() {
                   <SuggestionCard s={s} onApprove={() => reflect(s)} onReject={() => setDeclineFor(s)} />
                 )}
               </Appear>
+              </View>
               </View>
             ))}
           </View>
@@ -352,6 +378,9 @@ const styles = StyleSheet.create({
 
 
   list: { gap: 12 },
+  groupItem: { gap: Space.sm },
+  groupHead: { gap: Space.xs, marginTop: Space.xs },
+  groupTitle: { ...Type.desc, fontWeight: '800', color: InkColors.ink },
   card: { ...CardStyles.list, gap: 10 },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   kindChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: Radius.pill },

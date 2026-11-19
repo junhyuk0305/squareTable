@@ -252,6 +252,8 @@ export type UnknownQuery = {
   answer_author_id?: string | null;
   /** 승인 대기(서버 계산 칸 uq_in_review · 0520). 이 질문에 대기 중인 답 제안이 있다. 화면은 다시 계산하지 않는다. */
   in_review?: boolean | null;
+  /** 이 질문의 대기 답 제안 수(0910 · 서버 트리거가 센다). 직원은 남의 제안을 못 읽어 이 숫자만 본다. */
+  proposal_count?: number;
 };
 
 // ── RAG 결과 (lib/rag.ts 출력과 호환) ───────────────
