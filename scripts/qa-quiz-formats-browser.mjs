@@ -215,7 +215,8 @@ async function main() {
       // ★ 실패를 삼키지 않는다. 여기서 조용히 넘어가면 다음 문항이 안 떠도 "형태를 못 찾음"으로만 보여
       //   원인이 CTA 인지 렌더러인지 구분이 안 된다(첫 실행에서 실제로 그렇게 헤맸다).
       const last = i === 2;
-      const moved = await tapLabel(last ? '답 제출하기' : '다음 문제').then(() => true).catch(() => false);
+      // 0622226(2026-11-17 조립표 K-3)부터 다음 버튼 이름 = "N번 문제"(linkQuizNav). 옛 "다음 문제"는 없다.
+      const moved = await tapLabel(last ? '답 제출하기' : `${i + 2}번 문제`).then(() => true).catch(() => false);
       check(`[${tag}] ${kind} ${last ? '제출' : '다음 문제'} 버튼이 눌린다`, moved, moved ? '' : 'CTA 못 찾음');
       await page.waitForTimeout(500);
     }
