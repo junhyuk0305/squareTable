@@ -706,7 +706,8 @@ console.log('\n[10-07 결정 4] 허브 "근무 중"도 16시간 기준 · 넘으
   const f = lastDef('owner_today');
   check('★owner_today 가 16시간 기준이고 24시간 기준이 없다 · forgot_now 를 준다', /interval '16 hours'/.test(f.body) && !/interval '24 hours'/.test(f.body) && /forgot_now/.test(f.body), f.file);
   const hub = strip(read('src/components/hub/OwnerStatusView.tsx'));
-  check('★허브 화면이 forgot_now 를 "퇴근 미기록"으로 보여 준다', /forgot_now/.test(hub) && /퇴근 미기록/.test(hub));
+  // 2026-11-19 세션 C(C5): 16시간 넘게 열린 기록은 모든 화면에서 "퇴근 안 찍음"으로 부른다(사용자 결정).
+  check('★허브 화면이 forgot_now 를 "퇴근 안 찍음"으로 보여 준다', /forgot_now/.test(hub) && /퇴근 안 찍음/.test(hub) && !/퇴근 미기록/.test(hub));
   if (!dbUp) console.log('  SKIP 서버 동작 — 로컬 도커 DB 없음');
   else {
     const r = psql(`${IDS}
