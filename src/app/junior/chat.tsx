@@ -11,7 +11,7 @@ import { JuniorAsk } from '@/components/junior/JuniorAsk';
 import { JuniorMySpace } from '@/components/junior/JuniorMySpace';
 
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
-import { useUnknownQueueStore, answerableQuestions } from '@/lib/store/useUnknownQueueStore';
+import { useUnknownQueueStore, questionsToAnswer } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useChatStore } from '@/lib/store/useChatStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -41,11 +41,11 @@ export default function JuniorChatScreen() {
     () => entries.filter((e) => e.status === 'published' || !e.status),
     [entries],
   );
-  // '내 공간' 탭 배지 = 내가 도와줄 수 있는 매장 미답질문 수(SSOT: answerableQuestions).
-  // 제안을 함께 넘겨 "이미 누가 답을 올려 승인 대기 중"인 질문은 배지에서도 빠지게 한다(리스트와 동일 축).
+  // '내 공간' 탭 배지 = 아직 아무도 답하지 않은 매장 질문 수(SSOT: questionsToAnswer · C3 0910).
+  // 답이 들어온 질문은 목록에는 남지만 배지에서는 빠진다(배지 = 내가 할 일).
   const suggestions = useSuggestionStore((s) => s.suggestions);
   const answerableCount = useMemo(
-    () => answerableQuestions(queue, me, suggestions).length,
+    () => questionsToAnswer(queue, me, suggestions).length,
     [queue, me, suggestions],
   );
 

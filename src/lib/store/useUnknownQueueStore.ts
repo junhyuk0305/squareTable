@@ -37,26 +37,32 @@ type UnknownQueueState = {
 
 /**
  * D4(③) 이 직원이 도와줄 수 있는 매장 미답질문 — 대기 중 + 내가 물은 건 제외(내 질문에 내가 안 답함).
- * ★배지 카운트(junior/chat)와 리스트(JuniorMySpace)와 알림 벨의 공용 판정 SSOT — 한 곳만 바뀌어 어긋나지 않게.
- *
- * suggestions 를 주면 **이미 누가 답을 올려 사장 승인을 기다리는 질문**을 뺀다. 안 빼면 B가 답한 뒤에도
- * C·D 화면에 그대로 남아 같은 질문에 여러 명이 헛수고한다(질문 상태는 승인 전까지 pending 그대로라서).
- * 반려되면 그 제안이 pending 을 벗어나므로 질문은 저절로 다시 나타난다 — 되돌리는 코드가 따로 필요 없다.
+ * ★C3(11-19 사용자 결정 · 0910): 누가 먼저 답해도 질문은 목록에 남는다. 여러 직원이 답을 내고 사장이 하나를 승인한다.
+ *   목록(JuniorMySpace)은 이 함수, 배지·벨·"남은 n건"은 questionsToAnswer 다. 둘 다 여기서만 정한다.
  */
-export function answerableQuestions(
-  queue: UnknownQuery[],
-  me: string,
-  suggestions: PlaybookSuggestion[] = [],
-): UnknownQuery[] {
-  const claimed = new Set(
-    suggestions.filter((s) => s.status === 'pending' && s.source_uq_id).map((s) => s.source_uq_id),
-  );
-  return queue.filter(
-    // ★0520 승인 대기 판정은 서버 계산 칸 in_review(uq_in_review) 하나다. 직원은 제안 읽기 정책상 자기 제안만 보여서
-    //   claimed 로만 거르면 제안한 사람 화면에서만 빠지고 다른 직원 목록·배지·벨에 남았다(결함).
-    //   claimed 는 "방금 내가 올린 제안"이 질문 목록을 다시 읽기 전에도 바로 빠지게 남겨 둔다(서버 판정의 부분집합).
-    (u) => u.status === 'pending_owner_answer' && u.junior_id !== me && u.in_review !== true && !claimed.has(u.id),
-  );
+export function answerableQuestions(queue: UnknownQuery[], me: string): UnknownQuery[] {
+  return queue.filter((u) => u.status === 'pending_owner_answer' && u.junior_id !== me);
+}
+
+/** 이 질문에 들어온 대기 답 수. 서버 칸 proposal_count(0910)가 정본이다. 칸이 없는 옛 서버면 승인 대기 여부로 0·1 을 센다. */
+export function answerCountOf(u: UnknownQuery): number {
+  return u.proposal_count ?? (u.in_review === true ? 1 : 0);
+}
+
+/** 내가 낸 대기 답(질문 번호 → 제안). 직원은 자기 제안만 읽는다(ps_select). */
+export function myPendingAnswers(suggestions: PlaybookSuggestion[], me: string): Map<string, PlaybookSuggestion> {
+  const m = new Map<string, PlaybookSuggestion>();
+  for (const s of suggestions) if (s.status === 'pending' && s.source_uq_id && s.proposer_id === me) m.set(s.source_uq_id, s);
+  return m;
+}
+
+/**
+ * 배지·벨·"남은 n건" = 내가 할 일 = 아직 아무도 답하지 않은 질문(11-19 세션 C 결정).
+ * 내 답은 질문 목록을 다시 읽기 전에도 바로 빠지게 내 제안으로도 거른다.
+ */
+export function questionsToAnswer(queue: UnknownQuery[], me: string, suggestions: PlaybookSuggestion[] = []): UnknownQuery[] {
+  const mine = myPendingAnswers(suggestions, me);
+  return answerableQuestions(queue, me).filter((u) => answerCountOf(u) === 0 && !mine.has(u.id));
 }
 
 export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({

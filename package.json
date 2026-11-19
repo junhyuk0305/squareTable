@@ -116,6 +116,7 @@
     "qa:c8-pending": "node scripts/qa-c8-pending.cjs",
     "qa:suggestion-edit": "node scripts/qa-suggestion-edit.mjs --allow-remote",
     "qa:suggestion-edit:local": "node scripts/qa-suggestion-edit.mjs --local",
+    "qa:multi-answer:local": "node scripts/qa-multi-answer.mjs --local",
     "qa:brand-deploy:local": "node scripts/qa-brand-deploy.mjs --local",
     "qa:brand-boundary:local": "node scripts/qa-brand-boundary.mjs --local",
     "qa:knowhow-archive:local": "node scripts/qa-knowhow-archive.mjs --local",

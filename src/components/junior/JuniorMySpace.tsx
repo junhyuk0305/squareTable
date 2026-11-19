@@ -9,7 +9,7 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { Heatmap, type HeatCell, type HeatGroup, type HeatLegend } from '@/components/blocks/Heatmap';
 import { RollupRows, type RollupRow } from '@/components/blocks/RollupRows';
 import { Appear, stagger } from '@/components/Appear';
-import { useUnknownQueueStore, answerableQuestions } from '@/lib/store/useUnknownQueueStore';
+import { useUnknownQueueStore, answerableQuestions, questionsToAnswer, answerCountOf, myPendingAnswers } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useChatStore } from '@/lib/store/useChatStore';
@@ -18,7 +18,8 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { getSectionMeta } from '@/lib/utils/category';
 import { showToast } from '@/lib/store/useToastStore';
 import { searchPlaybook } from '@/lib/rag';
-import { SUGGESTION_STATUS_LABEL } from '@/lib/suggestion/labels';
+import { SUGGESTION_STATUS_LABEL, isOtherAnswerApproved, OTHER_ANSWER_APPROVED } from '@/lib/suggestion/labels';
+import { suggestionErrorMessage } from '@/lib/suggestion/errors';
 import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -67,6 +68,7 @@ export function JuniorMySpace({
   const live = answerGoesLive(useSessionStore((s) => s.role));
   const suggestions = useSuggestionStore((s) => s.suggestions);
   const submitSuggestion = useSuggestionStore((s) => s.submit);
+  const editSuggestion = useSuggestionStore((s) => s.edit);
   const history = useChatStore((s) => s.history);
   const entries = usePlaybookStore((s) => s.entries);
   // 이 뷰가 그리는 원격 소스 넷 — 하나라도 안 왔으면 본문을 마운트하지 않는다.
@@ -95,9 +97,11 @@ export function JuniorMySpace({
   const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
   const publishedEntries = useMemo(() => entries.filter((e) => e.status === 'published'), [entries]);
 
-  // 도와줄 수 있는 질문 — 배지와 동일한 SSOT 판정(answerableQuestions).
-  // 제안을 함께 넘겨 이미 누가 답을 올린(승인 대기) 질문은 빠지게 한다 — 같은 질문 중복 답변 방지.
-  const answerable = useMemo(() => answerableQuestions(queue, me, suggestions), [queue, me, suggestions]);
+  // 도와줄 수 있는 질문(SSOT: answerableQuestions). ★C3(0910): 누가 답해도 목록에 남고 "답 n개"가 붙는다.
+  //   "남은 n건"은 배지와 같은 questionsToAnswer(아직 아무도 답하지 않은 질문)다. 내가 낸 질문은 새로 내지 않고 고친다(0355).
+  const answerable = useMemo(() => answerableQuestions(queue, me), [queue, me]);
+  const leftCount = useMemo(() => questionsToAnswer(queue, me, suggestions).length, [queue, me, suggestions]);
+  const myAnswerFor = useMemo(() => myPendingAnswers(suggestions, me), [suggestions, me]);
   // 제안은 상태 변화가 있는 것(검토 중·반려)을 위로 — 등록된 건 기여 배너가 이미 말해준다.
   const myProposals = useMemo(() => {
     const weight = (st: PlaybookSuggestion['status']) => (st === 'pending' ? 0 : st === 'rejected' ? 1 : 2);
@@ -190,6 +194,11 @@ export function JuniorMySpace({
     const ok = await resolveUq(uqId, entryId);
     if (ok) showToast('답으로 남겼어요 · 다음 사람은 바로 봐요', 'good');
   };
+  const onEditAnswer = async (sugId: string, text: string) => {
+    setAnswerFor(null);
+    const err = await editSuggestion(sugId, text);
+    showToast(err ? suggestionErrorMessage(err) : '답을 고쳤어요', err ? 'warn' : 'good');
+  };
   const onNewAnswer = async (uqId: string, text: string) => {
     setAnswerFor(null);
     if (live) {
@@ -262,22 +271,31 @@ export function JuniorMySpace({
       )}
 
       {/* ① 도와줄 수 있는 질문 (D4). 내보내기 버튼도 이 섹션 안에 둔다. 목록과의 간격(16)이 섹션 간격으로 벌어지지 않게. */}
-      <Section icon="hand-left-outline" title="도와줄 수 있는 질문" hint={answerable.length ? `${answerable.length}건` : undefined}>
+      <Section icon="hand-left-outline" title="도와줄 수 있는 질문" hint={leftCount ? `남은 ${leftCount}건` : undefined}>
         {answerable.length === 0 ? (
           <Text style={s.empty}>지금은 도와줄 질문이 없어요.</Text>
         ) : (
           <View style={s.list}>
-            {answerable.map((u, i) => (
-              <Appear key={u.id} delay={stagger(i)}>
-                <Pressable onPress={() => setAnswerFor(u)} style={({ pressed }) => [s.qCard, pressed && { opacity: 0.85 }]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.qText} numberOfLines={2}>{u.query_text}</Text>
-                    <Text style={s.qMeta}>{u.junior_name}님이 물었어요{u.similar_queries_count > 0 ? ` · 같은 질문 ${u.similar_queries_count + 1}회` : ''}</Text>
-                  </View>
-                  <View style={s.qCta}><Text style={s.qCtaText}>답하기</Text></View>
-                </Pressable>
-              </Appear>
-            ))}
+            {answerable.map((u, i) => {
+              const mine = myAnswerFor.has(u.id);
+              const n = answerCountOf(u);
+              return (
+                <Appear key={u.id} delay={stagger(i)}>
+                  <Pressable onPress={() => setAnswerFor(u)} style={({ pressed }) => [s.qCard, pressed && { opacity: 0.85 }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.qText} numberOfLines={2}>{u.query_text}</Text>
+                      <Text style={s.qMeta}>{u.junior_name}님이 물었어요{u.similar_queries_count > 0 ? ` · 같은 질문 ${u.similar_queries_count + 1}회` : ''}</Text>
+                      {mine ? (
+                        <Text style={[s.qMeta, s.answerTag]}>내 답 보냄</Text>
+                      ) : n > 0 ? (
+                        <Text style={[s.qMeta, s.answerTag]}>답 {n}개 · 사장님 확인 중</Text>
+                      ) : null}
+                    </View>
+                    <View style={s.qCta}><Text style={s.qCtaText}>{mine ? '고치기' : '답하기'}</Text></View>
+                  </Pressable>
+                </Appear>
+              );
+            })}
           </View>
         )}
 
@@ -384,9 +402,11 @@ export function JuniorMySpace({
                         {SUGGESTION_STATUS_LABEL[sug.status]}
                       </Text>
                     </View>
-                    {sug.status === 'rejected' && !!sug.owner_note && (
+                    {isOtherAnswerApproved(sug) ? (
+                      <Text style={s.rejectNote}>{OTHER_ANSWER_APPROVED}</Text>
+                    ) : sug.status === 'rejected' && !!sug.owner_note ? (
                       <Text style={s.rejectNote}>사장님 메모 · {sug.owner_note}</Text>
-                    )}
+                    ) : null}
                   </View>
                 </Appear>
                 </View>
@@ -427,6 +447,8 @@ export function JuniorMySpace({
       {answerFor && (
         <AnswerSheet
           uq={answerFor}
+          myAnswer={myAnswerFor.get(answerFor.id)}
+          onEdit={onEditAnswer}
           entries={publishedEntries}
           onResolve={onResolveWith}
           onNewAnswer={onNewAnswer}
@@ -492,6 +514,8 @@ function buildMyContributionText(args: {
 /** 질문 답하기 시트 — 기존 노하우에서 찾아 지정(즉시 해결) 또는 새로 답 남기기(사장 승인). */
 function AnswerSheet({
   uq,
+  myAnswer,
+  onEdit,
   entries,
   onResolve,
   onNewAnswer,
@@ -499,6 +523,9 @@ function AnswerSheet({
   onClose,
 }: {
   uq: UnknownQuery;
+  /** 내가 이미 낸 대기 답 — 있으면 새로 내지 않고 고친다(0355 suggestion_edit). */
+  myAnswer?: PlaybookSuggestion;
+  onEdit: (sugId: string, text: string) => void;
   entries: PlaybookEntry[];
   onResolve: (uqId: string, entryId: string) => void;
   onNewAnswer: (uqId: string, text: string) => void;
@@ -507,7 +534,7 @@ function AnswerSheet({
   onClose: () => void;
 }) {
   const [q, setQ] = useState('');
-  const [line, setLine] = useState('');
+  const [line, setLine] = useState(myAnswer?.text ?? '');
   const results = useMemo(
     () => (q.trim() ? searchPlaybook(q, entries, { topK: 5, threshold: 0 }).candidates.map((c) => c.entry) : []),
     [q, entries],
@@ -516,12 +543,29 @@ function AnswerSheet({
   return (
     <BottomSheet visible={true} onClose={onClose} sheetStyle={{ height: '82%' }}>
       <View style={s.sheetHead}>
-        <Text style={s.sheetKicker}>이 질문에 답하기</Text>
+        <Text style={s.sheetKicker}>{myAnswer ? '내 답 고치기' : '이 질문에 답하기'}</Text>
         <Pressable onPress={onClose} hitSlop={8}><Ionicons name="close" size={20} color={InkColors.ink2} /></Pressable>
       </View>
       <ScrollView style={s.sheetScroll} contentContainerStyle={{ paddingBottom: 16 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={s.qBox}><Text style={s.qBoxText}>{uq.query_text}</Text></View>
 
+        {myAnswer ? (
+          <>
+            <Text style={s.sheetLabel}>내가 보낸 답</Text>
+            <TextInput value={line} onChangeText={setLine} placeholder="한 줄로 답을 적어주세요" placeholderTextColor={InkColors.ink3} style={[s.inp, s.inpMulti]} multiline />
+            <Text style={s.sheetHint}>사장님이 승인하기 전까지 고칠 수 있어요.</Text>
+            <Pressable
+              onPress={() => onEdit(myAnswer.id, line.trim())}
+              disabled={!line.trim() || line.trim() === myAnswer.text}
+              style={({ pressed }) => [s.cta, (!line.trim() || line.trim() === myAnswer.text) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel="답 고치기"
+            >
+              <Text style={s.ctaText}>답 고치기</Text>
+            </Pressable>
+          </>
+        ) : (
+        <>
         <Text style={s.sheetLabel}>이미 있는 노하우에서 찾기</Text>
         <View style={SearchStyles.box}>
           <Ionicons name="search" size={SEARCH_ICON.size} color={SEARCH_ICON.color} />
@@ -557,6 +601,8 @@ function AnswerSheet({
         >
           <Text style={s.ctaText}>{live ? ANSWER_LIVE.button : '사장님께 답 보내기'}</Text>
         </Pressable>
+        </>
+        )}
       </ScrollView>
     </BottomSheet>
   );
@@ -574,6 +620,8 @@ const s = StyleSheet.create({
   qMeta: { fontSize: 11.5, color: InkColors.ink3, marginTop: 3, fontWeight: '600' },
   qCta: { backgroundColor: InkColors.ink, borderRadius: Radius.pill, paddingHorizontal: 14, paddingVertical: 8 },
   qCtaText: { color: '#fff', fontSize: 12.5, fontWeight: '800' },
+  // 답 꼬리표(C3) — 같은 질문에 들어온 답 수 · 내 답. 상태 표시라 색 배지 대신 굵은 회색 한 줄.
+  answerTag: { color: InkColors.ink2, fontWeight: '800' },
 
 
   exportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 14, paddingVertical: 8, marginBottom: Space.xs },
