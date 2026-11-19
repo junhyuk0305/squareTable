@@ -349,7 +349,7 @@ console.log('\n[E11] 사장이 달력으로 고른 마감 날짜를 모든 직�
     /dueDate: string \| null = null/.test(ins) && /due_date: dueDate/.test(ins), ins.slice(0, 200));
   check('발송 원장을 읽을 때 due_date 도 읽는다', /const QUIZ_ASSIGNMENT_COLS = '[^']*\bdue_date\b[^']*'/.test(db) && /dueDate: r\.due_date \?\? null/.test(db));
   const qn = strip(read('src/app/owner/quiz-new.tsx'));
-  check('★만들기 화면이 달력으로 고른 날짜(dueAt)를 그대로 넘긴다', /insertQuizAssignments\(courseId, to, scheduledOn, dueAt\)/.test(qn));
+  check('★만들기 화면이 달력으로 고른 날짜(dueAt)를 그대로 넘긴다', /insertQuizAssignments\(courseId, to, scheduledOn, dueAt[,)]/.test(qn));
   const board = strip(read('src/lib/quiz/useQuizBoard.ts'));
   check('목록 한 줄의 마감도 고른 날짜를 쓴다', /\.dueDate/.test(board));
   const det = strip(read('src/app/owner/quiz/[id].tsx'));

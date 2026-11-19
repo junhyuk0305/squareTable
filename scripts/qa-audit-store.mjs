@@ -8,6 +8,7 @@
 // 실행: node --no-warnings scripts/qa-audit-store.mjs
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { Buffer } from 'node:buffer';
 
 let pass = 0, fail = 0;
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  PASS', n)) : (fail++, console.log('  FAIL', n, extra)); };
