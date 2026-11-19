@@ -596,7 +596,8 @@ export default function QuizNewScreen() {
       return;
     }
     // 받을 수 없는 사람이 있으면 사실만 덧붙인다(P5 · 0309). 보내기는 이미 됐다 — 막지 않는다.
-    const note = unreachableNote(await fetchRecipientReadiness(unitId, to), { schedule: true });
+    // "지금 바로"로 표시가 선 발송은 근무표를 안 본다(0870) → 근무표 사유를 붙이지 않는다. 예약·실패는 근무 시간에 나가므로 센다.
+    const note = unreachableNote(await fetchRecipientReadiness(unitId, to), { schedule: phase !== 'soon' });
     const head = sendToastLabel(phase, to.length, scheduledOn);
     showToast(note ? `${head} · 그중 ${note}` : head, 'good');
     router.replace(`/owner/quiz/${courseId}` as never);

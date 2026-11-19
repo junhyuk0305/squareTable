@@ -247,7 +247,8 @@ export default function QuizDetailScreen() {
   );
 
   const segItems: SegmentItem[] = [
-    { key: 'people', label: '결과', count: people.length },
+    // 결과 수 = 링 분모와 같은 값(받은 지금 직원 · 2026-11-19 사용자 결정). 나간 직원·발송 전 사람 줄은 기록으로 남지만 세지 않는다.
+    { key: 'people', label: '결과', count: progress.recipients },
     { key: 'items', label: '문항', count: items.length },
     // 2026-09-13: '배포' → '설정'. 이름·주기·마감을 고치는 자리가 더보기(⋯) 속 시트였고, 받는 사람을
     // 고치는 자리는 아무 데도 없었다. 고치는 일을 여기 한 탭으로 모으고, 배포는 그 안의 한 섹션이 된다
