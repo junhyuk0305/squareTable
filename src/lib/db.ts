@@ -3172,8 +3172,11 @@ export async function fetchQuizCourseStats(strict = false): Promise<Record<strin
   return out;
 }
 
-/** 아직 안 나간 이유(0274) — 근무표에 없음 · 연속 2회 안 열어 자동 정지. 이유가 없는 사람은 맵에 없다. */
-export type QuizSendBlock = 'not_scheduled' | 'auto_stopped';
+/**
+ * 보낼 시각이 지났는데 아직 안 나간 이유(0871 quiz_send_status · 판정 = 서버 quiz_send_block 하나). 이유가 없는 사람은 맵에 없다.
+ * seat_locked = 무료 인원을 넘어 잠김 · due_passed = 마감 지남 · quiet = 그 매장 방해금지 시간 · store_locked = 매장 이용 멈춤.
+ */
+export type QuizSendBlock = 'seat_locked' | 'due_passed' | 'quiet' | 'store_locked';
 export async function fetchQuizSendStatus(courseId: string, strict = false): Promise<Record<string, QuizSendBlock>> {
   if (!HAS_SUPABASE || !courseId) return {};
   const { data, error } = await supabase.rpc('quiz_send_status', { p_course_id: courseId });
@@ -3188,7 +3191,7 @@ export async function fetchQuizSendStatus(courseId: string, strict = false): Pro
 }
 
 /**
- * 받는 사람이 지금 알림을 받을 수 있는 상태인가(0309 · 패턴 P5) — 기기 · 알림 설정 · 근무표 · 주 2회 상한.
+ * 받는 사람이 지금 알림을 받을 수 있는 상태인가(0309 · 패턴 P5) — 기기 · 알림 설정. 근무표·주 2회는 0871 에서 빠졌다.
  * 보내는 쪽이 전제를 말하는 데만 쓴다. 보내기를 막지 않는다.
  * ★RPC 가 아직 없는 서버(push 전 · PGRST202)는 **여기서만** 조용히 빈 배열 — 안내만 안 뜨고 기능은 그대로다.
  */
@@ -3207,9 +3210,7 @@ export async function fetchRecipientReadiness(
     userId: String(r.user_id),
     hasDevice: !!r.has_device,
     pushOn: !!r.push_on,
-    onSchedule: !!r.on_schedule,
     blockedReason: (r.blocked_reason as RecipientReadinessRow['blockedReason']) ?? null,
-    weeklyQuotaLeft: Number(r.weekly_quota_left ?? 0),
   }));
 }
 
@@ -3413,7 +3414,8 @@ export async function fetchMyGuestQuizHistory(): Promise<MyGuestQuizRow[]> {
 //   앱이 쓰면 빈도 상한 판정의 근거가 화면에서 흔들린다.
 // ★count_from(0348)은 서버가 정한다(발송 트리거 · quiz_assignment_restart). 이 열을 읽으려면 0348 이 먼저 라이브에 있어야 한다.
 // ★send_now(0870)도 서버가 정한다(quiz_send_now). 이 열을 읽으려면 0870 이 먼저 라이브에 있어야 한다.
-const QUIZ_ASSIGNMENT_COLS = 'id, course_id, user_id, scheduled_on, sent_at, due_on, due_date, opened_at, completed_at, origin, count_from, send_now';
+// ★send_at(0871)은 사장이 고른 보낼 시각이다. 앱이 만들 때 넣는다. 이 열을 읽으려면 0871 이 먼저 라이브에 있어야 한다.
+const QUIZ_ASSIGNMENT_COLS = 'id, course_id, user_id, scheduled_on, sent_at, due_on, due_date, opened_at, completed_at, origin, count_from, send_now, send_at';
 
 const toAssignment = (r: any): QuizAssignment => ({
   id: r.id,
@@ -3428,6 +3430,7 @@ const toAssignment = (r: any): QuizAssignment => ({
   origin: r.origin ?? 'manual',
   countFrom: r.count_from ?? null,
   sendNow: r.send_now === true,
+  sendAt: r.send_at ?? null,
 });
 
 /** 활성 매장의 발송 원장 — 관리 권한은 전체, 직원은 본인 것만(RLS qz_select). */
@@ -3452,12 +3455,16 @@ export async function fetchQuizAssignments(strict = false): Promise<QuizAssignme
  * 발행 — 고른 직원 수만큼 행을 만든다. 이미 같은 (퀴즈, 사람, 예약일) 행이 있으면 그대로 둔다
  * (발행을 두 번 눌러도 두 번 안 간다 — unique 제약이 잠금이다).
  * dueDate = 사장이 달력으로 고른 마감 날짜(0291 · E11). 있으면 늦게 받은 사람도 같은 날짜가 마감이다.
+ * sendAt = 보낼 시각(0871 · ISO · scheduledOn 그날 안의 시각). null 이면 서버가 그날 09:00 KST 로 본다.
+ * sendNow = "지금 바로"(0870 send_now). 서버가 행을 만든 시각(서버 시계)부터 보낸다. 기기 시계를 보낼 시각에 싣지 않으려는 것이다(검토 지적 · 2026-11-19).
  */
 export async function insertQuizAssignments(
   courseId: string,
   userIds: string[],
   scheduledOn: string,
   dueDate: string | null = null,
+  sendAt: string | null = null,
+  sendNow = false,
 ): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   if (userIds.length === 0) return true;
@@ -3470,6 +3477,8 @@ export async function insertQuizAssignments(
         user_id: uid,
         scheduled_on: scheduledOn,
         due_date: dueDate,
+        send_at: sendAt,
+        ...(sendNow ? { send_now: true } : {}),
       })),
       { onConflict: 'course_id,user_id,scheduled_on', ignoreDuplicates: true },
     )
@@ -3603,7 +3612,7 @@ export async function resendQuiz(courseId: string, userIds: string[]): Promise<D
 
 /**
  * 지금 바로 보내기(0870 quiz_send_now). 이 퀴즈의 오늘 이하 미발송 행에 표시를 세우고 스윕을 한 번 앞당긴다.
- * 표시가 있는 행은 근무 시간·하루 1회·7일 2회를 건너뛴다. 다 푼 사람·나간 직원·좌석 잠김·자동 정지는 서버가 그대로 거른다.
+ * 보낼 시각이 지금보다 뒤인 행(send_at)은 건드리지 않는다(0871). 다 푼 사람·나간 직원·좌석 잠김·방해금지는 서버가 거른다.
  * 반환 = 표시가 있고 아직 안 나간 행 수. 두 번 불러도 한 번만 간다(서버).
  * 오류 코드 = invalid_argument · forbidden · quiz_not_found · quiz_no_items. 원문은 화면에 내지 않는다(quizErrorMessage).
  */

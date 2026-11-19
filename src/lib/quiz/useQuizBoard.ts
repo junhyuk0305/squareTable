@@ -35,6 +35,7 @@ import {
   answersStat,
   quizState,
   sendPhaseLabel,
+  nextSendAt,
   staffProgress,
   type QuizState,
   type StaffProgress,
@@ -436,7 +437,7 @@ export function useQuizBoard() {
         // "지금 바로"로 보냈고 아직 아무도 안 받았다(B1 · 판정 = metrics.sendPhase).
         caption = sendPhaseLabel('soon');
       } else if (status === 'scheduled') {
-        caption = sendPhaseLabel('waiting', c.start_at);
+        caption = sendPhaseLabel('waiting', nextSendAt(sends, now));
       } else {
         // 가장 최근 발송일. sentAt 은 timestamptz 라 앞 10자가 UTC 날짜다 → 한국 날짜로 옮겨 읽는다.
         const lastRow = [...sent].sort((x, y) => (x.sentAt as string).localeCompare(y.sentAt as string)).at(-1) as QuizAssignment;

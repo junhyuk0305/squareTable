@@ -39,6 +39,8 @@ export function quizNewDock(v: {
   busy: boolean;
   /** 1단계를 그릴 재료(노하우·퀴즈 판)가 다 왔는가. 안 왔으면 1단계 버튼을 누를 수 없다. */
   ready: boolean;
+  /** 예약 시각 형식이 맞나(0871). 없으면 맞다고 본다. 예약인데 틀리면 예약 버튼을 막는다. */
+  timeOk?: boolean;
 }): QuizNewDock | null {
   const guest = v.audience === 'guest';
   switch (v.step) {
@@ -56,7 +58,7 @@ export function quizNewDock(v: {
       const label = v.busy
         ? guest ? '링크 만드는 중…' : '보내는 중…'
         : guest ? '링크 만들기' : v.sendNow ? `${v.to}명에게 보내기` : `${v.to}명에게 예약하기`;
-      return { kind: 'publish', label, disabled: v.busy || (!guest && v.to === 0) };
+      return { kind: 'publish', label, disabled: v.busy || (!guest && v.to === 0) || (!guest && !v.sendNow && v.timeOk === false) };
     }
     case 6:
       return { kind: 'copy' };

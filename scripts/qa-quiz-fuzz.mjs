@@ -10,7 +10,8 @@
 //                사장 세션 quiz_resend 를 부른다(0348 뒤 · 2026-11-12 에 맞춤). 판정 함수(latestQuizAssignments·personState·isCurrentStaff·doneBefore)는
 //                src 에서 AST 로 뽑아 vm 으로 돌린다(복제 금지). 화면 안의 분기 몇 줄은 원문 표식을 정규식으로 확인한 뒤 옮겨 적었다.
 //   tick         service_role due_quiz_sends() → 행마다 claim_quiz_send (supabase/functions/push/index.ts sweepQuizSends 순서 · deliver 는 안 부른다)
-//                ★이 매장 행만 선점한다. due_quiz_sends 는 전역이라 다른 로컬 매장 행도 돌려주지만 손대지 않는다(enqueue_knowhow_rechecks 는 전역으로 돈다).
+//                ★이 매장 행만 선점한다. due_quiz_sends 는 전역이라 다른 로컬 매장 행도 돌려주지만 손대지 않는다.
+//                ★0871: due_quiz_sends 는 재확인 큐(enqueue_knowhow_rechecks)를 더 돌지 않는다 · 한 사람의 여러 행이 한 틱에 같이 나온다.
 //   advance_day  서버 시계를 못 바꾸므로 이 매장 행의 시각을 하루 당긴다(psql · 로컬 전용). 근사의 한계는 보고서 참고.
 //   staff_open / staff_answer / staff_complete — 직원 세션 mark_quiz_opened · quiz_staff_record_v2(db.ts recordStaffQuizAttempt) · mark_quiz_completed
 //   owner_archive / owner_restore — training_courses.active
@@ -390,8 +391,8 @@ async function main() {
     { t: 'staff_answer', s: 'A', c: 0, i: 0, ok: true }, { t: 'staff_answer', s: 'A', c: 0, i: 1, ok: true },
     { t: 'staff_complete', s: 'A', c: 0 }, { t: 'advance_day' }, { t: 'tick' }];
   const F = await freshRun(fixed, {});
-  // quiz_resend 사람별 결과(0348): sent = 바로 나감 · queued = 줄에 섬. 둘 다 다시 알리기가 선 것이다.
-  const remindMade = Array.isArray(F.log[2]?.out?.resend) && F.log[2].out.resend.some((r) => r.result === 'sent' || r.result === 'queued');
+  // quiz_resend 사람별 결과(0348): sent = 바로 나감. ★0871: 7일 상한이 없어 queued(줄에 섬)는 더 나오지 않는다.
+  const remindMade = Array.isArray(F.log[2]?.out?.resend) && F.log[2].out.resend.some((r) => r.result === 'sent');
   const completed = (F.log[5]?.out?.r ?? []).includes(true);
   result.fixed = { actions: fixed.map(fmt), log: F.log, violations: F.violations };
   if (!remindMade || !completed) { skip++; console.log('  - 고정 시나리오 셋업이 안 섰다(skip)', JSON.stringify({ remindMade, completed })); }

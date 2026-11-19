@@ -22,6 +22,7 @@ import {
   roundLabel,
   sendPhase,
   sendPhaseLabel,
+  nextSendAt,
   staffProgress,
 } from '@/lib/quiz/metrics';
 import { useStaffStore } from '@/lib/store/useStaffStore';
@@ -362,7 +363,7 @@ export default function QuizDetailScreen() {
 
   /**
    * 아직 안 푼 사람에게 지금 다시 알린다(0348 quiz_resend · 2026-11-03 사용자 결정).
-   * 어떤 행을 쓰고 언제 나가는지는 전부 서버가 정한다(10분 쿨다운 · 7일 2회 상한 · 줄에 선 행 재사용 · 날짜 · 마감).
+   * 어떤 행을 쓰고 언제 나가는지는 전부 서버가 정한다(1분 쿨다운 · 줄에 선 행 재사용 · 날짜 · 마감 · 0871).
    * 화면은 사람별 결과를 metrics.resendResultLabel 로 말하기만 한다.
    * ★예전(옛 앱)은 여기서 행을 직접 넣었고 오늘 행이 있으면 내일로 잡아 다음 날 나갔다(2026-10-15 QA #6 의 날짜 규칙은 서버로 옮겼다).
    */
@@ -473,7 +474,7 @@ export default function QuizDetailScreen() {
               />
             ) : (
               <EmptyState
-                title={sendPhaseLabel(phase, course.start_at)}
+                title={sendPhaseLabel(phase, nextSendAt(sends, now))}
                 body="직원이 받으면 여기에 결과가 보여요."
               />
             )

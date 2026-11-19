@@ -55,7 +55,11 @@ const FN_TOKENS = {
   transfer_shift: ['valid_from', 'shift_exceptions', 'archived_tenure_id'],
   approve_swap: ['p_confirm_past', 'kst_today() - 35', 'transfer_shift', 'auth_can_manage', 'archived_tenure_id'],
   // 0327·0332 — 보관·본사 숨김 필터는 quiz_course_servable 안(quiz_course_live)으로 옮겼다. 발송은 그것을 부른다.
-  due_quiz_sends: ['valid_to', 'workers_at', 'public.quiz_course_servable(qa.unit_id, qa.course_id)'],
+  // ★0871: 근무 판정(workers_at · valid_to)을 지웠다(2026-11-19 사용자 결정). 판정은 quiz_send_block 한 곳으로 갔다.
+  due_quiz_sends: ['public.quiz_send_block(qa, v_now) is null'],
+  quiz_send_block: ['public.quiz_course_servable(a.unit_id, a.course_id)', 'public.unit_access_locked(a.unit_id)', 'u.deleted_at is null',
+    'public.quiz_recipient_is_member(a.unit_id, a.user_id)', 'public.quiz_course_done_by(a.unit_id, a.course_id, a.user_id)',
+    'public.seat_locked_for(a.unit_id, a.user_id)', "a.origin = 'recheck'"],
   // P4-2 0243(J2) — 나누기가 요청을 안 옮기면 지난 날짜 요청이 엉뚱한 구간에 붙는다(데이터 H6). 승인은 사장만(J2 원문).
   copy_past_segment: ['shift_exceptions', 'swap_requests', 'shift_change_requests'],
   request_shift_time: ['valid_from', 'shift_exceptions', 'kst_today() - 35', 'kst_today() + 60', 'auth.uid()', 'archived_tenure_id'],
@@ -254,7 +258,7 @@ console.log('\n[4] 0246 정의자 함수 전수 — 대상 표를 읽는데 표�
     split_shift_at: '내부 헬퍼 — edit_shift_from 이 표시 확인 뒤에 부른다',
     add_shift_series: '새 행만 넣는다 · 담당자는 지금 멤버',
     shift_series_guard: '옛 앱 직접 쓰기(authenticated) 트리거 — RLS 가 표시된 행을 이미 막는다',
-    due_quiz_sends: '0248 담당 · 근무 판정은 workers_at(표시 조건 있음) · "근무표를 쓰는 매장" 판정은 닫힌 행 제외로 충분',
+    due_quiz_sends: '0248 담당 · ★0871 에 근무 판정이 빠져 대상 표를 더 읽지 않는다(옛 정의로 되돌릴 때를 위해 남김)',
     accept_swap: "표시된 교대는 모두 끝난 상태다(정리 함수가 open·accepted 를 지우거나 되돌린다) · status = 'open' 만 받는다",
     purge_old_records: '보관 기한 삭제 — 표시와 무관하게 나이로 지운다',
     purge_retention_global: '보관 기한 삭제 — 표시와 무관하게 나이로 지운다',

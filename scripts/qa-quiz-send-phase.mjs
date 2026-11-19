@@ -30,9 +30,22 @@ check('한 명이라도 나가면 sent "보냈어요"', () => {
   assert.equal(m.sendPhase([row({ sendNow: true }), row({ userId: 'b', sendNow: true, sentAt: '2026-11-19T00:01:00Z' })], NOW), 'sent');
   assert.equal(m.sendPhaseLabel('sent'), '보냈어요');
 });
-check('예약(표시 없음) = waiting · 예약일 문구는 지금 그대로', () => {
+check('예약(표시 없음) = waiting · 보낼 시각 문구(0871)', () => {
   assert.equal(m.sendPhase([row({ scheduledOn: '2026-11-21' })], NOW), 'waiting');
-  assert.equal(m.sendPhaseLabel('waiting', '2026-11-21'), '11월 21일에 보내요');
+  // 시간 없는 행 = 예약일 09:00 KST(00:00 UTC).
+  assert.equal(m.nextSendAt([row({ scheduledOn: '2026-11-21' })], NOW), '2026-11-21T00:00:00.000Z');
+  assert.equal(m.sendPhaseLabel('waiting', '2026-11-21T00:00:00.000Z'), '11월 21일 오전 9시에 보내요');
+  assert.equal(m.sendPhaseLabel('waiting', '2026-11-21T06:30:00.000Z'), '11월 21일 오후 3시 30분에 보내요');
+  assert.equal(m.sendPhaseLabel('waiting', null), '아직 안 나갔어요');
+});
+check('send_at(0871): 오늘 안의 나중 시각 = waiting · 지난 시각 = soon', () => {
+  assert.equal(m.sendPhase([row({ sendAt: '2026-11-19T06:00:00Z' })], NOW), 'waiting');
+  assert.equal(m.sendPhase([row({ sendAt: '2026-11-18T23:59:00Z' })], NOW), 'soon');
+  assert.equal(m.nextSendAt([row({ sendAt: '2026-11-19T06:00:00Z' }), row({ userId: 'b', sentAt: 'x', sendAt: '2026-11-19T01:00:00Z' })], NOW), '2026-11-19T06:00:00.000Z', '나간 행은 안 본다');
+});
+check('시간 없는 오늘 행: 09:00 전 = waiting · 09:00 = soon', () => {
+  assert.equal(m.sendPhase([row({})], NOW - 60_000), 'waiting');
+  assert.equal(m.sendPhase([row({})], NOW), 'soon');
 });
 check('옛 앱·옛 서버 행(sendNow 없음) = waiting', () => {
   assert.equal(m.sendPhase([{ userId: 'a', sentAt: null, completedAt: null }], NOW), 'waiting');
@@ -47,11 +60,11 @@ check('목록 상태: soon = queued "곧 발송" · sent = sending', () => {
   assert.equal(m.quizState({ active: true, start_at: '2026-11-19' }, [row({ sendNow: true })], [], NOW), 'queued');
   assert.equal(m.QUIZ_STATE_LABEL.queued, '곧 발송');
   assert.equal(m.quizState({ active: true, start_at: '2026-11-19' }, [row({ sentAt: 'x' })], [], NOW), 'sending');
-  assert.equal(m.quizState({ active: true, start_at: '2026-11-19' }, [row({})], [], NOW), 'scheduled', '바로 보내기 실패 = 예약 문구');
+  assert.equal(m.quizState({ active: true, start_at: '2026-11-19' }, [row({})], [], NOW - 60_000), 'scheduled', '09:00 전 = 예약 문구');
 });
 check('토스트 머리 = 같은 판정', () => {
   assert.equal(m.sendToastLabel('soon', 3, '2026-11-19'), '3명에게 5분 안에 가요');
-  assert.equal(m.sendToastLabel('waiting', 3, '2026-11-21'), '11월 21일에 보내요');
+  assert.equal(m.sendToastLabel('waiting', 3, '2026-11-21T06:00:00Z'), '11월 21일 오후 3시에 보내요');
 });
 check('결과 칸: 보낸 행이 있으면 비어도 none 이 아니다', () => {
   const sends = [row({ sendNow: true })];

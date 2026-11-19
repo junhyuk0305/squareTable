@@ -28,6 +28,7 @@ import {
   updateQuizAssignmentsDue,
 } from '@/lib/db';
 import { todayKst, addDaysKst, daysBetweenKst } from '@/lib/quiz/schedule';
+import { nextSendAt, sendAtLabel } from '@/lib/quiz/metrics';
 import { SectionLabel } from '@/components/SectionLabel';
 import { MiniCalendar } from '@/components/blocks/MiniCalendar';
 import { QuizDeployPanel } from '@/components/owner/quiz/QuizDeployPanel';
@@ -142,10 +143,13 @@ export function QuizSettingsPanel({
         ok = await guardWrite(updateQuizAssignmentsDue(course.id, dueDate), () => {}, '마감을 바꾸지 못했어요.');
       }
     }
+    // 새로 넣은 사람이 받을 시각(0871 send_at). 아직 안 나간 예약이 있으면 그 시각 · 없으면 지금(다음 스윕 5분).
+    const laterAt = nextSendAt(sends, Date.now());
     if (ok && peopleChanged) {
       if (added.length > 0) {
+        const on = laterAt ? new Date(Date.parse(laterAt) + 9 * 3600_000).toISOString().slice(0, 10) : todayKst();
         ok = await guardWrite(
-          insertQuizAssignments(course.id, added, todayKst()),
+          insertQuizAssignments(course.id, added, on, null, laterAt ?? new Date().toISOString()),
           () => {},
           '받는 사람을 추가하지 못했어요.',
         );
@@ -164,7 +168,7 @@ export function QuizSettingsPanel({
     // 무엇이 일어났는지 그대로 말한다 — "저장했어요"만 뜨면 사람이 늘었는지 모른다.
     showToast(
       added.length > 0
-        ? `${added.length}명에게 근무 시간에 맞춰 보낼게요`
+        ? `${added.length}명에게 ${laterAt ? `${sendAtLabel(laterAt)}에 보내요` : '5분 안에 가요'}`
         : removed.length > 0
           ? '아직 안 나간 배정을 취소했어요'
           : '저장했어요',
@@ -284,7 +288,7 @@ export function QuizSettingsPanel({
         <View style={s.card}>
           <Text style={qst.fieldLabel}>받는 사람</Text>
           <Text style={qst.fieldHint}>
-            체크하고 저장하면 근무 시간에 맞춰 나가요. 이미 받은 사람은 뺄 수 없어요.
+            저장하면 5분 안에 가요. 예약한 퀴즈는 그 시각에 가요. 이미 받은 사람은 뺄 수 없어요.
           </Text>
           {staff.length === 0 ? (
             <Text style={s.emptyText}>아직 합류한 직원이 없어요.</Text>

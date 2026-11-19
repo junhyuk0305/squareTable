@@ -40,6 +40,7 @@ import { FORMATS } from '@/lib/quiz/formats';
 import { COPY_LINK_LABEL, copyLinkToast, copyQuizLink, makeQuizToken, quizLinkUrl } from '@/lib/quiz/link';
 // KST 날짜 도구는 일정 SSOT 하나만 쓴다 — 이 파일·상세·설정 패널에 복붙돼 있던 것을 걷었다.
 import { todayKst, addDaysKst as addDays, daysBetweenKst as daysBetween } from '@/lib/quiz/schedule';
+import { maskHHMM } from '@/lib/utils/attendance';
 import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
 import { QuizEditorSheet } from '@/components/owner/quiz/QuizEditorSheet';
@@ -68,7 +69,7 @@ const TOTAL = 5;
 
 /**
  * 받는 쪽 — 1단계에서 고른다. 이 값이 4·5단계의 내용을 가른다.
- *  · staff = 우리 직원. 받는 사람을 고르고 근무 시간에 맞춰 나간다(0139 빈도 상한).
+ *  · staff = 우리 직원. 받는 사람을 고르고 지금 바로 또는 고른 날짜·시각에 나간다(0871).
  *  · guest = 외부 사람(지원자·단기). 보낼 계정이 없으니 **링크**가 나가고, 마지막에 주소를 준다.
  * ★코스 행에 이 값을 저장하지 않는다 — 링크가 있으면 외부, 발송원장이 있으면 내부다(이미 있는 사실).
  */
@@ -103,8 +104,7 @@ type Made = { entryId: string; title: string; item: QuizItem | null; formatLabel
  * ★ 사장에게 문항 형태를 고르게 하지 않는다. `generateQuizItems` 가 `detectKinds` 로 판정해
  *   자동으로 정하고, 사장은 3단계에서 **검토만** 한다. 11종을 늘어놓는 순간 "노하우만 고르면 끝"이라는
  *   강점이 사라진다(직접 쓰기에서만 쉬운 형태를 노출한다 — QuizEditorSheet startMode='manual').
- * ★ 5단계에서 **요일·시각을 묻지 않는다.** 물으면 사장이 빈도 상한(근무일에만·하루 1회·주 2회)을
- *   깨게 된다 — 도착 시각은 근무표가 정한다(0139 due_quiz_sends).
+ * ★ 5단계에서 예약 날짜와 시각을 묻는다(0871 · 2026-11-19 사용자 결정). 빈도 상한(근무일에만·하루 1회·주 2회)은 없앴다.
  * ★ 재확인 간격(3일→2주→8주→6개월)도 설명하지 않는다. 설명하면 설정처럼 보인다.
  *
  * 퀴즈(코스) 행은 **1단계를 넘길 때 만들어진다** — 중간에 나가도 초안으로 남는다(A2 '초안' 알약).
@@ -167,6 +167,8 @@ export default function QuizNewScreen() {
   // 5단계 — 날짜는 전부 "YYYY-MM-DD"(KST). 칩으로 며칠 뒤를 제시하지 않고 달력에서 고른다.
   const [sendNow, setSendNow] = useState(true);
   const [startAt, setStartAt] = useState<string>(() => addDays(todayKst(), 1));
+  /** 예약 시각 "HH:MM"(KST · 0871 send_at). 처음 값 09:00(2026-11-19 사용자 결정). */
+  const [sendTime, setSendTime] = useState('09:00');
   /** 마감일. null = 마감 없이 열어 둔다. */
   const [dueAt, setDueAt] = useState<string | null>(() => addDays(todayKst(), DEADLINE_DEFAULT_DAYS));
   /** 외부용 — 링크를 이 날까지 연다. 게스트에게는 이 날이 곧 마감이라 날짜가 하나뿐이다. */
@@ -430,6 +432,8 @@ export default function QuizNewScreen() {
   const today = useToday();
   /** 실제로 나가는 날. 마감일 달력의 하한이 이것이다(마감이 발송보다 빠를 수 없다). */
   const sendOn = sendNow ? today : startAt;
+  /** 예약 시각 형식이 맞나. 틀리면 예약 버튼을 막는다. */
+  const sendTimeOk = /^([01]\d|2[0-3]):[0-5]\d$/.test(sendTime);
 
   /**
    * 1단계를 그릴 준비가 됐는가 — 노하우·파트가 전부 도착한 뒤에만 그린다.
@@ -569,36 +573,33 @@ export default function QuizNewScreen() {
       return;
     }
 
+    // 보낼 시각(0871 send_at). 예약 = 고른 날의 고른 시각(KST). 지금 바로 = 시각 없이 send_now 로 넣는다 →
+    //   서버가 행을 만든 시각(서버 시계)부터 보낸다. 기기 시계가 앞서도 늦어지지 않는다(검토 지적 · 2026-11-19).
+    const sendAt = sendNow ? null : new Date(`${scheduledOn}T${sendTime}:00+09:00`).toISOString();
     const sent = await guardWrite(
-      insertQuizAssignments(courseId, to, scheduledOn, dueAt),
+      insertQuizAssignments(courseId, to, scheduledOn, dueAt, sendAt, sendNow),
       () => {},
       '보내기에 실패했어요.',
     );
     if (!sent) { setBusy(false); return; }
     /*
      * "지금 바로"(B1 · 2026-11-19) — 행을 넣은 뒤 서버에 바로 보내 달라고 한다(0870 quiz_send_now).
-     * 서버가 이 행에 표시를 세우고 근무·하루·주 규칙 없이 5분 안에 보낸다. 실패해도 행은 이미 있어 평소 규칙으로 나간다.
+     * 행은 이미 send_now 로 들어갔다. 이 호출은 같은 날 먼저 있던 행에도 표시를 세우고 스윕을 앞당긴다. 실패해도 다음 스윕(5분)에 나간다.
      * 토스트는 목록·상세와 같은 판정(metrics.sendPhase)으로 말한다. 방금 넣은 행은 아직 sent_at 이 없다.
      */
     let nowErr: Parameters<typeof quizSendNowErrorMessage>[0] = null;
-    // 서버가 표시를 세운 행 수. 0 이면 바로 갈 행이 없다 → "5분 안에"라고 말하지 않는다(검토 지적 · 2026-11-19).
-    let nowFlagged = 0;
-    if (sendNow) {
-      const r = await sendQuizNow(courseId);
-      nowErr = r.error;
-      nowFlagged = r.data ?? 0;
-    }
+    if (sendNow) nowErr = (await sendQuizNow(courseId)).error;
     setBusy(false);
-    const phase = sendPhase(to.map((userId) => ({ userId, sentAt: null, completedAt: null, sendNow: sendNow && !nowErr && nowFlagged > 0, scheduledOn })), Date.now());
+    // 지금 바로 행은 넣을 때 send_now 로 섰다 → 스윕 앞당기기가 실패해도 soon 이다.
+    const phase = sendPhase(to.map((userId) => ({ userId, sentAt: null, completedAt: null, sendNow, scheduledOn, sendAt })), Date.now());
     if (nowErr) {
       showToast(quizSendNowErrorMessage(nowErr));
       router.replace(`/owner/quiz/${courseId}` as never);
       return;
     }
     // 받을 수 없는 사람이 있으면 사실만 덧붙인다(P5 · 0309). 보내기는 이미 됐다 — 막지 않는다.
-    // "지금 바로"로 표시가 선 발송은 근무표를 안 본다(0870) → 근무표 사유를 붙이지 않는다. 예약·실패는 근무 시간에 나가므로 센다.
-    const note = unreachableNote(await fetchRecipientReadiness(unitId, to), { schedule: phase !== 'soon' });
-    const head = sendToastLabel(phase, to.length, scheduledOn);
+    const note = unreachableNote(await fetchRecipientReadiness(unitId, to));
+    const head = sendToastLabel(phase, to.length, sendAt);
     showToast(note ? `${head} · 그중 ${note}` : head, 'good');
     router.replace(`/owner/quiz/${courseId}` as never);
   };
@@ -625,7 +626,7 @@ export default function QuizNewScreen() {
   /** 맨 아래 고정 노란 버튼 하나. 이름 = 다음 단계 이름(quizNewDock). */
   const dock = step === 6 && !madeToken
     ? null
-    : quizNewDock({ step, audience, picked: picked.length, okItems: okItems.length, to: to.length, sendNow, busy, ready: step1Ready });
+    : quizNewDock({ step, audience, picked: picked.length, okItems: okItems.length, to: to.length, sendNow, busy, ready: step1Ready, timeOk: sendTimeOk });
   const onDock = () => {
     if (!dock) return;
     if (dock.kind === 'go') setStep(dock.to);
@@ -1098,6 +1099,19 @@ export default function QuizNewScreen() {
                         setDueAt((cur) => (cur && cur < d ? addDays(d, DEADLINE_DEFAULT_DAYS) : cur));
                       }}
                     />
+                    <Text style={st.label}>보낼 시각</Text>
+                    <TextInput
+                      value={sendTime}
+                      onChangeText={(t) => setSendTime(maskHHMM(t))}
+                      keyboardType="number-pad"
+                      maxLength={5}
+                      placeholder="09:00"
+                      placeholderTextColor={InkColors.ink3}
+                      accessibilityLabel="보낼 시각"
+                      maxFontSizeMultiplier={1.2}
+                      style={[st.input, !sendTimeOk && st.inputBad]}
+                    />
+                    <Text style={st.hint}>{sendTimeOk ? '24시간제로 적어요. 예) 15:30' : '시각을 09:00처럼 적어 주세요'}</Text>
                   </Collapse>
                 )}
                 </View>
@@ -1136,8 +1150,7 @@ export default function QuizNewScreen() {
               </>
             )}
 
-            {/* 2026-09-11: "근무일에만 · 하루 1번 · 주 2번까지만 보내요" 줄을 뺐다. 사장이 **할 수 있는
-                일이 없는** 문장이라 읽고 나서 다음 행동이 없었다(빈도 상한은 0139 가 알아서 지킨다). */}
+            {/* 2026-09-11: "근무일에만 · 하루 1번 · 주 2번까지만 보내요" 줄을 뺐다. 2026-11-19(0871): 그 상한 자체를 지웠다. */}
             </View>
           </Appear>
         )}
@@ -1292,6 +1305,7 @@ const st = StyleSheet.create({
     paddingHorizontal: Space.md, minHeight: 48, ...Type.body, fontWeight: '700',
     backgroundColor: InkColors.bg,
   },
+  inputBad: { borderColor: BrandColors.bad },
 
   listCard: CardStyles.rows,
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 56, paddingVertical: Space.sm },

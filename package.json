@@ -106,6 +106,7 @@
     "qa:quiz-resend:local": "node scripts/qa-quiz-resend.mjs --local",
     "qa:quiz-send-now": "node scripts/qa-quiz-send-now.mjs --allow-remote",
     "qa:quiz-send-now:local": "node scripts/qa-quiz-send-now.mjs --local",
+    "qa:quiz-send-rules:local": "node scripts/qa-quiz-send-rules.mjs --local",
     "qa:quiz-fuzz:local": "node scripts/qa-quiz-fuzz.mjs --local",
     "qa:quiz-understanding-race:local": "node scripts/qa-quiz-understanding-race.mjs",
     "qa:quiz-progress": "node scripts/qa-quiz-progress.mjs",
