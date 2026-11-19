@@ -148,6 +148,7 @@
     "qa:notif-axis": "node --no-warnings scripts/qa-notif-axis.mjs",
     "qa:notif-ack": "node scripts/qa-notif-ack.mjs --allow-remote",
     "qa:notif-read": "node scripts/qa-notif-read.mjs --local",
+    "qa:bell-realtime": "node scripts/qa-bell-realtime.mjs --local",
     "qa:affected": "node scripts/qa-affected.mjs",
     "qa:core": "node scripts/qa-journey-join.mjs --allow-remote && node scripts/qa-journey-task.mjs --allow-remote && node scripts/qa-journey-quiz.mjs --allow-remote && node scripts/qa-journey-ai.mjs --allow-remote",
     "qa:owner-alerts": "node scripts/qa-owner-alerts.mjs --allow-remote",
