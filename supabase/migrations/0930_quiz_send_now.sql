@@ -1,4 +1,4 @@
--- 0870 퀴즈 "지금 바로" 즉시 발송 (2026-11-19 · 첫 사용 수정 B1 · 정본 = 산출물/첫사용측정_2026-11-17/세션A_첫사용수정_멀티에이전트_2026-11-19.md B1)
+-- 0930 퀴즈 "지금 바로" 즉시 발송 (2026-11-19 · 첫 사용 수정 B1 · 정본 = 산출물/첫사용측정_2026-11-17/세션A_첫사용수정_멀티에이전트_2026-11-19.md B1)
 -- 옛 앱 호환: 안전 | 확장만 한다.
 --   열 하나(send_now · not null default false)를 더한다. 옛 앱·옛 웹은 이 열을 모르고 행을 넣는다 → false → 지금 규칙 + 다음 스윕(5분 크론).
 --   옛 클라는 quiz_assignments 를 열 목록으로만 읽는다(QUIZ_ASSIGNMENT_COLS · select('*') 없음). 옛 앱 upsert 도 이 열을 안 쓴다.
@@ -21,16 +21,16 @@
 --      스윕을 한 번 앞당긴다(quiz_kick_send_sweep · 0351 · 다시 알리기와 같은 길). 반환 = 호출 뒤 표시가 있고 아직 안 나간 행 수.
 --      두 번 불러도 한 번만 간다: 행을 새로 만들지 않고(표시 update 는 멱등) 실제 발송 선점은 claim_quiz_send 의 sent_at is null 조건부 update 다.
 --
--- 함수 담당표(최고 번호 = 정본 · AGENTS ⑧): due_quiz_sends 0349:49 → 0870. 새: quiz_send_now.
+-- 함수 담당표(최고 번호 = 정본 · AGENTS ⑧): due_quiz_sends 0349:49 → 0930. 새: quiz_send_now.
 --   다음 정의는 이 파일 본문을 통째로 복사해서 시작한다.
--- 되돌리기 = scripts/rollback/0870.sql (열은 남긴다 · 새 앱이 읽는다).
+-- 되돌리기 = scripts/rollback/0930.sql (열은 남긴다 · 새 앱이 읽는다).
 -- 이 파일은 다시 돌려도 같은 결과다.
 
 -- ── ⓐ 표시 열 ──
 alter table public.quiz_assignments
   add column if not exists send_now boolean not null default false;
 comment on column public.quiz_assignments.send_now is
-  '사장이 "지금 바로" 보내라고 한 행(0870). quiz_send_now 가 세운다. true 면 due_quiz_sends 가 근무 시간·하루 1회·7일 2회를 건너뛴다.
+  '사장이 "지금 바로" 보내라고 한 행(0930). quiz_send_now 가 세운다. true 면 due_quiz_sends 가 근무 시간·하루 1회·7일 2회를 건너뛴다.
    다 푼 사람·나간 직원·좌석 잠김·마감 지남·문항 0개·연속 무시 자동 정지는 그대로 지킨다. 옛 앱이 넣은 행은 false(지금 규칙).';
 
 -- ── ⓑ 예약 발송 (베이스 = 0349:49 본문 통째 · send_now 네 줄) ──
@@ -68,7 +68,7 @@ begin
       join public.units u on u.id = qa.unit_id and u.deleted_at is null and not public.unit_access_locked(u.id)
      where qa.sent_at is null
        -- ★0348 ⓔ: 사장이 지금 보내라고 한 행(resend_at)은 예약일과 무관하게 후보다.
-       --   ★0870: send_now 행은 quiz_send_now 가 오늘 이하 행에만 세우므로 이 줄을 바꾸지 않는다.
+       --   ★0930: send_now 행은 quiz_send_now 가 오늘 이하 행에만 세우므로 이 줄을 바꾸지 않는다.
        and (qa.scheduled_on <= v_date or qa.resend_at is not null)
        -- ★0327: 낼 문항이 없는 퀴즈는 보내지 않는다(되살리면 다시 나간다). 0248 의 "담긴 노하우가 전부 보관" 도 여기 들어간다.
        --   후보에서 빼야 한다. 뽑힌 뒤 claim 에서 거르면 그 사람의 다른 퀴즈가 이 행에 막혀 매 스윕 밀린다.
@@ -83,7 +83,7 @@ begin
        --   후보에서 빼야 한다(위 0327 과 같은 이유). 이 줄은 행을 지우지 않는다. manual 대기 행은 ⓖ 가 완료 순간 지운다.
        --   ★바뀐 것: 11-03 판에서는 재확인을 이 거르기에서 뺐고(노하우가 바뀌면 완료자도 다시 푼다),
        --     완료 뒤 다시 알리기(resend_at)는 그 시각부터 봤다. 11-04 사용자 결정으로 둘 다 막는다.
-       --   ★0870: send_now 행도 여기서 빠진다(지금 바로여도 다 푼 사람에게는 안 간다).
+       --   ★0930: send_now 행도 여기서 빠진다(지금 바로여도 다 푼 사람에게는 안 간다).
        and not public.quiz_course_done_by(qa.unit_id, qa.course_id, qa.user_id)
        -- ★0348 (오류 탐지 11-03 7번): 무료 인원 한도를 넘어 잠긴 직원에게는 보내지 않는다. 판정 = seat_locked_for(0336) 하나.
        --   행은 남는다. 매장이 다시 유료가 되거나 사장이 그 사람을 남길 명단에 넣으면 그때 나간다.
@@ -92,7 +92,7 @@ begin
        --   보내면 claim_quiz_send 가 due_on 을 그 지난 날짜로 찍어, 받자마자 마감이 지난 퀴즈가 된다.
        --   다시 알리기(quiz_resend)는 지난 마감을 비우고 보낸다. due_date 없는 행은 받은 날 + answer_days 라 지날 수 없다.
        and (qa.due_date is null or qa.due_date >= v_date)
-     -- ★0348 ⓔ: 지금 보내라고 한 행이 먼저다(한 스윕에 한 사람 1건 · v_taken). ★0870: send_now 행도 같은 앞줄이다.
+     -- ★0348 ⓔ: 지금 보내라고 한 행이 먼저다(한 스윕에 한 사람 1건 · v_taken). ★0930: send_now 행도 같은 앞줄이다.
      order by (qa.resend_at is null and not qa.send_now), qa.scheduled_on, qa.created_at
   loop
     v_key := a.unit_id || ':' || a.user_id::text;
@@ -106,7 +106,7 @@ begin
     --           안 빼면 근무표를 그만 쓴 매장은 퀴즈가 영원히 0건이 된다.
     --    ★0301: 판정은 unit_uses_schedule 하나(할일 알림과 같음). 지난 하루 근무·옛 재직분 근무는 세지 않는다.
     --    ★0348 ⓔ: 사장이 지금 보내라고 한 행(resend_at)은 ①②④ 를 건너뛴다. ③ 7일 상한은 지킨다.
-    --    ★0870: "지금 바로"(send_now) 행은 ①②③ 을 건너뛴다. ④ 자동 정지는 지킨다(2026-11-19 사용자 결정).
+    --    ★0930: "지금 바로"(send_now) 행은 ①②③ 을 건너뛴다. ④ 자동 정지는 지킨다(2026-11-19 사용자 결정).
     if a.resend_at is null and not a.send_now and public.unit_uses_schedule(a.unit_id, v_date) then
       if not exists (
         select 1 from public.workers_at(a.unit_id, v_day, v_time) w where w = a.user_id::text
@@ -115,7 +115,7 @@ begin
       end if;
     end if;
 
-    -- ② 하루 1회 (MAX_SENDS_PER_DAY). '하루'는 24시간 창이 아니라 KST 날짜다. ★0870: send_now 는 건너뛴다.
+    -- ② 하루 1회 (MAX_SENDS_PER_DAY). '하루'는 24시간 창이 아니라 KST 날짜다. ★0930: send_now 는 건너뛴다.
     if a.resend_at is null and not a.send_now and exists (
       select 1 from public.quiz_assignments x
        where x.unit_id = a.unit_id and x.user_id = a.user_id and x.sent_at is not null
@@ -123,13 +123,13 @@ begin
     ) then continue; end if;
 
     -- ③ 주 2회 (MAX_SENDS_PER_WEEK · 7일 슬라이딩 창). ★0348: 판정은 quiz_week_sends_full 하나(quiz_resend 와 같이 쓴다).
-    --    ★0870: send_now 는 건너뛴다. 지금 바로로 나간 발송도 sent_at 이 있으니 다음 예약 발송의 ②③ 에는 센다.
+    --    ★0930: send_now 는 건너뛴다. 지금 바로로 나간 발송도 sent_at 이 있으니 다음 예약 발송의 ②③ 에는 센다.
     if not a.send_now and public.quiz_week_sends_full(a.unit_id, a.user_id) then continue; end if;
 
     -- ④ 연속 2회 무시하면 자동 정지 (AUTO_STOP_AFTER_IGNORED).
     --    "다시 시작은 그 사람이 열었을 때" → opened_at 이 하나라도 나오면 연속이 끊긴다.
     --    보낸 지 24시간이 안 된 건은 아직 무시라고 부르지 않는다(판정 유보) — 세지도, 끊지도 않는다.
-    --    ★0870: send_now 행도 이 판정을 그대로 받는다(지금대로 · 2026-11-19 사용자 결정).
+    --    ★0930: send_now 행도 이 판정을 그대로 받는다(지금대로 · 2026-11-19 사용자 결정).
     v_streak := 0;
     for h in
       -- ★0348 ⓔ: 지금 보내라고 한 행은 자동 정지를 건너뛴다(아래 루프가 0건).
@@ -206,26 +206,26 @@ begin
   if not exists (select 1 from information_schema.columns
                   where table_schema = 'public' and table_name = 'quiz_assignments' and column_name = 'send_now'
                     and is_nullable = 'NO' and data_type = 'boolean' and column_default = 'false') then
-    raise exception '0870 자가점검 실패 — send_now 열이 boolean not null default false 가 아니다';
+    raise exception '0930 자가점검 실패 — send_now 열이 boolean not null default false 가 아니다';
   end if;
   -- ①②③ 세 자리와 정렬 한 자리 = send_now 네 번 이상 · ④ 와 0349 판정은 남아 있어야 한다.
   if (length(d) - length(replace(d, 'not a.send_now', ''))) / length('not a.send_now') < 3 then
-    raise exception '0870 자가점검 실패 — due_quiz_sends ①②③ 가 send_now 를 안 본다';
+    raise exception '0930 자가점검 실패 — due_quiz_sends ①②③ 가 send_now 를 안 본다';
   end if;
   if position('quiz_send_notified' in d) = 0 or position('quiz_course_done_by' in d) = 0
      or position('quiz_recipient_is_member' in d) = 0 or position('seat_locked_for' in d) = 0 then
-    raise exception '0870 자가점검 실패 — due_quiz_sends 가 0349 의 거르기·자동 정지를 잃었다';
+    raise exception '0930 자가점검 실패 — due_quiz_sends 가 0349 의 거르기·자동 정지를 잃었다';
   end if;
   if pg_get_function_result('public.quiz_send_now(text)'::regprocedure) <> 'integer' then
-    raise exception '0870 자가점검 실패 — quiz_send_now 반환이 integer 가 아니다';
+    raise exception '0930 자가점검 실패 — quiz_send_now 반환이 integer 가 아니다';
   end if;
   if not has_function_privilege('authenticated', 'public.quiz_send_now(text)', 'execute')
      or has_function_privilege('anon', 'public.quiz_send_now(text)', 'execute') then
-    raise exception '0870 자가점검 실패 — quiz_send_now 권한(authenticated 만)';
+    raise exception '0930 자가점검 실패 — quiz_send_now 권한(authenticated 만)';
   end if;
   if has_function_privilege('authenticated', 'public.due_quiz_sends()', 'execute')
      or has_function_privilege('authenticated', 'public.quiz_kick_send_sweep()', 'execute') then
-    raise exception '0870 자가점검 실패 — 발송 함수가 클라에 열렸다';
+    raise exception '0930 자가점검 실패 — 발송 함수가 클라에 열렸다';
   end if;
-  raise notice '0870 자가점검 통과';
+  raise notice '0930 자가점검 통과';
 end $$;

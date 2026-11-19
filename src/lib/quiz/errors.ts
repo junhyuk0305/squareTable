@@ -48,7 +48,7 @@ export function quizErrorMessage(err: QuizErr, fallback = '잠시 뒤 다시 시
 }
 
 /**
- * "지금 바로" 보내기(0870 quiz_send_now) 실패 문구. 발송 행은 보낼 시각 = 지금(send_at · 0871)으로 이미 있어 다음 스윕(5분)에 나간다 → 그 사실을 말한다.
+ * "지금 바로" 보내기(0930 quiz_send_now) 실패 문구. 발송 행은 보낼 시각 = 지금(send_at · 0931)으로 이미 있어 다음 스윕(5분)에 나간다 → 그 사실을 말한다.
  * forbidden 은 위 표가 다시 알리기 문맥이라 여기서 보내기 문맥으로 바꾼다.
  */
 const SEND_NOW_MESSAGES: Record<string, string> = {

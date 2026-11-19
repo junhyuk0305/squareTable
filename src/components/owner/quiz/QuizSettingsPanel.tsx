@@ -143,7 +143,7 @@ export function QuizSettingsPanel({
         ok = await guardWrite(updateQuizAssignmentsDue(course.id, dueDate), () => {}, '마감을 바꾸지 못했어요.');
       }
     }
-    // 새로 넣은 사람이 받을 시각(0871 send_at). 아직 안 나간 예약이 있으면 그 시각 · 없으면 지금(다음 스윕 5분).
+    // 새로 넣은 사람이 받을 시각(0931 send_at). 아직 안 나간 예약이 있으면 그 시각 · 없으면 지금(다음 스윕 5분).
     const laterAt = nextSendAt(sends, Date.now());
     if (ok && peopleChanged) {
       if (added.length > 0) {

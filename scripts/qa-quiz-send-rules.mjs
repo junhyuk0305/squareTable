@@ -1,4 +1,4 @@
-// qa-quiz-send-rules.mjs — 퀴즈 발송 규칙 정리(0871 · B8 · 2026-11-19 사용자 결정) · 로컬 도커 전용 · 자가정리 · 엣지 0회 · LLM 0회
+// qa-quiz-send-rules.mjs — 퀴즈 발송 규칙 정리(0931 · B8 · 2026-11-19 사용자 결정) · 로컬 도커 전용 · 자가정리 · 엣지 0회 · LLM 0회
 //
 // 무엇을 증명하나(정본 = 산출물/첫사용측정_2026-11-17/세션A_첫사용수정_멀티에이전트_2026-11-19.md "B8 재설계 결정"):
 //   (1) 지운 제한 넷: 근무 밖 직원 · 오늘·이번 주 이미 받은 직원 · 두 번 안 연 직원의 오늘 행이 due_quiz_sends 후보다.
@@ -68,7 +68,7 @@ try {
   await ok(admin.from('unit_member_prefs').upsert({ user_id: d.id, unit_id: w.unit, quiet_enabled: true,
     quiet_start: hhmm(minsNow - 30), quiet_end: hhmm(minsNow + 30) }, { onConflict: 'user_id,unit_id' }), '방해금지');
 
-  // 보낼 시각 열(send_at · 0871 이 더한다). 없으면 이 셋은 실패로 센다.
+  // 보낼 시각 열(send_at · 0931 이 더한다). 없으면 이 셋은 실패로 센다.
   const sa1 = await admin.from('quiz_assignments').insert({ id: rid('sa', 1), unit_id: w.unit, course_id: C1, user_id: a.id, scheduled_on: today, origin: 'manual', send_at: later(60) });
   const sa2 = await admin.from('quiz_assignments').insert({ id: rid('sa', 2), unit_id: w.unit, course_id: C2, user_id: a.id, scheduled_on: today, origin: 'manual', send_at: later(-1) });
   check('(3) send_at 열이 있다', !sa1.error && !sa2.error, sa1.error?.message ?? sa2.error?.message ?? '');

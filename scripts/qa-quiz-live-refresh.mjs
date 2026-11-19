@@ -99,7 +99,7 @@ try {
   await cleanup('시작');
   const { data: hasCol } = await admin.from('quiz_assignments').select('send_now').limit(1);
   const SEND_NOW_COL = Array.isArray(hasCol);
-  if (!SEND_NOW_COL) { skip++; console.log('  - skip send_now 열 없음(0870 적용 전) · ① 문구 검사는 예약 문구로 본다'); }
+  if (!SEND_NOW_COL) { skip++; console.log('  - skip send_now 열 없음(0930 적용 전) · ① 문구 검사는 예약 문구로 본다'); }
 
   for (const q of [
     admin.from('playbook_entries').insert({ id: EID, unit_id: UNIT, category: 'Routine', title: `${NAME} 근거`, status: 'published' }),

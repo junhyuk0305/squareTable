@@ -69,7 +69,7 @@ const TOTAL = 5;
 
 /**
  * 받는 쪽 — 1단계에서 고른다. 이 값이 4·5단계의 내용을 가른다.
- *  · staff = 우리 직원. 받는 사람을 고르고 지금 바로 또는 고른 날짜·시각에 나간다(0871).
+ *  · staff = 우리 직원. 받는 사람을 고르고 지금 바로 또는 고른 날짜·시각에 나간다(0931).
  *  · guest = 외부 사람(지원자·단기). 보낼 계정이 없으니 **링크**가 나가고, 마지막에 주소를 준다.
  * ★코스 행에 이 값을 저장하지 않는다 — 링크가 있으면 외부, 발송원장이 있으면 내부다(이미 있는 사실).
  */
@@ -104,7 +104,7 @@ type Made = { entryId: string; title: string; item: QuizItem | null; formatLabel
  * ★ 사장에게 문항 형태를 고르게 하지 않는다. `generateQuizItems` 가 `detectKinds` 로 판정해
  *   자동으로 정하고, 사장은 3단계에서 **검토만** 한다. 11종을 늘어놓는 순간 "노하우만 고르면 끝"이라는
  *   강점이 사라진다(직접 쓰기에서만 쉬운 형태를 노출한다 — QuizEditorSheet startMode='manual').
- * ★ 5단계에서 예약 날짜와 시각을 묻는다(0871 · 2026-11-19 사용자 결정). 빈도 상한(근무일에만·하루 1회·주 2회)은 없앴다.
+ * ★ 5단계에서 예약 날짜와 시각을 묻는다(0931 · 2026-11-19 사용자 결정). 빈도 상한(근무일에만·하루 1회·주 2회)은 없앴다.
  * ★ 재확인 간격(3일→2주→8주→6개월)도 설명하지 않는다. 설명하면 설정처럼 보인다.
  *
  * 퀴즈(코스) 행은 **1단계를 넘길 때 만들어진다** — 중간에 나가도 초안으로 남는다(A2 '초안' 알약).
@@ -167,7 +167,7 @@ export default function QuizNewScreen() {
   // 5단계 — 날짜는 전부 "YYYY-MM-DD"(KST). 칩으로 며칠 뒤를 제시하지 않고 달력에서 고른다.
   const [sendNow, setSendNow] = useState(true);
   const [startAt, setStartAt] = useState<string>(() => addDays(todayKst(), 1));
-  /** 예약 시각 "HH:MM"(KST · 0871 send_at). 처음 값 09:00(2026-11-19 사용자 결정). */
+  /** 예약 시각 "HH:MM"(KST · 0931 send_at). 처음 값 09:00(2026-11-19 사용자 결정). */
   const [sendTime, setSendTime] = useState('09:00');
   /** 마감일. null = 마감 없이 열어 둔다. */
   const [dueAt, setDueAt] = useState<string | null>(() => addDays(todayKst(), DEADLINE_DEFAULT_DAYS));
@@ -573,7 +573,7 @@ export default function QuizNewScreen() {
       return;
     }
 
-    // 보낼 시각(0871 send_at). 예약 = 고른 날의 고른 시각(KST). 지금 바로 = 시각 없이 send_now 로 넣는다 →
+    // 보낼 시각(0931 send_at). 예약 = 고른 날의 고른 시각(KST). 지금 바로 = 시각 없이 send_now 로 넣는다 →
     //   서버가 행을 만든 시각(서버 시계)부터 보낸다. 기기 시계가 앞서도 늦어지지 않는다(검토 지적 · 2026-11-19).
     const sendAt = sendNow ? null : new Date(`${scheduledOn}T${sendTime}:00+09:00`).toISOString();
     const sent = await guardWrite(
@@ -583,7 +583,7 @@ export default function QuizNewScreen() {
     );
     if (!sent) { setBusy(false); return; }
     /*
-     * "지금 바로"(B1 · 2026-11-19) — 행을 넣은 뒤 서버에 바로 보내 달라고 한다(0870 quiz_send_now).
+     * "지금 바로"(B1 · 2026-11-19) — 행을 넣은 뒤 서버에 바로 보내 달라고 한다(0930 quiz_send_now).
      * 행은 이미 send_now 로 들어갔다. 이 호출은 같은 날 먼저 있던 행에도 표시를 세우고 스윕을 앞당긴다. 실패해도 다음 스윕(5분)에 나간다.
      * 토스트는 목록·상세와 같은 판정(metrics.sendPhase)으로 말한다. 방금 넣은 행은 아직 sent_at 이 없다.
      */
@@ -1150,7 +1150,7 @@ export default function QuizNewScreen() {
               </>
             )}
 
-            {/* 2026-09-11: "근무일에만 · 하루 1번 · 주 2번까지만 보내요" 줄을 뺐다. 2026-11-19(0871): 그 상한 자체를 지웠다. */}
+            {/* 2026-09-11: "근무일에만 · 하루 1번 · 주 2번까지만 보내요" 줄을 뺐다. 2026-11-19(0931): 그 상한 자체를 지웠다. */}
             </View>
           </Appear>
         )}

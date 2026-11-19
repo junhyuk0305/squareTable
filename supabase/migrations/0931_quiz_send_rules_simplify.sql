@@ -1,4 +1,4 @@
--- 0871 퀴즈 발송 규칙 정리 · 보낼 시각 · 방해금지 · 재확인 멈춤 · 다시 알리기 1분 · 이유 판정 한 곳
+-- 0931 퀴즈 발송 규칙 정리 · 보낼 시각 · 방해금지 · 재확인 멈춤 · 다시 알리기 1분 · 이유 판정 한 곳
 --   (2026-11-19 · 첫 사용 수정 B8 · 정본 = 산출물/첫사용측정_2026-11-17/세션A_첫사용수정_멀티에이전트_2026-11-19.md "B8 재설계 결정")
 -- 옛 앱 호환: 안전 | 확장 + 판정 완화만 한다.
 --   열 하나(send_at · null 허용)를 더한다. 옛 앱은 이 열을 모르고 행을 넣는다 → null → 예약일 09:00 KST 에 나간다.
@@ -9,7 +9,7 @@
 --   옛 앱 문구("근무 시간에 맞춰 보내요" 등)는 다음 앱 빌드에서 고친다(사용자 감수 · 2026-11-19).
 --
 -- 무엇이 어긋났나(계층 · 규칙)
---   ① 화면 이유(quiz_send_status 0301)와 실제 발송(due_quiz_sends 0870)이 서로 다른 술어를 따로 들고 있었다.
+--   ① 화면 이유(quiz_send_status 0301)와 실제 발송(due_quiz_sends 0930)이 서로 다른 술어를 따로 들고 있었다.
 --      다시 알리기·지금 바로 행을 화면은 막혔다고 말했고, 서버가 막는 넷(좌석 잠김·다 푼 사람·7일 2회·마감 지남)을 화면은 몰랐다.
 --   ② 사용자 결정(2026-11-19)으로 발송 제한 넷을 지운다: 근무 시간 · 하루 1회 · 7일 2회 · 두 번 안 열면 자동 정지.
 --      한 스윕에 한 사람 1건(v_taken)도 지운다 → 여러 퀴즈가 한 번에 간다.
@@ -28,18 +28,18 @@
 --   ⓖ 안 나간 재확인 행을 지운다. 응시·답 기록은 행에 없고 나간 행은 건드리지 않는다.
 --
 -- 함수 담당표(최고 번호 = 정본 · AGENTS ⑧):
---   due_quiz_sends 0870 → 0871 · quiz_send_status 0301 → 0871 · recipient_readiness 0312 → 0871 ·
---   quiz_resend 0348 → 0871 · quiz_resend_cooldown 0348 → 0871 · quiz_send_now 0870 → 0871.
+--   due_quiz_sends 0930 → 0931 · quiz_send_status 0301 → 0931 · recipient_readiness 0312 → 0931 ·
+--   quiz_resend 0348 → 0931 · quiz_resend_cooldown 0348 → 0931 · quiz_send_now 0930 → 0931.
 --   새: quiz_send_block · quiz_send_due_at · member_quiet_now.
 --   쓰지 않게 된 것(지우지 않음 · 되돌리기용): enqueue_knowhow_rechecks(0367) · quiz_week_sends_full(0348) · quiz_send_notified(0349).
--- 되돌리기 = scripts/rollback/0871.sql (열은 남긴다 · 새 앱이 쓴다 · ⓖ 로 지운 대기 행은 되돌리면 재확인 큐가 다시 만든다).
+-- 되돌리기 = scripts/rollback/0931.sql (열은 남긴다 · 새 앱이 쓴다 · ⓖ 로 지운 대기 행은 되돌리면 재확인 큐가 다시 만든다).
 -- 이 파일은 다시 돌려도 같은 결과다.
 
 -- ── ⓐ 보낼 시각 열 ──
 alter table public.quiz_assignments
   add column if not exists send_at timestamptz;
 comment on column public.quiz_assignments.send_at is
-  '사장이 고른 보낼 시각(0871). null 이면 예약일(scheduled_on) 09:00 KST. resend_at(다시 알리기)·send_now(지금 바로) 행은 이 값과 상관없이 바로 후보다.';
+  '사장이 고른 보낼 시각(0931). null 이면 예약일(scheduled_on) 09:00 KST. resend_at(다시 알리기)·send_now(지금 바로) 행은 이 값과 상관없이 바로 후보다.';
 
 -- ── ⓒ 그 매장 방해금지 시간인가 ──
 -- 설정 = unit_member_prefs(0076) quiet_enabled · quiet_start · quiet_end("HH:MM" KST · 형식은 CHECK 가 지킨다).
@@ -101,7 +101,7 @@ returns text language sql stable security definer set search_path = public as $$
 $$;
 revoke all on function public.quiz_send_block(public.quiz_assignments, timestamptz) from public, anon, authenticated;
 
--- ── ⓓ 예약 발송 (베이스 = 0870 · 본문을 quiz_send_block 한 줄로 바꿨다) ──
+-- ── ⓓ 예약 발송 (베이스 = 0930 · 본문을 quiz_send_block 한 줄로 바꿨다) ──
 -- 반환 열·권한은 그대로다(push 엣지 task_reminders 모드가 부른다 · 엣지 배포 불필요).
 -- ★재확인 큐 채우기(§0 enqueue_knowhow_rechecks)를 더 부르지 않는다(재확인 기능 없앰).
 -- ★v_taken(한 스윕에 한 사람 1건)을 지웠다. 같은 사람의 여러 퀴즈가 한 스윕에 같이 나간다(2026-11-19 사용자 결정).
@@ -215,9 +215,9 @@ begin
       (select p.push_enabled from public.notification_prefs p where p.user_id = u),
       true);
 
-    -- ★0871: 근무표 판정을 뺐다(퀴즈가 근무 시간을 더 보지 않는다).
+    -- ★0931: 근무표 판정을 뺐다(퀴즈가 근무 시간을 더 보지 않는다).
     on_schedule := true;
-    -- ★0871: 7일 2회 상한이 없어졌다. 옛 앱이 "0 남음"으로 읽지 않게 옛 최댓값을 준다.
+    -- ★0931: 7일 2회 상한이 없어졌다. 옛 앱이 "0 남음"으로 읽지 않게 옛 최댓값을 준다.
     weekly_quota_left := 2;
 
     blocked_reason := case
@@ -238,7 +238,7 @@ returns interval language sql immutable as $$ select interval '1 minute' $$;
 revoke all on function public.quiz_resend_cooldown() from public, anon, authenticated;
 
 -- ── ⓔ 다시 알리기 (베이스 = 0348:236 · 7일 상한 판정만 뺐다) ──
--- 반환 result: sent · cooldown · completed · locked · not_member. ★0871: queued(7일 상한)는 더 나오지 않는다.
+-- 반환 result: sent · cooldown · completed · locked · not_member. ★0931: queued(7일 상한)는 더 나오지 않는다.
 create or replace function public.quiz_resend(p_course_id text, p_user_ids uuid[])
 returns table(user_id uuid, result text)
 language plpgsql security definer set search_path = public as $$
@@ -281,7 +281,7 @@ begin
     if public.quiz_course_done_by(v_unit, p_course_id, v_uid) then
       result := 'completed'; return next; continue;
     end if;
-    -- 쿨다운 기준 = 마지막 다시 알리기 요청(resend_at) 하나. 일반 발송(첫 발송·크론)은 세지 않는다. ★0871: 1분.
+    -- 쿨다운 기준 = 마지막 다시 알리기 요청(resend_at) 하나. 일반 발송(첫 발송·크론)은 세지 않는다. ★0931: 1분.
     select max(x.resend_at) into v_last from public.quiz_assignments x
      where x.unit_id = v_unit and x.course_id = p_course_id and x.user_id = v_uid;
     if v_last is not null and v_last > now() - public.quiz_resend_cooldown() then
@@ -306,7 +306,7 @@ begin
       values (v_unit, p_course_id, v_uid, v_on, 'manual', auth.uid(), case when v_due >= v_on then v_due end, now());
     end if;
 
-    -- ★0871: 7일 상한이 없어 늘 지금 보낸다(방해금지 시간이면 quiz_send_block 이 끝날 때까지 미룬다).
+    -- ★0931: 7일 상한이 없어 늘 지금 보낸다(방해금지 시간이면 quiz_send_block 이 끝날 때까지 미룬다).
     result := 'sent'; v_kick := true;
     return next;
   end loop;
@@ -317,7 +317,7 @@ end $$;
 revoke all on function public.quiz_resend(text, uuid[]) from public, anon;
 grant execute on function public.quiz_resend(text, uuid[]) to authenticated;
 
--- ── ⓕ 지금 바로 (베이스 = 0870 · 대상 줄에 send_at 조건 하나) ──
+-- ── ⓕ 지금 바로 (베이스 = 0930 · 대상 줄에 send_at 조건 하나) ──
 create or replace function public.quiz_send_now(p_course_id text)
 returns integer
 language plpgsql security definer set search_path = public as $$
@@ -340,7 +340,7 @@ begin
      and a.sent_at is null and a.scheduled_on <= v_today and not a.send_now
      -- 사장이 보낸 행만(합류·재확인 행은 표시하지 않는다).
      and a.origin = 'manual'
-     -- ★0871: 오늘 안의 나중 시각으로 예약한 행은 앞당기지 않는다.
+     -- ★0931: 오늘 안의 나중 시각으로 예약한 행은 앞당기지 않는다.
      and (a.send_at is null or a.send_at <= now());
 
   select count(*)::int into v_n from public.quiz_assignments a
@@ -362,14 +362,14 @@ declare v_src text;
 begin
   select prosrc into v_src from pg_proc where oid = 'public.due_quiz_sends()'::regprocedure;
   if v_src ~ 'enqueue_knowhow_rechecks' or v_src ~ 'workers_at' or v_src ~ 'quiz_week_sends_full' or v_src !~ 'quiz_send_block' then
-    raise exception '0871 자가점검 실패 — due_quiz_sends 본문';
+    raise exception '0931 자가점검 실패 — due_quiz_sends 본문';
   end if;
   if has_function_privilege('authenticated', 'public.quiz_send_block(public.quiz_assignments, timestamptz)', 'execute')
      or has_function_privilege('authenticated', 'public.member_quiet_now(text, uuid, timestamptz)', 'execute')
      or has_function_privilege('authenticated', 'public.due_quiz_sends()', 'execute') then
-    raise exception '0871 자가점검 실패 — 내부 함수가 authenticated 에 열렸다';
+    raise exception '0931 자가점검 실패 — 내부 함수가 authenticated 에 열렸다';
   end if;
   if public.quiz_resend_cooldown() <> interval '1 minute' then
-    raise exception '0871 자가점검 실패 — 쿨다운';
+    raise exception '0931 자가점검 실패 — 쿨다운';
   end if;
 end $$;

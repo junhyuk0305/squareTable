@@ -102,7 +102,7 @@ console.log('\n[C4] 닫힌(잠긴) 매장에는 할일·퀴즈 알림을 보내�
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   } catch { tGrant = 'DB 없음'; }
   check('할일 알림 함수는 service_role 전용 그대로(anon·authenticated 실행 불가 · 로컬 DB 권한)', tGrant === 'false/false/true', tGrant);
-  // ★0871: 판정이 quiz_send_block 한 곳으로 갔다. due_quiz_sends 는 그 판정이 null 인 행만 내고, 잠긴·지운 매장은 store_locked 다.
+  // ★0931: 판정이 quiz_send_block 한 곳으로 갔다. due_quiz_sends 는 그 판정이 null 인 행만 내고, 잠긴·지운 매장은 store_locked 다.
   const q = lastTouch('due_quiz_sends');
   const qb = lastDef('quiz_send_block');
   check('★퀴즈 발송 후보에서 잠긴 매장을 뺀다(due_quiz_sends → quiz_send_block store_locked)',

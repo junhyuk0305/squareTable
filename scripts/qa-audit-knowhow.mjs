@@ -76,11 +76,11 @@ console.log('[E1] 초안·외부용 퀴즈는 직원 카드와 자동 배정에 
       && todoOf('guest') === 0 && todoOf('staff') === 1 && todoOf(null) === 1,
     `${prog.__err ?? ''} guest=${todoOf('guest')} staff=${todoOf('staff')}`);
 
-  // ★0871: 재확인 기능을 없앴다. due_quiz_sends 가 재확인 큐를 더 채우지 않는다(자동 배정 = 0건).
+  // ★0931: 재확인 기능을 없앴다. due_quiz_sends 가 재확인 큐를 더 채우지 않는다(자동 배정 = 0건).
   //   enqueue_knowhow_rechecks 는 되돌리기용으로 남아 있어 아래 거르기 검사는 그대로 둔다.
   {
     const d = lastDef('due_quiz_sends');
-    check('★0871: 예약 발송(due_quiz_sends)이 재확인 큐를 채우지 않는다', !!d.body && !/enqueue_knowhow_rechecks/.test(d.body), d.file);
+    check('★0931: 예약 발송(due_quiz_sends)이 재확인 큐를 채우지 않는다', !!d.body && !/enqueue_knowhow_rechecks/.test(d.body), d.file);
   }
   for (const fn of ['enqueue_knowhow_rechecks']) {
     const d = lastDef(fn);
@@ -139,14 +139,14 @@ console.log('\n[E3] 퀴즈가 안 나가는 이유(좌석 잠김·마감 지남�
   const b = d.body;
   check('★서버 판정 함수 quiz_send_status 가 있다', !!d.file, '없음');
   check('관리 권한·활성 매장의 퀴즈만 본다', /public\.auth_can_manage\(\)/.test(b) && /c\.unit_id = public\.auth_unit_id\(\)/.test(b), d.file);
-  // ★0871: 근무표(not_scheduled)·자동 정지(auto_stopped) 이유가 없어졌다. 이유는 발송과 같은 quiz_send_block 한 곳에서 온다.
-  check('★0871: not_scheduled·auto_stopped 를 내지 않는다',
+  // ★0931: 근무표(not_scheduled)·자동 정지(auto_stopped) 이유가 없어졌다. 이유는 발송과 같은 quiz_send_block 한 곳에서 온다.
+  check('★0931: not_scheduled·auto_stopped 를 내지 않는다',
     !!b && !/'not_scheduled'/.test(b) && !/'auto_stopped'/.test(b), d.file);
-  check('★0871: 이유 = quiz_send_block(발송과 같은 판정) · 화면에 말할 넷만',
+  check('★0931: 이유 = quiz_send_block(발송과 같은 판정) · 화면에 말할 넷만',
     /public\.quiz_send_block\(qa\)/.test(b) && /s\.reason in \('seat_locked', 'due_passed', 'quiet', 'store_locked'\)/.test(b)
       && /public\.quiz_send_block\(qa, v_now\) is null/.test(lastDef('due_quiz_sends').body), d.file);
   const f = d.file ? read(`supabase/migrations/${d.file}`) : '';
-  // ★0871 은 authenticated 를 revoke 줄에서 뺐다(바로 아래 grant 로 다시 주므로 결과는 같다).
+  // ★0931 은 authenticated 를 revoke 줄에서 뺐다(바로 아래 grant 로 다시 주므로 결과는 같다).
   check('권한: authenticated 만 실행', /revoke all on function public\.quiz_send_status\(text\) from public, anon(, authenticated)?;/.test(f)
     && /grant\s+execute on function public\.quiz_send_status\(text\) to authenticated;/.test(f));
   const db = strip(read('src/lib/db.ts'));
@@ -154,7 +154,7 @@ console.log('\n[E3] 퀴즈가 안 나가는 이유(좌석 잠김·마감 지남�
   const scr = strip(read('src/app/owner/quiz/[id].tsx'));
   // 문구는 recipientReadiness.ts 표 한 곳(P5 · 2026-10-16) — 화면은 readinessText 로 읽는다.
   const rr = strip(read('src/lib/recipientReadiness.ts'));
-  // ★0871: 문구 표에 서버 이유 넷이 있고, 없어진 두 이유(근무표·자동 정지) 문구는 없다.
+  // ★0931: 문구 표에 서버 이유 넷이 있고, 없어진 두 이유(근무표·자동 정지) 문구는 없다.
   check('★사람 줄이 이유를 말한다(방해금지 · 인원 한도 · 마감 · 매장 멈춤)',
     /fetchQuizSendStatus\(/.test(scr) && /readinessText\(/.test(scr)
       && ['quiet', 'seat_locked', 'due_passed', 'store_locked'].every((k) => new RegExp(`\\b${k}: '`).test(rr))

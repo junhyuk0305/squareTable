@@ -3,13 +3,13 @@
 // 서버 recipient_readiness 의 blocked_reason 과 quiz_send_status 의 reason 을 사람 말로 바꾼다.
 // 퀴즈 결과 줄 · 퀴즈 보내기 · 할일 배정 · 공지 발송이 전부 이 표를 쓴다(화면마다 문구를 짓지 않는다).
 // 사실만 말한다. 보내기는 막지 않는다 — 사장이 고칠 수 없는 전제(직원이 앱을 깔아야 함)가 대부분이다.
-// ★0871: 근무표(not_scheduled)·자동 정지(auto_stopped)는 서버가 더 보지 않아 뺐다. 옛 앱은 그 코드를 계속 알지만 서버가 안 보낸다.
+// ★0931: 근무표(not_scheduled)·자동 정지(auto_stopped)는 서버가 더 보지 않아 뺐다. 옛 앱은 그 코드를 계속 알지만 서버가 안 보낸다.
 
 import type { QuizSendBlock } from '@/lib/db';
 
-/** recipient_readiness(0309 · 0871) 의 이유 코드. */
+/** recipient_readiness(0309 · 0931) 의 이유 코드. */
 export type DeviceReason = 'no_device' | 'push_off';
-/** 사람 줄에 붙는 이유 코드 = 기기 이유 + quiz_send_status(0871) 이유. */
+/** 사람 줄에 붙는 이유 코드 = 기기 이유 + quiz_send_status(0931) 이유. */
 export type ReadinessReason = DeviceReason | QuizSendBlock;
 
 export type RecipientReadiness = {

@@ -16,7 +16,7 @@
 
 /**
  * 발송 원장 한 줄(QuizAssignment 와 같은 모양). 사람별 최신 발송은 latestQuizAssignments 로 먼저 고른다.
- * sendNow = "지금 바로"로 보낸 행(0870 send_now · 옛 서버·옛 앱 행은 없음 = false). scheduledOn = 예약일(KST YYYY-MM-DD).
+ * sendNow = "지금 바로"로 보낸 행(0930 send_now · 옛 서버·옛 앱 행은 없음 = false). scheduledOn = 예약일(KST YYYY-MM-DD).
  */
 export type MetricAssignment = {
   userId: string;
@@ -25,7 +25,7 @@ export type MetricAssignment = {
   countFrom?: string | null;
   sendNow?: boolean;
   scheduledOn?: string;
-  /** 보낼 시각(0871 send_at · ISO). 없으면 예약일 09:00 KST. */
+  /** 보낼 시각(0931 send_at · ISO). 없으면 예약일 09:00 KST. */
   sendAt?: string | null;
 };
 
@@ -81,7 +81,7 @@ export const QUIZ_STATE_LABEL: Record<QuizState, string> = {
  *  · soon    = 아직 아무도 안 받았고, 오늘 행 중 보낼 시각이 지났거나 "지금 바로"(send_now) 행이 있다. 다음 스윕(5분)에 간다.
  *  · waiting = 행은 있는데 보낼 시각이 아직이다(예약).
  *  · none    = 발송 행이 없다.
- * 보낼 시각 = 서버 quiz_send_due_at(0871) 짝: send_now 면 지금 · send_at · 없으면 예약일 09:00 KST.
+ * 보낼 시각 = 서버 quiz_send_due_at(0931) 짝: send_now 면 지금 · send_at · 없으면 예약일 09:00 KST.
  * 어제 이전 행이 아직 안 나갔으면 막힌 것(좌석 잠김·마감 지남 등)이라 soon 이라 말하지 않는다.
  * 사람별 막힌 이유(방해금지 포함)는 상세의 fetchQuizSendStatus 가 말한다.
  */
@@ -240,7 +240,7 @@ export function doneLabel(p: StaffProgress): string {
 
 /**
  * 다시 알리기 결과 토스트(0348 quiz_resend). 사람별 결과를 센다.
- * sent = 지금 보냄 · cooldown = 1분 안에 이미 받음 · locked = 무료 인원 한도를 넘어 잠김 · queued = 옛 서버(0871 전)의 7일 상한
+ * sent = 지금 보냄 · cooldown = 1분 안에 이미 받음 · locked = 무료 인원 한도를 넘어 잠김 · queued = 옛 서버(0931 전)의 7일 상한
  * · completed = 그 퀴즈를 이미 다 풀어 다시 안 보냄(11-04).
  * not_member 등 나머지는 "보내지 못했어요"로 센다. 1 = schedule.ts RESEND_COOLDOWN_MINUTES(이 파일은 import 를 못 한다).
  * 반환 tone: 하나라도 보냈거나 줄에 섰으면 good.
@@ -320,14 +320,10 @@ export function rateLabel(r: QuizRate): string {
 // ── 링크 제출 ────────────────────────────────────────────────────────────
 
 /**
- * 링크 제출 수(N16).
- * 무엇을: 제출(submission). 같은 손님이 두 번 내면 2건이다. 사람 수가 아니다.
- * 누구를: 손님(staffId null). 언제부터: 누적.
- * 라벨: guestSubmissionsLabel → "링크 제출 N건". "명"을 쓰지 않는다.
+ * 링크 제출 수(N16) 라벨. 무엇을: 제출(submission · 같은 손님이 두 번 내면 2건 · 사람 수가 아니다).
+ * 정리한 제출은 세지 않는다(2026-11-19 사용자 결정). 수는 화면이 정리 안 한 제출 원장(fetchGuestQuizSubmissions)에서,
+ * 목록은 서버 quiz_course_stats.guest_submissions(0932)에서 같은 기준으로 받는다. "명"을 쓰지 않는다.
  */
-export function guestSubmissions(answers: readonly MetricAnswer[]): number {
-  return new Set(answers.filter((r) => r.staffId == null).map((r) => r.submissionId)).size;
-}
 
 export function guestSubmissionsLabel(n: number): string {
   return `링크 제출 ${n}건`;

@@ -1,5 +1,5 @@
--- rollback/0870.sql — due_quiz_sends 를 0349 본문으로 되돌리고 quiz_send_now 를 지운다("지금 바로" = 다시 지금 규칙 + 다음 스윕).
--- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0870.sql --linked
+-- rollback/0930.sql — due_quiz_sends 를 0349 본문으로 되돌리고 quiz_send_now 를 지운다("지금 바로" = 다시 지금 규칙 + 다음 스윕).
+-- 실행(사용자 세션 · main 체크아웃): npx -y supabase@2 db query -f scripts/rollback/0930.sql --linked
 -- send_now 열은 남긴다. 새 앱이 QUIZ_ASSIGNMENT_COLS 로 읽으므로 지우면 새 앱의 퀴즈 원장 읽기가 깨진다(확장 → 축소 · ⑪).
 -- 순서: 새 앱이 quiz_send_now 를 부르면 함수 없음 오류가 난다. 새 앱(웹)을 먼저 내리거나, 호출부가 오류를 일반 문구로 떨어뜨리는지 본다.
 begin;

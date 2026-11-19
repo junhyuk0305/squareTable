@@ -39,7 +39,7 @@ export function quizNewDock(v: {
   busy: boolean;
   /** 1단계를 그릴 재료(노하우·퀴즈 판)가 다 왔는가. 안 왔으면 1단계 버튼을 누를 수 없다. */
   ready: boolean;
-  /** 예약 시각 형식이 맞나(0871). 없으면 맞다고 본다. 예약인데 틀리면 예약 버튼을 막는다. */
+  /** 예약 시각 형식이 맞나(0931). 없으면 맞다고 본다. 예약인데 틀리면 예약 버튼을 막는다. */
   timeOk?: boolean;
 }): QuizNewDock | null {
   const guest = v.audience === 'guest';

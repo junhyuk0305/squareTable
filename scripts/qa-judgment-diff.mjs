@@ -359,8 +359,8 @@ note('S10-요금제', '해석', '호출부(billing.tsx:114·233·332)가 세션 
 }
 
 skipCase('S5-옛퀴즈', '전체', 'B 가 서버 quiz_legacy_open_courses(0338 SQL) · A 는 WorkBoard.tsx 컴포넌트 렌더 안 인라인(518-552)이라 순수 함수 쌍이 없다');
-// ★0871: 두 쪽이 판정 하나(quiz_send_block)를 같이 쓴다. 같은 답인지는 qa:quiz-send-rules (5) 가 서버에서 잰다.
-skipCase('S6-발송이유', '전체', '두 쪽 다 서버 SQL(quiz_send_status · due_quiz_sends 0871 → quiz_send_block 한 곳)');
+// ★0931: 두 쪽이 판정 하나(quiz_send_block)를 같이 쓴다. 같은 답인지는 qa:quiz-send-rules (5) 가 서버에서 잰다.
+skipCase('S6-발송이유', '전체', '두 쪽 다 서버 SQL(quiz_send_status · due_quiz_sends 0931 → quiz_send_block 한 곳)');
 skipCase('S7-허브50행', '전체', 'A 가 서버 my_units_notif_data(0346) 행 자르기 · SQL');
 
 console.log(`\nSAME ${same} · DIFF ${diff} · skip ${skip} · 실행 못 한 케이스 ${notRun} · AI 호출 0회`);

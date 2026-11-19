@@ -112,7 +112,6 @@ const r = m.quizRate(ans);
 assert.deepEqual({ ...r }, { asked: 5, correct: 3, pct: 60 }, 'Q2 staff first attempt + all guest submissions, Q1 self excluded');
 assert.equal(m.rateLabel(m.quizRate([])), '정답률 —');
 assert.equal(m.rateFromStat({}).pct, null, 'no server column -> no rate');
-assert.equal(m.guestSubmissions(ans), 2);
 assert.equal(m.guestSubmissionsLabel(2), '링크 제출 2건');
 const it = m.itemAnswers(ans, 'i1');
 assert.equal(it.answers, 5, 'self excluded from item answers');
@@ -134,10 +133,10 @@ assert.equal(e.linkSubmitResultOf({ message: 'Failed to fetch' }), 'network');
 for (const k of ['ok', 'link_closed', 'rate_limited', 'bad_input', 'network']) assert.ok(e.LINK_SUBMIT_MESSAGE[k], k);
 assert.equal(e.quizErrorMessage({ message: 'last_quiz_item' }).includes('보관'), true);
 // 0348 다시 알리기: raise 코드마다 사람 말이 있다(⑨) · 사람별 결과 토스트.
-assert.equal(e.quizErrorMessage({ message: 'resend_cooldown' }), '방금 보냈어요. 1분 뒤에 다시 보낼 수 있어요'); // ★0871: 1분
+assert.equal(e.quizErrorMessage({ message: 'resend_cooldown' }), '방금 보냈어요. 1분 뒤에 다시 보낼 수 있어요'); // ★0931: 1분
 for (const c of ['forbidden', 'quiz_not_found']) assert.notEqual(e.quizErrorMessage({ message: c }), e.quizErrorMessage({ message: 'x' }), c);
 assert.deepEqual({ ...m.resendResultLabel([{ result: 'sent' }]) }, { text: '다시 알렸어요', good: true });
-// ★0871: 7일 상한이 없어 서버는 queued 를 더 내지 않는다. 옛 서버 값이 오면 '곧 보내요'로 말한다.
+// ★0931: 7일 상한이 없어 서버는 queued 를 더 내지 않는다. 옛 서버 값이 오면 '곧 보내요'로 말한다.
 assert.deepEqual({ ...m.resendResultLabel([{ result: 'sent' }, { result: 'cooldown' }, { result: 'queued' }]) },
   { text: '1명에게 다시 알렸어요 · 1명은 방금 받아 1분 뒤에 보낼 수 있어요 · 1명은 곧 보내요', good: true }, '(j) partial result says counts');
 assert.equal(m.resendResultLabel([{ result: 'cooldown' }, { result: 'not_member' }]).good, false);

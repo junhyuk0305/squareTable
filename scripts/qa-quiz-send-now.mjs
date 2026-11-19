@@ -1,17 +1,17 @@
-// 퀴즈 "지금 바로" 서버 판정 QA(0870 · B1 · 2026-11-19 사용자 결정) — 실 백엔드 대상·자가정리 · 엣지 호출 0회 · LLM 호출 0회.
+// 퀴즈 "지금 바로" 서버 판정 QA(0930 · B1 · 2026-11-19 사용자 결정) — 실 백엔드 대상·자가정리 · 엣지 호출 0회 · LLM 호출 0회.
 //
 // 무엇을 증명하나:
-//   (a) ★0871(2026-11-19 사용자 결정 · 근무 시간 · 하루 1회 · 주 2회를 지웠다): 근무 밖 직원 · 오늘 근무 없는 직원 ·
+//   (a) ★0931(2026-11-19 사용자 결정 · 근무 시간 · 하루 1회 · 주 2회를 지웠다): 근무 밖 직원 · 오늘 근무 없는 직원 ·
 //       오늘 이미 받은 직원 · 이번 주 2번 받은 직원의 오늘 행도 보낼 시각(send_at)이 지났으면 표시 없이 후보다.
 //   (b) quiz_send_now 를 불러도 같은 행이 후보 1건 그대로다.
 //   (c) 그 퀴즈를 다 푼 직원 · 나간 직원은 표시가 있어도 후보가 아니다.
-//   (d) 미래 날짜 예약 행에는 표시를 세우지 않는다. ★0871: 오늘 안의 나중 시각(send_at > now) 행에도 세우지 않는다.
+//   (d) 미래 날짜 예약 행에는 표시를 세우지 않는다. ★0931: 오늘 안의 나중 시각(send_at > now) 행에도 세우지 않는다.
 //   (e) 두 번 불러도 행 수가 같고 사람마다 후보 1건이다. 선점(claim) 뒤 다시 불러도 다시 나가지 않는다.
 //   (f) 권한: 직원 세션 forbidden · anon 42501 · 남의 매장 퀴즈 quiz_not_found · 빈 인자 invalid_argument · 문항 0개 quiz_no_items.
 // 엣지(push)는 부르지 않는다. 스윕이 고르는 것(due_quiz_sends)과 선점(claim_quiz_send)을 service_role 로 직접 잰다.
 //
 // 사용: node scripts/qa-quiz-send-now.mjs --local   (로컬 도커 · `npx supabase status` 키)
-//       node scripts/qa-quiz-send-now.mjs --allow-remote   (.env + .env.seed · 라이브는 0870 적용 뒤)
+//       node scripts/qa-quiz-send-now.mjs --allow-remote   (.env + .env.seed · 라이브는 0930 적용 뒤)
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -57,7 +57,7 @@ const ON = [hhmm(minsNow - 10), hhmm(minsNow + 10)];   // 지금을 감싸는 �
 const OFF = [hhmm(minsNow + 60), hhmm(minsNow + 90)];  // 지금이 아닌 근무
 
 // w = 근무 밖 · x = 오늘 근무 없음 · d = 오늘 이미 받음 · k = 이번 주 2번 받음 · done = 다 풂 · gone = 나감 · f = 미래 예약
-// h = 오늘 나중 시각 예약(send_at 1시간 뒤 · 0871)
+// h = 오늘 나중 시각 예약(send_at 1시간 뒤 · 0931)
 const PEOPLE = ['w', 'x', 'd', 'k', 'done', 'gone', 'f', 'h'];
 // 0108 + 한 자리 순번 + 6자리(실행마다 다름) = 11자리. 0 = 사장 · 9 = 다른 매장 사장.
 const qaPhones = [0, ...PEOPLE.map((_, i) => i + 1), 9].map((n) => `0108${n}${s.slice(0, 6)}`);
@@ -137,7 +137,7 @@ async function main() {
   { const { error } = await admin.from('quiz_assignments').insert(sent); if (error) throw new Error('지난 발송 시드: ' + error.message); }
 
   // 사장이 오늘치 A 행을 넣는다(앱이 하는 것과 같다 · 표시 없음). f 는 내일 예약.
-  // ★0871: 보낼 시각 = w·x·d·k 는 1분 전(지금 시각과 상관없이 잰다) · h 는 1시간 뒤 · 나머지는 없음(예약일 09:00 KST).
+  // ★0931: 보낼 시각 = w·x·d·k 는 1분 전(지금 시각과 상관없이 잰다) · h 는 1시간 뒤 · 나머지는 없음(예약일 09:00 KST).
   const rowId = (k) => `qz_sn_${k}_${s}`;
   const sendAt = (k) => (['w', 'x', 'd', 'k'].includes(k) ? new Date(Date.now() - 60e3).toISOString() : k === 'h' ? new Date(Date.now() + 3600e3).toISOString() : null);
   const rows = PEOPLE.map((k) => ({ id: rowId(k), unit_id: UNIT, course_id: QA_, user_id: P[k].id, scheduled_on: k === 'f' ? dayOff(1) : dayOff(0), origin: 'manual', send_at: sendAt(k) }));
@@ -156,7 +156,7 @@ async function main() {
   const picked = (list, k) => list.filter((r) => r.out_user_id === P[k].id).map((r) => r.out_assignment_id);
   const BYPASS = { w: '근무 밖', x: '오늘 근무 없음', d: '오늘 이미 받음', k: '이번 주 2번 받음' };
 
-  console.log('— (a) ★0871: 표시 없는 오늘 행도 보낼 시각이 지났으면 후보다(근무·하루·주 규칙 없음) —');
+  console.log('— (a) ★0931: 표시 없는 오늘 행도 보낼 시각이 지났으면 후보다(근무·하루·주 규칙 없음) —');
   {
     const list = await due();
     for (const [k, why] of Object.entries(BYPASS)) {
@@ -180,8 +180,8 @@ async function main() {
     check('(c) 나간 직원은 표시가 있어도 후보가 아니다', picked(list, 'gone').length === 0, `후보 ${picked(list, 'gone').length}`);
     const { data: rc } = await admin.from('quiz_assignments').select('send_now').eq('id', RECHECK).maybeSingle();
     check('(c) 재확인 대기 행은 표시가 안 선다(지금 규칙 그대로)', rc?.send_now === false, JSON.stringify(rc));
-    // ★0871: 재확인 기능을 없앴다. 재확인 행은 근무와 상관없이 나가지 않는다.
-    check('(c) 재확인 대기 행은 후보가 아니다(0871 재확인 없앰)', !list.some((r) => r.out_assignment_id === RECHECK));
+    // ★0931: 재확인 기능을 없앴다. 재확인 행은 근무와 상관없이 나가지 않는다.
+    check('(c) 재확인 대기 행은 후보가 아니다(0931 재확인 없앰)', !list.some((r) => r.out_assignment_id === RECHECK));
   }
 
   console.log('— (d) 미래 예약 행에는 표시를 세우지 않는다 —');
@@ -190,10 +190,10 @@ async function main() {
     check('(d) 내일 예약 행 send_now = false', !error && data?.send_now === false, error?.message ?? JSON.stringify(data));
     const list = await due();
     check('(d) 내일 예약 행은 후보가 아니다', picked(list, 'f').length === 0);
-    // ★0871: 오늘 안의 나중 시각 예약은 지금 바로가 앞당기지 않는다.
+    // ★0931: 오늘 안의 나중 시각 예약은 지금 바로가 앞당기지 않는다.
     const { data: hRow, error: hErr } = await admin.from('quiz_assignments').select('send_now').eq('id', rowId('h')).maybeSingle();
-    check('(d) 1시간 뒤 시각 예약 행 send_now = false(0871)', !hErr && hRow?.send_now === false, hErr?.message ?? JSON.stringify(hRow));
-    check('(d) 1시간 뒤 시각 예약 행은 후보가 아니다(0871)', picked(list, 'h').length === 0);
+    check('(d) 1시간 뒤 시각 예약 행 send_now = false(0931)', !hErr && hRow?.send_now === false, hErr?.message ?? JSON.stringify(hRow));
+    check('(d) 1시간 뒤 시각 예약 행은 후보가 아니다(0931)', picked(list, 'h').length === 0);
   }
 
   console.log('— (e) 두 번 불러도 한 번만 간다 —');

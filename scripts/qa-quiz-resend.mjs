@@ -5,13 +5,13 @@
 //   (b) 2/4 푼 상태에서 다시 알리기가 나가면 이어 풀기가 기본이다. 새 발송 진행 = 2/4 · 남은 2문항만 나오고 · 그걸로 완료된다.
 //   (c) 같은 상황에서 quiz_assignment_restart 를 부르면 0/4 부터 다시 센다. 남의 발송·두 번째 호출은 false.
 //   (d) 옛 앱 경로(새 RPC 안 부름 · 옛 서명 quiz_staff_record(p_rows))도 (b) 와 같다.
-//   (e) 재확인(origin recheck): ★0871 재확인 기능 없앰 — 다 푼 사람이든 푸는 중이든 후보가 아니다.
+//   (e) 재확인(origin recheck): ★0931 재확인 기능 없앰 — 다 푼 사람이든 푸는 중이든 후보가 아니다.
 //       이미 나간 옛 재확인 행은 0 부터 센다(이어받지 않음 · 선점으로 재현).
 //   + 직원은 count_from 을 직접 못 쓴다(RLS) · 이어 풀기 행만 count_from < sent_at 이다(버튼 조건의 서버 근거).
 //   (f) quiz_resend → 다음 스윕 후보에 바로 든다 · claim 으로 sent_at · 이어 풀기 트리거를 탄다.
-//   (g) 1분 안 두 번째 → resend_cooldown · 새 행·후보 0.  (h) 1분 뒤(2분 전) → 다시 보낸다(오늘 이미 받았어도). ★0871: 10분 → 1분.
+//   (g) 1분 안 두 번째 → resend_cooldown · 새 행·후보 0.  (h) 1분 뒤(2분 전) → 다시 보낸다(오늘 이미 받았어도). ★0931: 10분 → 1분.
 //   (i) 옛 앱 예약 행(사장 insert)은 완료 순간 지워진다 · 재확인 행·나간 행·응시 기록은 남는다.
-//   (j) 여러 명 중 일부 쿨다운 → 사람별 결과(sent · cooldown) · ★0871: 7일에 2번 받은 사람도 sent(queued 없음) · 후보다 · 직원은 forbidden.
+//   (j) 여러 명 중 일부 쿨다운 → 사람별 결과(sent · cooldown) · ★0931: 7일에 2번 받은 사람도 sent(queued 없음) · 후보다 · 직원은 forbidden.
 //   (k) 그 퀴즈를 끝낸 사람의 join 행은 후보가 아니다(남아 있던 행이어도).
 //   (l) 합류는 퀴즈를 자동 배정하지 않는다 · 재합류 뒤 사장이 보내면 이전 회차를 이어받지 않는다(0/4 · 실제 remove_staff → join_by_invite).
 //   (o) 다 푼 사람에게 다시 알리기 = completed · 행 0 · 후보 0.  (e) 다 푼 사람의 재확인 행도 후보가 아니다(11-04 사용자 결정).
@@ -134,7 +134,7 @@ async function main() {
     ITEMS.push(qid);
   }
 
-  // ★0871: 오늘 행은 보낼 시각(send_at) 없으면 09:00 KST 에 나간다. 시각과 상관없이 "후보 아님" 검사가 뜻을 갖게 오늘 행에 1분 전을 넣는다.
+  // ★0931: 오늘 행은 보낼 시각(send_at) 없으면 09:00 KST 에 나간다. 시각과 상관없이 "후보 아님" 검사가 뜻을 갖게 오늘 행에 1분 전을 넣는다.
   const SEND_AT_NOW = new Date(Date.now() - 60e3).toISOString();
   const asg = (id, uid, on, origin = 'manual') => ({ id, unit_id: UNIT, course_id: QUIZ, user_id: uid, scheduled_on: on, origin,
     ...(on === dayOff(0) ? { send_at: SEND_AT_NOW } : {}) });
@@ -246,7 +246,7 @@ async function main() {
 
   // ── (e) 재확인 ─────────────────────────────────────────────────────────
   // 11-04 사용자: 그 퀴즈를 다 푼 사람은 재확인으로도 다시 받지 않는다(어떤 경로로도). 이어 풀기는 여전히 안 물려받는다.
-  // ★0871(2026-11-19 사용자 결정): 재확인 기능을 없앴다. 재확인 행은 누구에게도 나가지 않는다(quiz_send_block retired).
+  // ★0931(2026-11-19 사용자 결정): 재확인 기능을 없앴다. 재확인 행은 누구에게도 나가지 않는다(quiz_send_block retired).
   console.log('— (e) 재확인: 완료자에게도 푸는 중인 사람에게도 안 나간다 · 이미 나간 옛 행은 0 부터 —');
   {
     const e1 = await firstSend('e');
@@ -261,8 +261,8 @@ async function main() {
     await answer('f', ITEMS.slice(0, 2), 'f-half');
     const rf = await remind('f', 'recheck');
     const candF = (await due()).filter((x) => x.out_assignment_id === rf);
-    check('(e) ★0871: 푸는 중인 사람의 재확인 행도 후보가 아니다', candF.length === 0, `후보 ${candF.length}건`);
-    // 아래는 0871 전에 이미 나간 재확인 행의 셈이다(선점으로 그 상태를 만든다).
+    check('(e) ★0931: 푸는 중인 사람의 재확인 행도 후보가 아니다', candF.length === 0, `후보 ${candF.length}건`);
+    // 아래는 0931 전에 이미 나간 재확인 행의 셈이다(선점으로 그 상태를 만든다).
     await claim(rf);
     const p = await progressOf(P.f.c, rf);
     check('(e) 푸는 중 재확인이 나가면 0/4 부터(노하우가 바뀌어 다시 푼다)', p?.answered_items === 0 && p?.total_items === 4, show(p));
@@ -270,7 +270,7 @@ async function main() {
     check('(e) 재확인 행은 이어 풀기가 아니다(count_from 없음)', !cf?.error && !cf?.count_from, JSON.stringify(cf));
   }
 
-  // ── (f)~(j) 즉시 다시 알리기(quiz_resend) · 1분 쿨다운(0871) · 완료 시 대기 행 삭제 ─────────
+  // ── (f)~(j) 즉시 다시 알리기(quiz_resend) · 1분 쿨다운(0931) · 완료 시 대기 행 삭제 ─────────
   // 배달은 크론 스윕과 같은 길이다: quiz_resend 가 행에 resend_at 을 찍고 스윕을 앞당긴다 → due_quiz_sends → claim_quiz_send → 푸시.
   // 여기서는 스윕 한 번을 due() + claim 으로 재현한다(엣지 배달 자체는 qa:quiz-schedule ⑦ 이 잰다).
   const resend = (users) => owner.rpc('quiz_resend', { p_course_id: QUIZ, p_user_ids: users.map((k) => P[k].id) });
@@ -310,7 +310,7 @@ async function main() {
 
   console.log('— (h) 1분 지난 뒤 → 다시 보낸다(하루 1회는 사장의 다시 알리기를 막지 않는다) —');
   {
-    // ★0871: 쿨다운 1분. 2분 전이면 옛 10분 규칙에서는 막혔고 지금은 된다.
+    // ★0931: 쿨다운 1분. 2분 전이면 옛 10분 규칙에서는 막혔고 지금은 된다.
     const back = new Date(Date.now() - 2 * 60_000).toISOString();
     if (gResend) await admin.from('quiz_assignments').update({ sent_at: back, resend_at: back }).eq('id', gResend);
     const { data, error } = await resend(['g']);
@@ -340,7 +340,7 @@ async function main() {
   console.log('— (j) 여러 명 중 일부 쿨다운 · 7일에 2번 받은 사람 → 사람별 결과 —');
   {
     // j1 = 2분 전에 일반 발송을 받음(쿨다운 아님 · 기준은 다시 알리기뿐) · j2 = 30초 전에 다시 알리기를 받음(쿨다운 1분 안)
-    // j3 = 최근 7일에 2번 받음. ★0871: 7일 상한이 없어 바로 sent.
+    // j3 = 최근 7일에 2번 받음. ★0931: 7일 상한이 없어 바로 sent.
     const put = async (id, k, on, sentAt, extra = {}) => {
       await owner.from('quiz_assignments').insert(asg(id, P[k].id, on));
       await admin.from('quiz_assignments').update({ sent_at: sentAt, opened_at: sentAt, ...extra }).eq('id', id);
@@ -353,9 +353,9 @@ async function main() {
     await put(`qz_qr_j3b_${s}`, 'j3', dayOff(-4), daysAgo(4));
     const { data, error } = await resend(['j1', 'j2', 'j3']);
     check('(j) 일부가 막혀도 오류로 끝나지 않는다', !error, error?.message ?? '');
-    check('(j) j1 sent · j2 cooldown · j3 sent(0871 · queued 없음)', resultOf(data, 'j1') === 'sent' && resultOf(data, 'j2') === 'cooldown' && resultOf(data, 'j3') === 'sent', JSON.stringify(data));
+    check('(j) j1 sent · j2 cooldown · j3 sent(0931 · queued 없음)', resultOf(data, 'j1') === 'sent' && resultOf(data, 'j2') === 'cooldown' && resultOf(data, 'j3') === 'sent', JSON.stringify(data));
     const cand = await due();
-    check('(j) 후보 = j1 · j3(0871 · 7일 상한 없음) · j2 는 아님', cand.some((x) => x.out_user_id === P.j1.id) && cand.some((x) => x.out_user_id === P.j3.id) && !cand.some((x) => x.out_user_id === P.j2.id), cand.map((x) => x.out_user_id).join(','));
+    check('(j) 후보 = j1 · j3(0931 · 7일 상한 없음) · j2 는 아님', cand.some((x) => x.out_user_id === P.j1.id) && cand.some((x) => x.out_user_id === P.j3.id) && !cand.some((x) => x.out_user_id === P.j2.id), cand.map((x) => x.out_user_id).join(','));
     const { error: se } = await P.j1.c.rpc('quiz_resend', { p_course_id: QUIZ, p_user_ids: [P.j1.id] });
     check('(j) 직원은 다시 알리기를 못 부른다(forbidden)', /forbidden/.test(se?.message ?? ''), se?.message ?? '거부 안 됨');
   }

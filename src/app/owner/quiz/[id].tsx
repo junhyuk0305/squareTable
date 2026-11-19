@@ -11,7 +11,6 @@ import {
   PERSON_STATE_LABEL,
   countFromOf,
   doneBefore,
-  guestSubmissions,
   guestSubmissionsLabel,
   isCurrentStaff,
   itemAnswers,
@@ -37,6 +36,7 @@ import {
   fetchQuizItems,
   fetchQuizCourseAttemptItems,
   fetchQuizSendStatus,
+  fetchGuestQuizSubmissions,
   fetchRecipientReadiness,
   upsertTrainingCourse,
   resendQuiz,
@@ -178,6 +178,14 @@ export default function QuizDetailScreen() {
       .catch(() => { if (alive) setSendStatusError(true); });
     return () => { alive = false; };
   }, [id, sends, itemsReload]);
+  // 링크 제출 수(2026-11-19 사용자 결정 · 정리한 제출은 세지 않는다). 설정 탭 링크 섹션(QuizDeployPanel)과 같은 원장 · 같은 거르기다.
+  //   정답률은 정리한 제출도 그대로 센다(quizAnswers).
+  const [guestCount, setGuestCount] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    void fetchGuestQuizSubmissions().then((rows) => { if (alive) setGuestCount(rows.filter((r) => r.courseId === id).length); });
+    return () => { alive = false; };
+  }, [id, itemsReload]);
   /** 퀴즈 숫자에 쓰는 답 — 업무 자청 응시(source='self', Q1)는 뺀다. 옛 서버는 source 가 없어 전부 남는다. */
   const quizAnswers = useMemo(() => staffItems.filter((r) => r.source !== 'self'), [staffItems]);
   const latestSends = useMemo(() => latestQuizAssignments(sends), [sends]);
@@ -230,7 +238,6 @@ export default function QuizDetailScreen() {
   const noResults = resultsEmpty(sends, quizAnswers);
   /** 보냈나(B1) — 보내기 직후 토스트·목록 줄과 같은 판정. 결과가 비었을 때 "아직 안 보냄"과 "곧 가요"를 가른다. */
   const phase = sendPhase(sends, now);
-  const guestCount = guestSubmissions(quizAnswers);
 
   /** 근거가 바뀐 뒤 다시 안 만든 문항(0114). 판정은 이미 DB 트리거가 해 뒀고 보여줄 자리가 없었다. */
   const staleItems = useMemo(
@@ -363,7 +370,7 @@ export default function QuizDetailScreen() {
 
   /**
    * 아직 안 푼 사람에게 지금 다시 알린다(0348 quiz_resend · 2026-11-03 사용자 결정).
-   * 어떤 행을 쓰고 언제 나가는지는 전부 서버가 정한다(1분 쿨다운 · 줄에 선 행 재사용 · 날짜 · 마감 · 0871).
+   * 어떤 행을 쓰고 언제 나가는지는 전부 서버가 정한다(1분 쿨다운 · 줄에 선 행 재사용 · 날짜 · 마감 · 0931).
    * 화면은 사람별 결과를 metrics.resendResultLabel 로 말하기만 한다.
    * ★예전(옛 앱)은 여기서 행을 직접 넣었고 오늘 행이 있으면 내일로 잡아 다음 날 나갔다(2026-10-15 QA #6 의 날짜 규칙은 서버로 옮겼다).
    */
