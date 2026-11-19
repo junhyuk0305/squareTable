@@ -19,10 +19,18 @@
     "create_store": ["qa-onboarding"],
     "join_by_invite": ["qa-onboarding"],
     "handle_new_user": ["qa-onboarding"],
-    "approve_member": ["qa-onboarding"]
+    "approve_member": ["qa-onboarding"],
+    "push_kick_sweep": ["qa-push-kick"],
+    "claim_push_digests": ["qa-quiet-digest", "qa-race", "qa-push"],
+    "quiz_send_block": ["qa-quiz-send-rules", "qa-quiet-digest"],
+    "push_quiet_hold": ["qa-quiet-digest", "qa-race", "qa-push"]
   },
   "table": {
     "_": "마이그레이션이 이 표를 바꾸면 고른다. 표 이름을 본문에 적지 않아 자동으로 안 골라지는 하니스다(찾은결함 11).",
+    "push_quiet_digests": ["qa-quiet-digest", "qa-race", "qa-push"],
+    "member_notices": ["qa-member-notices", "qa-push-kick"],
+    "owner_alerts": ["qa-owner-alerts", "qa-push-kick"],
+    "quiz_assignments": ["qa-quiz-send-rules", "qa-quiet-digest", "qa-push-kick"],
     "attendance": ["qa-audit-attendance", "qa-open-record"],
     "swap_requests": ["qa-audit-attendance", "qa-shift-requests", "qa-j15"]
   },

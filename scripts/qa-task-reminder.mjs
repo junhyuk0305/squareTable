@@ -13,8 +13,9 @@
 //   ⑥ 크론이 부르는 엣지 엔드포인트를 그대로 쳐서 선점(중복 발송 방지)까지 실증한다.
 //   M2(2026-11-05): T1 선점 행에 발송 결과(delivered)가 남는다 · T2 크론 응답은 200 이고 갈래별 *Error 키가 전부 있다
 //      (한 갈래 throw 가 502 가 되지 않는다 · 값 null = 정상). 둘 다 엣지 경유 — 엣지가 안 떠 있으면 skip 으로 찍는다.
+//   0960(2026-11-19): T2 에 digestError(방해금지 요약 갈래) · T3 only:['notices'] 면 할일 갈래가 안 돈다 · T4 유저 JWT 는 403.
 //
-// ⚠️ ⑥ 은 **전역 스윕**이라 다른 매장의 "이미 도달한" 리마인더도 같이 발송된다(크론이 5분 안에
+// ⚠️ ⑥ 은 **전역 스윕**이라 다른 매장의 "이미 도달한" 리마인더도 같이 발송된다(크론이 1분 안에
 //    어차피 보낼 것을 앞당기는 것뿐이라 무해하지만, 조용한 부작용이 아니라 의도된 동작임을 밝혀 둔다).
 //
 // 사용: node scripts/qa-task-reminder.mjs   (.env + .env.seed 자동 로드) · --local(키 = npx -y supabase@2 status · .env 를 읽지 않는다)
@@ -239,18 +240,32 @@ async function main() {
   // ── ⑥ 엣지 스윕 E2E — 크론이 부르는 그 엔드포인트를 그대로 친다 ──────────
   console.log('— ⑥ 엣지 스윕(크론이 부르는 경로) —');
   // 엣지가 안 떠 있으면(로컬 functions serve 없음) status 0 — 예외로 끊지 않고 아래 검사가 red/skip 을 찍는다.
-  const sweep = async (key) => {
+  const sweep = async (key, body = { mode: 'task_reminders' }) => {
     try {
       const res = await fetch(`${URL_}/functions/v1/push`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${key}` },
-        body: JSON.stringify({ mode: 'task_reminders' }),
+        body: JSON.stringify(body),
       });
       return { status: res.status, body: await res.json().catch(() => ({})) };
     } catch (e) { return { status: 0, body: { fetch_error: e?.message } }; }
   };
   const denied = await sweep(ANON);
   check('anon 키로는 스윕 거부(403)', denied.status === 403, `status=${denied.status}`);
+  // ★0960: 사장 세션(유저 JWT)도 크론 모드는 거부(403) — only 를 실어도 같다.
+  const ownerTok = (await owner.auth.getSession()).data.session?.access_token ?? ANON;
+  const deniedUser = await sweep(ownerTok, { mode: 'task_reminders', only: ['notices'] });
+  check('T4 ★유저 JWT 로는 스윕 거부(403)', deniedUser.status === 403, `status=${deniedUser.status} ${JSON.stringify(deniedUser.body)}`);
+
+  // ── T3 ★0960 only: ['notices'] 면 할일 갈래는 돌지 않는다(담당자 할일이 선점되지 않는다) ──
+  const onlyRes = await sweep(SRV, { mode: 'task_reminders', only: ['notices'] });
+  const { data: early } = await admin.from('task_reminder_sent').select('template_id').eq('unit_id', UNIT).eq('remind_date', DAY);
+  if (onlyRes.status === 200) {
+    check('T3 ★only notices: 200 · 할일 갈래 안 돎(원장에 선점 없음 · 대상 그대로)', (early ?? []).length === 0 && (await mine()).some((r) => r.out_template_id === tPrivate),
+      `sent=${(early ?? []).map((r) => r.template_id).join(',') || '-'} body=${JSON.stringify(onlyRes.body)}`);
+  } else {
+    skipCase('T3 only notices 면 할일 갈래 안 돎', `엣지가 안 떠 있다 status=${onlyRes.status}`);
+  }
 
   made.sent.push(tPrivate, tNoShift); // tNoShift 는 선점되면 안 된다. 혹시 남으면 정리만 한다.
   const first = await sweep(SRV);
@@ -269,7 +284,7 @@ async function main() {
     const { data: sentRow, error: sentErr } = await admin.from('task_reminder_sent').select('delivered').eq('template_id', tPrivate).eq('remind_date', DAY).maybeSingle();
     check('T1 ★선점 행에 발송 결과가 남는다(delivered is not null)', !sentErr && sentRow?.delivered !== null && sentRow?.delivered !== undefined,
       sentErr?.message ?? JSON.stringify(sentRow));
-    const ERR_KEYS = ['quizError', 'alertError', 'closureError', 'noticeError', 'photoError'];
+    const ERR_KEYS = ['quizError', 'alertError', 'closureError', 'noticeError', 'digestError', 'photoError'];
     const missing = ERR_KEYS.filter((k) => !(k in (first.body ?? {})));
     check('T2 ★응답 200 · 갈래별 *Error 키가 전부 있다(한 갈래 throw 가 502 가 되지 않는다)', missing.length === 0,
       `missing=${missing.join(',') || '-'} body=${JSON.stringify(first.body)}`);

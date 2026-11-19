@@ -759,6 +759,46 @@ def('L23', 'add_shift_series 같은 반복 근무 동시 두 번 · apply_shift_
   check('L23', '묶음 정상 = ok', ok2.status === 0 && /ok\s*$/.test(ok2.stdout), (ok2.stdout || ok2.stderr).trim().slice(-80));
 });
 
+// ─────────────────────────────── 방해금지 요약(0960 · 2026-11-19) ───────────────────────────────
+// claim_push_digests 두 스윕이 같은 행을 동시에 · 보관(push_quiet_hold)과 선점이 겹침(양쪽 순서). 보관 수(held 합)를 잃지 않는다.
+//   방해금지 창 = 지금 ±30분(보관은 서버 now() 로 판정) · 선점은 p_now = 지금 + 2시간(끝난 뒤).
+def('QD', 'claim_push_digests 두 스윕 동시 · 보관과 선점이 겹침(0960)', async (W) => {
+  const w = await W({ staffN: 3, plan: 'multi' });
+  const [A, B, C] = w.staff;
+  const kst = new Date(Date.now() + 9 * 3600e3);
+  const m = kst.getUTCHours() * 60 + kst.getUTCMinutes();
+  const hm = (x) => { const y = ((x % 1440) + 1440) % 1440; return `${String(Math.floor(y / 60)).padStart(2, '0')}:${String(y % 60).padStart(2, '0')}`; };
+  const after = new Date(Date.now() + 2 * 3600e3).toISOString();
+  try {
+    R.val(`insert into public.unit_member_prefs(user_id, unit_id, quiet_enabled, quiet_start, quiet_end)
+      select u, ${q(w.unit)}, true, ${q(hm(m - 30))}, ${q(hm(m + 30))} from unnest(array[${q(A.id)}, ${q(B.id)}, ${q(C.id)}]::uuid[]) u; select 1;`);
+    const claimMine = (uid) => `(select count(*) from public.claim_push_digests(timestamptz ${q(after)}) c where c.out_user_id = ${q(uid)})`;
+    const hold = (uid) => `(select count(*) from public.push_quiet_hold(${q(w.unit)}, array[${q(uid)}]::uuid[], 'qa'))`;
+    const rows = (uid) => R.val(`select coalesce(string_agg(case when claimed_at is null then 'open' else 'claimed' end || ':' || held, ',' order by id), '') from public.push_quiet_digests where unit_id = ${q(w.unit)} and user_id = ${q(uid)}`);
+    const heldSum = (uid) => n(`select coalesce(sum(held), 0) from public.push_quiet_digests where unit_id = ${q(w.unit)} and user_id = ${q(uid)}`);
+
+    // QD1 두 스윕이 같은 열린 행을 동시에 → 한 쪽만 1행.
+    R.val(`insert into public.push_quiet_digests(user_id, unit_id, held) values (${q(A.id)}, ${q(w.unit)}, 2); select 1;`);
+    const [a1, b1] = R.twoAtOnce(S(w, 'service', claimMine(A.id), true), S(w, 'service', claimMine(A.id), false));
+    check('QD', 'QD1 두 스윕 동시: 앞 1행 · 뒤 0행', a1.ok && a1.v === '1' && b1.ok && b1.v === '0', `${show(a1)} · ${show(b1)}`);
+    check('QD', 'QD1 행 = 선점 1개(held 2)', rows(A.id) === 'claimed:2', rows(A.id));
+
+    // QD2 선점이 쥔 동안 보관 → 선점한 행 held 1 + 새 열린 행 held 1(합 2 · 잃지 않음).
+    R.val(`insert into public.push_quiet_digests(user_id, unit_id, held) values (${q(B.id)}, ${q(w.unit)}, 1); select 1;`);
+    const [a2, b2] = R.twoAtOnce(S(w, 'service', claimMine(B.id), true), S(w, 'service', hold(B.id), false));
+    check('QD', 'QD2 선점 1행 · 보관 1명', a2.ok && a2.v === '1' && b2.ok && b2.v === '1', `${show(a2)} · ${show(b2)}`);
+    check('QD', 'QD2 보관 합 = 2(선점 1 + 새 열린 행 1)', heldSum(B.id) === 2 && rows(B.id) === 'claimed:1,open:1', rows(B.id));
+
+    // QD3 보관이 쥔 동안 선점 → 선점은 이번에 건너뜀(skip locked) · 열린 행 held 2.
+    R.val(`insert into public.push_quiet_digests(user_id, unit_id, held) values (${q(C.id)}, ${q(w.unit)}, 1); select 1;`);
+    const [a3, b3] = R.twoAtOnce(S(w, 'service', hold(C.id), true), S(w, 'service', claimMine(C.id), false));
+    check('QD', 'QD3 보관 1명 · 겹친 선점 0행', a3.ok && a3.v === '1' && b3.ok && b3.v === '0', `${show(a3)} · ${show(b3)}`);
+    check('QD', 'QD3 열린 행 하나 · held 2', rows(C.id) === 'open:2', rows(C.id));
+  } finally {
+    R.val(`delete from public.unit_member_prefs where unit_id = ${q(w.unit)}; select 1;`);
+  }
+});
+
 // ─────────────────────────────── 엣지 · OTP 문자(H5) ───────────────────────────────
 // 로컬 엣지가 떠 있어야 한다: `npx -y supabase@2.122.1 functions serve otp --no-verify-jwt --env-file <파일>`.
 //   env 파일 = 가짜 SOLAPI_API_KEY·SECRET·FROM + HTTPS_PROXY=http://127.0.0.1:9 (밖으로 나가는 요청이 연결 거부로 끝난다 · 문자 0통).

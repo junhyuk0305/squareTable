@@ -17,8 +17,9 @@
 //   M2(2026-11-05) 스윕 재선점 — 선점 뒤 10분~1시간 안에 결과(delivered)가 안 남은 행은 엣지가 죽은 것으로 보고 한 번 더 준다
 //     (같은 update 로 delivered=0 → 최대 1회). O1 -15분·null 재선점+delivered=0 · O2 delivered=0 제외 · O3 -5분 제외 ·
 //     C1~C3 sweep_unit_closures 동일. RPC 를 직접 친다(엣지 불필요 · 별도 매장).
+//   0961(2026-11-19) 한 스윕 = push_sweep_cap() 100행 — L1·L2 sweep_owner_alerts (d) · L3·L4 sweep_unit_closures (b) · 101행이면 100 + 1.
 //
-// ⚠️ 스윕은 **전역**이다 — 다른 매장의 미발송 알림도 같이 나간다(크론이 5분 안에 보낼 것을 앞당길 뿐).
+// ⚠️ 스윕은 **전역**이다 — 다른 매장의 미발송 알림도 같이 나간다(크론이 1분 안에 보낼 것을 앞당길 뿐).
 // 실행: node scripts/qa-owner-alerts.mjs   (.env + .env.seed) · 로컬: --local(키 = npx -y supabase@2 status)
 // 자가정리: delete_my_account + app_config 원복(finally).
 import './lib/require-local-target.mjs'; // 접속 대상 가드 — 로컬이 아니면 --allow-remote 없이 멈춘다
@@ -205,6 +206,30 @@ async function main() {
       check('C3 -5분 행은 안 나온다', !swC.includes(c3) && ucBy[c3]?.delivered === null, JSON.stringify(ucBy[c3]));
       await admin.from('owner_alerts').delete().in('id', [o1, o2, o3]);
       await admin.from('unit_closure_alerts').delete().in('id', [c1, c2, c3]);
+
+      // L1~L4 ★0961 한 스윕 = push_sweep_cap() 100행. 101행이면 100 + 1(남은 행은 미선점이라 다음 분에 잡힌다).
+      //   전역 스윕이라 남은 미발송 행을 먼저 비운다(100행 미만이 나올 때까지).
+      const drain = async (fn) => {
+        for (let i = 0; i < 30; i++) {
+          const r = await admin.rpc(fn, { p_now: nowIso });
+          if (r.error) throw new Error(`${fn} 비우기 실패: ${r.error.message}`);
+          if ((r.data ?? []).length < 100) return;
+        }
+      };
+      const capCase = async (fn, table, rows, tag) => {
+        await drain(fn);
+        const insC = await admin.from(table).insert(rows).select('id');
+        if (insC.error) throw new Error(`${table} 101행 시드 실패: ${insC.error.message}`);
+        const ids = new Set(insC.data.map((x) => x.id));
+        const s1 = await admin.rpc(fn, { p_now: nowIso });
+        const s2 = await admin.rpc(fn, { p_now: nowIso });
+        const m1 = (s1.data ?? []).filter((x) => ids.has(x.out_id)).length, m2 = (s2.data ?? []).filter((x) => ids.has(x.out_id)).length;
+        check(`${tag[0]} ★${fn} 한 스윕 = 100행(101개 중)`, !s1.error && (s1.data ?? []).length === 100 && m1 === 100, s1.error?.message ?? `all=${(s1.data ?? []).length} mine=${m1}`);
+        check(`${tag[1]} ${fn} 남은 1행은 다음 스윕`, !s2.error && m2 === 1, s2.error?.message ?? `mine=${m2}`);
+        await admin.from(table).delete().in('id', [...ids]);
+      };
+      await capCase('sweep_owner_alerts', 'owner_alerts', Array.from({ length: 101 }, (_, i) => oa(`qa-cap-${s}-${i}`, {})), ['L1', 'L2']);
+      await capCase('sweep_unit_closures', 'unit_closure_alerts', Array.from({ length: 101 }, (_, i) => uc(ck(10 + i), {})), ['L3', 'L4']);
     }
 
     // ── 준비: 사장 + 직원 4명(유료로 열어 승인 → 만료 = 1명 잠김) ──

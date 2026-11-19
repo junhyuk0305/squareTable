@@ -3174,7 +3174,7 @@ export async function fetchQuizCourseStats(strict = false): Promise<Record<strin
 
 /**
  * 보낼 시각이 지났는데 아직 안 나간 이유(0931 quiz_send_status · 판정 = 서버 quiz_send_block 하나). 이유가 없는 사람은 맵에 없다.
- * seat_locked = 무료 인원을 넘어 잠김 · due_passed = 마감 지남 · quiet = 그 매장 방해금지 시간 · store_locked = 매장 이용 멈춤.
+ * seat_locked = 무료 인원을 넘어 잠김 · due_passed = 마감 지남 · quiet = 그 매장 방해금지 시간(옛 서버 0931~0959 만 · 0960 이 뺐다) · store_locked = 매장 이용 멈춤.
  */
 export type QuizSendBlock = 'seat_locked' | 'due_passed' | 'quiet' | 'store_locked';
 export async function fetchQuizSendStatus(courseId: string, strict = false): Promise<Record<string, QuizSendBlock>> {
@@ -3612,7 +3612,7 @@ export async function resendQuiz(courseId: string, userIds: string[]): Promise<D
 
 /**
  * 지금 바로 보내기(0930 quiz_send_now). 이 퀴즈의 오늘 이하 미발송 행에 표시를 세우고 스윕을 한 번 앞당긴다.
- * 보낼 시각이 지금보다 뒤인 행(send_at)은 건드리지 않는다(0931). 다 푼 사람·나간 직원·좌석 잠김·방해금지는 서버가 거른다.
+ * 보낼 시각이 지금보다 뒤인 행(send_at)은 건드리지 않는다(0931). 다 푼 사람·나간 직원·좌석 잠김은 서버가 거른다. 방해금지는 0960 부터 거르지 않고 푸시만 끝나고 요약한다.
  * 반환 = 표시가 있고 아직 안 나간 행 수. 두 번 불러도 한 번만 간다(서버).
  * 오류 코드 = invalid_argument · forbidden · quiz_not_found · quiz_no_items. 원문은 화면에 내지 않는다(quizErrorMessage).
  */

@@ -4,8 +4,9 @@
 //   (1) 지운 제한 넷: 근무 밖 직원 · 오늘·이번 주 이미 받은 직원 · 두 번 안 연 직원의 오늘 행이 due_quiz_sends 후보다.
 //   (2) 한 스윕에 같은 사람의 퀴즈 둘이 같이 나간다(v_taken 지움).
 //   (3) 보낼 시각: send_at 이 미래면 후보가 아니고, 지났으면 후보다. send_at 없는 행은 예약일 09:00 KST(quiz_send_block 시각 인자로 잰다).
-//   (4) 방해금지: 그 매장 방해금지 시간이면 후보가 아니고 이유 = quiet. 시간대를 지금 밖으로 옮기면 후보다.
-//   (5) 이유와 발송이 같은 답: 후보인 사람은 quiz_send_status 에 이유가 없고, 아닌 사람(quiet · due_passed)은 그 이유가 있다.
+//   (4) 방해금지: ★0960 부터 그 매장 방해금지 시간이어도 후보다(퀴즈 카드는 제시각에 뜨고 푸시만 모았다가 끝나면 요약 1건 · qa-quiet-digest).
+//       시간대를 지금 밖으로 옮겨도 후보다.
+//   (5) 이유와 발송이 같은 답: 후보인 사람은 quiz_send_status 에 이유가 없고, 아닌 사람(due_passed)은 그 이유가 있다. 'quiet' 이유는 없다(0960).
 //   (6) 재확인 행은 나가지 않는다(재확인 기능 없앰).
 //   (7) 다시 알리기: 쿨다운 1분(2분 전 요청 뒤 다시 됨 · 30초 전이면 resend_cooldown) · 이번 주 2번 받은 직원도 sent(queued 없음).
 //   (8) recipient_readiness: 근무표에 없는 직원도 on_schedule = true · weekly_quota_left = 2.
@@ -81,7 +82,7 @@ try {
   check('(2) f 의 퀴즈 둘이 한 스윕에 같이 후보', ids.has(rid(f.key)) && ids.has(rid(f.key, 2)));
   check('(3) send_at 1시간 뒤 행은 후보 아님', !sa1.error && !ids.has(rid('sa', 1)));
   check('(3) send_at 1분 전 행은 후보', !sa2.error && ids.has(rid('sa', 2)));
-  check('(4) 방해금지 중인 d 는 후보 아님', !ids.has(rid(d.key)));
+  check('(4) ★0960 방해금지 중인 d 도 후보(푸시만 보관)', ids.has(rid(d.key)));
   check('(5) 마감 지난 e 는 후보 아님', !ids.has(rid(e.key)));
   check('(6) 재확인 행은 후보 아님', !ids.has(rid('rc')));
 
@@ -96,14 +97,14 @@ try {
 
   // (5) 이유 = 발송. 사장 세션으로 읽는다.
   const st = Object.fromEntries((await ok(w.owner.c.rpc('quiz_send_status', { p_course_id: C0 }), 'quiz_send_status')).map((r) => [r.user_id, r.reason]));
-  check('(5) d 의 이유 = quiet', st[d.id] === 'quiet', JSON.stringify(st[d.id] ?? null));
+  check("(5) ★0960 방해금지 중인 d 는 이유 없음('quiet' 없앰)", !st[d.id], JSON.stringify(st[d.id] ?? null));
   check('(5) e 의 이유 = due_passed', st[e.id] === 'due_passed', JSON.stringify(st[e.id] ?? null));
   const agree = [a, b, c, f].every((p) => ids.has(rid(p.key)) && !st[p.id]);
   check('(5) 후보인 a·b·c·f 는 이유가 없다', agree, JSON.stringify([a, b, c, f].map((p) => st[p.id] ?? null)));
 
   // (4) 방해금지를 지금 밖으로 옮기면 후보.
   await ok(admin.from('unit_member_prefs').update({ quiet_start: hhmm(minsNow + 120), quiet_end: hhmm(minsNow + 180) }).eq('user_id', d.id).eq('unit_id', w.unit), '방해금지 옮김');
-  check('(4) 방해금지가 끝나면 d 가 후보', (await due()).includes(rid(d.key)));
+  check('(4) 방해금지를 지금 밖으로 옮겨도 d 가 후보', (await due()).includes(rid(d.key)));
 
   // (7) 다시 알리기. b = 이번 주 2번 받음 · 2분 전 다시 알리기 → 1분 쿨다운이 지나 sent.
   await ok(admin.from('quiz_assignments').insert({ id: rid('rs', 1), unit_id: w.unit, course_id: C2, user_id: b.id, scheduled_on: kstDay(1), origin: 'manual', resend_at: new Date(Date.now() - 120e3).toISOString() }), '다시 알리기 시드 b');

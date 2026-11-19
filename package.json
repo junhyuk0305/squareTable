@@ -107,6 +107,8 @@
     "qa:quiz-send-now": "node scripts/qa-quiz-send-now.mjs --allow-remote",
     "qa:quiz-send-now:local": "node scripts/qa-quiz-send-now.mjs --local",
     "qa:quiz-send-rules:local": "node scripts/qa-quiz-send-rules.mjs --local",
+    "qa:quiet-digest:local": "node scripts/qa-quiet-digest.mjs --local",
+    "qa:push-kick:local": "node scripts/qa-push-kick.mjs --local",
     "qa:quiz-link-count:local": "node scripts/qa-quiz-link-count.mjs --local",
     "qa:sheet-web-back:local": "node scripts/qa-sheet-web-back.mjs --local",
     "qa:quiz-fuzz:local": "node scripts/qa-quiz-fuzz.mjs --local",

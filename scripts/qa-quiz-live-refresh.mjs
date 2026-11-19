@@ -2,7 +2,7 @@
 //
 // 사장 창 둘(목록 /owner/training · 상세 /owner/quiz/<id>)을 띄워 두고, 탭을 다시 열거나 새로고침하지 않은 채
 // 발송 원장(quiz_assignments)만 바꾼다. 화면이 구독(subscribeQuizAssignments)으로 다시 읽어 바뀌어야 GREEN.
-//   ① 사장 세션으로 "지금 바로" 행을 넣는다(send_now) → 상세 "5분 안에 가요" · 목록 "곧 발송"
+//   ① 사장 세션으로 "지금 바로" 행을 넣는다(send_now) → 상세 "1분 안에 가요" · 목록 "곧 발송"
 //   ② service_role 로 sent_at 을 찍는다(크론 claim 과 같은 열) → 상세 결과 칸(완료 0/1) · 목록 "완료 0/1명"
 //   ③ service_role 로 completed_at 을 찍는다(직원이 다 푼 것과 같은 열) → 상세 "1/1" · 목록 "완료 1/1명" · 응시 완료 칸
 // 수정 전(구독 없음)에는 ①~③ 이 새로고침 없이 바뀌지 않아 RED 다.
@@ -131,8 +131,8 @@ try {
   if (SEND_NOW_COL) {
     const { error } = await admin.from('quiz_assignments').update({ send_now: true }).eq('id', AID);
     if (error) throw new Error(`send_now: ${error.message}`);
-    check('①-1 상세 = 5분 안에 가요', await D.waitFor(bodyHas(/5분 안에 가요/), LIVE_MS));
-    check('①-2 목록 = 곧 발송 · 5분 안에 가요', await waitRow(L, /곧 발송[\s\S]*5분 안에 가요|5분 안에 가요[\s\S]*곧 발송/), (await rowText(L)) ?? '');
+    check('①-1 상세 = 1분 안에 가요', await D.waitFor(bodyHas(/1분 안에 가요/), LIVE_MS));
+    check('①-2 목록 = 곧 발송 · 1분 안에 가요', await waitRow(L, /곧 발송[\s\S]*1분 안에 가요|1분 안에 가요[\s\S]*곧 발송/), (await rowText(L)) ?? '');
   } else {
     check('①-1 상세 = 예약 문구(M월 D일에 보내요)', await D.waitFor(bodyHas(/월 \d+일에 보내요/), LIVE_MS));
   }
@@ -140,7 +140,7 @@ try {
   section('② 발송이 나간다(sent_at)');
   const { error: sentErr } = await admin.from('quiz_assignments').update({ sent_at: new Date().toISOString() }).eq('id', AID);
   if (sentErr) throw new Error(`sent_at: ${sentErr.message}`);
-  check('②-1 상세 = 결과 칸(빈 상태가 사라진다)', await D.waitFor(`!${bodyHas(/5분 안에 가요|아직 아무에게도 안 보냈어요/)}&&${bodyHas(/완료/)}`, LIVE_MS));
+  check('②-1 상세 = 결과 칸(빈 상태가 사라진다)', await D.waitFor(`!${bodyHas(/1분 안에 가요|아직 아무에게도 안 보냈어요/)}&&${bodyHas(/완료/)}`, LIVE_MS));
   check('②-2 목록 = 완료 0/1명', await waitRow(L, /완료 0\/1명/), (await rowText(L)) ?? '');
 
   section('③ 직원이 다 푼다(completed_at)');

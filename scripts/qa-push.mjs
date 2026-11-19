@@ -20,6 +20,8 @@
 //     P1 push_client_event_v2 가 key 를 돌려주고 push_client_event(v1 · 옛 엣지·0339 트리거)는 5열 그대로
 //     P2 release 뒤 같은 사건이 다시 ok · P3 10분 지난 키·assign: 키는 release 가 지우지 않는다
 //     P4 엣지 deliver 인프라 실패 → release → 503 은 외부에서 유발 불가 → review 1(통과로 세지 않는다)
+//   0960(2026-11-19) 방해금지 보관·요약: T12m 음소거·수신 끔이 먼저(요약 행 없음) · T13d 방해금지 시간 = held 1 + 열린 요약 행 ·
+//     T13e 끝난 뒤 크론 모드(only digest)가 요약을 한 번 선점·결과 기록 · 다시 불러도 그대로.
 //   엣지가 안 떠 있으면 T1~T14 는 skip 1 로 찍는다(통과로 세지 않는다). 로컬은 --local(키 = npx -y supabase@2 status).
 //
 // 자가정리: 만든 모든 테스트 계정은 끝에 delete_my_account 로 삭제.
@@ -310,6 +312,28 @@ try {
   const t12 = await invokePush(ownerA, { audience: 'staff', tag: 'question', itemId: await ask(ownerA), title: '동료 질문' });
   check('T12b ★매장 음소거: staffA2 억제 → recipients=1', t12.status === 200 && t12.json?.recipients === 1, JSON.stringify(t12.json));
 
+  // ── T12m ★0960 음소거·수신 끔이 방해금지보다 먼저다 — 방해금지 시간이어도 보관하지 않는다(요약 행 없음) ──
+  const adminP = createClient(URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } });
+  const digestsOf = async (uid) => {
+    const r = await adminP.from('push_quiet_digests').select('id, held, claimed_at, delivered, dropped_at').eq('unit_id', unitA).eq('user_id', uid).order('id');
+    return r.error ? `오류 ${r.error.code ?? ''} ${r.error.message}` : (r.data ?? []);
+  };
+  const nowM = kstNowMin();
+  const qS = hhmm(nowM - 30), qE = hhmm(nowM + 30);
+  const t12mS = await saveUnitPrefs(staffA2, unitA, { muted: true, quiet: true, start: qS, end: qE });
+  const t12m = await invokePush(ownerA, { audience: 'staff', tag: 'question', itemId: await ask(ownerA), title: '동료 질문' });
+  const dm1 = await digestsOf(staffA2Id);
+  check('T12m-a ★음소거 + 방해금지 시간: 보관 안 함(held 0 · 요약 행 없음)', !t12mS.error && t12m.status === 200 && t12m.json?.recipients === 1
+    && (t12m.json?.held ?? 0) === 0 && Array.isArray(dm1) && dm1.length === 0, `${t12mS.error?.message ?? ''} ${JSON.stringify(t12m.json)} rows=${JSON.stringify(dm1)}`);
+  const offS = await staffA2.rpc('save_notification_prefs', { p_push_enabled: false, p_quiet_enabled: false, p_quiet_start: '22:00', p_quiet_end: '08:00' });
+  const t12nS = await saveUnitPrefs(staffA2, unitA, { muted: false, quiet: true, start: qS, end: qE });
+  const t12n = await invokePush(ownerA, { audience: 'staff', tag: 'question', itemId: await ask(ownerA), title: '동료 질문' });
+  const dm2 = await digestsOf(staffA2Id);
+  check('T12m-b ★수신 끔 + 방해금지 시간: 보관 안 함(held 0 · 요약 행 없음)', !offS.error && !t12nS.error && t12n.status === 200 && t12n.json?.recipients === 1
+    && (t12n.json?.held ?? 0) === 0 && Array.isArray(dm2) && dm2.length === 0, `${offS.error?.message ?? t12nS.error?.message ?? ''} ${JSON.stringify(t12n.json)} rows=${JSON.stringify(dm2)}`);
+  const onS = await staffA2.rpc('save_notification_prefs', { p_push_enabled: true, p_quiet_enabled: false, p_quiet_start: '22:00', p_quiet_end: '08:00' });
+  if (onS.error) throw new Error(`수신 켜기 원복 실패: ${onS.error.message}`);
+
   const now = kstNowMin();
   const inStart = hhmm(now - 30), inEnd = hhmm(now + 30); // 지금을 감싸는 60분 창(자정 넘김도 엣지가 처리)
   const t13s = await saveUnitPrefs(staffA2, unitA, { muted: false, quiet: true, start: inStart, end: inEnd });
@@ -323,12 +347,29 @@ try {
   const inList13 = (hub13 ?? []).some((r) => r.unit_id === unitA && r.source === 'uq' && r.payload?.id === q13);
   check('T13c ★방해금지 중에도 알림함에는 남음: staffA2 허브 데이터에 그 질문이 있음', !hub13e && inList13,
     hub13e?.message ?? `uq rows=${(hub13 ?? []).filter((r) => r.source === 'uq').length}`);
+  // T13d ★0960 억제가 아니라 보관이다 — 응답 held = 1 · (staffA2, 매장A) 열린 요약 행 held 1.
+  const dm3 = await digestsOf(staffA2Id);
+  check('T13d ★방해금지 시간: 응답 held=1 · 열린 요약 행 1개(held 1)', t13.json?.held === 1 && Array.isArray(dm3) && dm3.length === 1
+    && dm3[0].claimed_at === null && dm3[0].held === 1, `held=${t13.json?.held} rows=${JSON.stringify(dm3)}`);
 
   const outStart = hhmm(now + 120), outEnd = hhmm(now + 180);
   const t14s = await saveUnitPrefs(staffA2, unitA, { muted: false, quiet: true, start: outStart, end: outEnd });
   check('T14a save 매장 quiet(지금 제외) 성공', !t14s.error, t14s.error?.message ?? '');
   const t14 = await invokePush(ownerA, { audience: 'staff', tag: 'question', itemId: await ask(ownerA), title: '동료 질문' });
   check(`T14b 매장 방해금지 지금 제외(${outStart}~${outEnd}): 억제 안 함 → recipients=2 복귀`, t14.status === 200 && t14.json?.recipients === 2, JSON.stringify(t14.json));
+
+  // ── T13e ★0960 방해금지가 끝난 뒤 크론 모드(요약 갈래만)가 요약을 한 번 보낸다 · 다시 불러도 또 안 보낸다 ──
+  //   방해금지 창은 T14a 에서 지금 밖으로 옮겼다. 기기가 없어 접수 0 이지만 결과(delivered)는 적힌다.
+  const cron = { mode: 'task_reminders', only: ['digest'] };
+  const t13e1 = await invokePushRaw(SERVICE, cron);
+  const dm4 = await digestsOf(staffA2Id);
+  check('T13e-a ★크론 요약 갈래 200 · digestError null · 요약 행 선점 + 결과 기록', t13e1.status === 200 && t13e1.json?.digestError === null
+    && Array.isArray(dm4) && dm4.length === 1 && !!dm4[0].claimed_at && dm4[0].delivered !== null && !dm4[0].dropped_at,
+    `status=${t13e1.status} ${JSON.stringify(t13e1.json)} rows=${JSON.stringify(dm4)}`);
+  const t13e2 = await invokePushRaw(SERVICE, cron);
+  const dm5 = await digestsOf(staffA2Id);
+  check('T13e-b 다시 불러도 요약은 한 번(행 그대로 · 선점 시각 그대로)', t13e2.status === 200 && Array.isArray(dm5) && dm5.length === 1
+    && dm5[0].claimed_at === dm4?.[0]?.claimed_at, JSON.stringify(dm5));
 
 } catch (e) {
   if (e !== EDGE_DOWN) { fail++; console.log('  FAIL exception:', e.message); }

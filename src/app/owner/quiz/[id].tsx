@@ -472,7 +472,7 @@ export default function QuizDetailScreen() {
         {seg === 'people' ? (
           noResults ? (
             /* 보낸 행이 있는데 아직 안 나갔으면 "안 보냈어요"라고 하지 않는다(B1 · 판정 = metrics.sendPhase).
-               지금 바로 = 5분 안에 가요 · 예약 = 목록과 같은 "M월 D일에 보내요". 나가면 구독이 다시 읽어 결과로 바뀐다. */
+               지금 바로 = 1분 안에 가요 · 예약 = 목록과 같은 "M월 D일에 보내요". 나가면 구독이 다시 읽어 결과로 바뀐다. */
             phase === 'none' ? (
               <EmptyState
                 title="아직 아무에게도 안 보냈어요"

@@ -78,12 +78,12 @@ export const QUIZ_STATE_LABEL: Record<QuizState, string> = {
 /**
  * 퀴즈 한 건을 보냈나. 보내기 직후 토스트 · 상세 결과 칸 · 목록 줄이 이 판정 하나로 말한다.
  *  · sent    = 한 명이라도 sent_at 이 있다.
- *  · soon    = 아직 아무도 안 받았고, 오늘 행 중 보낼 시각이 지났거나 "지금 바로"(send_now) 행이 있다. 다음 스윕(5분)에 간다.
+ *  · soon    = 아직 아무도 안 받았고, 오늘 행 중 보낼 시각이 지났거나 "지금 바로"(send_now) 행이 있다. 다음 스윕(1분 · 0962)에 간다.
  *  · waiting = 행은 있는데 보낼 시각이 아직이다(예약).
  *  · none    = 발송 행이 없다.
  * 보낼 시각 = 서버 quiz_send_due_at(0931) 짝: send_now 면 지금 · send_at · 없으면 예약일 09:00 KST.
  * 어제 이전 행이 아직 안 나갔으면 막힌 것(좌석 잠김·마감 지남 등)이라 soon 이라 말하지 않는다.
- * 사람별 막힌 이유(방해금지 포함)는 상세의 fetchQuizSendStatus 가 말한다.
+ * 사람별 막힌 이유는 상세의 fetchQuizSendStatus 가 말한다. 방해금지는 0960 부터 막힌 이유가 아니다(카드는 제시각 · 푸시만 끝나고 요약).
  */
 export type SendPhase = 'none' | 'waiting' | 'soon' | 'sent';
 
@@ -127,14 +127,14 @@ export function sendAtLabel(iso: string): string {
  */
 export function sendPhaseLabel(phase: SendPhase, at?: string | null): string {
   if (phase === 'sent') return '보냈어요';
-  if (phase === 'soon') return '5분 안에 가요';
+  if (phase === 'soon') return '1분 안에 가요';
   if (phase === 'waiting') return at ? `${sendAtLabel(at)}에 보내요` : '아직 안 나갔어요';
   return '';
 }
 
 /**
  * 보내기 직후 토스트 머리. count = 만들기 화면에서 고른 받는 사람 수(발송 전 선택 인원).
- * soon·sent = "3명에게 5분 안에 가요" · waiting = 보낼 시각 문구 그대로("11월 20일 오후 3시에 보내요").
+ * soon·sent = "3명에게 1분 안에 가요" · waiting = 보낼 시각 문구 그대로("11월 20일 오후 3시에 보내요").
  */
 export function sendToastLabel(phase: SendPhase, count: number, at?: string | null): string {
   const label = sendPhaseLabel(phase, at);

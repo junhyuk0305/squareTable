@@ -584,7 +584,7 @@ export default function QuizNewScreen() {
     if (!sent) { setBusy(false); return; }
     /*
      * "지금 바로"(B1 · 2026-11-19) — 행을 넣은 뒤 서버에 바로 보내 달라고 한다(0930 quiz_send_now).
-     * 행은 이미 send_now 로 들어갔다. 이 호출은 같은 날 먼저 있던 행에도 표시를 세우고 스윕을 앞당긴다. 실패해도 다음 스윕(5분)에 나간다.
+     * 행은 이미 send_now 로 들어갔다. 이 호출은 같은 날 먼저 있던 행에도 표시를 세우고 스윕을 앞당긴다. 실패해도 다음 스윕(1분 · 0962)에 나간다.
      * 토스트는 목록·상세와 같은 판정(metrics.sendPhase)으로 말한다. 방금 넣은 행은 아직 sent_at 이 없다.
      */
     let nowErr: Parameters<typeof quizSendNowErrorMessage>[0] = null;

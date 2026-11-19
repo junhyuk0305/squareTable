@@ -19,7 +19,11 @@ export type RecipientReadiness = {
   blockedReason: DeviceReason | null;
 };
 
-/** 받는 사람 줄(퀴즈 결과 탭)에 붙는 한 줄. */
+/**
+ * 받는 사람 줄(퀴즈 결과 탭)에 붙는 한 줄.
+ * quiet = 옛 서버(0931~0959)만 보낸다. 0960 부터 방해금지는 퀴즈를 막지 않는다(카드는 제시각 · 푸시만 끝나고 요약 1건).
+ * 0960 이 라이브에 오르기 전 서버와 같이 돌 수 있어 문구를 남긴다.
+ */
 const ROW_TEXT: Record<ReadinessReason, string> = {
   no_device: '알림 받을 기기가 없어요',
   push_off: '알림을 꺼 두었어요',
