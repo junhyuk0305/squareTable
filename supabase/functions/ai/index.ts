@@ -50,6 +50,14 @@ const MAX_SOP_FIELD = 1_500;
 // → 사용자당 한도를 별도로 둬서 1인의 버스트가 매장 전체 예산을 독식하지 못하게 한다.
 const RATE_PER_MIN = 20;       // 매장(unit)당
 const RATE_PER_MIN_USER = 10;  // 사용자(uid)당 — 매장 한도의 절반
+// ★검색 색인(task=embed)은 대화 한도와 따로 센다(2026-11-19 첫 사용 측정 A1).
+//   온보딩에서 추천 노하우 10개를 담으면 앱이 색인 10개를 한꺼번에 보낸다. 같은 통에서 세면 사람당 10 이 바로 차서,
+//   곧바로 쓴 첫 노하우 정리(square)가 429 를 맞았다. 앱이 보내는 "온보딩 중" 같은 표시는 믿지 않으므로 embed 전부를 뺀다.
+//   숫자 근거: 매장 60 = 담기 10 + 인수인계서 대량 등록 · 진입 때 대기분 재시도(embedBacklog 5건) 를 한 분에 받아도 남는 양.
+//   사람 40 = 한 사람이 매장 통을 다 쓰지 못하게(동료 몫 20 을 남긴다 · 위 이중 한도와 같은 이유).
+//   임베딩은 대화 모델보다 훨씬 싸고, 넘친 건 대기 표시가 남아 다음 진입 때 다시 만든다(0181).
+const EMBED_RATE_PER_MIN = 60;      // 매장(unit)당
+const EMBED_RATE_PER_MIN_USER = 40; // 사용자(uid)당
 const hits = new Map<string, { n: number; resetAt: number }>();
 
 function corsFor(origin: string | null) {
@@ -1405,9 +1413,12 @@ Deno.serve(async (req: Request) => {
 
   // 2) 레이트리밋 — 사용자당 + 매장당 이중(남용 #15). 한 직원의 버스트가 매장 전체 예산을
   //    독식해 동료를 막는 걸 방지. 키 네임스페이스(u:/t:)로 uid·unitId 충돌 회피.
+  //    색인(embed)은 따로 센다(eu:/et: · 위 EMBED_RATE_* 근거). 본문을 못 읽었으면 task 가 없어 대화 통으로 센다.
+  const isEmbed = !bodyErr && body?.task === 'embed';
+  const [uKey, tKey] = isEmbed ? ['eu', 'et'] : ['u', 't'];
   if (
-    rateLimited(`u:${user.id}`, RATE_PER_MIN_USER) ||
-    (user.unitId ? rateLimited(`t:${user.unitId}`, RATE_PER_MIN) : false)
+    rateLimited(`${uKey}:${user.id}`, isEmbed ? EMBED_RATE_PER_MIN_USER : RATE_PER_MIN_USER) ||
+    (user.unitId ? rateLimited(`${tKey}:${user.unitId}`, isEmbed ? EMBED_RATE_PER_MIN : RATE_PER_MIN) : false)
   ) {
     return json({ error: 'rate_limited' }, 429);
   }

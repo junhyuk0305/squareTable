@@ -126,7 +126,12 @@ const MEASURE = () => {
     //   (Heatmap.tsx STAGE · 블록어휘 §7-2 H5, 08-27). 이 검사는 그보다 먼저(08-26) 만들어졌다.
     if (el.getAttribute('data-testid') === 'heat-cell') continue;
     const r = el.getBoundingClientRect();
-    if (r.height < 44) out.smallTaps.push({ t: label(el), h: Math.round(r.height) });
+    // 기준은 크롤러 R3(scripts/lib/qa-oracles.mjs r3)와 같다: 탭 스위처 칸 39 · 고르기 칩·요일 원 40 · 그 밖 44.
+    //   페이지 안에서 도는 코드라 그 함수를 가져올 수 없어 판정만 옮겨 적는다. 한쪽을 바꾸면 다른 쪽도 바꾼다.
+    const seg = el.getAttribute('role') === 'tab' && !!el.closest('[role="tablist"]');
+    const chip = el.getAttribute('role') !== 'tab' && ['aria-selected', 'aria-checked', 'aria-pressed'].some((a) => el.hasAttribute(a));
+    const min = seg ? 39 : chip ? 40 : 44;
+    if (r.height < min) out.smallTaps.push({ t: label(el), h: Math.round(r.height), min });
   }
 
   // L2 — 스크롤 본문의 **최상위 자식**들이 같은 좌우에서 서는가(여백 들쭉날쭉의 정체)
@@ -171,7 +176,7 @@ const report = (name, m) => {
   const rights = [...new Set(m.gutters.map((g) => g.right))];
   check(`${name} · L2 좌우 여백 일정`, lefts.length <= 1 && rights.length <= 1,
     `left=${JSON.stringify(lefts)} right=${JSON.stringify(rights)} ${JSON.stringify(m.gutters.slice(0, 4))}`);
-  check(`${name} · L3 터치 타깃 44dp+`, m.smallTaps.length === 0, JSON.stringify(m.smallTaps.slice(0, 4)));
+  check(`${name} · L3 터치 타깃(칩 40 · 탭 칸 39 · 그 밖 44)`, m.smallTaps.length === 0, JSON.stringify(m.smallTaps.slice(0, 4)));
   check(`${name} · L4 겹침 없음`, m.overlaps.length === 0, JSON.stringify(m.overlaps.slice(0, 3)));
   check(`${name} · L5 글자 잘림 없음`, m.clipped.length === 0, JSON.stringify(m.clipped.slice(0, 3)));
 };

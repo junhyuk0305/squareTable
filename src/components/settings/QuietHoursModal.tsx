@@ -66,7 +66,7 @@ export function QuietHoursModal({
               <Ionicons name="moon-outline" size={20} color={InkColors.ink} />
               <Text style={styles.title}>방해 금지 시간</Text>
             </View>
-            <Text style={styles.sub}>이 시간대에는 핸드폰 알림만 꺼요. 알림함에는 그대로 쌓여요.</Text>
+            <Text style={styles.sub}>핸드폰 알림만 미뤄요. 알림함에는 바로 쌓여요.</Text>
 
             {/* 대상 토글 — 시작/종료 중 무엇을 고를지 */}
             <View style={styles.seg}>
@@ -84,7 +84,7 @@ export function QuietHoursModal({
             </View>
 
             <Text style={styles.hint}>
-              {s > e ? `밤 ${s}부터 다음 날 ${e}까지 알림을 끕니다.` : `${s}부터 ${e}까지 알림을 끕니다.`}
+              {s > e ? `밤 ${s}부터 모은 알림을 다음 날 ${e}에 한 번에 알려요.` : `${s}부터 모은 알림을 ${e}에 한 번에 알려요.`}
             </Text>
 
             <View style={styles.actions}>

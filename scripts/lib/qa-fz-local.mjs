@@ -64,7 +64,7 @@ const pad = (n) => String(n).padStart(2, '0');
 export const kstDay = (n = 0) => { const k = new Date(Date.now() + 9 * 3600e3 + n * 864e5); return `${k.getUTCFullYear()}-${pad(k.getUTCMonth() + 1)}-${pad(k.getUTCDate())}`; };
 
 /**
- * 매장 하나 = 사장 1 + 직원 n + 퀴즈들. 근무표 없음(fail-open).
+ * 매장 하나 = 사장 1 + 직원 n + 퀴즈들. 근무표 없음(★0931 부터 퀴즈 발송은 근무표를 보지 않는다).
  * opts: { tag, staffN, courses: [{ items, answerDays }], plan: 'multi'|null }
  * 반환 world: { unit, code, owner:{id,c}, staff:[{id,c,email,key}], courses:[{id, items:[{id, answer}] , entries}] , users, phones }
  */

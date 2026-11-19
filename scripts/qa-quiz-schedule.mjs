@@ -4,32 +4,30 @@
 //   ① 컬럼 경로: 사장 실세션이 start_at·answer_days 를 저장하고 되읽는다(PGRST204 스키마 드리프트 검출).
 //      interval_step 은 기본 0 으로 붙고 범위 밖 값은 DB 가 거부한다.
 //   ② quiz_assignments RLS: 사장만 만든다 / 직원은 본인 것만 본다 / 남의 매장 코스·비멤버는 거부.
-//   ③ due_quiz_sends 근무일 판정: 근무 중이면 대상, 근무표가 있는데 오늘 없으면 제외,
-//      근무표를 아예 안 쓰는 매장은 fail-open(그 조건이 곧 "영원히 0건"이 되기 때문).
-//   ④ 빈도 상한 = src/lib/quiz/schedule.ts 상수의 SQL 사본이 어긋나지 않는다:
-//      하루 1회 · 주 2회 · 한 스윕에 같은 사람 2건 금지 · 연속 2회 무시 시 자동 정지 · 열면 재개.
+//   ③ ★0931(2026-11-19 사용자 결정): due_quiz_sends 는 근무표를 보지 않는다. 근무 중이든 근무 밖이든 대상이다.
+//   ④ ★0931: 빈도 상한을 지웠다 — 하루 1회 · 주 2회 · 한 스윕에 같은 사람 1건 · 연속 2회 무시 시 자동 정지가 없다.
+//      같은 사람의 두 퀴즈가 한 스윕에 같이 나가고, 7일 안에 2번 받았거나 두 번 안 열었어도 대상이다.
 //   ⑤ 예약일이 미래면 안 나간다. 내보낸 직원(멤버십 없음)에게도 안 나간다.
 //   ⑥ claim_quiz_send 선점: 첫 호출만 true, due_on = 받은 날 + answer_days.
 //   ⑦ 크론이 부르는 엣지 엔드포인트를 그대로 쳐서 퀴즈 갈래까지 실증한다.
 //   ⑧ 열었다/다 풀었다(0140): 직원 직접 UPDATE 는 막히고 definer RPC 만 통한다. 남의 것·안 나간 것은 false.
-//   ⑨ 완료·열기가 실제로 자동 정지를 푸는가 — ④에서 막힌 사람이 다시 대상이 되는지.
+//   ⑨ ★0931: 자동 정지가 없다 — 다시 연속 무시 상태가 돼도 대상이다.
 //   ⑩ 합류(0346 _admit_member): 신청(pending)에도 확정에도 퀴즈가 자동 배정되지 않는다.
 //      0169 의 신입 첫 퀴즈 자동 예약은 0348 에서 없앴다(2026-11-04 사용자 결정 · 사장이 보내야 받는다).
-//   ⑪ 변경 트리거(0169): 사장이 노하우를 고치면 **이미 통과한 직원**에게 재확인이 생긴다.
-//      ★문항 스냅샷(0114 source_updated_at)이 낡은 동안은 안 나간다 — 옛 정답을 다시 묻지 않는다.
-//      ★폭주 방지: 3건을 한 번에 고쳐도 1건 · 대기 중이면 더 안 만듦 · (매장,직원)당 7일 1건 ·
-//        통과 기록 없는 직원과 사장 본인은 제외. 만들어진 뒤는 0139 의 발송 상한을 그대로 탄다.
+//   ⑪ ★0931(재확인 기능 없앰): 사장이 노하우를 고치고 문항을 검수해도 예약 발송이 재확인 행을 만들지 않는다.
+//      남아 있는 재확인 대기 행은 발송 후보가 아니다. (옛 ⑪ = 0169 변경 트리거 · enqueue_knowhow_rechecks 폭주 방지 검사)
 //   ⑫ M2 발송 결과(2026-11-05 · delivered·suppressed 열 + quiz_send_notified + claim_quiz_push_retry):
-//      Q1 스윕 뒤 delivered 가 남는다(엣지 경유 · 엣지가 안 떠 있으면 skip) · Q2 delivered=0 두 건은 자동정지에 안 세고 1이면 센다 ·
-//      Q3 suppressed=1·delivered=0(음소거·방해금지)은 알린 것으로 센다 · Q4 delivered null(옛 엣지 행)도 알린 것으로 센다 ·
+//      Q1 스윕 뒤 delivered 가 남는다(엣지 경유 · 엣지가 안 떠 있으면 skip) ·
+//      ★0931 Q2·Q3·Q4: 자동 정지가 없어 delivered·suppressed 값과 상관없이 두 번 안 연 사람도 대상이다 ·
 //      Q5 sent_at 10분~1시간 전·delivered null·안 연 행만 claim_quiz_push_retry 가 1회 재배달로 돌려주고 delivered=0 을 찍는다 ·
-//      Q6 delivered=0 행도 하루 1회 상한에는 센다(상한 축 = sent_at 발급).
+//      ★0931 Q6: 하루 1회가 없어 오늘 받은 행이 있어도 대상이다.
 //
-// ★ ④ 의 기대값은 schedule.ts 를 읽어서 만든다 — 상수를 한쪽만 고치면 이 게이트가 red 가 된다.
-//   (schedule.ts 머리말: "서버가 같은 판정을 해야 할 때는 상수를 마이그레이션에 옮겨 적고 양쪽을 같이 고친다")
+// ★0931: 상한 상수(MAX_SENDS_PER_DAY · MAX_SENDS_PER_WEEK · AUTO_STOP_AFTER_IGNORED · MAX_AUTO_RECHECKS_PER_WEEK)는 schedule.ts 에서도 빠졌다.
+//   이 게이트는 그 상수를 읽지 않는다. 간격(REVIEW_INTERVALS_DAYS)만 schedule.ts 에서 읽는다.
+// ★0931: 예약일이 오늘이고 보낼 시각(send_at)이 없으면 09:00 KST 에 나간다. 시각과 상관없이 재려고 오늘 행에 1분 전 send_at 을 넣는다.
 //
 // ⚠️ ⑦ 은 **전역 스윕**이라 다른 매장의 이미 도달한 할일 리마인더·예약 퀴즈도 같이 나간다
-//    (크론이 5분 안에 어차피 보낼 것을 앞당기는 것뿐이지만, 의도된 동작임을 밝혀 둔다).
+//    (크론이 1분 안에 어차피 보낼 것을 앞당기는 것뿐이지만, 의도된 동작임을 밝혀 둔다).
 // ⚠️ 크론(task-reminders) 등록 자체는 여기서 못 본다 — 0139 는 새 크론을 만들지 않고 그 잡에 갈래만 얹는다.
 //
 // 사용: node scripts/qa-quiz-schedule.mjs   (.env + .env.seed 자동 로드)
@@ -71,19 +69,10 @@ const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  ✓', n, ext
 // 돌릴 수 없는 검사는 통과로 세지 않는다 — 최종 줄에 skip n 으로 남긴다(AGENTS "건너뛴 것을 통과로 세지 않는다").
 const skipCase = (n, why) => { skip++; console.log('  – skip', n, `(${why})`); };
 
-// ── schedule.ts 상수 읽기 (SQL 사본과 대조할 기대값의 출처) ──────────────
+// ── schedule.ts 상수 읽기 (간격만) ──────────────────────────────────────
 const SCHED = readFileSync(here('../src/lib/quiz/schedule.ts'), 'utf8');
-const constOf = (name) => {
-  const m = SCHED.match(new RegExp(`export const ${name}\\s*=\\s*(\\d+)`));
-  if (!m) throw new Error(`schedule.ts 에서 ${name} 을 못 찾았다 — 상수 이름이 바뀌었나?`);
-  return Number(m[1]);
-};
-const MAX_PER_DAY = constOf('MAX_SENDS_PER_DAY');
-const MAX_PER_WEEK = constOf('MAX_SENDS_PER_WEEK');
-const AUTO_STOP = constOf('AUTO_STOP_AFTER_IGNORED');
-// 0169 변경 트리거의 생성 상한도 같은 SSOT 에서 온다(한쪽만 고치면 이 게이트가 red).
-// 입사 트리거(JOIN_FIRST_QUIZ_COURSES)는 0348 에서 없앴다(2026-11-04 사용자 결정).
-const RECHECK_WEEK = constOf('MAX_AUTO_RECHECKS_PER_WEEK');
+// ★0931: 하루·주 상한 · 자동 정지 · 재확인 생성 상한 상수는 읽지 않는다(규칙과 함께 지웠다). 옛 주 상한 2 는 아래 시드 수로만 쓴다.
+const OLD_WEEK_CAP = 2;
 const INTERVALS = JSON.parse(
   SCHED.match(/export const REVIEW_INTERVALS_DAYS\s*=\s*(\[[^\]]*\])/)[1],
 );
@@ -129,7 +118,7 @@ const due = async () => {
 const dueFor = async (uid) => (await due()).filter((r) => r.out_user_id === uid);
 
 async function main() {
-  console.log(`— 상수 (schedule.ts) 하루 ${MAX_PER_DAY} · 주 ${MAX_PER_WEEK} · 자동정지 ${AUTO_STOP} · 간격 ${INTERVALS.join('/')}일 —`);
+  console.log(`— 상수 (schedule.ts) 간격 ${INTERVALS.join('/')}일 —`);
   console.log(`— 셋업 (KST ${DAY} · 근무 ${SHIFT_START}~${SHIFT_END} · 비번 ${OFF_START}~${OFF_END}) —`);
   await seedVerifiedPhones(URL_, SRV, qaPhones);
 
@@ -211,8 +200,9 @@ async function main() {
     for (const q of steps) { const { error } = await q; if (error) throw new Error(`giveItem(${tag}): ${error.message}`); }
   };
   await giveItem(UNIT, QUIZ, 'a');
+  const SEND_AT_NOW = new Date(Date.now() - 60e3).toISOString();   // ★0931 오늘 행의 보낼 시각 = 1분 전
   const asg = (id, uid, on = DAY, unit = UNIT, course = QUIZ) =>
-    ({ id, unit_id: unit, course_id: course, user_id: uid, scheduled_on: on });
+    ({ id, unit_id: unit, course_id: course, user_id: uid, scheduled_on: on, ...(on === DAY ? { send_at: SEND_AT_NOW } : {}) });
   const A1 = `qz_a1_${s}`, A2 = `qz_a2_${s}`, A3 = `qz_a3_${s}`;
   const B1 = `qz_b1_${s}`, C1 = `qz_c1_${s}`;
   const { error: oiErr } = await owner.from('quiz_assignments').insert([asg(A1, aId), asg(B1, bId), asg(C1, cId)]);
@@ -255,10 +245,10 @@ async function main() {
     xmErr ? `${xmErr.code} ${xmErr.message}` : `행 ${xmRows}`);
   await owner.rpc('switch_active_unit', { p_unit_id: UNIT });
 
-  // ── ③ 근무일 판정 ───────────────────────────────────────────────────────
-  console.log('— ③ 근무일 판정 —');
-  // 아직 shift_templates 가 0행 = 근무표를 안 쓰는 매장 → fail-open.
-  check('근무표 없는 매장은 fail-open(3명 전부 대상)', (await due()).length === 3, `n=${(await due()).length}`);
+  // ── ③ 근무일 판정 (★0931: 퀴즈는 근무표를 보지 않는다) ─────────────────
+  console.log('— ③ 근무표와 상관없이 대상(0931) —');
+  // 아직 shift_templates 가 0행 = 근무표를 안 쓰는 매장.
+  check('근무표 없는 매장은 3명 전부 대상', (await due()).length === 3, `n=${(await due()).length}`);
 
   const shA = `sh_qs_a_${s}`, shB = `sh_qs_b_${s}`, shC = `sh_qs_c_${s}`;
   const { error: shErr } = await admin.from('shift_templates').insert([
@@ -268,24 +258,24 @@ async function main() {
   ]);
   if (shErr) throw new Error('shift insert: ' + shErr.message);
   check('근무 중인 사람은 대상(A)', (await dueFor(aId)).length === 1);
-  check('근무표가 있는데 지금 근무가 아니면 제외(B)', (await dueFor(bId)).length === 0);
+  check('★0931: 근무표가 있는데 지금 근무가 아니어도 대상(B)', (await dueFor(bId)).length === 1, `n=${(await dueFor(bId)).length}`);
 
-  // ── ④ 빈도 상한 (기대값은 schedule.ts 에서 온다) ────────────────────────
-  console.log('— ④ 빈도 상한 —');
+  // ── ④ 빈도 상한 (★0931: 하루·주·한 스윕 1건·자동 정지를 지웠다) ───────────
+  console.log('— ④ 빈도 상한 없음(0931) —');
   await admin.from('quiz_assignments').insert(asg(A2, aId, TOMORROW));
   check('예약일이 미래면 제외', (await dueFor(aId)).length === 1, '오늘치 1건만');
 
-  // 같은 사람에게 오늘치 2건 → 한 스윕에 1건만(아직 sent_at 이 없어 원장 조회만으로는 못 막는 자리).
+  // 같은 사람에게 오늘치 2건 → ★0931: 한 스윕에 둘 다 나간다(v_taken 지움).
   const QUIZ_B = `tc_qsb_${s}`;
   await owner.from('training_courses').insert({ id: QUIZ_B, unit_id: UNIT, key: `qsb_${s}`, name: '두 번째 퀴즈', start_at: DAY });
-  // 0327: 문항 없는 퀴즈는 스윕 후보가 아니다. 문항이 없으면 아래 "한 스윕에 1건" 검사가 공짜로 통과한다.
+  // 0327: 문항 없는 퀴즈는 스윕 후보가 아니다. 문항이 있어야 아래 "한 스윕에 2건" 검사가 뜻을 갖는다.
   await giveItem(UNIT, QUIZ_B, 'b');
   await admin.from('quiz_assignments').insert(asg(A3, aId, DAY, UNIT, QUIZ_B));
-  check(`한 스윕에 같은 사람 ${MAX_PER_DAY}건까지`, (await dueFor(aId)).length === MAX_PER_DAY, `n=${(await dueFor(aId)).length}`);
+  check('★0931: 한 스윕에 같은 사람의 퀴즈 2건이 같이 나간다', (await dueFor(aId)).length === 2, `n=${(await dueFor(aId)).length}`);
 
-  // 주 상한 — 최근 7일 안에 발송 MAX_PER_WEEK 건(열어 둬서 자동 정지와 섞이지 않게).
+  // 옛 주 상한 — 최근 7일 안에 발송 2건(열어 둬서 옛 자동 정지 판정과 섞이지 않게).
   const wk = [];
-  for (let i = 0; i < MAX_PER_WEEK; i++) {
+  for (let i = 0; i < OLD_WEEK_CAP; i++) {
     wk.push({ id: `qz_wk${i}_${s}`, unit_id: UNIT, course_id: QUIZ, user_id: cId,
       scheduled_on: DAY, sent_at: daysAgo(2 + i), opened_at: daysAgo(2 + i), due_on: null });
   }
@@ -293,26 +283,26 @@ async function main() {
   wk.forEach((r, i) => { r.scheduled_on = ymd(new Date(kst.getFullYear(), kst.getMonth(), kst.getDate() - 2 - i)); });
   const { error: wkErr } = await admin.from('quiz_assignments').insert(wk);
   if (wkErr) throw new Error('주 상한 시드: ' + wkErr.message);
-  check(`7일 안에 ${MAX_PER_WEEK}건 발송했으면 제외`, (await dueFor(cId)).length === 0);
+  check(`★0931: 7일 안에 ${OLD_WEEK_CAP}건 받았어도 대상`, (await dueFor(cId)).length === 1, `n=${(await dueFor(cId)).length}`);
 
-  // 창 밖으로 밀면 다시 대상. 동시에 자동 정지 판정의 재료가 된다.
+  // 창 밖으로 밀어도 대상. 동시에 옛 자동 정지 판정의 재료가 된다.
   for (const [i, r] of wk.entries()) {
     await admin.from('quiz_assignments').update({ sent_at: daysAgo(10 + i), opened_at: daysAgo(10 + i) }).eq('id', r.id);
   }
-  check('7일 창 밖이면 다시 대상', (await dueFor(cId)).length === 1);
+  check('7일 창 밖이어도 대상', (await dueFor(cId)).length === 1);
 
-  // 자동 정지 — 연속 AUTO_STOP 건을 안 열면 멈춘다.
+  // ★0931: 자동 정지가 없다 — 연속 2건을 안 열어도 대상이다.
   for (const r of wk) await admin.from('quiz_assignments').update({ opened_at: null }).eq('id', r.id);
-  check(`연속 ${AUTO_STOP}회 무시하면 자동 정지`, (await dueFor(cId)).length === 0);
+  check('★0931: 연속 2회 안 열어도 대상(자동 정지 없음)', (await dueFor(cId)).length === 1, `n=${(await dueFor(cId)).length}`);
   const newest = wk[0]; // sent_at 이 가장 최근인 것(-10일)
   await admin.from('quiz_assignments').update({ opened_at: daysAgo(9) }).eq('id', newest.id);
-  check('그 사람이 열면 다시 시작', (await dueFor(cId)).length === 1);
+  check('그 사람이 열어도 대상 그대로', (await dueFor(cId)).length === 1);
 
   // ── ⑤ 내보낸 직원 ───────────────────────────────────────────────────────
   console.log('— ⑤ 내보낸 직원 —');
   const { data: memB } = await admin.from('unit_members').select('*').eq('unit_id', UNIT).eq('user_id', bId).maybeSingle();
   await admin.from('shift_templates').update({ start_time: SHIFT_START, end_time: SHIFT_END }).eq('id', shB);
-  check('B가 근무 중이 되면 대상', (await dueFor(bId)).length === 1);
+  check('B가 근무 중이 돼도 대상 그대로', (await dueFor(bId)).length === 1);
   await admin.from('unit_members').delete().eq('unit_id', UNIT).eq('user_id', bId);
   check('멤버십이 없으면 제외(퇴사자 폰에 안 간다)', (await dueFor(bId)).length === 0);
   if (memB) await admin.from('unit_members').insert(memB);
@@ -326,7 +316,8 @@ async function main() {
   const { data: a1Row } = await admin.from('quiz_assignments').select('sent_at, due_on').eq('id', A1).maybeSingle();
   check('sent_at 채워짐', !!a1Row?.sent_at);
   check(`due_on = 받은 날 + ${ANSWER_DAYS}일`, a1Row?.due_on === DUE_EXPECT, `${a1Row?.due_on} vs ${DUE_EXPECT}`);
-  check(`오늘 이미 받았으면 제외(하루 ${MAX_PER_DAY}회)`, (await dueFor(aId)).length === 0);
+  const aLeft = (await dueFor(aId)).map((r) => r.out_assignment_id);
+  check('★0931: 오늘 이미 받아도 남은 퀴즈는 대상(하루 1회 없음)', aLeft.length === 1 && aLeft[0] === A3, JSON.stringify(aLeft));
 
   // 마감 없는 퀴즈는 due_on 도 없다.
   const { data: cl3 } = await admin.rpc('claim_quiz_send', { p_id: A3 });
@@ -366,8 +357,7 @@ async function main() {
   }
 
   // ── ⑧ 열었다/다 풀었다 기록(0140) ───────────────────────────────────────
-  // ★이 경로가 없으면 시스템이 "아무도 안 푼다"고 판단해 연속 2회 뒤 영영 안 보낸다(④의 자동 정지).
-  //   RLS 는 직원 UPDATE 를 막아 뒀으므로 definer RPC 만이 유일한 쓰기 경로다.
+  // RLS 는 직원 UPDATE 를 막아 뒀으므로 definer RPC 만이 유일한 쓰기 경로다(★0931 뒤 자동 정지는 없지만 진행·완료 판정이 이 기록을 쓴다).
   console.log('— ⑧ 열었다 / 다 풀었다 (0140) —');
   const { data: juUp2 } = await jC.from('quiz_assignments').update({ opened_at: new Date().toISOString() }).eq('id', C1).select();
   check('직원이 직접 opened_at 을 못 쓴다(RLS)', (juUp2 ?? []).length === 0, `updated=${juUp2?.length}`);
@@ -406,14 +396,14 @@ async function main() {
   check('다 푼 뒤 본인 발송 완료 true', done1 === true, `got=${done1}`);
   check('completed_at 채워짐', !!doneRow?.completed_at);
 
-  // ⑨ 완료가 자동 정지를 실제로 푸는가 — ④에서 막혔던 사람이 다시 대상이 되는지 본다.
-  console.log('— ⑨ 완료가 자동 정지를 푼다 —');
+  // ⑨ ★0931: 자동 정지가 없다 — ④ 의 연속 무시 상태로 되돌려도 대상이다.
+  console.log('— ⑨ 연속 무시여도 정지하지 않는다(0931) —');
   await admin.from('quiz_assignments').delete().eq('id', PEND);
   for (const r of wk) await admin.from('quiz_assignments').update({ opened_at: null }).eq('id', r.id);
   await admin.from('quiz_assignments').update({ sent_at: null, due_on: null, opened_at: null, completed_at: null }).eq('id', C1);
-  check('다시 연속 무시 상태 → 정지', (await dueFor(cId)).length === 0);
+  check('★0931: 다시 연속 무시 상태여도 대상', (await dueFor(cId)).length === 1, `n=${(await dueFor(cId)).length}`);
   await admin.from('quiz_assignments').update({ opened_at: daysAgo(9) }).eq('id', wk[0].id);
-  check('가장 최근 것을 열면 해제', (await dueFor(cId)).length === 1);
+  check('가장 최근 것을 열어도 대상 그대로', (await dueFor(cId)).length === 1);
 
   // ══════════════════════════════════════════════════════════════════════
   // ⑩ 입사 트리거 (0169)
@@ -468,13 +458,12 @@ async function main() {
   check('origin 은 아는 값만(제약)', !!ogErr, ogErr?.code ?? '거부 안 됨');
 
   // ══════════════════════════════════════════════════════════════════════
-  // ⑪ 변경 트리거 (0169)
+  // ⑪ 재확인 없앰 (★0931 · 2026-11-19 사용자 결정 · 옛 = 0169 변경 트리거)
   // ══════════════════════════════════════════════════════════════════════
-  // 사장이 노하우를 고치면 **이미 통과한 직원**에게 다시 확인이 나간다.
-  // 감지는 새로 만들지 않는다: playbook_entries.updated_at > knowhow_understanding.verified_at,
-  // 그리고 quiz_items.source_updated_at(0114 스냅샷)이 최신일 때만 = 사장이 검수를 마친 뒤에만.
-  console.log('— ⑪ 변경 트리거 —');
-  const enqueue = async () => { const { error } = await admin.rpc('enqueue_knowhow_rechecks'); if (error) throw new Error('enqueue: ' + error.message); };
+  // 0931 전에는 예약 발송(due_quiz_sends)이 맨 앞에서 enqueue_knowhow_rechecks 를 돌아, 사장이 노하우를 고치고 문항을 검수하면
+  // **이미 통과한 직원**에게 재확인 행을 만들었다. 이제 같은 상태를 만들고 스윕 후보를 읽어도 재확인 행이 없어야 한다.
+  // (enqueue 를 직접 부르지 않는다. 그 함수는 되돌리기용으로 남았고 전역으로 돈다 · 대조군은 qa:scheduler-recheck ③a 가 로컬에서 잰다.)
+  console.log('— ⑪ 재확인 없앰(0931) —');
   const rechecks = async (uid) => (await admin.from('quiz_assignments')
     .select('id, course_id, origin, created_by, scheduled_on, created_at')
     .eq('unit_id', UNIT).eq('user_id', uid).eq('origin', 'recheck')).data ?? [];
@@ -493,8 +482,7 @@ async function main() {
       is_template: false, pack_id: null, needs_review: false, correction_points: [], section: null, order_index: 0,
     });
     if (error) throw new Error(`playbook_entries(${id}): ` + error.message);
-    // ★노하우가 **통과보다 먼저** 있었던 상태를 만든다. 방금 만든 노하우(updated_at=지금)에
-    //   과거 통과를 붙이면 그 자체가 "통과 뒤에 바뀌었다"가 되어 아래 셋업 검사가 무너진다.
+    // ★노하우가 **통과보다 먼저** 있었던 상태를 만든다(아래 "고친 뒤"가 통과보다 뒤가 되게).
     await admin.from('playbook_entries').update({ updated_at: daysAgo(5) }).eq('id', id);
     await owner.from('course_entries').insert({ course_id: CJ, entry_id: id, unit_id: UNIT, position: 1 });
     await admin.from('knowhow_understanding').insert({ unit_id: UNIT, entry_id: id, staff_id: aId, staff_name: 'QA직원A', verified_at: daysAgo(3) });
@@ -511,90 +499,68 @@ async function main() {
   })));
   check('근거 문항 3건 준비', !qiErr, qiErr?.message ?? '');
 
-  await enqueue();
+  await due();
   check('안 바뀐 노하우로는 재확인이 안 생긴다', (await rechecks(aId)).length === 0, `n=${(await rechecks(aId)).length}`);
 
-  // 사장이 노하우 3건을 한 번에 고친다(= 섹션 이름 바꾸기 한 번이면 실제로 이렇게 된다).
+  // 사장이 노하우 3건을 한 번에 고치고(= 섹션 이름 바꾸기 한 번) 문항을 검수한다(스냅샷 갱신). 옛 규칙이면 여기서 재확인이 생겼다.
   await admin.from('playbook_entries').update({ updated_at: new Date().toISOString() }).in('id', ENTRIES3);
-  await enqueue();
-  check('★문항이 낡은 동안은 안 보낸다(옛 정답 출제 방지 · 0114)', (await rechecks(aId)).length === 0, `n=${(await rechecks(aId)).length}`);
-
-  // 사장이 문항을 검수(수정)하면 스냅샷이 갱신된다 → 이제 다시 물어봐도 되는 순간.
+  await due();
+  check('문항이 낡은 동안 재확인이 안 생긴다', (await rechecks(aId)).length === 0, `n=${(await rechecks(aId)).length}`);
   await owner.from('quiz_items').update({ payload: { ask: '오픈 때 가장 먼저 할 일은?', choices: ['바닥 청소', '포스 켜기'], answer_index: 1, explain: '포스부터요' } })
     .in('id', ENTRIES3.map((_, i) => `qi_qs${i}_${s}`));
-  await enqueue();
-  const r1 = await rechecks(aId);
-  check(`★노하우 3건을 한 번에 고쳐도 재확인은 ${RECHECK_WEEK}건(폭주 방지)`, r1.length === RECHECK_WEEK, `n=${r1.length}`);
-  check('origin=recheck · 시스템 생성(created_by null)', r1[0]?.origin === 'recheck' && r1[0]?.created_by === null, JSON.stringify(r1[0]));
-  check('재확인도 그 노하우가 담긴 코스로 나간다', r1[0]?.course_id === CJ, `${r1[0]?.course_id}`);
+  await due();
+  check('★0931: 노하우를 고치고 문항을 검수해도 예약 발송이 재확인 행을 만들지 않는다', (await rechecks(aId)).length === 0, `n=${(await rechecks(aId)).length}`);
 
-  await enqueue();
-  check('대기 중인 재확인이 있으면 더 안 만든다', (await rechecks(aId)).length === RECHECK_WEEK);
-
-  check('통과 기록이 없는 직원에게는 안 만든다(새로 배우는 것은 재확인이 아니다)', (await rechecks(bId)).length === 0);
-  await admin.from('knowhow_understanding').insert({ unit_id: UNIT, entry_id: ENTRY, staff_id: ownerId, staff_name: 'QA사장', verified_at: daysAgo(3) });
-  await enqueue();
-  check('사장 본인에게는 안 만든다', (await rechecks(ownerId)).length === 0);
-
-  // 대기 건이 나가도 7일 안에는 새로 안 만든다 — 주 상한 2회를 재확인이 다 먹지 않게.
-  await admin.from('quiz_assignments').update({ sent_at: daysAgo(1), opened_at: daysAgo(1) }).eq('id', r1[0].id);
-  await enqueue();
-  check(`이미 나갔어도 7일 안에는 새로 안 만든다(주 ${RECHECK_WEEK}건)`, (await rechecks(aId)).length === RECHECK_WEEK);
-
-  // 창 밖으로 밀면 다시 만든다(영영 멈추는 것이 아니다).
-  await admin.from('quiz_assignments')
-    .update({ created_at: daysAgo(8), scheduled_on: ymd(new Date(kst.getFullYear(), kst.getMonth(), kst.getDate() - 8)) })
-    .eq('id', r1[0].id);
-  await enqueue();
-  check('7일 창 밖이면 다시 만든다', (await rechecks(aId)).length === RECHECK_WEEK + 1);
-
-  // 재확인도 결국 0139 의 발송 경로를 그대로 탄다 — 상한·근무일 판정이 따로 놀지 않는다.
-  await admin.from('quiz_assignments').update({ opened_at: daysAgo(1) }).eq('id', r1[0].id);
-  const aDue = await dueFor(aId);
-  check('재확인이 발송 후보에 들어온다(A는 오늘 이미 받아 하루 상한에 걸린다)', aDue.length === 0, `n=${aDue.length}`);
-  await admin.from('quiz_assignments').update({ sent_at: daysAgo(8) }).eq('id', A1);
-  await admin.from('quiz_assignments').update({ sent_at: daysAgo(9) }).eq('id', A3);
-  const aDue2 = await dueFor(aId);
-  check('하루 상한이 풀리면 재확인이 후보가 된다', aDue2.length === 1, `n=${aDue2.length}`);
+  // 남아 있는 재확인 대기 행(0931 전에 만들어진 것)은 발송 후보가 아니다. 같은 사람의 사장 발송 행(대조군)은 후보다.
+  const RC = `qz_rc_${s}`, RCC = `qz_rcc_${s}`;
+  const yday = ymd(new Date(kst.getFullYear(), kst.getMonth(), kst.getDate() - 1));
+  const { error: rcErr } = await admin.from('quiz_assignments').insert([
+    { id: RC, unit_id: UNIT, course_id: CJ, user_id: aId, scheduled_on: yday, origin: 'recheck' },
+    { id: RCC, unit_id: UNIT, course_id: CJ2, user_id: aId, scheduled_on: yday, origin: 'manual' },
+  ]);
+  const aIds = (await dueFor(aId)).map((r) => r.out_assignment_id);
+  check('★0931: 재확인 대기 행은 발송 후보가 아니다 · 같은 사람의 사장 발송 행은 후보다', !rcErr && !aIds.includes(RC) && aIds.includes(RCC),
+    rcErr?.message ?? JSON.stringify(aIds));
+  await admin.from('quiz_assignments').delete().in('id', [RC, RCC]);
 
   // ══════════════════════════════════════════════════════════════════════
   // ⑫ M2 발송 결과 · 재배달 (2026-11-05)
   // ══════════════════════════════════════════════════════════════════════
-  // 자동정지 ④ 는 "알린 것"(quiz_send_notified = coalesce(delivered,1)>0 or coalesce(suppressed,0)>0)만 센다.
-  // 하루 1회·주 2회는 sent_at(발급) 그대로다. 대상은 B — 지금 근무 중(⑤에서 근무 구간을 지금으로 옮겼다) · 대기 행 B1 1건.
+  // ★0931: 자동 정지·하루 1회가 없어 delivered·suppressed 값과 상관없이 B 는 대상이다(옛 = quiz_send_notified 로 센 자동 정지).
+  // 대상은 B · 대기 행 B1 1건.
   // 열·함수가 없으면(마이그레이션 전) insert/update/rpc 가 오류 → 그 검사는 red 다(없어서 skip 으로 숨기지 않는다).
   console.log('— ⑫ M2 발송 결과 · 재배달 —');
   const agoDay = (n) => ymd(new Date(kst.getFullYear(), kst.getMonth(), kst.getDate() - n));
   const minsAgo = (m) => new Date(Date.now() - m * 60_000).toISOString();
   const bRow = (id, extra) => ({ id, unit_id: UNIT, course_id: QUIZ, user_id: bId, due_on: null, ...extra });
-  // ⑦ 의 전역 스윕이 B1 을 이미 발급했다(오늘 1건 → 하루 상한). B 의 행을 전부 미발급으로 되돌려 깨끗한 출발점을 만든다.
+  // ⑦ 의 전역 스윕이 B1 을 이미 발급했다. B 의 행을 전부 미발급으로 되돌려 깨끗한 출발점을 만든다.
   await admin.from('quiz_assignments').update({ sent_at: null, due_on: null, opened_at: null, completed_at: null }).eq('unit_id', UNIT).eq('user_id', bId);
   check('⑫ 셋업: B 는 지금 대상 1건', (await dueFor(bId)).length === 1, `n=${(await dueFor(bId)).length}`);
 
-  // Q2 — 10·12일 전에 보냈지만 푸시가 0건(delivered=0)인 두 건: 무시가 아니다 → 정지 안 됨. delivered=1 로 바꾸면 정지.
+  // Q2 — 10·12일 전에 보냈는데 안 연 두 건. delivered=0 이든 1 이든 대상이다(★0931 자동 정지 없음 · 옛 = 1 이면 정지).
   const M1 = `qz_m2a_${s}`, M2 = `qz_m2b_${s}`;
   const { error: m2Ins } = await admin.from('quiz_assignments').insert([
     bRow(M1, { scheduled_on: agoDay(10), sent_at: daysAgo(10), delivered: 0, suppressed: 0 }),
     bRow(M2, { scheduled_on: agoDay(12), sent_at: daysAgo(12), delivered: 0, suppressed: 0 }),
   ]);
-  check('Q2a ★delivered=0 두 건은 무시로 안 센다(자동정지 안 됨)', !m2Ins && (await dueFor(bId)).length === 1, m2Ins?.message ?? `n=${(await dueFor(bId)).length}`);
+  check('Q2a delivered=0 두 건이어도 대상', !m2Ins && (await dueFor(bId)).length === 1, m2Ins?.message ?? `n=${(await dueFor(bId)).length}`);
   const { error: m2Up1 } = await admin.from('quiz_assignments').update({ delivered: 1 }).in('id', [M1, M2]);
-  check('Q2b delivered=1 이면 두 번 무시 → 자동정지', !m2Up1 && (await dueFor(bId)).length === 0, m2Up1?.message ?? `n=${(await dueFor(bId)).length}`);
+  check('Q2b ★0931: delivered=1 두 번 무시여도 대상(자동 정지 없음)', !m2Up1 && (await dueFor(bId)).length === 1, m2Up1?.message ?? `n=${(await dueFor(bId)).length}`);
 
-  // Q3 — 음소거·방해금지로 억제된 발송(suppressed=1 · delivered=0)은 알린 것으로 센다(인앱 알림함은 남는다는 약속과 같은 축).
+  // Q3 — 음소거·방해금지로 억제된 발송(suppressed=1 · delivered=0). 옛 규칙은 알린 것으로 세 정지했다.
   const { error: m2Up2 } = await admin.from('quiz_assignments').update({ delivered: 0, suppressed: 1 }).in('id', [M1, M2]);
-  check('Q3 ★suppressed=1·delivered=0 은 알린 것으로 센다(자동정지)', !m2Up2 && (await dueFor(bId)).length === 0, m2Up2?.message ?? `n=${(await dueFor(bId)).length}`);
+  check('Q3 ★0931: suppressed=1·delivered=0 두 번이어도 대상', !m2Up2 && (await dueFor(bId)).length === 1, m2Up2?.message ?? `n=${(await dueFor(bId)).length}`);
 
-  // Q4 — 옛 엣지가 기록을 안 남긴 행(delivered null)은 알린 것으로 센다(모름=알림 · 옛 동작 그대로).
+  // Q4 — 옛 엣지가 기록을 안 남긴 행(delivered null). 옛 규칙은 알린 것으로 세 정지했다.
   const { error: m2Up3 } = await admin.from('quiz_assignments').update({ delivered: null, suppressed: null }).in('id', [M1, M2]);
-  check('Q4 ★delivered null(옛 행)은 알린 것으로 센다(자동정지)', !m2Up3 && (await dueFor(bId)).length === 0, m2Up3?.message ?? `n=${(await dueFor(bId)).length}`);
+  check('Q4 ★0931: delivered null(옛 행) 두 번이어도 대상', !m2Up3 && (await dueFor(bId)).length === 1, m2Up3?.message ?? `n=${(await dueFor(bId)).length}`);
   await admin.from('quiz_assignments').update({ opened_at: daysAgo(9) }).in('id', [M1, M2]);
-  check('⑫ 셋업: 열면 다시 대상', (await dueFor(bId)).length === 1, `n=${(await dueFor(bId)).length}`);
+  check('⑫ 열어도 대상 그대로', (await dueFor(bId)).length === 1, `n=${(await dueFor(bId)).length}`);
 
-  // Q6 — 오늘 발급됐지만 푸시가 0건인 행도 하루 1회에는 센다(상한을 delivered 기준으로 바꾸면 같은 날 두 번째 퀴즈가 인앱에 쌓인다 · D1).
+  // Q6 — 오늘 발급됐지만 푸시가 0건인 행. ★0931: 하루 1회가 없어 B 의 대기 행은 그대로 대상이다(옛 = 하루 1회에 센다).
   const M3 = `qz_m2c_${s}`;
   const { error: m2Ins3 } = await admin.from('quiz_assignments').insert(bRow(M3, { scheduled_on: agoDay(1), sent_at: new Date().toISOString(), delivered: 0, suppressed: 0 }));
-  check('Q6 ★delivered=0 행도 하루 1회에 센다', !m2Ins3 && (await dueFor(bId)).length === 0, m2Ins3?.message ?? `n=${(await dueFor(bId)).length}`);
+  check('Q6 ★0931: 오늘 받은 행이 있어도 대상(하루 1회 없음)', !m2Ins3 && (await dueFor(bId)).length === 1, m2Ins3?.message ?? `n=${(await dueFor(bId)).length}`);
 
   // Q5 — 재배달 선점: sent_at 10분~1시간 전 · delivered null · 안 열었고 안 끝낸 행만. 같은 update 로 delivered=0 → 두 번째는 0건.
   // R90 = 1시간 밖(묵은 행)은 재배달하지 않는다(배포 직후 옛 엣지가 보낸 delivered null 행이 몰려 나가지 않게 · 검토 지적 2026-11-05).

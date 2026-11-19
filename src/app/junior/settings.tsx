@@ -145,7 +145,7 @@ export default function StoreSettings() {
           <SettingsToggle
             icon="moon-outline"
             label="방해 금지 시간"
-            hint={`${pref.quiet_start}~${pref.quiet_end}에는 이 매장 핸드폰 알림만 꺼요`}
+            hint={`${pref.quiet_start}~${pref.quiet_end}에 온 알림은 끝나면 한 번에 알려요`}
             value={pref.quiet_enabled}
             onValueChange={(v) => save({ quiet_enabled: v })}
           />

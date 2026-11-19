@@ -494,8 +494,9 @@ try {
     note('K5 quiz_assignments(A) 행 수', `${before.length}→${after.length} · 새 행 날짜 ${after.filter((a) => !before.some((b) => b.id === a.id)).map((a) => a.scheduled_on).join(',') || '없음'}`);
     check('K5 다시 알리기 2회 · 오류 문구("못 했어요") 0건', toasts.every((t) => !/못 ?했어요/.test(t)), toasts.join(' | '));
     // 두 번째는 버튼이 사라졌거나 "이미 보내는 중"이어야 한다 — 어느 쪽이든 새 발송은 1건이다(멱등).
-    // 0348(11-04 · 다시 알리기 즉시 발송 + 10분 쿨다운) 뒤에는 첫 알림이 바로 나가 버튼이 남고, 두 번째는 서버 `resend_cooldown`
-    // → 화면 문구 "방금 보냈어요. 10분 뒤에 다시 보낼 수 있어요"(src/lib/quiz/errors.ts). 그 문구도 차단으로 센다(2026-11-05).
+    // 0348(11-04 · 다시 알리기 즉시 발송 + 쿨다운) 뒤에는 첫 알림이 바로 나가 버튼이 남고, 두 번째는 서버 `resend_cooldown`
+    // → 화면 문구 "방금 보냈어요. 1분 뒤에 다시 보낼 수 있어요"(src/lib/quiz/errors.ts). 그 문구도 차단으로 센다(2026-11-05).
+    // ★0931: 쿨다운 10분 → 1분. 두 누름 사이는 약 6초라 두 번째는 그대로 쿨다운이다.
     const added = after.filter((a) => !before.some((b) => b.id === a.id)).length;
     check('K5-2 두 번 눌러도 새 발송 1건(두 번째 = 버튼 사라짐 또는 "이미 보내는 중")', added === 1 && (goneAfter1 || /이미 보내는 중|방금 보냈어요/.test(toasts[1] ?? '')), `새 행 ${added} · 두 번째 "${toasts[1]}"`);
   }

@@ -12,6 +12,7 @@
 //       (매니저·신청자·다른 매장 사장·anon 은 0행 또는 거부) · 허브 my_units_notif_data 'join_done' 이 같은 행을 준다.
 //   [7] M2(2026-11-05) 스윕 재선점 — 선점 뒤 10분~1시간 안에 결과(delivered)가 안 남은 행은 한 번 더 준다(같은 update 로 delivered=0).
 //       N1 -15분·null 재선점+delivered=0 · N2 delivered=0 제외 · N3 -5분 제외 · N4 배정 취소 행(assign · delivered=0) 재선점 안 됨.
+//   [8] 0961(2026-11-19) 한 스윕 = push_sweep_cap() 100행 · 101행이면 100 + 1(남은 행은 미선점이라 다음 분에 잡힌다).
 //
 // 지금(0246)은 알림이 어디에도 없다. 내보낸 직원은 앱을 열기 전까지 모르고, 엣지 user 대상은 같은 매장 멤버만
 //   받아서 내보낸 뒤에는 클라이언트가 보낼 수도 없다.
@@ -228,10 +229,10 @@ try {
       .select('id');
     const oldId = old.data?.[0]?.id;
     check('4-0 하루 지난 알림 셋업', !old.error && !!oldId, old.error?.message);
-    // 한 틱에 200개까지 claim 한다. 로컬 DB 에 다른 하니스가 남긴 미발송 알림이 많아도 빠짐없이 보게 빌 때까지 돈다.
+    // 한 틱에 100개까지 claim 한다(0961 push_sweep_cap · 그 전 200). 로컬 DB 에 다른 하니스가 남긴 미발송 알림이 많아도 빠짐없이 보게 빌 때까지 돈다.
     const s1 = await admin.rpc('sweep_member_notices');
     const rows1 = [...(s1.data ?? [])];
-    for (let i = 0, last = rows1.length; !s1.error && last === 200 && i < 20; i++) {
+    for (let i = 0, last = rows1.length; !s1.error && last >= 100 && i < 20; i++) {
       const more = await admin.rpc('sweep_member_notices');
       last = (more.data ?? []).length;
       rows1.push(...(more.data ?? []));
@@ -278,6 +279,28 @@ try {
     check('N3 -5분 행은 안 나온다(엣지가 아직 보내는 중일 수 있다)', !got.includes(n3) && by[n3]?.delivered === null, JSON.stringify(by[n3]));
     check('N4 배정 취소 행(assign · delivered=0)은 재선점 안 됨', !got.includes(n4) && by[n4]?.delivered === 0, JSON.stringify(by[n4]));
     await admin.from('member_notices').delete().in('id', [n1, n2, n3, n4]);
+  }
+
+  // ═══════ 8. 한 번에 보낼 개수(0961 · push_sweep_cap = 100) ═══════
+  console.log('\n[8] 0961 — 한 스윕에 100행까지 · 101번째는 다음 스윕');
+  {
+    const nowIso = new Date().toISOString();
+    // 전역 스윕이다. 남은 미발송 행을 먼저 비운다(100행 미만이 나올 때까지).
+    for (let i = 0; i < 30; i++) {
+      const r = await admin.rpc('sweep_member_notices', { p_now: nowIso });
+      if (r.error) throw new Error(`sweep_member_notices 비우기: ${r.error.message}`);
+      if ((r.data ?? []).length < 100) break;
+    }
+    const rows = Array.from({ length: 101 }, (_, i) => ({ user_id: O.id, unit_id: UNIT, kind: 'left', title: `QA 개수 ${i}`, body: 'b', url: '/owner/staff' }));
+    const ins = await admin.from('member_notices').insert(rows).select('id');
+    if (ins.error) throw new Error(`member_notices 101행 시드: ${ins.error.message}`);
+    const ids = new Set(ins.data.map((x) => x.id));
+    const s1 = await admin.rpc('sweep_member_notices', { p_now: nowIso });
+    const s2 = await admin.rpc('sweep_member_notices', { p_now: nowIso });
+    const m1 = (s1.data ?? []).filter((x) => ids.has(x.out_id)).length, m2 = (s2.data ?? []).filter((x) => ids.has(x.out_id)).length;
+    check('8-1 ★한 스윕 = 100행(101개 중)', !s1.error && (s1.data ?? []).length === 100 && m1 === 100, s1.error?.message ?? `all=${(s1.data ?? []).length} mine=${m1}`);
+    check('8-2 남은 1행은 다음 스윕이 준다', !s2.error && m2 === 1, s2.error?.message ?? `mine=${m2}`);
+    await admin.from('member_notices').delete().in('id', [...ids]);
   }
 
   // ═══════ 5. 엣지 — 순수 검사 ═══════

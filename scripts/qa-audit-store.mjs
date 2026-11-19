@@ -102,9 +102,12 @@ console.log('\n[C4] 닫힌(잠긴) 매장에는 할일·퀴즈 알림을 보내�
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   } catch { tGrant = 'DB 없음'; }
   check('할일 알림 함수는 service_role 전용 그대로(anon·authenticated 실행 불가 · 로컬 DB 권한)', tGrant === 'false/false/true', tGrant);
+  // ★0931: 판정이 quiz_send_block 한 곳으로 갔다. due_quiz_sends 는 그 판정이 null 인 행만 내고, 잠긴·지운 매장은 store_locked 다.
   const q = lastTouch('due_quiz_sends');
-  check('★퀴즈 발송 후보에서 잠긴 매장을 뺀다(due_quiz_sends)',
-    /and not public\.unit_access_locked\(u\.id\)/.test(q.text), q.file);
+  const qb = lastDef('quiz_send_block');
+  check('★퀴즈 발송 후보에서 잠긴 매장을 뺀다(due_quiz_sends → quiz_send_block store_locked)',
+    /public\.quiz_send_block\(qa, v_now\) is null/.test(q.text)
+      && /u\.deleted_at is null\)\s*or public\.unit_access_locked\(a\.unit_id\) then 'store_locked'/.test(qb.body), `${q.file} · ${qb.file}`);
   // 0332 가 마지막 정의인데 자가점검 줄이 없다. 파일 문자열 대신 로컬 DB 의 실제 권한을 본다.
   let grant = '';
   try {

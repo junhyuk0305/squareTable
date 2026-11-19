@@ -16,7 +16,8 @@ import { useStoreAskFirst } from '@/lib/hooks/useStoreAskFirst';
 import { OWNER_FIRST } from '@/lib/place/words';
 import { StepDock } from '@/components/StepDock';
 import { useBackIntercept } from '@/lib/hooks/useBackIntercept';
-import { ownerFirstPlan } from '@/lib/utils/stepScreenPlans';
+import { ownerFirstPlan, ownerFirstAfterWrite } from '@/lib/utils/stepScreenPlans';
+import { OwnerWriteOwnStep } from '@/components/onboarding/OwnerWriteOwnStep';
 import { templatesForIndustry, forkTemplate, type PlaybookTemplate } from '@/data/knowhowPacks';
 import { standardSections, UNSECTIONED } from '@/lib/config/sections';
 import { Appear, stagger } from '@/components/Appear';
@@ -35,6 +36,7 @@ import { showBillingEntry, showPaymentSurface } from '@/lib/config/store-policy'
 import { industryLabel } from '@/lib/config/industry';
 
 // 사장 온보딩 — 업종 표준 노하우 팩에서 '선택 → 자동등록'. 빈 매장(노하우 0건) 죽음의 나선 차단.
+// 단계(2026-11-19 B5): 고르기 → 우리 매장 방식 한 줄 쓰기(코치와 같은 square 정리) → 첫 질문 → 초대코드.
 // 레이아웃: ① 추천 묶음 한 번에 담기(결정 최소화) → ② '직접 고르기' 접이식 카테고리 섹션(미세조정)
 // → ③ 기존 매뉴얼 올리기(/owner/handover — 템플릿 대신 이미 쓰던 인수인계서로 시작하는 선택지).
 // 추천 항목 프리체크(기본 ≥4) → 매장 노하우로 fork(needs_review 배지). [[project_squaretable_onboarding]]
@@ -77,8 +79,10 @@ export default function OwnerOnboardingScreen() {
   const [expanded, setExpanded] = useState(false); // '직접 고르기' 펼침
   // ask = aha 스텝(콜드스타트): 담기 성공 직후 "첫 질문" 경험. 허브 시작 체크리스트가
   // ?step=ask 로 직접 재진입할 수 있다(사장이 질문할 수 있는 유일한 표면).
-  const [step, setStep] = useState<'pick' | 'ask' | 'done'>(params.step === 'ask' ? 'ask' : 'pick');
+  const [step, setStep] = useState<'pick' | 'write' | 'ask' | 'done'>(params.step === 'ask' ? 'ask' : 'pick');
   const [registeredCount, setRegisteredCount] = useState(0);
+  // 쓰기 단계에서 담은 수(0 또는 1). 완료 화면 개수와 뒤로 갈 곳에 같이 센다.
+  const [wrote, setWrote] = useState(0);
   const [registering, setRegistering] = useState(false);
   // 하단 고정 바 높이 — 글자가 커지면 바도 커진다. 스크롤 끝 빈칸을 그만큼 늘려 마지막 카드가 바 뒤에 숨지 않게 한다(기본은 168 그대로).
   const [barH, setBarH] = useState(168);
@@ -135,20 +139,20 @@ export default function OwnerOnboardingScreen() {
       showToast(`노하우 ${okCount}개를 담았어요`, 'good');
     }
     setRegisteredCount(okCount);
-    // 담기 성공 → aha 스텝(첫 질문). 초대코드는 aha 뒤 done 에서(초대는 aha 이후 — 콜드스타트 원칙).
-    setStep('ask');
+    // 담기 성공 → 우리 매장 방식 쓰기 → aha 스텝(첫 질문). 초대코드는 aha 뒤 done 에서(초대는 aha 이후 — 콜드스타트 원칙).
+    setStep('write');
   };
 
-  // 건너뛰기도 완료 화면을 거친다 — 초대코드를 한 번은 보여주기 위함(0건으로 done 진입).
-  // 노하우 0건이면 ask 스텝도 건너뛴다(빈 검색 대상에 질문 = 보장된 실패 경험 차단).
+  // 고르기를 건너뛰어도 쓰기 단계는 거친다. 거기서도 건너뛰면 완료 화면(초대코드)으로 간다.
+  // 노하우 0건이면 ask 스텝도 건너뛴다(빈 검색 대상에 질문 = 보장된 실패 경험 차단 · ownerFirstAfterWrite).
   const onSkip = () => {
-    setStep('done');
+    setStep('write');
   };
   const goDashboard = () => router.replace('/owner/dashboard');
 
   // 맨 아래 노란 버튼 이름 + 안드 뒤로 = 앞 단계(화면조립표 2026-11-17 11절 3번). 머리가 없는 화면이라 안드 뒤로만 받는다.
   // 새 순서(askFirst)는 OwnerFirstFive 가 자기 단계를 든다.
-  const plan = ownerFirstPlan(step, { selected: selectedCount, registering, registered: registeredCount });
+  const plan = ownerFirstPlan(step, { selected: selectedCount, registering, registered: registeredCount, wrote });
   const back = plan.back;
   useBackIntercept(askFirst === false && back !== null, () => { if (back !== null) setStep(back); });
 
@@ -177,6 +181,22 @@ export default function OwnerOnboardingScreen() {
     );
   }
 
+  // ── 우리 매장 방식 한 줄 쓰기 ──
+  if (step === 'write') {
+    return (
+      // 아래 안전 영역은 StepDock 이 든다.
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <OwnerWriteOwnStep
+          industry={industry}
+          nextLabel="AI에게 물어보기"
+          onNext={() => { setWrote(1); setStep('ask'); }}
+          onSkip={() => setStep(ownerFirstAfterWrite({ registered: registeredCount, wrote }))}
+        />
+      </SafeAreaView>
+    );
+  }
+
   // ── aha 스텝: 첫 질문 ──
   if (step === 'ask') {
     return (
@@ -194,6 +214,7 @@ export default function OwnerOnboardingScreen() {
 
   // ── 완료 화면 ──
   if (step === 'done') {
+    const doneCount = registeredCount + wrote;
     return (
       // 아래 안전 영역은 StepDock 이 든다.
       <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -205,9 +226,9 @@ export default function OwnerOnboardingScreen() {
             <Ionicons name="checkmark-circle" size={52} color={InkColors.ink} />
           </Appear>
           <Appear delay={stagger(1)} style={styles.doneHead}>
-            {registeredCount > 0 ? (
+            {doneCount > 0 ? (
               <>
-                <Text style={styles.doneTitle}>노하우 {registeredCount}개로 시작해요</Text>
+                <Text style={styles.doneTitle}>노하우 {doneCount}개로 시작해요</Text>
                 <Text style={styles.doneSub}>
                   이제 직원이 물어보면 AI가 이 노하우로 대신 답해줘요.{'\n'}
                   <Text style={styles.doneStrong}>‘점검 필요’ 표시</Text>가 붙은 건 나중에 우리 매장에 맞게 다듬어 주세요.
@@ -284,6 +305,7 @@ export default function OwnerOnboardingScreen() {
             {industryLabel(industry) ? `${industryLabel(industry)} ` : ''}매장에서 자주 생기는 일을 모아뒀어요. 추천 묶음으로 바로 시작하거나,
             직접 골라 담을 수 있어요.
           </Text>
+          <Text style={styles.introBody}>다음 단계에서 우리 매장만의 방식도 직접 써요.</Text>
         </Appear>
 
         {/* ① 추천 묶음 — 결정 최소화. 한 번에 담기(추천 전체 토글) */}

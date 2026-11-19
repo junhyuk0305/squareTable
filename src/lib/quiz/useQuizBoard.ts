@@ -8,9 +8,9 @@
  *
  * ★ 로직만 있고 화면은 없다. 정렬·필터·문구는 각 화면의 몫이다.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { fetchQuizAssignments, fetchQuizItems, fetchQuizLinks, fetchQuizStats, fetchTrainingCourses } from '@/lib/db';
+import { fetchQuizAssignments, fetchQuizItems, fetchQuizLinks, fetchQuizStats, fetchTrainingCourses, subscribeQuizAssignments } from '@/lib/db';
 import {
   useWorkStore,
   courseEntriesOf,
@@ -34,6 +34,8 @@ import {
   ITEM_MISS_RATE,
   answersStat,
   quizState,
+  sendPhaseLabel,
+  nextSendAt,
   staffProgress,
   type QuizState,
   type StaffProgress,
@@ -122,11 +124,35 @@ export type QuizBoardStats = {
   staleQuizzes: number;
 };
 
-/** "2026-08-12" → "8월 12일". 잘못된 값은 조용히 통째로 돌려준다(날짜를 지어내지 않는다). */
-function dayLabel(ymd: string | null | undefined): string {
-  if (!ymd) return '';
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
-  return m ? `${Number(m[2])}월 ${Number(m[3])}일` : ymd;
+/** 발송 한 번에 여러 행이 같이 바뀐다(스윕이 N명을 한꺼번에 찍는다). 그 묶음을 한 번 다시 읽기로 모으는 시간. */
+const LIVE_DEBOUNCE_MS = 400;
+
+/**
+ * 발송 원장이 바뀌면 바로 다시 읽는다(2026-11-19 B2 · 사용자 "실제 데이터와 화면이 매칭이 안 되면 안 됨").
+ * 예전엔 목록·상세가 포커스 때만 다시 읽어, 직원이 다 풀어도 화면을 다시 열기 전까지 옛 상태였다.
+ * 화면마다 다시 읽을 것이 달라(목록 = 발송·응시 집계 · 상세 = 발송·답 행) onChange 는 화면이 준다.
+ * 구독은 매장(자리 번호)이 바뀌면 다시 걸고, 화면이 내려가면 푼다.
+ */
+export function useQuizAssignmentsLive(onChange: () => void): void {
+  const unitId = useSessionStore((s) => s.unitId);
+  const cb = useRef(onChange);
+  useEffect(() => {
+    cb.current = onChange;
+  }, [onChange]);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const off = subscribeQuizAssignments(() => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        cb.current();
+      }, LIVE_DEBOUNCE_MS);
+    }, unitId);
+    return () => {
+      if (timer) clearTimeout(timer);
+      off();
+    };
+  }, [unitId]);
 }
 
 export function useQuizBoard() {
@@ -407,8 +433,11 @@ export function useQuizBoard() {
         // 링크만 열린 퀴즈의 일정 = 열린 링크 중 가장 늦은 만료일(한국 날짜).
         const until = Math.max(...courseLinks.filter((l) => !l.revokedAt && Date.parse(l.expiresAt) > now).map((l) => Date.parse(l.expiresAt)));
         caption = `${linkLastDayLabel(new Date(until).toISOString())}까지 링크`;
+      } else if (status === 'queued') {
+        // "지금 바로"로 보냈고 아직 아무도 안 받았다(B1 · 판정 = metrics.sendPhase).
+        caption = sendPhaseLabel('soon');
       } else if (status === 'scheduled') {
-        caption = `${dayLabel(c.start_at)}에 보내요`;
+        caption = sendPhaseLabel('waiting', nextSendAt(sends, now));
       } else {
         // 가장 최근 발송일. sentAt 은 timestamptz 라 앞 10자가 UTC 날짜다 → 한국 날짜로 옮겨 읽는다.
         const lastRow = [...sent].sort((x, y) => (x.sentAt as string).localeCompare(y.sentAt as string)).at(-1) as QuizAssignment;

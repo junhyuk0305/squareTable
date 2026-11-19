@@ -38,7 +38,7 @@ export function starterSteps(row: StarterRow): StarterStep[] {
     {
       id: 'invite',
       title: '직원 초대',
-      hint: '직원이 초대코드로 신청하면 사장님이 승인해요',
+      hint: '직원이 초대코드를 넣으면 바로 우리 매장 직원이 돼요',
       done: Number(row.staff) > 0,
     },
     {

@@ -378,7 +378,7 @@ export function juniorNotifRows(args: {
     });
   }
 
-  // 내 근무 알림(D9) — 서버가 넣은 문구 그대로. 푸시(5분 크론)와 같은 행이다. 탭하면 근무표로.
+  // 내 근무 알림(D9) — 서버가 넣은 문구 그대로. 푸시(행이 생기면 바로 깨움 · 0961)와 같은 행이다. 탭하면 근무표로.
   // 0315: 같은 member_notices 갈래로 역할 변경(role_changed)도 온다 → 역할 행으로 그린다.
   for (const n of scheduleNotices) {
     if (n.kind === 'role_changed') {

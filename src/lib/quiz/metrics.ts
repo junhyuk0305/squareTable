@@ -14,8 +14,20 @@
 
 // ── 입력 모양 ────────────────────────────────────────────────────────────
 
-/** 발송 원장 한 줄(QuizAssignment 와 같은 모양). 사람별 최신 발송은 latestQuizAssignments 로 먼저 고른다. */
-export type MetricAssignment = { userId: string; sentAt: string | null; completedAt: string | null; countFrom?: string | null };
+/**
+ * 발송 원장 한 줄(QuizAssignment 와 같은 모양). 사람별 최신 발송은 latestQuizAssignments 로 먼저 고른다.
+ * sendNow = "지금 바로"로 보낸 행(0930 send_now · 옛 서버·옛 앱 행은 없음 = false). scheduledOn = 예약일(KST YYYY-MM-DD).
+ */
+export type MetricAssignment = {
+  userId: string;
+  sentAt: string | null;
+  completedAt: string | null;
+  countFrom?: string | null;
+  sendNow?: boolean;
+  scheduledOn?: string;
+  /** 보낼 시각(0931 send_at · ISO). 없으면 예약일 09:00 KST. */
+  sendAt?: string | null;
+};
 
 /**
  * 이 발송의 진행을 세기 시작하는 시각(0348 · 서버 짝 = quiz_assignment_count_from).
@@ -49,21 +61,90 @@ export type MetricLink = { expiresAt: string; revokedAt: string | null };
 
 // ── 퀴즈 상태 ────────────────────────────────────────────────────────────
 
-export type QuizState = 'draft' | 'scheduled' | 'sending' | 'link_open' | 'archived';
+export type QuizState = 'draft' | 'scheduled' | 'queued' | 'sending' | 'link_open' | 'archived';
 
 /** 상태어. 배지 자리라 명사형이다. */
 export const QUIZ_STATE_LABEL: Record<QuizState, string> = {
   draft: '초안',
   scheduled: '예약',
+  queued: '곧 발송',
   sending: '발송 중',
   link_open: '링크 열림',
   archived: '보관',
 };
 
+// ── 보냈나(B1 · 2026-11-19) ──────────────────────────────────────────────
+
+/**
+ * 퀴즈 한 건을 보냈나. 보내기 직후 토스트 · 상세 결과 칸 · 목록 줄이 이 판정 하나로 말한다.
+ *  · sent    = 한 명이라도 sent_at 이 있다.
+ *  · soon    = 아직 아무도 안 받았고, 오늘 행 중 보낼 시각이 지났거나 "지금 바로"(send_now) 행이 있다. 다음 스윕(1분 · 0962)에 간다.
+ *  · waiting = 행은 있는데 보낼 시각이 아직이다(예약).
+ *  · none    = 발송 행이 없다.
+ * 보낼 시각 = 서버 quiz_send_due_at(0931) 짝: send_now 면 지금 · send_at · 없으면 예약일 09:00 KST.
+ * 어제 이전 행이 아직 안 나갔으면 막힌 것(좌석 잠김·마감 지남 등)이라 soon 이라 말하지 않는다.
+ * 사람별 막힌 이유는 상세의 fetchQuizSendStatus 가 말한다. 방해금지는 0960 부터 막힌 이유가 아니다(카드는 제시각 · 푸시만 끝나고 요약).
+ */
+export type SendPhase = 'none' | 'waiting' | 'soon' | 'sent';
+
+/** now(ms) → 한국 날짜 YYYY-MM-DD. 이 파일은 import 를 못 해 schedule.todayKst 와 같은 계산을 둔다. */
+function kstDay(now: number): string {
+  return new Date(now + 9 * 3600_000).toISOString().slice(0, 10);
+}
+
+/** 이 행을 보낼 시각(ms). 알 수 없으면 null. 서버 quiz_send_due_at 의 짝(다시 알리기 resend_at 은 이 열 목록에 없다). */
+function dueAtMs(a: MetricAssignment): number | null {
+  if (a.sendNow) return -Infinity;
+  if (a.sendAt) return Date.parse(a.sendAt);
+  if (a.scheduledOn) return Date.parse(`${a.scheduledOn}T00:00:00Z`); // 09:00 KST = 00:00 UTC
+  return null;
+}
+
+export function sendPhase(sends: readonly MetricAssignment[], now: number): SendPhase {
+  if (sends.some((a) => !!a.sentAt)) return 'sent';
+  const today = kstDay(now);
+  if (sends.some((a) => { const d = dueAtMs(a); return d !== null && d <= now && (!a.scheduledOn || a.scheduledOn >= today); })) return 'soon';
+  return sends.length > 0 ? 'waiting' : 'none';
+}
+
+/** 아직 안 나간 행 중 가장 이른 미래 보낼 시각(ISO). 없으면 null. waiting 문구에 쓴다. */
+export function nextSendAt(sends: readonly MetricAssignment[], now: number): string | null {
+  const ts = sends.filter((a) => !a.sentAt).map(dueAtMs).filter((d): d is number => d !== null && d > now);
+  return ts.length ? new Date(Math.min(...ts)).toISOString() : null;
+}
+
+/** ISO 시각 → "11월 20일 오후 3시" · "11월 20일 오전 9시 30분"(KST). */
+export function sendAtLabel(iso: string): string {
+  const k = new Date(Date.parse(iso) + 9 * 3600_000);
+  const h = k.getUTCHours(), m = k.getUTCMinutes();
+  const hh = h % 12 === 0 ? 12 : h % 12;
+  return `${k.getUTCMonth() + 1}월 ${k.getUTCDate()}일 ${h < 12 ? '오전' : '오후'} ${hh}시${m ? ` ${m}분` : ''}`;
+}
+
+/**
+ * 보냈나 문구. waiting 은 보낼 시각을 말한다(at = nextSendAt 의 ISO · "11월 20일 오후 3시에 보내요").
+ * none 은 빈 문자열이다(각 화면이 "아직 안 보냄"을 따로 말한다).
+ */
+export function sendPhaseLabel(phase: SendPhase, at?: string | null): string {
+  if (phase === 'sent') return '보냈어요';
+  if (phase === 'soon') return '1분 안에 가요';
+  if (phase === 'waiting') return at ? `${sendAtLabel(at)}에 보내요` : '아직 안 나갔어요';
+  return '';
+}
+
+/**
+ * 보내기 직후 토스트 머리. count = 만들기 화면에서 고른 받는 사람 수(발송 전 선택 인원).
+ * soon·sent = "3명에게 1분 안에 가요" · waiting = 보낼 시각 문구 그대로("11월 20일 오후 3시에 보내요").
+ */
+export function sendToastLabel(phase: SendPhase, count: number, at?: string | null): string {
+  const label = sendPhaseLabel(phase, at);
+  return phase === 'soon' || phase === 'sent' ? `${count}명에게 ${label}` : label;
+}
+
 /**
  * 퀴즈 한 건의 지금 상태(N09).
  * 무엇을: 코스 1건. 언제: 지금(now).
- * 순서: 보관(active=false) → 발송 중(한 명이라도 sent_at) → 링크 열림(회수 안 됐고 만료 전 링크 1개 이상)
+ * 순서: 보관(active=false) → 발송 중(sendPhase=sent) → 곧 발송(sendPhase=soon) → 링크 열림(회수 안 됐고 만료 전 링크 1개 이상)
  *       → 예약(start_at 있음) → 초안.
  * 발송도 했고 링크도 열려 있으면 "발송 중"이다. 링크 열림은 링크 칸(meta)이 따로 말한다.
  */
@@ -74,7 +155,9 @@ export function quizState(
   now: number,
 ): QuizState {
   if (!course.active) return 'archived';
-  if (sends.some((a) => !!a.sentAt)) return 'sending';
+  const phase = sendPhase(sends, now);
+  if (phase === 'sent') return 'sending';
+  if (phase === 'soon') return 'queued';
   if (links.some((l) => !l.revokedAt && Date.parse(l.expiresAt) > now)) return 'link_open';
   if (course.start_at) return 'scheduled';
   return 'draft';
@@ -157,9 +240,9 @@ export function doneLabel(p: StaffProgress): string {
 
 /**
  * 다시 알리기 결과 토스트(0348 quiz_resend). 사람별 결과를 센다.
- * sent = 지금 보냄 · queued = 최근 7일에 2번 받아 창이 풀리면 나감 · cooldown = 10분 안에 이미 받음 · locked = 무료 인원 한도를 넘어 잠김
+ * sent = 지금 보냄 · cooldown = 1분 안에 이미 받음 · locked = 무료 인원 한도를 넘어 잠김 · queued = 옛 서버(0931 전)의 7일 상한
  * · completed = 그 퀴즈를 이미 다 풀어 다시 안 보냄(11-04).
- * not_member 등 나머지는 "보내지 못했어요"로 센다. 10 = schedule.ts RESEND_COOLDOWN_MINUTES(이 파일은 import 를 못 한다).
+ * not_member 등 나머지는 "보내지 못했어요"로 센다. 1 = schedule.ts RESEND_COOLDOWN_MINUTES(이 파일은 import 를 못 한다).
  * 반환 tone: 하나라도 보냈거나 줄에 섰으면 good.
  */
 export function resendResultLabel(results: readonly { result: string }[]): { text: string; good: boolean } {
@@ -168,8 +251,8 @@ export function resendResultLabel(results: readonly { result: string }[]): { tex
   const other = results.length - sent - queued - cool - locked - done;
   const parts: string[] = [];
   if (sent > 0) parts.push(results.length === 1 ? '다시 알렸어요' : `${sent}명에게 다시 알렸어요`);
-  if (cool > 0) parts.push(results.length === 1 ? '방금 보냈어요. 10분 뒤에 다시 보낼 수 있어요' : `${cool}명은 방금 받아 10분 뒤에 보낼 수 있어요`);
-  if (queued > 0) parts.push(results.length === 1 ? '최근 7일에 2번 보내 그 뒤에 나가요' : `${queued}명은 최근 7일에 2번 받아 그 뒤에 나가요`);
+  if (cool > 0) parts.push(results.length === 1 ? '방금 보냈어요. 1분 뒤에 다시 보낼 수 있어요' : `${cool}명은 방금 받아 1분 뒤에 보낼 수 있어요`);
+  if (queued > 0) parts.push(results.length === 1 ? '곧 보내요' : `${queued}명은 곧 보내요`);
   if (done > 0) parts.push(results.length === 1 ? '이미 다 풀어서 보내지 않았어요' : `${done}명은 이미 다 풀어서 보내지 않았어요`);
   if (locked > 0) parts.push(results.length === 1 ? '인원 한도를 넘어 받을 수 없어요' : `${locked}명은 인원 한도를 넘어 받을 수 없어요`);
   if (other > 0) parts.push(results.length === 1 ? '보내지 못했어요' : `${other}명은 보내지 못했어요`);
@@ -237,14 +320,10 @@ export function rateLabel(r: QuizRate): string {
 // ── 링크 제출 ────────────────────────────────────────────────────────────
 
 /**
- * 링크 제출 수(N16).
- * 무엇을: 제출(submission). 같은 손님이 두 번 내면 2건이다. 사람 수가 아니다.
- * 누구를: 손님(staffId null). 언제부터: 누적.
- * 라벨: guestSubmissionsLabel → "링크 제출 N건". "명"을 쓰지 않는다.
+ * 링크 제출 수(N16) 라벨. 무엇을: 제출(submission · 같은 손님이 두 번 내면 2건 · 사람 수가 아니다).
+ * 정리한 제출은 세지 않는다(2026-11-19 사용자 결정). 수는 화면이 정리 안 한 제출 원장(fetchGuestQuizSubmissions)에서,
+ * 목록은 서버 quiz_course_stats.guest_submissions(0932)에서 같은 기준으로 받는다. "명"을 쓰지 않는다.
  */
-export function guestSubmissions(answers: readonly MetricAnswer[]): number {
-  return new Set(answers.filter((r) => r.staffId == null).map((r) => r.submissionId)).size;
-}
 
 export function guestSubmissionsLabel(n: number): string {
   return `링크 제출 ${n}건`;

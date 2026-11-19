@@ -25,6 +25,7 @@ import { Appear } from '@/components/Appear';
 import { HqModal } from '@/components/hq/HqModal';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
 import { structureSquare, extractDocText, embedEntry } from '@/lib/ai';
+import { AiRateLimitError, AI_RATE_LIMIT_MESSAGE } from '@/lib/ai/client';
 import { pickPdf, PDF_PICK_SUPPORTED } from '@/lib/import/pickPdf';
 import { MAX_IMPORT_CHARS } from '@/lib/import/chunk';
 import { KNOWHOW_TEMPLATES, type PlaybookTemplate } from '@/data/knowhowPacks';
@@ -161,12 +162,21 @@ export default function HqKnowhowEditorScreen() {
     setErr(null);
     setNote(null);
     const prev: Category = draft?.category ?? 'Routine';
-    const out = await structureSquare({
-      storeId: wsUnitId,
-      rawText: raw,
-      category: prev,
-      categoryGuide: EXTRACTION_MASTER, // 매장 앱과 같은 단일 지침 — 분류는 AI 가 내부에서 판단한다
-    });
+    let out: Awaited<ReturnType<typeof structureSquare>>;
+    try {
+      out = await structureSquare({
+        storeId: wsUnitId,
+        rawText: raw,
+        category: prev,
+        categoryGuide: EXTRACTION_MASTER, // 매장 앱과 같은 단일 지침 — 분류는 AI 가 내부에서 판단한다
+      });
+    } catch (e) {
+      // 429 는 폴백하지 않고 던진다(client.ts). 붙여넣은 글은 그대로 두고 다시 보내게 한다.
+      if (!(e instanceof AiRateLimitError)) throw e;
+      setPhase('idle');
+      setErr(AI_RATE_LIMIT_MESSAGE);
+      return;
+    }
     const aiCat = out.segments?.[0]?.category;
     const cat: Category = isCategory(aiCat) ? aiCat : prev;
     setPhase('idle');

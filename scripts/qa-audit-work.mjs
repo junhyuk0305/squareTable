@@ -267,9 +267,12 @@ console.log('\n[D7] 근무표를 쓰는 매장은 그 시각 근무자에게만,
   check('★근무표 판정 unit_uses_schedule: 하루 근무는 그날 이후만, archived 제외, 반복은 안 끝난 것만',
     /st\.archived_tenure_id is null/.test(us.body) && /st\.shift_date is not null and st\.shift_date >= p_day/.test(us.body)
       && /st\.valid_to is null or st\.valid_to >= p_day/.test(us.body), us.file || '없음');
-  check('★할일 알림·퀴즈 발송·퀴즈 미발송 이유가 같은 판정 함수를 쓴다',
-    /public\.unit_uses_schedule\(a\.unit_id, v_date\)/.test(lastDef('due_quiz_sends').body)
-      && /public\.unit_uses_schedule\(v_unit, v_date\)/.test(lastDef('quiz_send_status').body));
+  // ★0931(2026-11-19 사용자 결정): 퀴즈는 근무 시간을 더 보지 않는다. 할일 알림만 근무표를 본다.
+  //   퀴즈 발송·미발송 이유는 quiz_send_block 한 곳이고 그 안에도 근무 판정이 없다.
+  const qd = lastDef('due_quiz_sends').body, qs = lastDef('quiz_send_status').body, qb = lastDef('quiz_send_block').body;
+  check('★0931: 퀴즈 발송·미발송 이유는 근무표(unit_uses_schedule · workers_at)를 보지 않는다',
+    !!qd && !!qs && !!qb && [qd, qs, qb].every((b) => !/unit_uses_schedule|workers_at/.test(b))
+      && /quiz_send_block/.test(qd) && /quiz_send_block/.test(qs));
   if (!dbUp) console.log('  SKIP 서버 동작 — 로컬 도커 DB 없음');
   else {
     const TASK = `insert into public.work_templates (id, unit_id, section, text, scope, remind_at) values ('qa_t7', 'store_001', 'open', '오픈 준비', 'shared', current_setting('qa.t'));\n`;

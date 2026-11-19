@@ -7,8 +7,8 @@ const MESSAGES: Record<string, string> = {
   // 0326·0327 문항 0개 금지
   last_quiz_item: '마지막 문항은 뺄 수 없어요. 퀴즈를 그만 내려면 퀴즈를 보관해 주세요.',
   quiz_no_items: '문항이 없는 퀴즈는 보낼 수 없어요. 문항을 하나 이상 만들어 주세요.',
-  // 0348 다시 알리기(quiz_resend). 10 = schedule.ts RESEND_COOLDOWN_MINUTES(이 파일은 import 를 못 해 숫자로 둔다 · qa:quiz-resend 가 대조).
-  resend_cooldown: '방금 보냈어요. 10분 뒤에 다시 보낼 수 있어요',
+  // 0348 다시 알리기(quiz_resend). 1 = schedule.ts RESEND_COOLDOWN_MINUTES(이 파일은 import 를 못 해 숫자로 둔다 · qa:quiz-resend 가 대조).
+  resend_cooldown: '방금 보냈어요. 1분 뒤에 다시 보낼 수 있어요',
   forbidden: '사장님이나 매니저만 다시 알릴 수 있어요.',
   quiz_not_found: '퀴즈를 찾을 수 없어요. 화면에서 나갔다가 다시 들어와 주세요.',
 };
@@ -45,4 +45,17 @@ export const LINK_SUBMIT_MESSAGE: Record<LinkSubmitResult, string> = {
 export function quizErrorMessage(err: QuizErr, fallback = '잠시 뒤 다시 시도해 주세요.'): string {
   const code = (err?.message ?? '').split(/[\s:]/)[0];
   return MESSAGES[code] ?? fallback;
+}
+
+/**
+ * "지금 바로" 보내기(0930 quiz_send_now) 실패 문구. 발송 행은 보낼 시각 = 지금(send_at · 0931)으로 이미 있어 다음 스윕(1분 · 0962)에 나간다 → 그 사실을 말한다.
+ * forbidden 은 위 표가 다시 알리기 문맥이라 여기서 보내기 문맥으로 바꾼다.
+ */
+const SEND_NOW_MESSAGES: Record<string, string> = {
+  forbidden: '사장님이나 매니저만 바로 보낼 수 있어요.',
+};
+
+export function quizSendNowErrorMessage(err: QuizErr): string {
+  const code = (err?.message ?? '').split(/[\s:]/)[0];
+  return SEND_NOW_MESSAGES[code] ?? quizErrorMessage(err, '1분 안에 보내요.');
 }

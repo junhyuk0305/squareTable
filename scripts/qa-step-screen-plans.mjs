@@ -2,7 +2,7 @@
 // qa-step-screen-plans.mjs — 매장 단계 화면 네 곳의 판정 케이스 표(2026-11-17 · 화면조립표 11절 3번).
 //   맨 아래 고정 노란 버튼 하나(이름 = 다음 단계 이름 · 일을 끝내는 단계는 그 일 이름) · 머리·안드 뒤로 = 앞 단계.
 // 백엔드·AI 호출 0회. 실행: node scripts/qa-step-screen-plans.mjs   (Node 24 type-strip 로 .ts 직접 import)
-import { importKnowhowPlan, handoverPlan, ownerFirstPlan, ownerFivePlan, downgradePlan } from '../src/lib/utils/stepScreenPlans.ts';
+import { importKnowhowPlan, handoverPlan, ownerFirstPlan, ownerFirstAfterWrite, ownerWritePlan, ownerFivePlan, downgradePlan } from '../src/lib/utils/stepScreenPlans.ts';
 
 let pass = 0, fail = 0;
 const check = (name, got, want) => {
@@ -28,15 +28,27 @@ check('고르기 2개: 노하우 2개 추가하기 · 뒤로 = 붙여넣기', ha
 check('고르기 0개: 꺼짐', handoverPlan('review', { tooShort: true, extracting: false, chosen: 0 }).dock.disabled, true);
 
 console.log('ownerFirstPlan · 사장 첫 노하우 담기(옛 순서)');
-check('고르기 5개: 5개 우리 매장에 담기 · 나감', ownerFirstPlan('pick', { selected: 5, registering: false, registered: 0 }), { dock: { label: '5개 우리 매장에 담기', disabled: false }, back: null });
-check('담는 중: 꺼짐', ownerFirstPlan('pick', { selected: 5, registering: true, registered: 0 }).dock, { label: '담는 중…', disabled: true });
-check('첫 질문: 버튼은 OwnerFirstAsk 가 든다 · 담은 뒤라 고르기로 안 감', ownerFirstPlan('ask', { selected: 5, registering: false, registered: 5 }), { dock: null, back: null });
-check('초대코드(담음): 뒤로 = 첫 질문', ownerFirstPlan('done', { selected: 5, registering: false, registered: 5 }).back, 'ask');
-check('초대코드(건너뜀): 뒤로 = 고르기', ownerFirstPlan('done', { selected: 0, registering: false, registered: 0 }).back, 'pick');
+check('고르기 5개: 5개 우리 매장에 담기 · 나감', ownerFirstPlan('pick', { selected: 5, registering: false, registered: 0, wrote: 0 }), { dock: { label: '5개 우리 매장에 담기', disabled: false }, back: null });
+check('담는 중: 꺼짐', ownerFirstPlan('pick', { selected: 5, registering: true, registered: 0, wrote: 0 }).dock, { label: '담는 중…', disabled: true });
+check('첫 질문: 버튼은 OwnerFirstAsk 가 든다 · 담은 뒤라 고르기로 안 감', ownerFirstPlan('ask', { selected: 5, registering: false, registered: 5, wrote: 0 }), { dock: null, back: null });
+check('초대코드(담음): 뒤로 = 첫 질문', ownerFirstPlan('done', { selected: 5, registering: false, registered: 5, wrote: 0 }).back, 'ask');
+check('초대코드(둘 다 건너뜀): 뒤로 = 쓰기', ownerFirstPlan('done', { selected: 0, registering: false, registered: 0, wrote: 0 }).back, 'write');
+check('초대코드(쓰기만 담음): 뒤로 = 첫 질문', ownerFirstPlan('done', { selected: 0, registering: false, registered: 0, wrote: 1 }).back, 'ask');
+check('쓰기(담은 뒤): 버튼은 OwnerWriteOwnStep 이 든다 · 고르기로 안 감', ownerFirstPlan('write', { selected: 5, registering: false, registered: 5, wrote: 0 }), { dock: null, back: null });
+check('쓰기(고르기 건너뜀): 뒤로 = 고르기', ownerFirstPlan('write', { selected: 0, registering: false, registered: 0, wrote: 0 }).back, 'pick');
+check('쓰기 건너뜀(담은 것 있음): 첫 질문', ownerFirstAfterWrite({ registered: 5, wrote: 0 }), 'ask');
+check('쓰기 건너뜀(0개): 첫 질문도 건너뛰고 초대코드', ownerFirstAfterWrite({ registered: 0, wrote: 0 }), 'done');
+
+console.log('ownerWritePlan · 우리 매장 방식 한 줄 쓰기');
+check('빈 칸: 정리해서 담기 · 꺼짐', ownerWritePlan({ saved: false, busy: false, hasText: false, nextLabel: 'AI에게 물어보기' }), { label: '정리해서 담기', disabled: true });
+check('씀: 켜짐', ownerWritePlan({ saved: false, busy: false, hasText: true, nextLabel: 'AI에게 물어보기' }).disabled, false);
+check('정리 중: 꺼짐', ownerWritePlan({ saved: false, busy: true, hasText: true, nextLabel: 'AI에게 물어보기' }).disabled, true);
+check('담은 뒤: 다음 단계 이름', ownerWritePlan({ saved: true, busy: false, hasText: false, nextLabel: 'AI에게 물어보기' }), { label: 'AI에게 물어보기', disabled: false });
 
 console.log('ownerFivePlan · 사장 첫 5분(새 순서)');
-check('초대: 질문 던져 보기 · 나감', ownerFivePlan('invite', { startAtAsk: false }), { dock: { label: 'next' }, back: null });
-check('질문: 끝내기 · 뒤로 = 초대', ownerFivePlan('ask', { startAtAsk: false }), { dock: { label: 'finish' }, back: 'invite' });
+check('초대: 우리 매장 방식 쓰기 · 나감', ownerFivePlan('invite', { startAtAsk: false }), { dock: { label: 'write' }, back: null });
+check('쓰기: 버튼은 OwnerWriteOwnStep 이 든다 · 뒤로 = 초대', ownerFivePlan('write', { startAtAsk: false }), { dock: null, back: 'invite' });
+check('질문: 끝내기 · 뒤로 = 쓰기', ownerFivePlan('ask', { startAtAsk: false }), { dock: { label: 'finish' }, back: 'write' });
 check('허브에서 바로 질문: 현황으로 돌아가기 · 나감', ownerFivePlan('ask', { startAtAsk: true }), { dock: { label: 'backToHub' }, back: null });
 
 console.log('downgradePlan · 요금제 낮추기');
@@ -48,7 +60,8 @@ check('직원 0명: 남길 직원 고르기 · 꺼짐', downgradePlan('seats', {
 
 const all = [importKnowhowPlan(1, { picked: true, selected: 0 }), importKnowhowPlan(2, { picked: true, selected: 1 }), importKnowhowPlan(3, { picked: true, selected: 1 }),
   handoverPlan('input', { tooShort: false, extracting: false, chosen: 0 }), handoverPlan('review', { tooShort: false, extracting: false, chosen: 1 }),
-  ownerFirstPlan('pick', { selected: 1, registering: false, registered: 0 }), ownerFirstPlan('done', { selected: 1, registering: false, registered: 1 }),
+  ownerFirstPlan('pick', { selected: 1, registering: false, registered: 0, wrote: 0 }), ownerFirstPlan('done', { selected: 1, registering: false, registered: 1, wrote: 0 }),
+  { dock: ownerWritePlan({ saved: false, busy: false, hasText: true, nextLabel: '' }) },
   downgradePlan('store', { pickedStore: true, seats: 0, busy: false }), downgradePlan('seats', { pickedStore: true, seats: 1, busy: false })]
   .map((p) => p.dock?.label ?? '');
 check('버튼 이름에 다음·확인·완료 없음', all.filter((l) => /다음|확인|완료/.test(l)), []);

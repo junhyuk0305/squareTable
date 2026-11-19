@@ -200,9 +200,6 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const scheduleLoaded = useScheduleStore((s) => s.loaded);
   const boardLoaded = workLoaded && roomLoaded && playbookLoaded && staffLoaded && scheduleLoaded;
 
-  // 업무 사용 안내 — **직원에게만**. 이 컴포넌트는 사장도 쓰므로 세션 역할로 가른다
-  // (prop `role` 은 화면 세트라 매니저가 직원 세트로 들어오면 직원으로 잘못 잡힌다 — 위 주석과 같은 이유).
-  useGuideOnce('junior_work_v1', boardLoaded && !isOwner);
   // ★이 화면의 **본문 두 축**(업무·방)이 실패하면 "할 일이 없어요"·"방이 없어요"로 위장된다(#56·#34).
   //   특히 fetchDone 실패는 완료 체크를 전부 미완료로 보이게 해 **직원이 이미 끝낸 일을 다시 한다.**
   //   노하우·직원·근무표는 이 화면의 부가 정보라 게이트에 넣지 않는다(배너가 맡는다).
@@ -240,6 +237,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   //   메시지면 채팅의 그 말풍선(P1 역 ⑤). 어느 쪽인지는 피드가 온 뒤 종류로 가른다.
   const { view: viewParam, compose: composeParam, quiz: quizParam, task: taskParam, feed: feedParam } =
     useLocalSearchParams<{ view?: string; compose?: string; quiz?: string; task?: string; feed?: string }>();
+  // 업무 사용 안내 — **직원에게만**. 이 컴포넌트는 사장도 쓰므로 세션 역할로 가른다
+  // (prop `role` 은 화면 세트라 매니저가 직원 세트로 들어오면 직원으로 잘못 잡힌다 — 위 주석과 같은 이유).
+  // 퀴즈로 들어온 진입(?quiz=)에서는 응시 시트가 먼저다. 안내를 미루고 본 것으로 치지 않는다(2026-11-19 B6).
+  useGuideOnce('junior_work_v1', boardLoaded && !isOwner && !quizParam);
   const paramView: ViewKey | null =
     viewParam === 'todo' || viewParam === 'notice' ? viewParam : viewParam === 'assign' ? 'todo' : null;
   const initialView: ViewKey = paramView ?? 'chat';

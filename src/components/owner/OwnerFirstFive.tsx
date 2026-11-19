@@ -1,4 +1,4 @@
-// OwnerFirstFive — 사장 첫 5분 새 순서(8번 · 결정 116). ① 직원 초대 → ② 질문 던져보기 → [끝내기].
+// OwnerFirstFive — 사장 첫 5분 새 순서(8번 · 결정 116). ① 직원 초대 → ② 우리 매장 방식 한 줄 쓰기(2026-11-19 B5) → ③ 질문 던져보기 → [끝내기].
 // 스위치 ('store','ask_first') 가 켜진 계정만 이 부품을 본다(owner/onboarding 이 고른다). 꺼진 계정은 옛 순서 그대로.
 // 템플릿 고르기는 여기서 뺐다. 노하우 탭 템플릿 보관함(/owner/templates)은 그대로다.
 // 질문 던져보기는 AI 를 부르지 않는다. 업종 노하우팩에서 초안을 찾는다(src/lib/knowhow/packDraft.ts).
@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { InviteBlock } from '@/components/owner/InviteBlock';
+import { OwnerWriteOwnStep, OWNER_WRITE } from '@/components/onboarding/OwnerWriteOwnStep';
 import { PackDraftCard, confirmedPackEntry } from '@/components/owner/PackDraftCard';
 import { PressableScale } from '@/components/PressableScale';
 import { StepDock } from '@/components/StepDock';
@@ -49,7 +50,7 @@ export function OwnerFirstFive({
   const role = useSessionStore((s) => s.role);
   const addEntry = usePlaybookStore((s) => s.add);
 
-  const [step, setStep] = useState<'invite' | 'ask'>(startAtAsk ? 'ask' : 'invite');
+  const [step, setStep] = useState<'invite' | 'write' | 'ask'>(startAtAsk ? 'ask' : 'invite');
   const [input, setInput] = useState('');
   const [asked, setAsked] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -83,6 +84,7 @@ export function OwnerFirstFive({
   const plan = ownerFivePlan(step, { startAtAsk });
   const back = plan.back;
   useBackIntercept(back !== null, () => { if (back !== null) setStep(back); });
+  const dockLabel = (l: 'write' | 'next' | 'finish' | 'backToHub') => (l === 'write' ? OWNER_WRITE.stepName : OWNER_FIRST[l]);
 
   if (step === 'invite') {
     return (
@@ -97,8 +99,14 @@ export function OwnerFirstFive({
           </Appear>
         </ScrollView>
         {/* 맨 아래 고정 노란 버튼 하나 · 이름 = 다음 단계 이름(11절 3번). 버튼만 든 흰 카드를 없앴다(11절 4번). */}
-        <StepDock label={OWNER_FIRST[plan.dock.label]} onPress={() => setStep('ask')} />
+        <StepDock label={dockLabel(plan.dock!.label)} onPress={() => setStep('write')} />
       </View>
+    );
+  }
+
+  if (step === 'write') {
+    return (
+      <OwnerWriteOwnStep industry={industry} nextLabel={OWNER_FIRST.next} onNext={() => setStep('ask')} onSkip={() => setStep('ask')} />
     );
   }
 
@@ -154,7 +162,7 @@ export function OwnerFirstFive({
 
       </ScrollView>
       {/* 끝내기 = 맨 아래 고정 노란 버튼 하나(11절 3번). 버튼만 든 흰 카드를 없앴다(11절 4번). */}
-      <StepDock label={OWNER_FIRST[plan.dock.label]} onPress={onFinish} />
+      <StepDock label={dockLabel(plan.dock!.label)} onPress={onFinish} />
     </KeyboardShift>
   );
 }

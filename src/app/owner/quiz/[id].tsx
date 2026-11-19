@@ -6,12 +6,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
+import { useQuizBoard, useQuizAssignmentsLive } from '@/lib/quiz/useQuizBoard';
 import {
   PERSON_STATE_LABEL,
   countFromOf,
   doneBefore,
-  guestSubmissions,
   guestSubmissionsLabel,
   isCurrentStaff,
   itemAnswers,
@@ -20,6 +19,9 @@ import {
   resendResultLabel,
   resultsEmpty,
   roundLabel,
+  sendPhase,
+  sendPhaseLabel,
+  nextSendAt,
   staffProgress,
 } from '@/lib/quiz/metrics';
 import { useStaffStore } from '@/lib/store/useStaffStore';
@@ -34,6 +36,7 @@ import {
   fetchQuizItems,
   fetchQuizCourseAttemptItems,
   fetchQuizSendStatus,
+  fetchGuestQuizSubmissions,
   fetchRecipientReadiness,
   upsertTrainingCourse,
   resendQuiz,
@@ -99,7 +102,7 @@ export default function QuizDetailScreen() {
   const { id, tab } = useLocalSearchParams<{ id: string; tab?: string }>();
   const unitId = useSessionStore((s) => s.unitId);
 
-  const { courses, boardLoaded, boardError, sendsByCourse, bumpSends, reloadCourses, bumpQuiz } = useQuizBoard();
+  const { now, courses, boardLoaded, boardError, sendsByCourse, bumpSends, reloadCourses, bumpQuiz } = useQuizBoard();
   const courseEntries = useWorkStore((s) => s.courseEntries);
   const addCourseEntry = useWorkStore((s) => s.addCourseEntry);
   const entries = usePlaybookStore((s) => s.entries);
@@ -138,6 +141,11 @@ export default function QuizDetailScreen() {
   useFocusEffect(useCallback(() => {
     reloadCourses(); bumpSends(); bumpQuiz(); setItemsReload((n) => n + 1);
   }, [reloadCourses, bumpSends, bumpQuiz]));
+  // 띄운 채로도 맞게 둔다(2026-11-19 B2) — 발송이 나가거나 직원이 다 풀면 발송 원장과 답 행을 다시 읽는다.
+  //   막힌 이유(fetchQuizSendStatus)는 sends 가 바뀌면 아래 이펙트가 따라 읽는다.
+  useQuizAssignmentsLive(useCallback(() => {
+    bumpSends(); setItemsReload((n) => n + 1);
+  }, [bumpSends]));
   useEffect(() => {
     let alive = true;
     const p = entryIds.length === 0 ? Promise.resolve({ data: [] as QuizItem[], error: null }) : fetchQuizItems(entryIds);
@@ -170,6 +178,14 @@ export default function QuizDetailScreen() {
       .catch(() => { if (alive) setSendStatusError(true); });
     return () => { alive = false; };
   }, [id, sends, itemsReload]);
+  // 링크 제출 수(2026-11-19 사용자 결정 · 정리한 제출은 세지 않는다). 설정 탭 링크 섹션(QuizDeployPanel)과 같은 원장 · 같은 거르기다.
+  //   정답률은 정리한 제출도 그대로 센다(quizAnswers).
+  const [guestCount, setGuestCount] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    void fetchGuestQuizSubmissions().then((rows) => { if (alive) setGuestCount(rows.filter((r) => r.courseId === id).length); });
+    return () => { alive = false; };
+  }, [id, itemsReload]);
   /** 퀴즈 숫자에 쓰는 답 — 업무 자청 응시(source='self', Q1)는 뺀다. 옛 서버는 source 가 없어 전부 남는다. */
   const quizAnswers = useMemo(() => staffItems.filter((r) => r.source !== 'self'), [staffItems]);
   const latestSends = useMemo(() => latestQuizAssignments(sends), [sends]);
@@ -220,7 +236,8 @@ export default function QuizDetailScreen() {
   const resultTop = quizResultTop(notDone.length);
   /** 결과 탭 빈 상태(N10) — 받은 직원도 답도(손님 포함) 없을 때만. */
   const noResults = resultsEmpty(sends, quizAnswers);
-  const guestCount = guestSubmissions(quizAnswers);
+  /** 보냈나(B1) — 보내기 직후 토스트·목록 줄과 같은 판정. 결과가 비었을 때 "아직 안 보냄"과 "곧 가요"를 가른다. */
+  const phase = sendPhase(sends, now);
 
   /** 근거가 바뀐 뒤 다시 안 만든 문항(0114). 판정은 이미 DB 트리거가 해 뒀고 보여줄 자리가 없었다. */
   const staleItems = useMemo(
@@ -238,7 +255,8 @@ export default function QuizDetailScreen() {
   );
 
   const segItems: SegmentItem[] = [
-    { key: 'people', label: '결과', count: people.length },
+    // 결과 수 = 링 분모와 같은 값(받은 지금 직원 · 2026-11-19 사용자 결정). 나간 직원·발송 전 사람 줄은 기록으로 남지만 세지 않는다.
+    { key: 'people', label: '결과', count: progress.recipients },
     { key: 'items', label: '문항', count: items.length },
     // 2026-09-13: '배포' → '설정'. 이름·주기·마감을 고치는 자리가 더보기(⋯) 속 시트였고, 받는 사람을
     // 고치는 자리는 아무 데도 없었다. 고치는 일을 여기 한 탭으로 모으고, 배포는 그 안의 한 섹션이 된다
@@ -352,7 +370,7 @@ export default function QuizDetailScreen() {
 
   /**
    * 아직 안 푼 사람에게 지금 다시 알린다(0348 quiz_resend · 2026-11-03 사용자 결정).
-   * 어떤 행을 쓰고 언제 나가는지는 전부 서버가 정한다(10분 쿨다운 · 7일 2회 상한 · 줄에 선 행 재사용 · 날짜 · 마감).
+   * 어떤 행을 쓰고 언제 나가는지는 전부 서버가 정한다(1분 쿨다운 · 줄에 선 행 재사용 · 날짜 · 마감 · 0931).
    * 화면은 사람별 결과를 metrics.resendResultLabel 로 말하기만 한다.
    * ★예전(옛 앱)은 여기서 행을 직접 넣었고 오늘 행이 있으면 내일로 잡아 다음 날 나갔다(2026-10-15 QA #6 의 날짜 규칙은 서버로 옮겼다).
    */
@@ -453,11 +471,20 @@ export default function QuizDetailScreen() {
         <Appear key={seg} style={st.segBody}>
         {seg === 'people' ? (
           noResults ? (
-            <EmptyState
-              title="아직 아무에게도 안 보냈어요"
-              body="문항을 검토하고 받는 사람을 고르면 보낼 수 있어요."
-              cta={{ label: '문항 보기', onPress: () => setSeg('items') }}
-            />
+            /* 보낸 행이 있는데 아직 안 나갔으면 "안 보냈어요"라고 하지 않는다(B1 · 판정 = metrics.sendPhase).
+               지금 바로 = 1분 안에 가요 · 예약 = 목록과 같은 "M월 D일에 보내요". 나가면 구독이 다시 읽어 결과로 바뀐다. */
+            phase === 'none' ? (
+              <EmptyState
+                title="아직 아무에게도 안 보냈어요"
+                body="문항을 검토하고 받는 사람을 고르면 보낼 수 있어요."
+                cta={{ label: '문항 보기', onPress: () => setSeg('items') }}
+              />
+            ) : (
+              <EmptyState
+                title={sendPhaseLabel(phase, nextSendAt(sends, now))}
+                body="직원이 받으면 여기에 결과가 보여요."
+              />
+            )
           ) : (
             <>
               <View style={st.ringCard}>

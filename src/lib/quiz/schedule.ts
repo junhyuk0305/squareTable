@@ -64,34 +64,17 @@ export function isReviewDue(
   return now >= reviewDueAt(verifiedAt, step, fixedDays);
 }
 
-// ── 빈도 상한 (원설계 §06 "빈도 상한 — 이게 기능의 생사를 가른다") ──────────
-/** 하루 최대 발송 횟수. */
-export const MAX_SENDS_PER_DAY = 1;
-/** 주 최대 발송 횟수(7일 슬라이딩 창). */
-export const MAX_SENDS_PER_WEEK = 2;
+// ── 빈도 (원설계 §06) ──────────
+// ★0931(2026-11-19 사용자 결정): 하루 1회 · 7일 2회 · 연속 무시 자동 정지 · 근무일에만 보내기를 지웠다. 판정은 서버 quiz_send_block 한 곳이다.
 /** 한 번에 낼 문항 수 상한. */
 export const MAX_ITEMS_PER_ROUND = 3;
-/** 연속으로 이만큼 무시하면 자동으로 멈춘다. 다시 시작은 **그 사람이 열었을 때**. */
-export const AUTO_STOP_AFTER_IGNORED = 2;
 /**
- * 다시 알리기를 보낸 뒤 같은 (퀴즈, 사람)에게 다시 보낼 수 없는 시간(분). 판정은 서버 quiz_resend_cooldown()(0348) 한 곳이다.
+ * 다시 알리기를 보낸 뒤 같은 (퀴즈, 사람)에게 다시 보낼 수 없는 시간(분). 판정은 서버 quiz_resend_cooldown()(0348 · 0931 에서 1분) 한 곳이다.
  * 여기 값은 화면 문구에만 쓴다. qa:quiz-resend 가 서버 값과 대조한다(한쪽만 고치면 RED).
  */
-export const RESEND_COOLDOWN_MINUTES = 10;
+export const RESEND_COOLDOWN_MINUTES = 1;
 
-// ── 자동 출제 계기의 생성 상한 (0169 변경 트리거 · 입사 트리거는 0348 에서 없앴다) ──────────
-/**
- * 노하우가 바뀌어서 **시스템이 스스로** 만드는 재확인 발송의 상한(매장·직원당 7일).
- *
- * 위 `MAX_SENDS_PER_WEEK`(=2)가 "실제로 몇 번 도착하나"의 상한이라면 이 값은
- * "시스템이 스스로 몇 번 만드나"의 상한이다. 재확인은 사람이 누르지 않는 유일한 갈래라
- * 상한이 없으면 주 2칸을 재확인이 다 먹고 **사장이 직접 보낸 퀴즈가 영영 밀린다**.
- * 절반만 쓴다. 사장이 노하우 10건을 한 번에 고쳐도 직원이 받는 재확인은 그 주에 1건이다.
- *
- * ★SQL 사본: `supabase/migrations/0169_quiz_triggers_join_change.sql`
- *   enqueue_knowhow_rechecks() 의 `interval '7 days'`. 바꿀 때 양쪽을 같이 고친다.
- */
-export const MAX_AUTO_RECHECKS_PER_WEEK = 1;
+// 노하우가 바뀌면 시스템이 만들던 재확인 발송(0169)은 0931 에서 멈췄다(재확인 기능 없앰 · 2026-11-19 사용자 결정).
 
 // 입사 즉시 첫 퀴즈 배정(JOIN_FIRST_QUIZ_COURSES · 0169)은 0348 에서 없앴다(2026-11-04 사용자 결정 · 사장이 보내야 받는다).
 
@@ -128,38 +111,6 @@ export function recheckEntryDue(
 ): boolean {
   if (!pendingRecheck || !verifiedAt || !entryUpdatedAt) return false;
   return Date.parse(entryUpdatedAt) > Date.parse(verifiedAt);
-}
-
-/** 발송 상한에 걸린 이유. null = 보내도 된다. */
-export type SendBlockReason = 'day_cap' | 'week_cap' | 'auto_stopped' | 'not_working';
-
-/**
- * 지금 이 사람에게 퀴즈를 보내도 되나.
- *
- * @param sentAt        그 사람에게 보낸 시각들(ISO). 순서는 상관없다.
- * @param ignoredStreak 연속으로 안 푼 횟수.
- * @param workingToday  오늘 근무인가. **근무 아닌 날에는 절대 보내지 않는다**(원설계 명시).
- *                      판정은 근무표가 한다 — `shiftsOn`(클라) / `workers_at`(서버).
- */
-export function sendBlockReason(
-  sentAt: string[],
-  ignoredStreak: number,
-  workingToday: boolean,
-  now: number,
-): SendBlockReason | null {
-  if (!workingToday) return 'not_working';
-  if (ignoredStreak >= AUTO_STOP_AFTER_IGNORED) return 'auto_stopped';
-
-  const times = sentAt.map((s) => Date.parse(s)).filter((t) => Number.isFinite(t));
-  // '하루'는 24시간 창이 아니라 **날짜**다 — 어제 23시에 보냈다고 오늘 오전이 막히면 안 된다.
-  const today = new Date(now).toDateString();
-  if (times.filter((t) => new Date(t).toDateString() === today).length >= MAX_SENDS_PER_DAY) return 'day_cap';
-  if (times.filter((t) => now - t < 7 * DAY).length >= MAX_SENDS_PER_WEEK) return 'week_cap';
-  return null;
-}
-
-export function canSend(sentAt: string[], ignoredStreak: number, workingToday: boolean, now: number): boolean {
-  return sendBlockReason(sentAt, ignoredStreak, workingToday, now) === null;
 }
 
 // ── 날짜 도구(KST 고정) ────────────────────────────────────────────────────

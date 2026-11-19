@@ -147,7 +147,7 @@ export function InviteBlock({
       <View style={s.card}>
         <View style={s.head}>
           <Text style={s.howTitle}>초대코드</Text>
-          <Text style={s.desc}>{isSpace ? SPACE_MEMBERS.inviteHint : '직원이 가입하고 초대코드를 넣으면 합류 신청이 돼요.'}</Text>
+          <Text style={s.desc}>{isSpace ? SPACE_MEMBERS.inviteHint : '직원이 가입하고 초대코드를 넣으면 바로 우리 매장 직원이 돼요.'}</Text>
         </View>
 
         <View style={s.codeRow}>

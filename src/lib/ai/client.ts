@@ -68,6 +68,15 @@ class AiQuotaError extends Error {
   constructor(readonly cap: number, readonly used: number, readonly scope: AiQuotaScope = 'store') { super('ai_quota_exceeded'); }
 }
 
+// 분당 요청 한도(엣지 429 rate_limited) — 상태 코드를 들고 오는 타입으로 가른다(문구 매칭 금지).
+// 노하우 정리(structureSquare)는 이걸 mock 폴백하지 않고 던진다. 가짜 정리본을 저장하게 두지 않고 "잠시 뒤 다시"를 말한다.
+// ★message 는 예전 글자(`AI edge <task> failed: 429`)를 그대로 둔다 — structureDoc 의 재시도 판정이 아직 그 글자를 본다.
+export const AI_RATE_LIMIT_MESSAGE = '요청이 몰렸어요. 1분 뒤 다시 보내 주세요.';
+export class AiRateLimitError extends Error {
+  readonly status = 429;
+  constructor(task: string) { super(`AI edge ${task} failed: 429`); this.name = 'AiRateLimitError'; }
+}
+
 /** 엣지가 어느 자리로 도는지. 비우면 현재 매장(옛 요청과 같다).
  *  unitId 에 현재 공간 번호를 넣으면 엣지가 그 번호를 서버의 현재 공간(auth_space_id)과 맞춰 보고, 같을 때만 공간으로 돈다.
  *  다르면 매장 갈래 그대로다 — 본문 값만으로 남의 자리로 가지 못한다. */
@@ -116,13 +125,14 @@ async function callEdge<T>(task: Task, payload: unknown, target?: AiTarget): Pro
         }
         throw new Error(`AI edge ${task} failed: 402`); // 쿼터 외 402 → 일반 4xx(mock 폴백 경로)
       }
+      if (res.status === 429) throw new AiRateLimitError(task);
       // 4xx는 재시도 무의미 → 즉시 실패(catch에서 4xx로 재-throw됨).
       if (res.status < 500) throw new Error(`AI edge ${task} failed: ${res.status}`);
       // 5xx → 재시도 여지(마지막 시도면 아래서 throw).
       lastErr = new Error(`AI edge ${task} failed: ${res.status}`);
     } catch (e) {
       // 쿼터 초과·4xx로 명시 throw된 건 재시도하지 않는다. 그 외(네트워크/타임아웃/5xx)는 재시도.
-      if (e instanceof AiQuotaError) throw e;
+      if (e instanceof AiQuotaError || e instanceof AiRateLimitError) throw e;
       if (e instanceof Error && /failed: 4\d\d/.test(e.message)) throw e;
       lastErr = e;
     } finally {
@@ -182,6 +192,8 @@ export async function structureSquare(
     }
     return out;
   } catch (e) {
+    // 한도(429)는 폴백하지 않는다 — 호출부가 저장을 멈추고 쓴 글을 남긴 채 AI_RATE_LIMIT_MESSAGE 를 낸다.
+    if (e instanceof AiRateLimitError) throw e;
     console.warn('[ai] structureSquare fallback to mock:', e);
     reportError('ai.structureSquare.degraded', e);
     return { ...(await mockStructureSquare(input)), degraded: true };

@@ -47,6 +47,12 @@ const MAX_BODY = 300;
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 const EXPO_PUSH_CHUNK = 100; // Expo 문서 권장 상한
 
+// 크론 한 번에 보낼 행 수 상한(0960). ★SQL push_sweep_cap() 과 같은 값이다. 한쪽을 바꾸면 다른 쪽도 같이 바꾼다.
+//   할일·퀴즈는 엣지가 선점하므로 여기서 자른다. 남은 행은 선점되지 않아 다음 분 틱이 가져간다.
+const SWEEP_CAP = 100;
+// 크론 한 번의 실행 예산(0960). 시작 뒤 이만큼 지나면 아직 시작하지 않은 갈래는 다음 틱으로 미룬다(응답 deferred).
+const SWEEP_BUDGET_MS = 30_000;
+
 
 function corsFor(origin: string | null) {
   const allow = ALLOWED_ORIGINS.includes('*')
@@ -103,6 +109,8 @@ async function readOnceRetry<T extends { error: unknown }>(run: () => PromiseLik
   return await run();
 }
 // now 가 [start, end) 방해금지 구간 안인가. start>end 면 자정 넘김(예: 22:00~08:00).
+// ★0960 부터는 옛 DB 대비용이다. 방해금지 판정 정본은 SQL member_quiet_now(push_quiet_hold 가 쓴다).
+//   push_quiet_hold 가 없거나 실패할 때만 이걸로 억제한다(보관 없이 버림 · 0960 전 동작).
 function inQuietWindow(now: string, start?: string | null, end?: string | null): boolean {
   const s = String(start ?? '').slice(0, 5);
   const e = String(end ?? '').slice(0, 5);
@@ -281,16 +289,22 @@ async function deliverExpoPush(
  *   호출부가 이걸로 재배달(사용자 경로 = 선점 풀고 503 · 크론 = 결과 열 null 유지)을 정한다.
  *   "수신자 0(억제·본인뿐)"·"살아있는 토큰 0" 은 정상 종료라 false — 다시 보내도 결과가 같다.
  *   설정 조회 실패는 suppressed 에 세지 않는다(억제한 게 아니라 못 보낸 것 · 자동정지 판정이 suppressed 를 알림으로 센다).
+ *
+ * held(0960 · 2026-11-19) = 방해금지라 보관한 사람 수. 지금 보내지 않고 끝나면 (사람, 매장)마다 요약 1건으로 간다
+ *   (sweepQuietDigests). 보관은 실패가 아니다(failed 에 안 넣는다) → 재배달·재선점이 돌지 않는다.
+ *   opts.hold=false = 보관하지 않고 방해금지를 보지 않는다. 요약 발송만 쓴다(수신 끔·음소거는 그대로 본다).
  */
-type DeliverResult = { sent: number; recipients: number; suppressed: number; pruned: number; failed: boolean };
+type DeliverResult = { sent: number; recipients: number; suppressed: number; held: number; pruned: number; failed: boolean };
 async function deliver(
   admin: Admin,
   scopeUnit: string,
   targets: string[],
   notifIn: { title: string; body: string; url: string; route?: string; tag?: string },
   nativeIn?: { title: string; body: string } | 'skip',
+  opts?: { hold?: boolean },
 ): Promise<DeliverResult> {
-  if (targets.length === 0) return { sent: 0, recipients: 0, suppressed: 0, pruned: 0, failed: false };
+  if (targets.length === 0) return { sent: 0, recipients: 0, suppressed: 0, held: 0, pruned: 0, failed: false };
+  const hold = opts?.hold !== false;
 
   // ★설정 조회는 1회 재시도하고, 그래도 못 읽으면 보내지 않는다(2026-11-04 사용자 결정 · fail-closed).
   //   알림 끔·음소거·방해금지를 켠 사람에게 한 번 울리는 것보다 이번 발송을 거르는 쪽이 낫다 —
@@ -303,7 +317,7 @@ async function deliver(
     .in('user_id', targets));
   if (prefErr) {
     console.error('[push] notification_prefs read failed (발송 안 함):', prefErr.message);
-    return { sent: 0, recipients: 0, suppressed: 0, pruned: 0, failed: true };
+    return { sent: 0, recipients: 0, suppressed: 0, held: 0, pruned: 0, failed: true };
   }
   const prefByUser = new Map(
     (prefRows ?? []).map((p: { user_id: string; push_enabled: boolean }) => [p.user_id, p]),
@@ -316,23 +330,47 @@ async function deliver(
     .in('user_id', targets));
   if (unitPrefErr) {
     console.error('[push] unit_member_prefs read failed (발송 안 함):', unitPrefErr.message);
-    return { sent: 0, recipients: 0, suppressed: 0, pruned: 0, failed: true };
+    return { sent: 0, recipients: 0, suppressed: 0, held: 0, pruned: 0, failed: true };
   }
   const unitPrefByUser = new Map(
     (unitPrefRows ?? []).map((p: { user_id: string; muted: boolean; quiet_enabled: boolean; quiet_start: string; quiet_end: string; nickname?: string | null }) => [p.user_id, p]),
   );
   const nowKst = kstNowHHMM();
   const suppressed: string[] = [];
+  const quietCands: string[] = []; // 방해금지를 켠 사람. 지금 방해금지 시간인지는 SQL(push_quiet_hold)이 정한다.
   const recipientIds = targets.filter((id) => {
     const p = prefByUser.get(id);
     if (p && p.push_enabled === false) { suppressed.push(id); return false; } // 계정 전역: 알림 끔 → 발송 안 함
     const up = unitPrefByUser.get(id);
     if (!up) return true; // 매장별 설정 없음 = 기본(발송)
     if (up.muted) { suppressed.push(id); return false; } // 이 매장 음소거 → 발송 안 함
-    if (up.quiet_enabled && inQuietWindow(nowKst, up.quiet_start, up.quiet_end)) { suppressed.push(id); return false; } // 이 매장 방해금지 시간 → 이번 발송만 스킵
+    if (up.quiet_enabled && hold) { quietCands.push(id); return false; } // 이 매장 방해금지 → 아래에서 보관 판정
     return true;
   });
-  if (recipientIds.length === 0) return { sent: 0, recipients: 0, suppressed: suppressed.length, pruned: 0, failed: false };
+  // ★0960: 방해금지 시간인 사람은 버리지 않고 보관한다. 돌려받은 사람 = 보관(held) · 나머지는 지금 보낸다.
+  //   함수가 없거나(옛 DB) 실패하면 0960 전처럼 방해금지 시간이면 이번 발송만 스킵한다(보관 없음 · 로그).
+  let held = 0;
+  if (quietCands.length > 0) {
+    const { data: heldRows, error: holdErr } = await readOnceRetry(() => admin.rpc('push_quiet_hold', {
+      p_unit: scopeUnit, p_user_ids: quietCands, p_tag: notifIn.tag ?? null,
+    }));
+    if (holdErr) {
+      if (isMissingRpc(holdErr)) console.log('[push] push_quiet_hold 없음(옛 DB) → 방해금지 시간이면 이번 발송만 스킵');
+      else console.error('[push] push_quiet_hold failed (방해금지 시간이면 이번 발송만 스킵):', holdErr.message);
+      for (const id of quietCands) {
+        const up = unitPrefByUser.get(id);
+        if (inQuietWindow(nowKst, up?.quiet_start, up?.quiet_end)) suppressed.push(id);
+        else recipientIds.push(id);
+      }
+    } else {
+      const heldSet = new Set(((heldRows ?? []) as { user_id: string }[]).map((h) => h.user_id));
+      for (const id of quietCands) {
+        if (heldSet.has(id)) held += 1;
+        else recipientIds.push(id);
+      }
+    }
+  }
+  if (recipientIds.length === 0) return { sent: 0, recipients: 0, suppressed: suppressed.length, held, pruned: 0, failed: false };
 
   // 받을 기기는 DB 가 정한다(0236): 탈퇴 계정 제외 · 토큰을 저장한 로그인 세션이 살아 있어야 함 ·
   //   세션 정보가 없는 옛 행은 유예 7일 동안 등록 전 세션이 살아 있을 때만. user_id 로 표를 직접 읽지 않는다.
@@ -344,7 +382,7 @@ async function deliver(
   if (webRes.error || deviceRes.error) {
     console.error('[push] target read failed (발송 안 함):',
       webRes.error?.message ?? '-', '/', deviceRes.error?.message ?? '-');
-    return { sent: 0, recipients: recipientIds.length, suppressed: suppressed.length, pruned: 0, failed: true };
+    return { sent: 0, recipients: recipientIds.length, suppressed: suppressed.length, held, pruned: 0, failed: true };
   }
   const deviceTokens = (deviceRes.data ?? []) as { id: string; token: string; user_id: string }[];
 
@@ -425,6 +463,7 @@ async function deliver(
     sent: totalSent,
     recipients: recipientIds.length,
     suppressed: suppressed.length,
+    held,
     pruned: dead.length + expo.pruned,
     failed: totalSent === 0 && totalFailed > 0,
   };
@@ -446,7 +485,7 @@ function isMissingColumn(err: { code?: string; message?: string } | null | undef
 }
 
 /**
- * 할일 시간대 알림 스윕(0118) — pg_cron 이 5분마다 부른다.
+ * 할일 시간대 알림 스윕(0118) — pg_cron 이 1분마다 부른다(0962 · 그 전엔 5분).
  * 입력이 없다: 제목·본문·수신자를 전부 due_task_reminders() 가 정한다(수신자 규칙 SSOT = DB).
  * 순서가 중요하다 — **발송 전에** task_reminder_sent 를 선점(insert)한다. PK(template_id, remind_date)
  * 충돌이 곧 잠금이라, 크론이 겹쳐 돌거나 재시도해도 같은 할일이 두 번 나가지 않는다.
@@ -463,9 +502,10 @@ async function sweepTaskReminders(token: string): Promise<{ swept: number; sent:
     const denied = /permission denied|not exist/i.test(error.message);
     return { swept: 0, sent: 0, error: denied ? 'forbidden' : 'rpc_failed' };
   }
-  const rows = (data ?? []) as {
+  // 0960: 한 틱에 SWEEP_CAP 행까지. 남은 행은 원장에 선점되지 않아 다음 틱이 잡는다(due_task_reminders 창 = 60분).
+  const rows = ((data ?? []) as {
     out_template_id: string; out_unit_id: string; out_text: string; out_date: string; out_recipients: string[];
-  }[];
+  }[]).slice(0, SWEEP_CAP);
   let sent = 0;
   let zeroSent = 0; // 선점은 했는데 실제 발송이 0건이었던 건수(#32 관측 축)
   for (const r of rows) {
@@ -491,7 +531,8 @@ async function sweepTaskReminders(token: string): Promise<{ swept: number; sent:
       //   재시도되지 않는다.** 구독 행이 하나도 없거나 발송이 전부 실패한 경우가 여기다.
       //   선점을 되돌리면 크론이 매 틱마다 같은 실패를 반복하므로(구독이 없는 매장은 영구 반복),
       //   되돌리는 대신 **관측 가능하게** 만든다 — 원장에 실제 발송 수를 남기고 로그로 올린다.
-      if (res.sent === 0) {
+      //   0960: 방해금지로 보관한 사람이 있으면(held>0) 요약으로 가므로 0건이 아니다 → 찍지 않는다.
+      if (res.sent === 0 && res.held === 0) {
         console.error(`[push] task reminder delivered 0 — unit=${r.out_unit_id} template=${r.out_template_id} date=${r.out_date} recipients=${r.out_recipients.length} failed=${res.failed}`);
         zeroSent += 1;
       }
@@ -558,7 +599,8 @@ async function sweepQuizSends(token: string): Promise<{ swept: number; sent: num
     const denied = /permission denied|not exist/i.test(error.message);
     return { swept: 0, sent: 0, retried: 0, retriedSent: 0, error: denied ? 'forbidden' : 'rpc_failed' };
   }
-  const rows = (data ?? []) as QuizSendRow[];
+  // 0960: 한 틱에 SWEEP_CAP 행까지. 남은 행은 sent_at null 그대로라 다음 틱이 잡는다.
+  const rows = ((data ?? []) as QuizSendRow[]).slice(0, SWEEP_CAP);
   let sent = 0;
   for (const r of rows) {
     try {
@@ -739,7 +781,48 @@ async function sweepMemberNotices(token: string): Promise<{ swept: number; sent:
 }
 
 /**
- * 파기한 매장의 사진 파일 지우기(0278 · F3) — 알림이 아니지만 같은 5분 틱에 얹는다(새 크론을 만들지 않는다).
+ * 방해금지 요약 스윕(0960) — 구성원 알림 다음으로 같은 틱에서 돈다.
+ * 방해금지 동안 deliver() 가 보관한 알림을 끝나면 (사람, 매장)마다 1건으로 보낸다. 알림함에는 원래 알림이 다 남아 있다.
+ * 선점·버리기(나간 사람 · 하루 지남)·문구·화면은 claim_push_digests() 가 정한다. 여기는 배달과 결과 기록만.
+ * hold:false = 다시 보관하지 않는다(수신 끔·음소거는 deliver 가 다시 본다).
+ * 함수가 없으면(옛 DB) 조용히 건너뛴다. 인프라 실패면 delivered null 유지 → DB 재선점(1회).
+ */
+async function sweepQuietDigests(token: string): Promise<{ swept: number; sent: number; error?: string }> {
+  const admin = createClient(SUPABASE_URL, token);
+  const { data, error } = await admin.rpc('claim_push_digests');
+  if (error) {
+    if (isMissingRpc(error)) return { swept: 0, sent: 0 }; // 옛 DB — 보관도 없으니 보낼 요약도 없다.
+    console.error('[push] claim_push_digests failed:', error.message);
+    const denied = /permission denied/i.test(error.message);
+    return { swept: 0, sent: 0, error: denied ? 'forbidden' : 'rpc_failed' };
+  }
+  const rows = (data ?? []) as {
+    out_id: number; out_user_id: string; out_unit_id: string; out_title: string; out_body: string; out_url: string;
+  }[];
+  let sent = 0;
+  for (const r of rows) {
+    try {
+      const res = await deliver(admin, r.out_unit_id, [r.out_user_id], {
+        title: r.out_title,
+        body: r.out_body,
+        url: r.out_url || '/',
+        tag: `quiet-digest-${r.out_unit_id}`,
+      }, undefined, { hold: false });
+      sent += res.sent;
+      if (res.failed) { console.error(`[push] quiet digest infra failure — id=${r.out_id} (delivered null 유지)`); continue; }
+      const { error: recErr } = await readOnceRetry(() => admin.rpc('mark_push_digest_result', {
+        p_id: r.out_id, p_delivered: res.sent,
+      }));   // L22: 기록 실패 = 재선점 중복 1회 → 한 번 다시 쓴다
+      if (recErr) console.error('[push] mark_push_digest_result failed:', recErr.message);
+    } catch (e) {
+      console.error(`[push] quiet digest row threw — id=${r.out_id}:`, (e as Error)?.message ?? String(e));
+    }
+  }
+  return { swept: rows.length, sent };
+}
+
+/**
+ * 파기한 매장의 사진 파일 지우기(0278 · F3) — 알림이 아니지만 같은 크론 틱에 얹는다(새 크론을 만들지 않는다).
  * units 가 지워질 때 트리거가 경로를 photo_purge_queue 에 넣는다. 여기서 Storage API 로 지우고 대기열에서 뺀다.
  * SQL 로 storage.objects 행만 지우면 실제 파일은 남는다 — 그래서 엣지가 지운다.
  */
@@ -784,6 +867,8 @@ Deno.serve(async (req) => {
 
   let payload: {
     mode?: string;
+    /** 0961: 크론 모드에서 돌릴 갈래 이름(push_kick_sweep 이 싣는다). 없으면 전부. 옛 엣지는 무시하고 전부 돈다. */
+    only?: unknown;
     audience?: 'owners' | 'staff' | 'user' | 'join_owners';
     /** F-2: audience 'owners' 를 사장만으로 좁힌다. 옛 엣지는 무시한다. */
     ownerOnly?: boolean;
@@ -826,25 +911,45 @@ Deno.serve(async (req) => {
         return { ...empty, error: 'threw' };
       }
     };
-    const swept = await safe('task reminder', () => sweepTaskReminders(token), { swept: 0, sent: 0, zeroSent: 0 });
-    if (swept.error === 'forbidden') return json(403, swept);
+    // 0961: only(갈래 이름 배열)가 오면 그 갈래만 돈다(push_kick_sweep 즉시 깨우기). 없으면 전부(크론 · 옛 호출부).
+    // 0960: 시작 뒤 SWEEP_BUDGET_MS 가 지나면 아직 시작하지 않은 갈래는 건너뛰고 deferred 에 적는다(다음 틱이 한다).
+    //   ★forbidden 이 하나라도 나오면 거기서 멈추고 403 이다(사용자 JWT · anon 은 어느 갈래도 실행 권한이 없다).
+    //   돌지 않은 갈래는 빈 값이고 `*Error` 키는 null 이다.
+    const only = Array.isArray(payload.only)
+      ? new Set(payload.only.filter((s): s is string => typeof s === 'string'))
+      : null;
+    const startedAt = Date.now();
+    const deferred: string[] = [];
+    let forbidden = false;
+    const branch = async <T extends { error?: string }>(key: string, name: string, run: () => Promise<T>, empty: T): Promise<T | null> => {
+      if (forbidden || (only && !only.has(key))) return null;
+      if (Date.now() - startedAt > SWEEP_BUDGET_MS) { deferred.push(key); return null; }
+      const r = await safe(name, run, empty);
+      if (r.error === 'forbidden') forbidden = true;
+      return r;
+    };
+    const swept = await branch('tasks', 'task reminder', () => sweepTaskReminders(token), { swept: 0, sent: 0, zeroSent: 0 });
     // 퀴즈 갈래가 실패해도 할일 리마인더 결과는 그대로 돌려준다(한쪽 장애가 다른 쪽을 삼키지 않는다).
-    const quiz = await safe('quiz', () => sweepQuizSends(token), { swept: 0, sent: 0, retried: 0, retriedSent: 0 });
+    const quiz = await branch('quiz', 'quiz', () => sweepQuizSends(token), { swept: 0, sent: 0, retried: 0, retriedSent: 0 });
     // 사장 알림(0191)도 같은 원칙 — 실패해도 앞 두 갈래 결과는 그대로 돌려준다.
-    const alerts = await safe('owner alert', () => sweepOwnerAlerts(token), { swept: 0, sent: 0 });
+    const alerts = await branch('alerts', 'owner alert', () => sweepOwnerAlerts(token), { swept: 0, sent: 0 });
     // 닫힌 매장 직원 알림(0196) — 같은 원칙.
-    const closures = await safe('unit closure', () => sweepUnitClosures(token), { swept: 0, sent: 0 });
+    const closures = await branch('closures', 'unit closure', () => sweepUnitClosures(token), { swept: 0, sent: 0 });
     // 구성원 알림(0247) — 같은 원칙.
-    const notices = await safe('member notice', () => sweepMemberNotices(token), { swept: 0, sent: 0 });
+    const notices = await branch('notices', 'member notice', () => sweepMemberNotices(token), { swept: 0, sent: 0 });
+    // 방해금지 요약(0960) — 같은 원칙.
+    const digest = await branch('digest', 'quiet digest', () => sweepQuietDigests(token), { swept: 0, sent: 0 });
     // 파기한 매장 사진 지우기(0278) — 같은 원칙.
-    const photos = await safe('photo purge', () => sweepPhotoPurge(token), { removed: 0 });
-    return json(200, {
-      ...swept, error: swept.error ?? null,
-      quizSwept: quiz.swept, quizSent: quiz.sent, quizRetried: quiz.retried, quizRetriedSent: quiz.retriedSent, quizError: quiz.error ?? null,
-      alertSwept: alerts.swept, alertSent: alerts.sent, alertError: alerts.error ?? null,
-      closureSwept: closures.swept, closureSent: closures.sent, closureError: closures.error ?? null,
-      noticeSwept: notices.swept, noticeSent: notices.sent, noticeError: notices.error ?? null,
-      photoRemoved: photos.removed, photoError: photos.error ?? null,
+    const photos = await branch('photos', 'photo purge', () => sweepPhotoPurge(token), { removed: 0 });
+    return json(forbidden ? 403 : 200, {
+      swept: swept?.swept ?? 0, sent: swept?.sent ?? 0, zeroSent: swept?.zeroSent ?? 0, error: swept?.error ?? null,
+      quizSwept: quiz?.swept ?? 0, quizSent: quiz?.sent ?? 0, quizRetried: quiz?.retried ?? 0, quizRetriedSent: quiz?.retriedSent ?? 0, quizError: quiz?.error ?? null,
+      alertSwept: alerts?.swept ?? 0, alertSent: alerts?.sent ?? 0, alertError: alerts?.error ?? null,
+      closureSwept: closures?.swept ?? 0, closureSent: closures?.sent ?? 0, closureError: closures?.error ?? null,
+      noticeSwept: notices?.swept ?? 0, noticeSent: notices?.sent ?? 0, noticeError: notices?.error ?? null,
+      digestSwept: digest?.swept ?? 0, digestSent: digest?.sent ?? 0, digestError: digest?.error ?? null,
+      photoRemoved: photos?.removed ?? 0, photoError: photos?.error ?? null,
+      deferred,
     });
   }
 
@@ -991,5 +1096,5 @@ Deno.serve(async (req) => {
     else if (released !== true) console.error('[push] push_client_event_release: 풀 행 없음 key=', eventKey);
     return json(503, { error: 'delivery_failed', sent: 0, recipients: r.recipients, suppressed: r.suppressed, released: released === true });
   }
-  return json(200, { sent: r.sent, recipients: r.recipients, pruned: r.pruned, suppressed: r.suppressed });
+  return json(200, { sent: r.sent, recipients: r.recipients, pruned: r.pruned, suppressed: r.suppressed, held: r.held });
 });
