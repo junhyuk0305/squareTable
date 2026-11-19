@@ -9,7 +9,7 @@
 -- 실시간은 받는 사람의 select RLS 를 따라 행을 보낸다. 넣기 전에 세 정책을 확인했다(최고 번호 기준):
 --   member_notices  mn_self_read(0721)              = user_id = auth.uid() · assign 제외 · 버린 행 제외 → 본인 행만
 --   owner_alerts    owner_alerts_select_owner(0721) = auth_is_owner_of(unit_id) · 버린 행 제외 → 그 매장 사장만
---   payment_claims  payment_claims_select(0319)     = auth_is_owner_of(unit_id) 또는 신고한 본인(0235) → 그 매장 사장만
+--   payment_claims  payment_claims_select(0319)     = auth_is_owner_of(unit_id) 또는 claimed_by = 본인(0235) → 그 매장 사장 · 신고한 본인
 -- ★DELETE 는 RLS 를 거치지 않고 모든 구독자에게 열쇠만 간다(Supabase Realtime). 앱은 이 세 표의 DELETE 를 듣지 않는다
 --   (보관 정리 0360 이 6개월 지난 member_notices 를 지울 때 모든 기기가 다시 읽지 않게). 듣는 이벤트 = 앱 db.ts 주석.
 --
